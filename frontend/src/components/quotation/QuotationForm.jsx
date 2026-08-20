@@ -193,8 +193,11 @@ const ItemSearchSelect = ({
       taxInclusive: !!item.taxInclusive,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount (set in QuickItemDrawer's "More
+      // Details" -> Discount) — previously always started at 0, ignoring
+      // whatever default the product was configured with.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     });
     setIsOpen(false);
     setSearchTerm(item.displayName);
@@ -458,6 +461,10 @@ const QuotationForm = ({
               // sellingPrice/hsnSac above.
               gstRate: variant.gstRate ?? item.gstRate ?? 0,
               taxInclusive: !!(variant.taxInclusive ?? item.taxInclusive),
+              // Discount only lives on the parent Item (variants have no
+              // discount field of their own) — same catalog default for
+              // every variant of a product.
+              discount: item.discount || { type: "percentage", value: 0 },
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -477,6 +484,7 @@ const QuotationForm = ({
               hsnSac: item.hsnSac || "",
               gstRate: item.gstRate ?? 0,
               taxInclusive: !!item.taxInclusive,
+              discount: item.discount || { type: "percentage", value: 0 },
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -848,8 +856,10 @@ const QuotationForm = ({
         ...itemData,
         quantity: newItems[index].quantity || 1,
         hsn: itemData.hsn || "",
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData carries it from
+        // the catalog) instead of the stale blank row's discount.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,
@@ -884,8 +894,8 @@ const QuotationForm = ({
       isVariant: false,
               parentItemId: null,
               stock: item.inventory?.currentStock ?? 0,
-      discountType: "amount",
-      discount: 0,
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     };
     setForm((prev) => {
       const isBlankStarterRow =

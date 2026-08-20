@@ -206,6 +206,17 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
     }
     try {
       setSaving(true);
+      // A variant typed into the open "Add Variant" panel only lives in
+      // currentVariant until its own "Add Variant" button commits it into
+      // `variants` — saving the drawer directly (without clicking that
+      // button first) used to silently drop it. Auto-commit it here so
+      // whatever's on screen actually gets saved.
+      const variantsToSave =
+        showVariantForm && currentVariant.name?.trim()
+          ? variantIndex !== null
+            ? variants.map((v, i) => (i === variantIndex ? currentVariant : v))
+            : [...variants, currentVariant]
+          : variants;
       const payload = {
         type: type === "Service" ? "service" : "product",
         name: form.name,
@@ -219,7 +230,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         category: form.category,
         primaryUnit: form.primaryUnit || "OTH OTHERS",
         isActive: true,
-        variants,
+        variants: variantsToSave,
         // Default discount applied when this product is added to a
         // document — the user can still change it there.
         discount: { type: form.discountType, value: parseFloat(form.discountValue) || 0 },
@@ -227,6 +238,19 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         maxDiscountPercent: form.maxDiscountPercent === "" || form.maxDiscountPercent === undefined
           ? null
           : parseFloat(form.maxDiscountPercent),
+        // Opening Quantity / Low Stock Alert were being captured into form
+        // state but never sent — itemController.createItem only reads stock
+        // settings from a nested `inventory` object (matching ItemForm.jsx's
+        // shape), so the flat fields silently had no effect and every new
+        // item's Inventory-page stock stayed 0 regardless of what was typed
+        // here. `openingPurchasePrice`/`openingStockValue` have no backing
+        // field on the Item model at all (the ledger's opening-stock unit
+        // price comes from the Purchase Price field above instead), so
+        // there's nothing to wire them to.
+        inventory: {
+          openingStock: parseFloat(form.openingQuantity) || 0,
+          lowStockThreshold: parseFloat(form.lowStockAlert) || 0,
+        },
       };
 
       let res;
@@ -237,11 +261,12 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         // files under one "images" field name.
         const fd = new FormData();
         Object.entries(payload).forEach(([key, value]) => {
-          if (key === "variants" || key === "discount") return;
+          if (key === "variants" || key === "discount" || key === "inventory") return;
           fd.append(key, value === null || value === undefined ? "" : (typeof value === "boolean" ? String(value) : value));
         });
-        fd.append("variants", JSON.stringify(variants));
+        fd.append("variants", JSON.stringify(variantsToSave));
         fd.append("discount", JSON.stringify(payload.discount));
+        fd.append("inventory", JSON.stringify(payload.inventory));
         imageFiles.forEach((file) => fd.append("images", file));
         res = await API.post("/items", fd, { headers: { "Content-Type": "multipart/form-data" } });
       } else {
@@ -260,9 +285,9 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
 
   if (!shouldRender) return null;
 
-  /* shared input style matching old ItemForm exactly */
-  const inp = "w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400";
-  const lbl = "block text-xs font-semibold text-gray-700 mb-1.5";
+  /* shared input/label style matching the QuickDealForm quick-drawer pattern */
+  const inp = "w-full border border-[#1F2937]/10 rounded-full px-4 h-11 text-sm text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter";
+  const lbl = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2 font-inter";
 
   return (
     <>
@@ -276,22 +301,22 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           same dc-panel-card inset/rounded-corner chrome and slide animation
           as the rest of the quick-drawer forms. */}
       <div
-        className={`fixed dc-panel-card z-[100006] w-full max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        className={`fixed dc-panel-card z-[100006] w-full max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
-        <div className="bg-white border-b border-gray-100 flex-shrink-0 rounded-t-2xl">
-          <div className="flex items-center justify-between px-6 py-4">
+        <div className="bg-white border-b border-[#D9D9D9] flex-shrink-0 rounded-t-2xl">
+          <div className="flex items-center justify-between px-6 py-3">
             <div className="flex items-center gap-3">
-              <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <X className="w-5 h-5" />
+              <button onClick={handleClose} title="Close" className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity" aria-label="Close">
+                <X className="w-[18px] h-[18px]" strokeWidth={2} />
               </button>
-              <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Add Item</h2>
+              <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">Add Item</h2>
             </div>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? "Adding…" : "Add Item"}
             </button>
@@ -299,24 +324,24 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
         </div>
 
         {/* ── Scrollable body ── */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
 
           {/* ── Basic Details — flat section, no card wrapper (matches
               CompanyForm.jsx/QuickCompanyForm's heading+divider style) ── */}
-          <div className="space-y-5">
-            <div className="pb-2 border-b border-gray-100">
-              <span className="text-sm font-bold text-gray-900">Basic Details</span>
+          <div className="space-y-4">
+            <div className="pb-1.5 border-b border-gray-100">
+              <span className="text-[16px] font-bold text-[#111216]">Basic Details</span>
             </div>
 
             {/* Product / Service toggle */}
-              <div className="inline-flex p-0.5 bg-gray-100 rounded-lg border border-gray-200">
+              <div className="inline-flex p-0.5 bg-gray-100 rounded-full border border-gray-200">
                 {["Product", "Service"].map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setType(t)}
-                    className={`px-6 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      type === t ? "bg-[#0085FF] text-white shadow" : "text-gray-600 hover:text-gray-900"
+                    className={`px-6 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                      type === t ? "bg-[#158FFF] text-white shadow" : "text-gray-600 hover:text-gray-900"
                     }`}
                   >
                     {t}
@@ -340,20 +365,20 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Selling Price</label>
-                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-200 text-gray-500 text-sm">₹</span>
+                  <div className="flex h-11 border border-[#1F2937]/10 rounded-full overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 font-inter">
+                    <span className="flex items-center px-3 bg-gray-50 border-r border-[#1F2937]/10 text-gray-500 text-sm">₹</span>
                     <input
                       type="number"
                       value={form.sellingPrice}
                       onChange={(e) => handleChange("sellingPrice", e.target.value)}
                       onWheel={(e) => e.target.blur()}
                       placeholder="0"
-                      className="flex-1 px-3 py-2.5 text-sm focus:outline-none min-w-0 bg-white"
+                      className="flex-1 px-3 text-sm text-[#1F2937] focus:outline-none min-w-0 bg-white"
                     />
                     <select
                       value={form.sellingPriceTax}
                       onChange={(e) => handleChange("sellingPriceTax", e.target.value)}
-                      className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none"
+                      className="px-2 bg-gray-50 border-l border-[#1F2937]/10 text-xs text-gray-600 focus:outline-none"
                     >
                       <option value="without Tax">without Tax</option>
                       <option value="with Tax">with Tax</option>
@@ -386,20 +411,20 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Purchase Price</label>
-                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                    <span className="flex items-center px-3 bg-gray-50 border-r border-gray-200 text-gray-500 text-sm">₹</span>
+                  <div className="flex h-11 border border-[#1F2937]/10 rounded-full overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 font-inter">
+                    <span className="flex items-center px-3 bg-gray-50 border-r border-[#1F2937]/10 text-gray-500 text-sm">₹</span>
                     <input
                       type="number"
                       value={form.purchasePrice}
                       onChange={(e) => handleChange("purchasePrice", e.target.value)}
                       onWheel={(e) => e.target.blur()}
                       placeholder="0"
-                      className="flex-1 px-3 py-2.5 text-sm focus:outline-none bg-white"
+                      className="flex-1 px-3 text-sm text-[#1F2937] focus:outline-none bg-white"
                     />
                     <select
                       value={form.purchasePriceTax}
                       onChange={(e) => handleChange("purchasePriceTax", e.target.value)}
-                      className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none"
+                      className="px-2 bg-gray-50 border-l border-[#1F2937]/10 text-xs text-gray-600 focus:outline-none"
                     >
                       <option value="with Tax">with Tax</option>
                       <option value="without Tax">without Tax</option>
@@ -437,7 +462,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 {showVariantForm && (
                   <div className="border border-gray-200 rounded-xl bg-white mb-3 shadow-sm">
                     <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                      <span className="text-sm font-semibold text-gray-900">
+                      <span className="text-[14px] font-medium text-[#1F2937] font-inter">
                         {variantIndex !== null ? "Edit Variant" : "Add Variant"}
                       </span>
                       <button type="button" onClick={() => { setShowVariantForm(false); setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); }} className="text-gray-400 hover:text-gray-600">
@@ -453,7 +478,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                         <label className={lbl}>SKU</label>
                         <div className="flex gap-2">
                           <input type="text" name="sku" value={currentVariant.sku} onChange={handleVariantChange} placeholder="Enter or Generate SKU" className={inp} />
-                          <button type="button" onClick={generateVariantSku} className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-4 py-2.5 rounded-full transition-colors whitespace-nowrap">Generate</button>
+                          <button type="button" onClick={generateVariantSku} className="flex-shrink-0 bg-[#158FFF] hover:opacity-90 text-white text-xs font-bold px-5 h-11 rounded-full transition-colors whitespace-nowrap font-inter">Generate</button>
                         </div>
                       </div>
                       <div>
@@ -467,8 +492,8 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                           <div className="space-y-2">
                             {Object.entries(currentVariant.attributes).map(([key, val], idx) => (
                               <div key={idx} className="flex gap-2 items-center">
-                                <input type="text" value={key} onChange={(e) => { const nk = e.target.value; setCurrentVariant((p) => { const a = { ...p.attributes }; const v = a[key]; delete a[key]; a[nk] = v; return { ...p, attributes: a }; }); }} placeholder="Name (e.g. color)" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                                <input type="text" value={val} onChange={(e) => setCurrentVariant((p) => ({ ...p, attributes: { ...p.attributes, [key]: e.target.value } }))} placeholder="Value (e.g. Red)" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                <input type="text" value={key} onChange={(e) => { const nk = e.target.value; setCurrentVariant((p) => { const a = { ...p.attributes }; const v = a[key]; delete a[key]; a[nk] = v; return { ...p, attributes: a }; }); }} placeholder="Name (e.g. color)" className="flex-1 border border-[#1F2937]/10 rounded-full px-3 h-11 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter" />
+                                <input type="text" value={val} onChange={(e) => setCurrentVariant((p) => ({ ...p, attributes: { ...p.attributes, [key]: e.target.value } }))} placeholder="Value (e.g. Red)" className="flex-1 border border-[#1F2937]/10 rounded-full px-3 h-11 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter" />
                                 <button type="button" onClick={() => setCurrentVariant((p) => { const a = { ...p.attributes }; delete a[key]; return { ...p, attributes: a }; })} className="text-red-500 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             ))}
@@ -503,11 +528,11 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                       </div>
                       <div className="flex items-center gap-2 pt-1">
                         <input type="checkbox" id="vActive" name="isActive" checked={currentVariant.isActive !== false} onChange={(e) => setCurrentVariant((p) => ({ ...p, isActive: e.target.checked }))} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                        <label htmlFor="vActive" className="text-sm font-medium text-gray-900 cursor-pointer">Active</label>
+                        <label htmlFor="vActive" className="text-sm font-medium text-[#161618] cursor-pointer font-inter">Active</label>
                       </div>
                       <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => { setShowVariantForm(false); setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); }} className="flex-1 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 py-2.5 text-sm transition-colors">Cancel</button>
-                        <button type="button" onClick={handleAddVariant} className="flex-1 bg-[#0085FF] hover:bg-blue-600 text-white font-semibold rounded-full py-2.5 text-sm transition-colors shadow-sm">{variantIndex !== null ? "Update Variant" : "Add Variant"}</button>
+                        <button type="button" onClick={() => { setShowVariantForm(false); setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); }} className="flex-1 border border-gray-200 text-gray-700 font-bold rounded-[25px] hover:bg-gray-50 py-2 text-sm transition-colors font-inter">Cancel</button>
+                        <button type="button" onClick={handleAddVariant} className="flex-1 bg-[#158FFF] hover:opacity-90 text-white font-bold rounded-[25px] py-2 text-sm transition-colors font-inter">{variantIndex !== null ? "Update Variant" : "Add Variant"}</button>
                       </div>
                     </div>
                   </div>
@@ -536,10 +561,10 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           </div>
 
           {/* ── Additional Information — flat section, no card wrapper ── */}
-          <div className="space-y-5">
-            <div className="pb-2 border-b border-gray-100">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Additional Information</span>
-              <span className="ml-2 text-xs text-gray-400">Optional</span>
+          <div className="space-y-4">
+            <div className="pb-1.5 border-b border-gray-100">
+              <span className="text-[16px] font-bold text-[#111216]">Additional Information</span>
+              <span className="ml-2 text-xs text-gray-400 font-normal">Optional</span>
             </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -576,25 +601,27 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={lbl}>Barcode</label>
-                  <div className="flex gap-2">
-                    <input type="text" value={form.barcode} onChange={(e) => handleChange("barcode", e.target.value)} placeholder="Enter or Generate Barcode" className={inp} />
-                    <button type="button" onClick={generateBarcode} className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap">Generate</button>
-                  </div>
+              {/* Barcode gets its own half-width row rather than sharing a grid row with
+                  Description below — pairing a single-line input against a 140px rich-text
+                  editor in a symmetric 2-col grid stretched the row to the editor's height,
+                  leaving Barcode's cell with a large dead gap underneath it. */}
+              <div className="w-1/2 pr-2">
+                <label className={lbl}>Barcode</label>
+                <div className="flex gap-2">
+                  <input type="text" value={form.barcode} onChange={(e) => handleChange("barcode", e.target.value)} placeholder="Enter or Generate Barcode" className={inp} />
+                  <button type="button" onClick={generateBarcode} className="flex-shrink-0 bg-[#158FFF] hover:opacity-90 text-white text-xs font-bold px-5 h-11 rounded-full transition-colors whitespace-nowrap font-inter">Generate</button>
                 </div>
-                <div>
-                  <label className={lbl}>Description</label>
-                  <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
-                    <ReactQuill
-                      theme="snow"
-                      value={form.description}
-                      onChange={(val) => handleChange("description", val)}
-                      placeholder="Add product description…"
-                      className="[&_.ql-editor]:min-h-[140px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
-                    />
-                  </div>
+              </div>
+              <div>
+                <label className={lbl}>Description</label>
+                <div className="border border-[#1F2937]/10 rounded-xl bg-white overflow-hidden">
+                  <ReactQuill
+                    theme="snow"
+                    value={form.description}
+                    onChange={(val) => handleChange("description", val)}
+                    placeholder="Add product description…"
+                    className="[&_.ql-editor]:min-h-[100px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                  />
                 </div>
               </div>
 
@@ -638,11 +665,11 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           </div>
 
           {/* ── Opening Stock — flat section, no card wrapper ── */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
               <div>
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opening Stock</span>
-                <span className="ml-2 text-xs text-gray-400">Optional</span>
+                <span className="text-[16px] font-bold text-[#111216]">Opening Stock</span>
+                <span className="ml-2 text-xs text-gray-400 font-normal">Optional</span>
               </div>
               <button type="button" disabled title="Upgrade to track batches" className="flex items-center gap-1 text-xs font-medium text-gray-400 cursor-not-allowed">
                 <Lock className="w-3 h-3" /> Add batches
@@ -675,12 +702,12 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               </div>
             </button>
             {showMoreDetails && (
-              <div className="border-t border-[#FDE3CC] bg-white px-5 py-5 grid grid-cols-2 gap-5">
+              <div className="border-t border-[#FDE3CC] bg-white px-5 py-4 grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Discount</label>
-                  <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
-                    <input type="number" min="0" value={form.discountValue} onChange={(e) => handleChange("discountValue", e.target.value)} className="flex-1 px-3 py-2.5 text-sm focus:outline-none" />
-                    <select value={form.discountType} onChange={(e) => handleChange("discountType", e.target.value)} className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none">
+                  <div className="flex h-11 border border-[#1F2937]/10 rounded-full overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 bg-white font-inter">
+                    <input type="number" min="0" value={form.discountValue} onChange={(e) => handleChange("discountValue", e.target.value)} className="flex-1 px-3 text-sm text-[#1F2937] focus:outline-none" />
+                    <select value={form.discountType} onChange={(e) => handleChange("discountType", e.target.value)} className="px-2 bg-gray-50 border-l border-[#1F2937]/10 text-xs text-gray-600 focus:outline-none">
                       <option value="percentage">% Percentage</option>
                       <option value="amount">₹ Amount</option>
                     </select>
@@ -735,19 +762,19 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
             )}
           </div>
 
-          <div className="pb-8" />
+          <div className="pb-4" />
         </div>
 
         {/* ── Footer ── */}
         <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-100 flex-shrink-0 rounded-b-2xl">
-          <button type="button" onClick={handleClose} className="px-5 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-full hover:bg-gray-50 transition-colors">
+          <button type="button" onClick={handleClose} className="px-6 py-2 border border-gray-200 text-gray-700 text-sm font-bold rounded-[25px] hover:bg-gray-50 transition-colors">
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-8 py-2 bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-semibold rounded-full transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-8 py-2 bg-[#158FFF] hover:opacity-90 text-white text-sm font-bold rounded-[25px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Adding…" : "Add Item"}
           </button>

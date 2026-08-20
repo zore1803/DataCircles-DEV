@@ -57,10 +57,19 @@ const ALL_COLUMNS = [
 const money = (n) =>
   `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/* When a product has variants, stock is tracked per-variant (variant.stock) — the parent
+   item's own inventory.currentStock is never touched for a variant product, so reading it
+   directly showed 0/stale numbers for anything with variants. Sum the variants instead;
+   fall back to the item's own currentStock for non-variant products. */
+const getItemStock = (item) =>
+  item.variants && item.variants.length > 0
+    ? item.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
+    : Number(item.inventory?.currentStock) || 0;
+
 /* Stock level → badge. Mirrors the backend's stockStatus filter exactly, so the badge a row
    shows and the status you can filter by can never disagree. */
 const stockStatusOf = (item) => {
-  const qty = Number(item.inventory?.currentStock) || 0;
+  const qty = getItemStock(item);
   const threshold = Number(item.inventory?.lowStockThreshold) || 0;
   if (qty <= 0) return { key: "out", label: "Out of Stock", cls: "bg-red-100 text-red-800" };
   if (qty <= threshold) return { key: "low", label: "Low Stock", cls: "bg-amber-100 text-amber-800" };
@@ -96,11 +105,11 @@ const cellTextFor = (colId, item) => {
   switch (colId) {
     case "item":          return item.name || "";
     case "category":      return item.category || "";
-    case "currentStock":  return String(item.inventory?.currentStock ?? 0);
+    case "currentStock":  return String(getItemStock(item));
     case "status":        return stockStatusOf(item).label;
     case "purchasePrice": return money(item.purchasePrice);
     case "sellingPrice":  return money(item.sellingPrice);
-    case "stockValue":    return money((item.inventory?.currentStock || 0) * (item.sellingPrice || 0));
+    case "stockValue":    return money(getItemStock(item) * (item.sellingPrice || 0));
     case "lastUpdated":   return relativeTime(item.inventory?.lastMovementAt);
     default:              return "";
   }
@@ -259,9 +268,9 @@ export default function Inventory() {
     const valueOf = (row, key) => {
       switch (key) {
         case "item": return row.name;
-        case "currentStock": return row.inventory?.currentStock ?? 0;
+        case "currentStock": return getItemStock(row);
         case "status": return stockStatusOf(row).label;
-        case "stockValue": return (row.inventory?.currentStock || 0) * (row.sellingPrice || 0);
+        case "stockValue": return getItemStock(row) * (row.sellingPrice || 0);
         default: return row[key];
       }
     };
@@ -544,13 +553,12 @@ export default function Inventory() {
       list.map((i) => ({
         Item: i.name || "",
         Category: i.category || "",
-        "Current Stock": Number(i.inventory?.currentStock) || 0,
+        "Current Stock": getItemStock(i),
         Unit: i.primaryUnit || "",
         Status: stockStatusOf(i).label,
         "Purchase Price": Number(i.purchasePrice) || 0,
         "Selling Price": Number(i.sellingPrice) || 0,
-        "Stock Value":
-          Math.max(Number(i.inventory?.currentStock) || 0, 0) * (Number(i.sellingPrice) || 0),
+        "Stock Value": Math.max(getItemStock(i), 0) * (Number(i.sellingPrice) || 0),
       }))
     );
     sheet["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
@@ -655,7 +663,7 @@ export default function Inventory() {
         );
         break;
       case "currentStock": {
-        const qty = Number(item.inventory?.currentStock) || 0;
+        const qty = getItemStock(item);
         content = (
           <div className="flex items-baseline gap-1.5">
             <span className={`text-sm font-bold ${qty <= 0 ? "text-red-600" : "text-gray-900"}`}>{qty}</span>
@@ -690,7 +698,7 @@ export default function Inventory() {
       case "stockValue":
         content = (
           <span className="text-sm font-semibold text-gray-900">
-            {money(Math.max(Number(item.inventory?.currentStock) || 0, 0) * (Number(item.sellingPrice) || 0))}
+            {money(Math.max(getItemStock(item), 0) * (Number(item.sellingPrice) || 0))}
           </span>
         );
         break;
@@ -975,8 +983,13 @@ export default function Inventory() {
             </tr>
           </thead>
 
-          <tbody className="bg-white">
-            {showLoadingSkeleton ? (
+          <tbody className={`bg-white transition-opacity duration-150 ${showLoadingSkeleton && items.length > 0 ? "opacity-60" : "opacity-100"}`}>
+            {/* Full skeleton rows only when there's no data on screen yet (first load, or a
+                search/filter that hasn't returned anything before). Once rows exist, a search
+                keystroke or page change just dims them (above) instead of wiping the whole
+                table to skeleton and back — that constant swap was the "breaking"/flicker on
+                every search/pagination request. */}
+            {showLoadingSkeleton && items.length === 0 ? (
               <TableSkeletonRows
                 numRows={pagination.limit}
                 columns={orderedColumns.map((c) => colWidths[c.id])}
@@ -1288,7 +1301,7 @@ export default function Inventory() {
         data={items}
         getFieldValue={(item, key) => {
           if (key === "item") return item.name;
-          if (key === "currentStock") return item.inventory?.currentStock ?? 0;
+          if (key === "currentStock") return getItemStock(item);
           if (key === "status") return stockStatusOf(item).label;
           return item[key];
         }}

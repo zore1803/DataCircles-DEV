@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
-import { Upload, X } from "lucide-react";
+import { Paperclip, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, editVendor = null }) => {
@@ -228,30 +228,6 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
       reader.readAsDataURL(file);
       setIsFormDirty(true);
     }
-  };
-
-  const getRandomColor = (name) => {
-    const colors = [
-      "bg-red-500",
-      "bg-green-500",
-      "bg-blue-500",
-      "bg-yellow-500",
-      "bg-purple-500",
-      "bg-pink-500",
-    ];
-    const index = name ? name.charCodeAt(0) % colors.length : 0;
-    return colors[index];
-  };
-
-  const getInitials = (name) => {
-    return (
-      name
-        ?.split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2) || "?"
-    );
   };
 
   const renderFieldInput = (fieldDef, value) => {
@@ -560,45 +536,61 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Profile Picture
               </label>
-              <div className="flex items-center space-x-6 p-4 border border-[#E0E0E1] rounded-xl bg-gray-50/50">
-                <div className="relative">
-                  {profilePreview ? (
-                    <img
-                      src={profilePreview}
-                      alt="Preview"
-                      className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-sm"
-                    />
-                  ) : (
-                    <div
-                      className={`w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-inner ${getRandomColor(
-                        form.name
-                      )}`}
-                    >
-                      {getInitials(form.name)}
-                    </div>
-                  )}
+              <div className="flex items-center gap-3">
+                {/* Pill-shaped "chosen file" field — shows the filename once
+                    picked (or the current photo while editing), otherwise the
+                    "Choose a file" placeholder — matching QuickCompanyForm's
+                    logo upload. */}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10 cursor-pointer"
+                >
+                  <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
+                    {profilePicture?.name || (profilePreview ? "Current photo" : "Choose a file")}
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    id="avatar"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="avatar"
-                    className="inline-flex items-center px-6 py-2 bg-white text-[#111216] text-[14px] font-bold rounded-xl hover:bg-gray-50 focus:outline-none cursor-pointer border border-[#E0E0E1] transition-colors shadow-sm"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Choose Photo
-                  </label>
-                  <p className="text-[12px] text-gray-500 mt-2 font-inter italic">
-                    PNG, JPG up to 5MB
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload profile picture"
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                >
+                  <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
               </div>
+              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPG upto 5MB</p>
+              {profilePreview && (
+                <div className="relative mt-2 inline-block">
+                  <img
+                    src={profilePreview}
+                    alt="Vendor"
+                    className="block max-h-20 max-w-[160px] w-auto h-auto object-contain rounded-lg border border-[#E0E0E1]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfilePicture(null);
+                      setProfilePreview(null);
+                      setIsFormDirty(true);
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
+                      }
+                    }}
+                    title="Remove photo"
+                    aria-label="Remove photo"
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white border border-[#E0E0E1] shadow-sm flex items-center justify-center text-[#1C1B1F] hover:bg-gray-50 transition-colors"
+                  >
+                    <X className="w-3 h-3" strokeWidth={2.5} />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>

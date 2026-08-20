@@ -4,6 +4,7 @@ import API from "../services/api";
 import PurchaseForm from "../components/purchase/PurchaseForm";
 import PurchasePreview from "../components/purchase/PurchasePreview";
 import ImportPurchases from "../components/purchase/ImportPurchases";
+import RecordPurchasePaymentModal from "../components/purchase/RecordPurchasePaymentModal";
 import BulkActions from "../components/BulkActions";
 import {
   ChevronUp,
@@ -77,6 +78,20 @@ const PurchasePage = () => {
   const [showForm, setShowForm] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return !!params.get("convertPO");
+  });
+  // PO id from PurchaseOrderPage's "Convert to Purchase" link — handed to
+  // PurchaseForm so it opens pre-linked/pre-filled instead of a blank form
+  // the user has to manually re-select the same PO in.
+  const [initialConvertPOId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("convertPO") || null;
+  });
+  // Purchase Order was already converted — PurchaseOrderPage's "View
+  // <purchaseNumber>" link lands here with ?view=<purchaseId> instead of
+  // silently doing nothing.
+  const [initialViewPurchaseId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("view") || null;
   });
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -156,6 +171,10 @@ const PurchasePage = () => {
   // Delete Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [purchaseToDelete, setPurchaseToDelete] = useState(null);
+
+  // Record Payment drawer
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [purchaseToPay, setPurchaseToPay] = useState(null);
 
   // Video Tutorial
   const [showVideoTutorial, setShowVideoTutorial] = useState(false);
@@ -304,6 +323,18 @@ const PurchasePage = () => {
     fetchVendors();
   }, []);
 
+  useEffect(() => {
+    if (!initialViewPurchaseId) return;
+    API.get(`/purchases/${initialViewPurchaseId}`)
+      .then((res) => {
+        setSelectedPurchase(res.data);
+        setShowPreview(true);
+      })
+      .catch((err) => {
+        toast.error(err.response?.data?.error || "Failed to load purchase");
+      });
+  }, [initialViewPurchaseId]);
+
   const fetchVendors = async () => {
     try {
       const res = await API.get("/vendors");
@@ -348,6 +379,11 @@ const PurchasePage = () => {
   const handleEdit = (purchase) => {
     setEditingPurchase(purchase);
     setShowForm(true);
+  };
+
+  const handleRecordPayment = (purchase) => {
+    setPurchaseToPay(purchase);
+    setShowPaymentModal(true);
   };
 
   const handleView = (purchase) => {
@@ -788,12 +824,31 @@ const PurchasePage = () => {
                     <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
                     Delete
                   </button>
+                  {p.status !== "Paid" && (
+                    <>
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                      >
+                        Change Status
+                      </button>
+                    </>
+                  )}
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    disabled={p.status === "Cancelled"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      handleRecordPayment(p);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${
+                      p.status === "Cancelled" ? "text-gray-400 cursor-not-allowed" : "text-[#158FFF] hover:bg-blue-50"
+                    }`}
                   >
-                    Change Status
+                    Record Payment
                   </button>
                 </>
               )}
@@ -1300,6 +1355,7 @@ const PurchasePage = () => {
         <PurchaseForm
           editingPurchase={editingPurchase}
           vendors={vendors}
+          initialPurchaseOrderId={!editingPurchase ? initialConvertPOId : null}
           onRequestClose={() => {
             setShowForm(false);
             setEditingPurchase(null);
@@ -1321,6 +1377,24 @@ const PurchasePage = () => {
           onDelete={() => {
             setShowPreview(false);
             handleDelete(selectedPurchase._id);
+          }}
+          onRecordPayment={() => {
+            setShowPreview(false);
+            handleRecordPayment(selectedPurchase);
+          }}
+        />
+      )}
+
+      {showPaymentModal && (
+        <RecordPurchasePaymentModal
+          isOpen={showPaymentModal}
+          purchase={purchaseToPay}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPurchaseToPay(null);
+          }}
+          onSuccess={() => {
+            fetchPurchases();
           }}
         />
       )}

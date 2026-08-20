@@ -879,20 +879,48 @@ const PurchaseOrderPage = () => {
                     <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
                     Delete
                   </button>
+                  {po.status !== "Delivered" && (
+                    <>
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                      >
+                        Change Status
+                      </button>
+                    </>
+                  )}
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                  >
-                    Change Status
-                  </button>
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); window.location.href = "/purchases?convertPO=" + po._id; }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#0085FF] hover:bg-blue-50 whitespace-nowrap"
-                  >
-                    Convert to Purchase
-                  </button>
+                  {po.convertedPurchase ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenRowActionsId(null);
+                        setRowActionsPos(null);
+                        window.location.href = "/purchases?view=" + po.convertedPurchase._id;
+                      }}
+                      title={`Already converted to ${po.convertedPurchase.purchaseNumber}`}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap text-gray-500 hover:bg-gray-50"
+                    >
+                      View {po.convertedPurchase.purchaseNumber}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (po.status !== "Approved" && po.status !== "Delivered") {
+                          toast.error("Only Approved or Delivered Purchase Orders can be converted.");
+                          return;
+                        }
+                        window.location.href = "/purchases?convertPO=" + po._id;
+                      }}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${
+                        po.status === "Approved" || po.status === "Delivered" ? "text-[#0085FF] hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      Convert to Purchase
+                    </button>
+                  )}
                 </>
               )}
             </div>

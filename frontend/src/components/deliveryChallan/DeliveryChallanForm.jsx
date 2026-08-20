@@ -160,8 +160,9 @@ const ItemSearchSelect = ({
       quantity: 1,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount — previously always started at 0.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -406,6 +407,10 @@ const DeliveryChallanForm = ({
               name: variant.name,
               description: variant.description || item.description || "",
               sellingPrice: variant.sellingPrice || item.sellingPrice,
+              // Discount only lives on the parent Item (variants have no
+              // discount field of their own) — same catalog default for
+              // every variant of a product.
+              discount: variant.discount || item.discount,
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -422,6 +427,7 @@ const DeliveryChallanForm = ({
               name: item.name,
               description: item.description || "",
               sellingPrice: item.sellingPrice,
+              discount: item.discount,
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -715,8 +721,10 @@ const DeliveryChallanForm = ({
       newItems[index] = {
         ...itemData,
         quantity: newItems[index].quantity || 1,
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData carries it from
+        // the catalog) instead of the stale blank row's discount.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,

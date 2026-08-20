@@ -399,6 +399,18 @@ const ItemForm = ({
     try {
       setLoading(true);
 
+      // A variant typed into the open "Add Variant" panel only lives in
+      // currentVariant until its own "Add Variant" button commits it into
+      // `variants` — submitting the outer form directly (without clicking
+      // that button first) used to silently drop it. Auto-commit it here so
+      // whatever's on screen actually gets saved.
+      const variantsToSave =
+        showVariantForm && currentVariant.name?.trim()
+          ? variantIndex !== null
+            ? variants.map((v, i) => (i === variantIndex ? currentVariant : v))
+            : [...variants, currentVariant]
+          : variants;
+
       // Flatten the entered custom-field values into the array shape the
       // Item model stores. Multiselect arrays collapse to a comma-separated
       // string, matching how the other modules persist them.
@@ -427,7 +439,7 @@ const ItemForm = ({
             fd.append(key, typeof value === "boolean" ? String(value) : value);
           }
         );
-        fd.append("variants", JSON.stringify(variants));
+        fd.append("variants", JSON.stringify(variantsToSave));
         fd.append("additionalFields", JSON.stringify(processedAdditionalFields));
         fd.append("discount", JSON.stringify(form.discount || { type: "percentage", value: 0 }));
         // Nested object, so it must be JSON-stringified like variants/discount above —
@@ -446,7 +458,7 @@ const ItemForm = ({
       } else {
         const payload = {
           ...form,
-          variants,
+          variants: variantsToSave,
           additionalFields: processedAdditionalFields,
           images: existingImages,
         };

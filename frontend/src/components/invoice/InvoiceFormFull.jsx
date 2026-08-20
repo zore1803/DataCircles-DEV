@@ -22,6 +22,7 @@ import TemplateDrawer from "./TemplateDrawer";
 import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
+import InsufficientStockDialog from "../common/InsufficientStockDialog";
 import toast from "react-hot-toast";
 import { computeDocument } from "../../../../shared/documentTemplates";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
@@ -193,8 +194,11 @@ const ItemSearchSelect = ({
       taxInclusive: !!item.taxInclusive,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount (set in QuickItemDrawer's "More
+      // Details" -> Discount) — previously always started at 0, ignoring
+      // whatever default the product was configured with.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     });
     setIsOpen(false);
     setSearchTerm(item.displayName);
@@ -416,6 +420,7 @@ const InvoiceFormFull = ({
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stockErrorMessage, setStockErrorMessage] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [items, setItems] = useState([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -460,6 +465,10 @@ const InvoiceFormFull = ({
               // sellingPrice/hsnSac above.
               gstRate: variant.gstRate ?? item.gstRate ?? 0,
               taxInclusive: !!(variant.taxInclusive ?? item.taxInclusive),
+              // Discount only lives on the parent Item (variants have no
+              // discount field of their own) — same catalog default for
+              // every variant of a product.
+              discount: item.discount || { type: "percentage", value: 0 },
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -479,6 +488,7 @@ const InvoiceFormFull = ({
               hsnSac: item.hsnSac || "",
               gstRate: item.gstRate ?? 0,
               taxInclusive: !!item.taxInclusive,
+              discount: item.discount || { type: "percentage", value: 0 },
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -845,8 +855,10 @@ const InvoiceFormFull = ({
         ...itemData,
         quantity: newItems[index].quantity || 1,
         hsn: itemData.hsn || "",
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData carries it from
+        // the catalog) instead of the stale blank row's discount.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,
@@ -880,8 +892,10 @@ const InvoiceFormFull = ({
       taxInclusive: !!item.taxInclusive,
       isVariant: false,
       parentItemId: null,
-      discountType: "amount",
-      discount: 0,
+      // Copy the product's own default discount, same as the search-select
+      // path below — the quick-add path was previously hardcoding 0.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     };
     setForm((prev) => {
       const isBlankStarterRow =
@@ -1094,10 +1108,18 @@ const InvoiceFormFull = ({
       await fetchData();
       onClose();
     } catch (err) {
-      const errorMessage = err.response?.status === 402
-        ? (err.response?.data?.message || "An active subscription is required to make changes.")
-        : (err.response?.data?.error || (editingInvoice ? "Failed to update invoice" : "Failed to create invoice"));
-      toast.error(errorMessage);
+      const serverMessage = err.response?.data?.error || "";
+      if (/insufficient stock/i.test(serverMessage)) {
+        // A toast disappears before the user can act on it — this failure
+        // needs a deliberate response (go fix the quantity), not a passive
+        // notice, so it gets a dialog instead.
+        setStockErrorMessage(serverMessage);
+      } else {
+        const errorMessage = err.response?.status === 402
+          ? (err.response?.data?.message || "An active subscription is required to make changes.")
+          : (serverMessage || (editingInvoice ? "Failed to update invoice" : "Failed to create invoice"));
+        toast.error(errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -2145,6 +2167,12 @@ const InvoiceFormFull = ({
           onClose={() => setShowTemplates(false)}
           type="tax"
           docLabel="Invoice"
+        />
+
+        <InsufficientStockDialog
+          isOpen={!!stockErrorMessage}
+          message={stockErrorMessage}
+          onClose={() => setStockErrorMessage(null)}
         />
       </div>
     </>

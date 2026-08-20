@@ -340,12 +340,30 @@ const PurchaseOrderForm = ({
     setItems(newItems);
   };
 
-  const totalAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
-    0,
-  );
+  const subtotal = items.reduce((sum, item) => {
+    let itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    if (item.taxInclusive) {
+      itemTotal = itemTotal / (1 + (parseFloat(item.gstRate) || 0) / 100);
+    }
+    return sum + itemTotal;
+  }, 0);
+
+  // Calculate tax
+  const totalTax = items.reduce((sum, item) => {
+    const itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    const rate = parseFloat(item.gstRate) || 0;
+    
+    if (rate <= 0) return sum;
+    
+    if (item.taxInclusive) {
+      const base = itemTotal / (1 + rate / 100);
+      return sum + (itemTotal - base);
+    } else {
+      return sum + (itemTotal * (rate / 100));
+    }
+  }, 0);
+
+  const grandTotal = subtotal + totalTax;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -376,6 +394,8 @@ const PurchaseOrderForm = ({
         amount:
           (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
         sku: item.sku,
+        gstRate: parseFloat(item.gstRate) || 0,
+        taxInclusive: item.taxInclusive || false,
       })),
       paymentTerms,
       notes,
@@ -658,27 +678,7 @@ const PurchaseOrderForm = ({
                     </div>
                   </div>
 
-                  {/* Purchase Price & Selling Price */}
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
-                      Purchase Price <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter Purchase Price"
-                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
-                      Selling Price <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter Selling Price"
-                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                    />
-                  </div>
+
                 </div>
               ))}
             </div>
@@ -747,7 +747,13 @@ const PurchaseOrderForm = ({
               options={statusOptions}
               value={status}
               onChange={setStatus}
+              disabled={editingPO?.status === "Delivered"}
             />
+            {editingPO?.status === "Delivered" && (
+              <p className="mt-1.5 text-[11px] text-gray-400">
+                A Delivered Purchase Order can't be changed to another status.
+              </p>
+            )}
           </div>
 
           {/* Total Amount Banner */}
@@ -756,7 +762,7 @@ const PurchaseOrderForm = ({
               Total Amount
             </span>
             <span className="text-[#0085FF] font-medium text-base">
-              ₹{formatNumberFixed(totalAmount)}
+              ₹{formatNumberFixed(grandTotal)}
             </span>
           </div>
         </div>

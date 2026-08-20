@@ -1,9 +1,7 @@
 // controllers/journalController.js
 //
-// Basic Journal CRUD + Ledger read. Pay In / Pay Out write endpoints are
-// intentionally NOT here yet — the JournalEntry model exists so the Ledger
-// has something real to query, but nothing creates entries until that UI
-// is built in a follow-up pass. See models/Journal.js / JournalEntry.js.
+// Basic Journal CRUD + Ledger read/write. See models/Journal.js / JournalEntry.js.
+const mongoose = require("mongoose");
 const Journal = require("../models/Journal");
 const JournalEntry = require("../models/JournalEntry");
 
@@ -137,6 +135,147 @@ exports.deleteJournal = async (req, res) => {
 
     res.json({ message: "Journal deleted successfully" });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Pay In / Pay Out — appends one signed JournalEntry and moves the Journal's
+// currentBalance by it in the same transaction, so the two can never drift
+// apart. Direction is entirely determined by the caller's `type` (set by
+// which button the user clicked) — there is no separate Credit/Debit choice
+// on the form itself, matching how openingBalance already works.
+exports.addJournalEntry = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { type, date, partyType, partyName, amount, paymentType, bank, referenceId, notes, internalNotes } = req.body;
+
+    if (type !== "payin" && type !== "payout") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "type must be 'payin' or 'payout'" });
+    }
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Amount must be a number greater than zero" });
+    }
+
+    const journal = await Journal.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!journal) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Journal not found or access denied" });
+    }
+
+    if (journal.status === "cancelled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Cannot record a transaction against a cancelled journal" });
+    }
+
+    // Pay In always adds, Pay Out always subtracts — the sign lives entirely in `type`.
+    const balanceAfter = journal.currentBalance + (type === "payin" ? parsedAmount : -parsedAmount);
+
+    const [entry] = await JournalEntry.create(
+      [
+        {
+          organization: req.user.organization,
+          journal: journal._id,
+          user: req.user._id,
+          type,
+          date: date ? new Date(date) : new Date(),
+          partyType: partyType || "",
+          partyName: partyName || "",
+          amount: parsedAmount,
+          paymentType: paymentType || "",
+          bank: bank || "",
+          referenceId: referenceId || "",
+          notes: notes || "",
+          internalNotes: internalNotes || "",
+          balanceAfter,
+        },
+      ],
+      { session }
+    );
+
+    journal.currentBalance = balanceAfter;
+    await journal.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json({ entry, journal });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Delete one Pay In / Pay Out entry. Every later entry's stored balanceAfter
+// is recomputed by replaying from the opening balance, since removing an
+// entry from the middle of the ledger shifts every running total after it —
+// and the Journal's own currentBalance is reset to match the new last row
+// (or the opening balance, if that was the only entry).
+exports.deleteJournalEntry = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const journal = await Journal.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!journal) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Journal not found or access denied" });
+    }
+
+    const target = await JournalEntry.findOne({
+      _id: req.params.entryId,
+      journal: journal._id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!target) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Entry not found" });
+    }
+
+    await JournalEntry.deleteOne({ _id: target._id }).session(session);
+
+    const remaining = await JournalEntry.find({ journal: journal._id })
+      .sort({ date: 1, createdAt: 1 })
+      .session(session);
+
+    let runningBalance = toSignedBalance(journal.openingBalance, journal.balanceType);
+    for (const entry of remaining) {
+      runningBalance += entry.type === "payin" ? entry.amount : -entry.amount;
+      entry.balanceAfter = runningBalance;
+      await entry.save({ session });
+    }
+
+    journal.currentBalance = runningBalance;
+    await journal.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ message: "Entry deleted successfully", journal });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ error: err.message });
   }
 };

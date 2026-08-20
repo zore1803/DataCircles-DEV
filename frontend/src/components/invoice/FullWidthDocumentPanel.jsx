@@ -390,6 +390,11 @@ const FullWidthDocumentPanel = ({
                               hsn: picked.hsnSac || "",
                               isVariant: picked.isVariant,
                               parentItemId: picked.parentItemId,
+                              // The product's own default discount — previously
+                              // never copied, so a picked item's discount stayed
+                              // whatever the blank row started with (0).
+                              discountType: picked.discount?.type || "amount",
+                              discount: picked.discount?.value || 0,
                             });
                           }}
                         />

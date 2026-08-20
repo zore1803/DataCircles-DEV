@@ -10,6 +10,11 @@ const purchaseItemSchema = new mongoose.Schema(
     total: { type: Number, min: 0 }, // per item total (quantity * unitPrice)
     sku: { type: String },
     variantAttributes: { type: Map, of: String },
+    // Per-item GST/Tax-Inc. override (PurchaseForm.jsx lets each line carry its own rate,
+    // separate from the document-level gstRate above) — was being sent by the frontend but
+    // silently dropped since this schema never declared the fields.
+    gstRate: { type: Number, default: 0, min: 0 },
+    taxInclusive: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -48,6 +53,23 @@ const purchaseSchema = new mongoose.Schema(
       default: "Draft",
     },
     notes: { type: String, default: "" },
+    // Payment records against this Purchase — same shape as Invoice.payments,
+    // so vendor payments can be recorded/tracked the same way customer
+    // payments are, including partial payments.
+    payments: [{
+      amount: { type: Number, required: true },
+      paymentDate: { type: Date, default: Date.now },
+      paymentMethod: {
+        type: String,
+        enum: ['Cash', 'UPI', 'Net Banking', 'Cheque', 'Card', 'NEFT', 'RTGS', 'IMPS', 'EMI', 'TDS', 'Other'],
+        default: 'UPI',
+      },
+      reference: { type: String, default: '' },
+      notes: { type: String, default: '' },
+      internalNotes: { type: String, default: '' },
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      recordedAt: { type: Date, default: Date.now },
+    }],
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     organization: {
       type: mongoose.Schema.Types.ObjectId,

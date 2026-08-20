@@ -193,8 +193,9 @@ const ItemSearchSelect = ({
       taxInclusive: !!item.taxInclusive,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount — previously always started at 0.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     });
     setIsOpen(false);
     setSearchTerm(item.displayName);
@@ -457,6 +458,9 @@ const PerformaInvoiceFormFull = ({
               // sellingPrice/hsnSac above.
               gstRate: variant.gstRate ?? item.gstRate ?? 0,
               taxInclusive: !!(variant.taxInclusive ?? item.taxInclusive),
+              // Threaded through so handleItemSelect can copy the product's
+              // default discount (variant falls back to the parent item's).
+              discount: variant.discount || item.discount,
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -476,6 +480,7 @@ const PerformaInvoiceFormFull = ({
               hsnSac: item.hsnSac || "",
               gstRate: item.gstRate ?? 0,
               taxInclusive: !!item.taxInclusive,
+              discount: item.discount,
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -842,8 +847,10 @@ const PerformaInvoiceFormFull = ({
         ...itemData,
         quantity: newItems[index].quantity || 1,
         hsn: itemData.hsn || "",
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData carries it from
+        // the catalog) instead of the stale blank row's discount.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,
@@ -878,8 +885,8 @@ const PerformaInvoiceFormFull = ({
       isVariant: false,
               parentItemId: null,
               stock: item.inventory?.currentStock ?? 0,
-      discountType: "amount",
-      discount: 0,
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     };
     setForm((prev) => {
       const isBlankStarterRow =

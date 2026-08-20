@@ -1,12 +1,110 @@
 const PurchaseOrder = require("../models/PurchaseOrder");
+const Purchase = require("../models/Purchase");
 const Vendor = require("../models/Vendor");
 const Branding = require("../models/Branding");
 const purchaseDocumentPdf = require("../utils/purchaseDocumentPdf");
+const { syncDocumentStock } = require("../utils/inventorySync");
 
 // Helper function to generate unique PO number per organization
 async function generatePONumber(organizationId) {
   const count = await PurchaseOrder.countDocuments({ organization: organizationId });
   return `PO-${(count + 1).toString().padStart(5, "0")}`;
+}
+
+// Helper function to calculate item total
+function calculateItemTotal(quantity, unitPrice) {
+  return (parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0);
+}
+
+// Helper function to calculate subtotal
+function calculateSubtotal(items) {
+  return items.reduce((sum, item) => sum + calculateItemTotal(item.quantity, item.unitPrice), 0);
+}
+
+// Helper function to calculate tax (CGST+SGST for intra, IGST for inter — same split as purchaseController).
+function calculateTax(items) {
+  return items.reduce((sum, item) => sum + (parseFloat(item.taxAmount) || 0), 0);
+}
+
+// Attaches a `convertedPurchase` summary ({_id, purchaseNumber}) to each PO so
+// the frontend can show "already converted" and hide/disable "Convert to
+// Purchase" instead of only finding out when the create call 400s.
+async function attachConvertedPurchaseInfo(purchaseOrders, organizationId) {
+  const list = Array.isArray(purchaseOrders) ? purchaseOrders : [purchaseOrders];
+  const ids = list.map((po) => po._id).filter(Boolean);
+  if (ids.length === 0) return purchaseOrders;
+
+  const linkedPurchases = await Purchase.find({
+    purchaseOrder: { $in: ids },
+    organization: organizationId,
+  }).select("_id purchaseNumber purchaseOrder").lean();
+
+  const byPoId = new Map(linkedPurchases.map((p) => [String(p.purchaseOrder), p]));
+
+  list.forEach((po) => {
+    const linked = byPoId.get(String(po._id));
+    const summary = linked ? { _id: linked._id, purchaseNumber: linked.purchaseNumber } : null;
+    // Mongoose documents only serialize schema paths + `_doc` — an arbitrary
+    // instance property like `po.convertedPurchase = x` would silently vanish
+    // from res.json(). Lean objects (from .lean() queries) are plain objects,
+    // so a direct assignment is enough for them.
+    if (po._doc) {
+      po._doc.convertedPurchase = summary;
+    } else {
+      po.convertedPurchase = summary;
+    }
+  });
+
+  return purchaseOrders;
+}
+
+// Applies/reverses the inventory movement for a PurchaseOrder transitioning
+// into or out of "Delivered" — the single inventory-triggering event for the
+// PO -> Purchase workflow. Converting to a Purchase, and that Purchase later
+// being marked Paid, must never touch stock — it was already moved here.
+//
+// Guarded by stockMovementStatus so re-saving, re-delivering, converting to a
+// Purchase, or marking that Purchase Paid can never double the stock
+// increase — Delivered can only ever apply its movement once until reversed.
+async function syncPurchaseOrderDeliveryStock(purchaseOrder, oldStatus, oldStockMovementStatus, userId) {
+  const newStatus = purchaseOrder.status;
+  const isNowDelivered = newStatus === "Delivered";
+  const wasDelivered = oldStatus === "Delivered";
+
+  if (isNowDelivered && !wasDelivered && oldStockMovementStatus !== "applied") {
+    // -> Delivered: goods have physically arrived, increase stock exactly once.
+    await syncDocumentStock({
+      organization: purchaseOrder.organization,
+      documentId: purchaseOrder._id,
+      documentModel: "PurchaseOrder",
+      documentNumber: purchaseOrder.poNumber,
+      items: purchaseOrder.items,
+      previousItems: [],
+      baseDirection: "in",
+      userId,
+      reason: "purchase_received",
+      isReversal: false,
+    });
+    purchaseOrder.stockMovementStatus = "applied";
+    await purchaseOrder.save({ validateModifiedOnly: true });
+  } else if (!isNowDelivered && wasDelivered && oldStockMovementStatus === "applied") {
+    // Delivered -> anything else (Pending/Approved/Rejected): reverse the
+    // earlier increase so the ledger stays accurate.
+    await syncDocumentStock({
+      organization: purchaseOrder.organization,
+      documentId: purchaseOrder._id,
+      documentModel: "PurchaseOrder",
+      documentNumber: purchaseOrder.poNumber,
+      items: purchaseOrder.items,
+      previousItems: [],
+      baseDirection: "in",
+      userId,
+      reason: "adjustment",
+      isReversal: true,
+    });
+    purchaseOrder.stockMovementStatus = "reversed";
+    await purchaseOrder.save({ validateModifiedOnly: true });
+  }
 }
 
 // Create Purchase Order
@@ -76,6 +174,7 @@ exports.getAllPurchaseOrders = async (req, res) => {
     }
     
     const purchaseOrders = await PurchaseOrder.find(query).populate("vendor");
+    await attachConvertedPurchaseInfo(purchaseOrders, req.user.organization);
     res.json(purchaseOrders);
   } catch (err) {
     console.error("Error fetching purchase orders:", err);
@@ -139,7 +238,8 @@ exports.getAllPurchaseOrdersWithPagination = async (req, res) => {
         .select('-__v'), // Exclude version field
       PurchaseOrder.countDocuments(query)
     ]);
-    
+    await attachConvertedPurchaseInfo(purchaseOrders, req.user.organization);
+
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalCount / limit);
     const hasNextPage = page < totalPages;
@@ -202,6 +302,7 @@ exports.getPurchaseOrderById = async (req, res) => {
     }).populate("vendor");
     
     if (!purchaseOrder) return res.status(404).json({ message: "Purchase Order not found" });
+    await attachConvertedPurchaseInfo(purchaseOrder, req.user.organization);
     res.json(purchaseOrder);
   } catch (err) {
     console.error("Error fetching purchase order:", err);
@@ -218,8 +319,20 @@ exports.updatePurchaseOrder = async (req, res) => {
       _id: req.params.id,
       organization: req.user.organization
     });
-    
+
     if (!purchaseOrder) return res.status(404).json({ message: "Purchase Order not found" });
+
+    // Captured before any field changes below, so the Delivered stock sync
+    // (after save) can tell what actually transitioned.
+    const oldStatus = purchaseOrder.status;
+    const oldStockMovementStatus = purchaseOrder.stockMovementStatus;
+
+    // Delivered is terminal — same rule as updatePurchaseOrderStatus, applied
+    // here too since this endpoint is also how the edit form and bulk status
+    // updates change status.
+    if (oldStatus === "Delivered" && status && status !== "Delivered") {
+      return res.status(400).json({ message: "A Delivered Purchase Order can't be changed to another status." });
+    }
 
     // Update fields
     if (items) {
@@ -252,6 +365,12 @@ exports.updatePurchaseOrder = async (req, res) => {
     if (status) purchaseOrder.status = status;
 
     await purchaseOrder.save();
+
+    // Applies/reverses the Delivered stock movement. Covers both the edit
+    // form (which sends items+status together) and bulk status updates from
+    // the list page, which PUT here rather than the /status endpoint below.
+    await syncPurchaseOrderDeliveryStock(purchaseOrder, oldStatus, oldStockMovementStatus, req.user.id);
+
     res.json(purchaseOrder);
   } catch (err) {
     console.error("Update purchase order error:", err);
@@ -264,24 +383,44 @@ exports.updatePurchaseOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
     const validStatuses = ["Pending", "Approved", "Rejected", "Delivered"];
-    
+
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
+    const existingPO = await PurchaseOrder.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!existingPO) {
+      return res.status(404).json({ message: "Purchase Order not found" });
+    }
+    const oldStatus = existingPO.status;
+    const oldStockMovementStatus = existingPO.stockMovementStatus;
+
+    // Delivered is terminal — goods have already been recorded as received
+    // and stock moved accordingly, so it can't be walked back through the
+    // status dropdown. (Not enforced via the enum itself since Delivered is
+    // still a perfectly valid status to reach.)
+    if (oldStatus === "Delivered" && status !== "Delivered") {
+      return res.status(400).json({ message: "A Delivered Purchase Order can't be changed to another status." });
+    }
+
     const purchaseOrder = await PurchaseOrder.findOneAndUpdate(
-      { 
+      {
         _id: req.params.id,
-        organization: req.user.organization 
+        organization: req.user.organization
       },
       { status },
       { new: true }
     );
-    
+
     if (!purchaseOrder) {
       return res.status(404).json({ message: "Purchase Order not found" });
     }
-    
+
+    await syncPurchaseOrderDeliveryStock(purchaseOrder, oldStatus, oldStockMovementStatus, req.user.id);
+
     res.json(purchaseOrder);
   } catch (err) {
     console.error("Update purchase order status error:", err);
@@ -292,15 +431,34 @@ exports.updatePurchaseOrderStatus = async (req, res) => {
 // Delete Purchase Order
 exports.deletePurchaseOrder = async (req, res) => {
   try {
-    const purchaseOrder = await PurchaseOrder.findOneAndDelete({
+    const purchaseOrder = await PurchaseOrder.findOne({
       _id: req.params.id,
       organization: req.user.organization
     });
-    
+
     if (!purchaseOrder) {
       return res.status(404).json({ message: "Purchase Order not found" });
     }
-    
+
+    // Deleting a Delivered PO must reverse its stock increase — otherwise the
+    // stock stays inflated with no surviving document to explain why.
+    if (purchaseOrder.stockMovementStatus === "applied") {
+      await syncDocumentStock({
+        organization: req.user.organization,
+        documentId: purchaseOrder._id,
+        documentModel: "PurchaseOrder",
+        documentNumber: purchaseOrder.poNumber,
+        items: purchaseOrder.items,
+        previousItems: [],
+        baseDirection: "in",
+        userId: req.user.id,
+        reason: "adjustment",
+        isReversal: true,
+      });
+    }
+
+    await purchaseOrder.deleteOne();
+
     res.json({ message: "Purchase Order deleted successfully" });
   } catch (err) {
     console.error("Delete purchase order error:", err);

@@ -192,8 +192,9 @@ const ItemSearchSelect = ({
       gstRate: item.gstRate ?? 0,
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount — previously always started at 0.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     });
     setIsOpen(false);
     setSearchTerm(item.displayName);
@@ -453,6 +454,10 @@ const DeliveryChallanFormFull = ({
               // Variant's own rate falls back to the parent item's, same as
               // sellingPrice/hsnSac above.
               gstRate: variant.gstRate ?? item.gstRate ?? 0,
+              // Discount only lives on the parent Item (variants have no
+              // discount field of their own) — same catalog default for
+              // every variant of a product.
+              discount: variant.discount || item.discount,
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -471,6 +476,7 @@ const DeliveryChallanFormFull = ({
               sellingPrice: item.sellingPrice,
               hsnSac: item.hsnSac || "",
               gstRate: item.gstRate ?? 0,
+              discount: item.discount,
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -833,8 +839,10 @@ const DeliveryChallanFormFull = ({
         ...itemData,
         quantity: newItems[index].quantity || 1,
         hsn: itemData.hsn || "",
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData carries it from
+        // the catalog) instead of the stale blank row's discount.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,
@@ -868,8 +876,8 @@ const DeliveryChallanFormFull = ({
       isVariant: false,
               parentItemId: null,
               stock: item.inventory?.currentStock ?? 0,
-      discountType: "amount",
-      discount: 0,
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     };
     setForm((prev) => {
       const isBlankStarterRow =

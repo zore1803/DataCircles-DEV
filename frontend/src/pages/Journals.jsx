@@ -1,16 +1,18 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
-  BookOpen, Plus, X, ChevronDown, ChevronUp, MoreVertical, Pin, PinOff,
+  BookOpen, Plus, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, MoreVertical, Pin, PinOff,
   EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { getAncestorZoom } from "../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import QuickJournalForm from "../components/journal/QuickJournalForm";
 import JournalLedgerDrawer from "../components/journal/JournalLedgerDrawer";
+import PayInOutModal from "../components/journal/PayInOutModal";
 import API from "../services/api";
 
 /*
@@ -18,10 +20,8 @@ import API from "../services/api";
  * Deals.jsx/Contacts.jsx/Tasks.jsx/Inventory.jsx already have (this mirrors
  * Inventory.jsx's implementation directly). Backed by the real Journal API
  * now (see backend/routes/journalRoutes.js): list/create/edit/delete all
- * hit the server. Pay In/Pay Out are still local "coming soon" stubs — that
- * write path (and the entries it creates) is a follow-up pass; Ledger
- * already reads real data, it'll just show more than the Opening Balance
- * row once Pay In/Pay Out exist.
+ * hit the server. Pay In/Pay Out post to POST /journals/:id/entries and
+ * update both the row's balance here and (if open) the Ledger drawer.
  */
 
 const DEFAULT_COL_WIDTHS = {
@@ -73,12 +73,24 @@ export default function Journals() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [editingJournal, setEditingJournal] = useState(null);
   const [ledgerJournalId, setLedgerJournalId] = useState(null);
+  const [payModal, setPayModal] = useState({ open: false, journal: null, type: "payin" });
+  // Bumped whenever a Pay In/Out lands while the Ledger drawer for that same
+  // journal is open, so JournalLedgerDrawer knows to re-pull its rows.
+  const [ledgerRefreshKey, setLedgerRefreshKey] = useState(0);
   const searchInputRef = useRef(null);
 
   /* journal list — fetched from the real API */
   const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("active"); // "active" | "cancelled"
+
+  /* pagination — client-side over the already-loaded list (journals don't
+     paginate server-side; the whole org's list is small enough to fetch in
+     one call), same edge-to-edge bottom-bar treatment as PaymentsTimeline.jsx/
+     Inventory.jsx/PurchasePage.jsx. */
+  const [journalsPagination, setJournalsPagination] = useState({ currentPage: 1, limit: 20 });
+  const [editingJournalsPage, setEditingJournalsPage] = useState(false);
+  const [journalsPageInput, setJournalsPageInput] = useState("");
 
   const fetchJournals = useCallback(async () => {
     setLoading(true);
@@ -335,6 +347,28 @@ export default function Journals() {
     return list;
   }, [journals, activeTab, searchTerm, sortConfig]);
 
+  // Reset to page 1 whenever the visible set changes shape (tab/search/sort) —
+  // otherwise a narrowed result set can strand the user on a now-empty page.
+  useEffect(() => {
+    setJournalsPagination((p) => ({ ...p, currentPage: 1 }));
+  }, [activeTab, searchTerm, sortConfig]);
+
+  const journalsTotalCount = filteredJournals.length;
+  const journalsTotalPages = Math.max(1, Math.ceil(journalsTotalCount / journalsPagination.limit));
+  const paginatedJournals = useMemo(() => {
+    const start = (journalsPagination.currentPage - 1) * journalsPagination.limit;
+    return filteredJournals.slice(start, start + journalsPagination.limit);
+  }, [filteredJournals, journalsPagination]);
+
+  const handleJournalsPageChange = (page) => {
+    if (page >= 1 && page <= journalsTotalPages && page !== journalsPagination.currentPage) {
+      setJournalsPagination((p) => ({ ...p, currentPage: page }));
+    }
+  };
+  const handleJournalsLimitChange = (limit) => {
+    setJournalsPagination({ currentPage: 1, limit });
+  };
+
   const handleDeleteJournal = async (j) => {
     try {
       await API.delete(`/journals/${j._id}`);
@@ -349,7 +383,7 @@ export default function Journals() {
   const renderActionMenu = (j) => {
     const isOpen = openActionMenuId === j._id;
     const closeMenu = () => { setOpenActionMenuId(null); setActionMenuPos(null); };
-    const comingSoon = (label) => { closeMenu(); toast(`${label} — coming soon`, { icon: "🛠️" }); };
+    const openPay = (payType) => { closeMenu(); setPayModal({ open: true, journal: j, type: payType }); };
     return (
       <div className="relative flex-shrink-0 flex items-center">
         <button
@@ -390,11 +424,17 @@ export default function Journals() {
               >
                 <Pencil className="w-4 h-4 text-blue-600" /> Edit
               </button>
-              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => comingSoon("Pay In")}>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => openPay("payin")}>
                 <ArrowDownCircle className="w-4 h-4 text-green-600" /> Pay In
               </button>
-              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => comingSoon("Pay Out")}>
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => openPay("payout")}>
                 <ArrowUpCircle className="w-4 h-4 text-red-600" /> Pay Out
+              </button>
+              <button
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={() => { closeMenu(); setLedgerJournalId(j._id); }}
+              >
+                <Eye className="w-4 h-4 text-gray-400" /> Ledger
               </button>
               <div className="h-px bg-gray-100 my-1" />
               <button
@@ -459,17 +499,9 @@ export default function Journals() {
     return (
       <div className="flex items-center justify-between gap-2 w-full min-w-0">
         <div className="flex-1 min-w-0">{content}</div>
-        {isRightmost && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button
-              onClick={(e) => { e.stopPropagation(); setLedgerJournalId(j._id); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold hover:bg-purple-100 transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" /> Ledger
-            </button>
-            {renderActionMenu(j)}
-          </div>
-        )}
+        {/* Ledger lives solely in the ⋮ menu — the inline pill duplicated it on every
+            row and crowded the last column. */}
+        {isRightmost && renderActionMenu(j)}
       </div>
     );
   };
@@ -584,13 +616,32 @@ export default function Journals() {
       <JournalLedgerDrawer
         isOpen={!!ledgerJournalId}
         journalId={ledgerJournalId}
+        refreshKey={ledgerRefreshKey}
         onClose={() => setLedgerJournalId(null)}
+        onOpenPayIn={(journal) => setPayModal({ open: true, journal, type: "payin" })}
+        onOpenPayOut={(journal) => setPayModal({ open: true, journal, type: "payout" })}
+      />
+
+      <PayInOutModal
+        isOpen={payModal.open}
+        journal={payModal.journal}
+        type={payModal.type}
+        onClose={() => setPayModal((p) => ({ ...p, open: false }))}
+        onSuccess={(updatedJournal) => {
+          // Keep the list row's balance in sync without a full refetch, and
+          // let the Ledger drawer (if this same journal's ledger is open)
+          // know a new entry landed so it re-pulls its rows.
+          setJournals((prev) => prev.map((row) => (row._id === updatedJournal._id ? updatedJournal : row)));
+          if (ledgerJournalId === updatedJournal._id) {
+            setLedgerRefreshKey((k) => k + 1);
+          }
+        }}
       />
 
       {/* ── Full-bleed table, edge to edge ───────────────────────────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 0, top: 173 }}
+        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: 173 }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">
@@ -641,11 +692,12 @@ export default function Journals() {
 
           <tbody className="bg-white">
             {loading ? (
-              <tr>
-                <td colSpan={orderedColumns.length + 1} className="px-6 py-20 text-center text-sm text-gray-400">
-                  Loading journals…
-                </td>
-              </tr>
+              <TableSkeletonRows
+                numRows={journalsPagination.limit}
+                columns={orderedColumns.map((c) => colWidths[c.id])}
+                hasCheckbox
+                checkboxWidth={colWidths.selection}
+              />
             ) : filteredJournals.length === 0 ? (
               <tr>
                 <td colSpan={orderedColumns.length + 1} className="px-6 py-20 text-center">
@@ -661,7 +713,7 @@ export default function Journals() {
                 </td>
               </tr>
             ) : (
-              filteredJournals.map((j) => (
+              paginatedJournals.map((j) => (
                 <tr key={j._id} className="bg-white hover:bg-blue-50 transition-colors">
                   <td
                     style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
@@ -693,6 +745,120 @@ export default function Journals() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Pagination bar — edge-to-edge, same shape as PaymentsTimeline.jsx ── */}
+      <div
+        className="fixed bottom-0 right-0 h-16 bg-white border-t border-[#E1E4EA] flex items-center justify-between px-6 z-40"
+        style={{ left: "var(--sidebar-width, 0px)" }}
+      >
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-700">
+            Showing{" "}
+            <span className="font-semibold">
+              {journalsTotalCount === 0 ? 0 : (journalsPagination.currentPage - 1) * journalsPagination.limit + 1}
+            </span>{" "}to{" "}
+            <span className="font-semibold">
+              {Math.min(journalsPagination.currentPage * journalsPagination.limit, journalsTotalCount)}
+            </span>{" "}of{" "}
+            <span className="font-semibold">{journalsTotalCount}</span> journals
+          </p>
+          <select
+            value={journalsPagination.limit}
+            onChange={(e) => handleJournalsLimitChange(parseInt(e.target.value))}
+            className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:outline-none focus:border-[#0085FF] focus:ring-1 focus:ring-[#0085FF]"
+          >
+            {[10, 20, 50, 100].map((val) => (
+              <option key={val} value={val}>{val} per page</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleJournalsPageChange(journalsPagination.currentPage - 1)}
+            disabled={journalsPagination.currentPage <= 1}
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-[#E1E4EA] bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {(() => {
+            const commitPage = () => {
+              const val = parseInt(journalsPageInput, 10);
+              if (!isNaN(val) && val >= 1 && val <= journalsTotalPages) {
+                handleJournalsPageChange(val);
+              }
+              setEditingJournalsPage(false);
+            };
+            const { currentPage } = journalsPagination;
+            const items = [];
+            if (journalsTotalPages <= 1) {
+              items.push(1);
+            } else {
+              items.push(1);
+              if (currentPage > 2) items.push("left-dots");
+              if (currentPage !== 1 && currentPage !== journalsTotalPages) items.push(currentPage);
+              if (currentPage < journalsTotalPages - 1) items.push("right-dots");
+              items.push(journalsTotalPages);
+            }
+            return items.map((item, index) => {
+              if (item === "left-dots" || item === "right-dots") {
+                return (
+                  <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                    ....
+                  </span>
+                );
+              }
+              const isCurrent = item === currentPage;
+              if (isCurrent && editingJournalsPage) {
+                return (
+                  <input
+                    key="page-edit"
+                    autoFocus
+                    type="number"
+                    min={1}
+                    max={journalsTotalPages}
+                    value={journalsPageInput}
+                    onChange={(e) => setJournalsPageInput(e.target.value)}
+                    onBlur={commitPage}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitPage();
+                      if (e.key === "Escape") setEditingJournalsPage(false);
+                    }}
+                    className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                );
+              }
+              return (
+                <button
+                  key={`page-${item}`}
+                  onClick={() => handleJournalsPageChange(item)}
+                  onDoubleClick={() => {
+                    if (isCurrent) {
+                      setJournalsPageInput(String(currentPage));
+                      setEditingJournalsPage(true);
+                    }
+                  }}
+                  title={isCurrent ? "Double-click to type a page number" : undefined}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                    isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            });
+          })()}
+
+          <button
+            onClick={() => handleJournalsPageChange(journalsPagination.currentPage + 1)}
+            disabled={journalsPagination.currentPage >= journalsTotalPages}
+            className="flex items-center justify-center w-8 h-8 rounded-full border border-[#E1E4EA] bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* ── Column header menu ───────────────────────────────────────── */}

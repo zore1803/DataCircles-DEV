@@ -15,6 +15,14 @@ import { formatNumberFixed } from "../../utils/numberFormatter";
 
 import SearchIcon from "../common/SearchIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
+// Same fixed slab set as ItemForm.jsx/QuickItemDrawer.jsx, so a purchase's
+// per-item GST% can only be one of the rates products are actually defined
+// with — not an arbitrary free-typed number.
+const GST_RATES = [0, 5, 12, 18, 28];
+// The product's description is rich text ("<p>...</p>" etc, same as
+// InvoiceForm.jsx's own stripHtml) — strip the markup before it lands in a
+// plain <input>, which was showing the raw tags.
+const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
 const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,7 +54,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               _id: item._id,
               variantId: variant._id,
               name: `${item.name} – ${variant.name}`,
-              description: item.description || "",
+              description: stripHtml(item.description),
               unitPrice:
                 variant.purchasePrice ||
                 item.purchasePrice ||
@@ -63,7 +71,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               _id: item._id,
               variantId: null,
               name: item.name,
-              description: item.description || "",
+              description: stripHtml(item.description),
               unitPrice: item.purchasePrice || item.sellingPrice,
               type: item.type,
               sku: null,
@@ -183,6 +191,10 @@ const PurchaseForm = ({
   onRequestClose,
   onSuccess,
   onError,
+  // PO id to pre-link/pre-fill from, e.g. arriving via "Convert to Purchase"
+  // on a Delivered PO — skips making the user re-pick the same PO from the
+  // "Link to Purchase Order" dropdown below.
+  initialPurchaseOrderId = null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -193,9 +205,7 @@ const PurchaseForm = ({
   // Form State
   const [vendorId, setVendorId] = useState("");
   const [selectedPO, setSelectedPO] = useState("");
-  const handlePOChange = async (e) => {
-    const poId = e.target.value;
-    setSelectedPO(poId);
+  const loadPurchaseOrder = async (poId) => {
     if (!poId) return;
     try {
       const res = await API.get("/purchase-orders/" + poId);
@@ -206,7 +216,7 @@ const PurchaseForm = ({
           _id: item.itemId || null,
           variantId: item.variantId || null,
           name: item.name,
-          description: item.description || "",
+          description: stripHtml(item.description),
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           sku: item.sku || null,
@@ -215,10 +225,20 @@ const PurchaseForm = ({
         })));
         if (po.notes) setNotes(po.notes);
         if (po.transactionType) setTransactionType(po.transactionType);
+        // A new Purchase created from a PO always starts as Pending (enforced
+        // server-side too, in purchaseController.createPurchase) — reflect
+        // that here instead of leaving whatever the status field had before.
+        if (!editingPurchase) setStatus("Pending");
       }
     } catch (err) {
       console.error("Failed to fetch PO details", err);
+      toast.error("Failed to load the Purchase Order's details");
     }
+  };
+  const handlePOChange = (e) => {
+    const poId = e.target.value;
+    setSelectedPO(poId);
+    loadPurchaseOrder(poId);
   };
   const [items, setItems] = useState([
     {
@@ -242,16 +262,30 @@ const PurchaseForm = ({
       try {
         const res = await API.get("/purchase-orders");
         const all = res.data.purchaseOrders || res.data || [];
-        // Only an Approved PO can be converted to a Purchase (enforced
-        // server-side too, in purchaseController.js) — a Pending/Rejected/
-        // Delivered one shouldn't even be selectable here.
-        setPurchaseOrders(all.filter((po) => po.status === "Approved"));
+        // An Approved or Delivered PO can be converted to a Purchase
+        // (enforced server-side too, in purchaseController.js) — a Pending/
+        // Rejected one shouldn't even be selectable here. Already-converted
+        // POs are excluded too — picking one would just 400 on save.
+        setPurchaseOrders(
+          all.filter(
+            (po) => (po.status === "Approved" || po.status === "Delivered") && !po.convertedPurchase
+          )
+        );
       } catch (err) {
         console.error("Failed to fetch POs", err);
       }
     };
     fetchPOs();
   }, []);
+
+  // Arrived via "Convert to Purchase" on a specific Delivered PO — pre-link
+  // and pre-fill from it instead of leaving the form blank.
+  useEffect(() => {
+    if (!initialPurchaseOrderId || editingPurchase) return;
+    setSelectedPO(initialPurchaseOrderId);
+    loadPurchaseOrder(initialPurchaseOrderId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPurchaseOrderId]);
 
   useEffect(() => {
     setTimeout(() => setIsOpen(true), 10);
@@ -269,7 +303,7 @@ const PurchaseForm = ({
           _id: item.itemId || null,
           variantId: item.variantId || null,
           name: item.name,
-          description: item.description || "",
+          description: stripHtml(item.description),
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           sku: item.sku || null,
@@ -312,24 +346,28 @@ const PurchaseForm = ({
     setItems(newItems);
   };
 
-  const subtotal = items.reduce(
-    (sum, item) =>
-      sum +
-      (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
-    0,
-  );
+  const subtotal = items.reduce((sum, item) => {
+    let itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    if (item.taxInclusive) {
+      itemTotal = itemTotal / (1 + (parseFloat(item.gstRate) || parseFloat(gstRate) || 0) / 100);
+    }
+    return sum + itemTotal;
+  }, 0);
 
   // Calculate tax
-  let totalTax = 0;
-  if (gstRate > 0) {
-    if (transactionType === "intra") {
-      // CGST + SGST (half each)
-      totalTax = subtotal * (gstRate / 100);
+  const totalTax = items.reduce((sum, item) => {
+    const itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    const rate = parseFloat(item.gstRate) || parseFloat(gstRate) || 0;
+    
+    if (rate <= 0) return sum;
+    
+    if (item.taxInclusive) {
+      const base = itemTotal / (1 + rate / 100);
+      return sum + (itemTotal - base);
     } else {
-      // IGST
-      totalTax = subtotal * (gstRate / 100);
+      return sum + (itemTotal * (rate / 100));
     }
-  }
+  }, 0);
 
   const grandTotal = subtotal + totalTax;
 
@@ -355,6 +393,8 @@ const PurchaseForm = ({
           (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
         sku: item.sku,
         variantAttributes: item.variantAttributes,
+        gstRate: parseFloat(item.gstRate) || parseFloat(gstRate) || 0,
+        taxInclusive: item.taxInclusive || false,
       })),
       notes,
       status,
@@ -374,13 +414,13 @@ const PurchaseForm = ({
         }
         onSuccess("Purchase updated successfully!");
       } else {
-        const res = await API.post("/purchases", payload);
-        // If status is not default, update it
-        if (status !== "Draft" && res.data?.purchase?._id) {
-          await API.put(`/purchases/${res.data.purchase._id}/status`, {
-            status,
-          });
-        }
+        // createPurchase already saves with this exact `status` (or forces
+        // "Draft" server-side when purchaseOrder is linked) — no follow-up
+        // status call needed. (This used to try one via
+        // res.data.purchase._id, but createPurchase returns the purchase
+        // directly, not nested under `.purchase`, so that call silently
+        // never ran.)
+        await API.post("/purchases", payload);
         onSuccess("Purchase created successfully!");
       }
       handleClose();
@@ -618,18 +658,18 @@ const PurchaseForm = ({
                         GST %
                       </label>
                       <div className="relative">
-                        <input
-                          type="number"
-                          value={item.gstRate ?? ""}
+                        <select
+                          value={item.gstRate ?? 0}
                           onChange={(e) =>
-                            updateItem(index, "gstRate", e.target.value)
+                            updateItem(index, "gstRate", parseFloat(e.target.value) || 0)
                           }
-                          className="w-full pl-3 pr-7 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                          placeholder="0"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
-                          %
-                        </span>
+                          className="w-full pl-3 pr-7 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all appearance-none cursor-pointer"
+                        >
+                          {GST_RATES.map((rate) => (
+                            <option key={rate} value={rate}>{rate}%</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
                       </div>
                       <label className="flex items-center gap-2 mt-2 cursor-pointer">
                         <input
@@ -647,16 +687,32 @@ const PurchaseForm = ({
                     </div>
                   </div>
 
-                  {/* Amount */}
+                  {/* Amount — editable. This is quantity × unitPrice (the same figure Tax Inc.
+                      and GST% use to derive the subtotal/tax split below), so editing it
+                      back-solves for the Unit Price at the current quantity instead of the
+                      other way around. Whatever Tax Inc. is set to keeps meaning the same
+                      thing it always did for this row — only the direction of entry changes. */}
                   <div>
                     <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                       Amount
                     </label>
-                    <div className="w-full px-3 h-8 flex items-center bg-gray-100 border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-gray-800">
-                      ₹
-                      {formatNumberFixed(
-                        (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 0)
-                      )}
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={
+                          (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 0) || ""
+                        }
+                        onChange={(e) => {
+                          const amount = parseFloat(e.target.value) || 0;
+                          const qty = parseFloat(item.quantity) || 0;
+                          updateItem(index, "unitPrice", qty > 0 ? amount / qty : 0);
+                        }}
+                        className="w-full pl-7 pr-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                        placeholder="0"
+                      />
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
+                        ₹
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -687,7 +743,15 @@ const PurchaseForm = ({
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full appearance-none px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+                  disabled={(!editingPurchase && !!selectedPO) || editingPurchase?.status === "Paid"}
+                  title={
+                    editingPurchase?.status === "Paid"
+                      ? "A Paid purchase can't be changed to another status"
+                      : !editingPurchase && selectedPO
+                      ? "A Purchase created from a Purchase Order always starts as Pending"
+                      : undefined
+                  }
+                  className="w-full appearance-none px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="Draft">Draft</option>
                   <option value="Pending">Pending</option>

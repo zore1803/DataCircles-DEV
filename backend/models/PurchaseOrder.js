@@ -28,6 +28,11 @@ const purchaseOrderSchema = new mongoose.Schema({
   grandTotal: { type: Number, default: 0, min: 0 },
   paymentTerms: { type: String, default: "Net 30" },
   status: { type: String, enum: ["Pending", "Approved", "Rejected", "Delivered"], default: "Pending" },
+  // Tracks whether this PO's Delivered transition has already added its items to
+  // inventory, so re-saving/re-delivering can never double the stock increase. See
+  // purchaseOrderController's syncPurchaseOrderDeliveryStock — mirrors Purchase's
+  // own stockMovementStatus field/guard.
+  stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
   notes: String,
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true }

@@ -162,8 +162,10 @@ const ItemSearchSelect = ({
       hsn: item.hsnSac || "",
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount (set in QuickItemDrawer's "More
+      // Details" -> Discount) — previously always started at 0.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
       gstRate: item.gstRate || 0,
       taxInclusive: !!item.taxInclusive,
     });
@@ -759,8 +761,10 @@ const PerformaInvoiceForm = ({
         ...itemData,
         quantity: newItems[index].quantity || 1,
         hsn: itemData.hsn || "",
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData carries it from
+        // the catalog) instead of the stale blank row's discount.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,

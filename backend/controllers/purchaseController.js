@@ -2,8 +2,37 @@ const Purchase = require("../models/Purchase");
 const Vendor = require("../models/Vendor");
 const PurchaseOrder = require("../models/PurchaseOrder");
 const Branding = require("../models/Branding");
+const Item = require("../models/Item");
 const purchaseDocumentPdf = require("../utils/purchaseDocumentPdf");
 const { syncDocumentStock } = require("../utils/inventorySync");
+
+// A purchase's per-item Purchase Price / GST% (PurchaseForm.jsx's editable Amount/GST%
+// fields) are an explicit "this is what it actually cost" entry — sync them back onto the
+// product's own master record so the next purchase/document defaults to the new value,
+// instead of only living inside this one purchase. Best-effort: a sync failure here must
+// never fail the purchase itself, since the purchase already saved successfully.
+async function syncItemMasterPricing(items, organizationId) {
+  for (const item of items || []) {
+    if (!item.itemId) continue;
+    const unitPrice = parseFloat(item.unitPrice) || 0;
+    const gstRate = parseFloat(item.gstRate) || 0;
+    try {
+      if (item.variantId) {
+        await Item.updateOne(
+          { _id: item.itemId, organization: organizationId, "variants._id": item.variantId },
+          { $set: { "variants.$.purchasePrice": unitPrice, "variants.$.gstRate": gstRate } }
+        );
+      } else {
+        await Item.updateOne(
+          { _id: item.itemId, organization: organizationId },
+          { $set: { purchasePrice: unitPrice, gstRate } }
+        );
+      }
+    } catch (err) {
+      console.error("Item master pricing sync failed for item", item.itemId, err);
+    }
+  }
+}
 
 // Helper function to calculate item total
 const calculateItemTotal = (quantity, unitPrice) => {
@@ -54,13 +83,15 @@ exports.createPurchase = async (req, res) => {
       });
       if (!poExists) return res.status(404).json({ message: "Purchase Order not found" });
 
-      // Only an Approved PO can become a Purchase — converting a Pending/Rejected/
-      // Delivered one would let goods get "received" and paid for before the order
-      // was actually approved. Enforced here (not just hidden in the UI) since this
-      // endpoint can be hit directly.
-      if (poExists.status !== "Approved") {
+      // An Approved or Delivered PO can become a Purchase — Pending/Rejected
+      // can't, since neither represents a confirmed order yet. Stock itself
+      // only ever moves on the PO's own Delivered transition (see
+      // purchaseOrderController's syncPurchaseOrderDeliveryStock), never here,
+      // so converting from Approved (before delivery) is safe. Enforced here
+      // (not just hidden in the UI) since this endpoint can be hit directly.
+      if (poExists.status !== "Approved" && poExists.status !== "Delivered") {
         return res.status(400).json({
-          message: `Only an Approved Purchase Order can be converted to a Purchase (this one is "${poExists.status}").`,
+          message: `Only an Approved or Delivered Purchase Order can be converted to a Purchase (this one is "${poExists.status}").`,
         });
       }
 
@@ -105,12 +136,19 @@ exports.createPurchase = async (req, res) => {
       totalTax,
       grandTotal,
       notes,
-      status: status || "Draft",
+      // A Purchase created from a PO always starts as Pending, regardless of
+      // what the caller sends — it's a real order awaiting payment, not a
+      // draft. (Converting never moves stock either way — that only happens
+      // on the PO's own Delivered transition.)
+      status: purchaseOrder ? "Pending" : (status || "Draft"),
       user: req.user.id,
       organization: req.user.organization
     });
 
     await purchase.save();
+
+    // Explicit user choice on this purchase — carry it back to the product master.
+    await syncItemMasterPricing(purchase.items, req.user.organization);
 
     // Populate references
     await purchase.populate([
@@ -296,11 +334,11 @@ exports.updatePurchase = async (req, res) => {
 
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
 
-    // Store old values for inventory delta
-    const oldStatus = purchase.status;
-    const oldStockMovementStatus = purchase.stockMovementStatus;
-    // Deep copy to prevent reference issues
-    const oldItems = purchase.items && purchase.items.length ? JSON.parse(JSON.stringify(purchase.items)) : [];
+    // Paid is terminal — same rule as updatePurchaseStatus, applied here too
+    // since this endpoint is also how the edit form changes status.
+    if (purchase.status === "Paid" && status && status !== "Paid") {
+      return res.status(400).json({ message: "A Paid purchase can't be changed to another status." });
+    }
 
     // If items updated, recalc subtotal and item totals
     if (items) {
@@ -332,10 +370,10 @@ exports.updatePurchase = async (req, res) => {
         });
         if (!poExists) return res.status(404).json({ message: "Purchase Order not found" });
 
-        // Same "must be Approved" rule as createPurchase — see the comment there.
-        if (poExists.status !== "Approved") {
+        // Same "must be Approved or Delivered" rule as createPurchase — see the comment there.
+        if (poExists.status !== "Approved" && poExists.status !== "Delivered") {
           return res.status(400).json({
-            message: `Only an Approved Purchase Order can be converted to a Purchase (this one is "${poExists.status}").`,
+            message: `Only an Approved or Delivered Purchase Order can be converted to a Purchase (this one is "${poExists.status}").`,
           });
         }
 
@@ -362,58 +400,18 @@ exports.updatePurchase = async (req, res) => {
 
     await purchase.save();
 
-    // Inventory Sync Logic
-    const newStatus = purchase.status;
-    const isNowReceived = newStatus === "Paid";
-    const wasReceived = oldStatus === "Paid";
-
-    if (isNowReceived && !wasReceived && oldStockMovementStatus !== 'applied') {
-      // Draft -> Paid
-      await syncDocumentStock({
-        organization: req.user.organization,
-        documentId: purchase._id,
-        documentModel: "Purchase",
-        documentNumber: purchase.purchaseNumber,
-        items: purchase.items,
-        previousItems: [],
-        baseDirection: "in",
-        userId: req.user.id,
-        reason: "purchase",
-        isReversal: false,
-      });
-      purchase.stockMovementStatus = 'applied';
-      await purchase.save({ validateModifiedOnly: true });
-    } else if (isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
-      // Paid -> Paid (Edited)
-      await syncDocumentStock({
-        organization: req.user.organization,
-        documentId: purchase._id,
-        documentModel: "Purchase",
-        documentNumber: purchase.purchaseNumber,
-        items: purchase.items,
-        previousItems: oldItems, // Delta calculation
-        baseDirection: "in",
-        userId: req.user.id,
-        reason: "purchase",
-        isReversal: false,
-      });
-    } else if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
-      // Paid -> Draft/Cancelled
-      await syncDocumentStock({
-        organization: req.user.organization,
-        documentId: purchase._id,
-        documentModel: "Purchase",
-        documentNumber: purchase.purchaseNumber,
-        items: purchase.items,
-        previousItems: [],
-        baseDirection: "in",
-        userId: req.user.id,
-        reason: "adjustment",
-        isReversal: true,
-      });
-      purchase.stockMovementStatus = 'reversed';
-      await purchase.save({ validateModifiedOnly: true });
+    // Explicit user choice on this purchase — carry it back to the product master (only
+    // when items were actually part of this update, same as the recalc above).
+    if (items) {
+      await syncItemMasterPricing(purchase.items, req.user.organization);
     }
+
+    // No inventory sync here: stock is moved exactly once, when the source
+    // Purchase Order becomes Delivered (see purchaseOrderController's
+    // syncPurchaseOrderDeliveryStock). This Purchase document is an
+    // accounting/payment record only — its status (Draft/Pending/Paid/
+    // Partial/Cancelled) must never touch stock, or the Delivered increase
+    // would get counted twice.
 
     // Populate references
     await purchase.populate([
@@ -442,6 +440,15 @@ exports.updatePurchaseStatus = async (req, res) => {
     const oldPurchase = await Purchase.findOne({ _id: req.params.id, organization: req.user.organization });
     if (!oldPurchase) return res.status(404).json({ message: "Purchase not found" });
 
+    // Paid is terminal — a fully paid purchase can't be walked back through
+    // the status dropdown. (Deleting/editing an individual payment via
+    // Record Payment still recomputes status automatically — see
+    // statusForPaidAmount — that's a payment-driven correction, not this
+    // manual override.)
+    if (oldPurchase.status === "Paid" && status !== "Paid") {
+      return res.status(400).json({ message: "A Paid purchase can't be changed to another status." });
+    }
+
     const purchase = await Purchase.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -458,30 +465,21 @@ exports.updatePurchaseStatus = async (req, res) => {
       return res.status(404).json({ message: "Purchase not found" });
     }
 
-    // Inventory Sync Logic
-    const oldStatus = oldPurchase.status;
+    // No forward inventory sync on Paid: stock moves exactly once, when the
+    // source Purchase Order becomes Delivered — see purchaseOrderController's
+    // syncPurchaseOrderDeliveryStock. Marking a Purchase Paid is payment/
+    // accounting status only.
+    //
+    // Existing records from before this change may still carry
+    // stockMovementStatus 'applied' (stock was increased under the old
+    // Paid-triggers-stock behavior). Moving such a purchase off Paid still
+    // reverses that earlier increase, so its ledger stays accurate — this is
+    // the last remaining site that can flip 'applied' -> 'reversed'; nothing
+    // sets it to 'applied' going forward.
     const oldStockMovementStatus = oldPurchase.stockMovementStatus;
+    const wasReceived = oldPurchase.status === "Paid";
     const isNowReceived = status === "Paid";
-    const wasReceived = oldStatus === "Paid";
-
-    if (isNowReceived && !wasReceived && oldStockMovementStatus !== 'applied') {
-      // Draft -> Paid
-      await syncDocumentStock({
-        organization: req.user.organization,
-        documentId: purchase._id,
-        documentModel: "Purchase",
-        documentNumber: purchase.purchaseNumber,
-        items: purchase.items,
-        previousItems: [],
-        baseDirection: "in",
-        userId: req.user.id,
-        reason: "purchase",
-        isReversal: false,
-      });
-      purchase.stockMovementStatus = 'applied';
-      await purchase.save({ validateModifiedOnly: true });
-    } else if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
-      // Paid -> Draft/Cancelled
+    if (!isNowReceived && wasReceived && oldStockMovementStatus === 'applied') {
       await syncDocumentStock({
         organization: req.user.organization,
         documentId: purchase._id,
@@ -538,6 +536,162 @@ exports.deletePurchase = async (req, res) => {
   } catch (err) {
     console.error("Delete purchase error:", err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+// Derives the payment-tracking status (Pending/Partial/Paid) from how much of
+// grandTotal has actually been paid. Never touches Draft/Cancelled — those
+// are set explicitly via the status dropdown/endpoint, not by paying.
+function statusForPaidAmount(purchase, totalPaid) {
+  // Cancelled is terminal — recording/removing a payment against a
+  // cancelled Purchase (the UI blocks this, but the API doesn't) must not
+  // resurrect it into Pending/Partial/Paid.
+  if (purchase.status === "Cancelled") {
+    return purchase.status;
+  }
+  // Draft becomes a real payment-tracked status the moment a payment is
+  // actually recorded against it — staying "Draft" while carrying a full
+  // payment would be misleading.
+  if (totalPaid >= purchase.grandTotal - 0.01 && purchase.grandTotal > 0) {
+    return "Paid";
+  }
+  if (totalPaid > 0) {
+    return "Partial";
+  }
+  return purchase.status === "Draft" ? "Draft" : "Pending";
+}
+
+// GET Purchase Payments
+exports.getPurchasePayments = async (req, res) => {
+  try {
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).populate("payments.recordedBy", "name email");
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+    res.json({ payments: purchase.payments, totalAmount: purchase.grandTotal });
+  } catch (err) {
+    res.status(500).json({ error: `Failed to fetch payments: ${err.message}` });
+  }
+};
+
+// POST Purchase Payment — records a payment made to the vendor against this
+// Purchase, mirroring invoiceController.addInvoicePayment. Stock is never
+// touched here — see the note on updatePurchase/updatePurchaseStatus above.
+exports.addPurchasePayment = async (req, res) => {
+  try {
+    const { amount, paymentDate, paymentMethod, reference, notes, internalNotes } = req.body;
+
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "A valid payment amount greater than 0 is required." });
+    }
+
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+
+    const alreadyPaid = (purchase.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    const amountDue = purchase.grandTotal - alreadyPaid;
+    if (parsedAmount > amountDue + 0.01) {
+      return res.status(400).json({ error: `Payment cannot exceed the remaining balance of ₹${amountDue.toFixed(2)}.` });
+    }
+
+    purchase.payments.push({
+      amount: parsedAmount,
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+      paymentMethod: paymentMethod || "UPI",
+      reference: reference || "",
+      notes: notes || "",
+      internalNotes: internalNotes || "",
+      recordedBy: req.user._id,
+      recordedAt: new Date(),
+    });
+
+    const newTotalPaid = alreadyPaid + parsedAmount;
+    purchase.status = statusForPaidAmount(purchase, newTotalPaid);
+
+    // Only `payments` and `status` changed — same reasoning as
+    // invoiceController.addInvoicePayment (don't re-validate unrelated
+    // legacy fields on an older purchase).
+    await purchase.save({ validateModifiedOnly: true });
+    await purchase.populate([
+      { path: "vendor", select: "name email phone" },
+      { path: "purchaseOrder", select: "poNumber vendor" },
+      { path: "payments.recordedBy", select: "name email" },
+    ]);
+
+    res.json({ message: "Payment recorded successfully", purchase });
+  } catch (err) {
+    res.status(500).json({ error: `Failed to record payment: ${err.message}` });
+  }
+};
+
+// PUT Purchase Payment
+exports.updatePurchasePayment = async (req, res) => {
+  try {
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+
+    const payment = purchase.payments.id(req.params.paymentId);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    const { amount, paymentDate, paymentMethod, reference, notes, internalNotes } = req.body;
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "A valid payment amount greater than 0 is required." });
+    }
+
+    const otherPaid = (purchase.payments || [])
+      .filter((p) => p._id.toString() !== req.params.paymentId)
+      .reduce((sum, p) => sum + p.amount, 0);
+    const amountDue = purchase.grandTotal - otherPaid;
+    if (parsedAmount > amountDue + 0.01) {
+      return res.status(400).json({ error: `Payment cannot exceed the remaining balance of ₹${amountDue.toFixed(2)}.` });
+    }
+
+    payment.amount = parsedAmount;
+    if (paymentDate) payment.paymentDate = new Date(paymentDate);
+    if (paymentMethod) payment.paymentMethod = paymentMethod;
+    payment.reference = reference ?? payment.reference;
+    payment.notes = notes ?? payment.notes;
+    payment.internalNotes = internalNotes ?? payment.internalNotes;
+
+    purchase.status = statusForPaidAmount(purchase, otherPaid + parsedAmount);
+
+    await purchase.save({ validateModifiedOnly: true });
+    res.json({ message: "Payment updated successfully", purchase });
+  } catch (err) {
+    res.status(500).json({ error: `Failed to update payment: ${err.message}` });
+  }
+};
+
+// DELETE Purchase Payment
+exports.deletePurchasePayment = async (req, res) => {
+  try {
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+
+    const payment = purchase.payments.id(req.params.paymentId);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    payment.deleteOne();
+
+    const totalPaid = (purchase.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    purchase.status = statusForPaidAmount(purchase, totalPaid);
+
+    await purchase.save({ validateModifiedOnly: true });
+    res.json({ message: "Payment deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: `Failed to delete payment: ${err.message}` });
   }
 };
 

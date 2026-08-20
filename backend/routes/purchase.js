@@ -108,4 +108,40 @@ router.delete("/:id",
   purchaseController.deletePurchase
 );
 
+// GET /api/purchases/:id/payments (List payments)
+router.get("/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'read'),
+  checkPermission("purchases", "readonly"),
+  purchaseController.getPurchasePayments
+);
+
+// POST /api/purchases/:id/payments (Record a payment)
+router.post("/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.addPurchasePayment
+);
+
+// PUT /api/purchases/:id/payments/:paymentId (Update a payment)
+router.put("/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.updatePurchasePayment
+);
+
+// DELETE /api/purchases/:id/payments/:paymentId (Delete a payment)
+router.delete("/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.deletePurchasePayment
+);
+
 module.exports = router;

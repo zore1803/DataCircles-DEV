@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Pencil, Printer, Trash2, X } from "lucide-react";
+import { IndianRupee, Pencil, Printer, Trash2, X } from "lucide-react";
 import API from "../../services/api";
 
 // Same server-rendered-PDF approach as Accounting.jsx's InvoiceViewer: fetch
 // the actual PDF (backend/utils/purchaseDocumentPdf.js) and show it in an
 // iframe, instead of re-rendering the document as plain JSX in the panel —
 // what you see here is exactly what downloads/prints.
-const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete }) => {
+const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete, onRecordPayment }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [loadError, setLoadError] = useState(false);
   // Local mount-in/out state, same pattern as PurchaseForm: the parent
@@ -66,18 +66,29 @@ const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete }) => {
         onClick={handleClose}
       />
 
-      {/* Floating rounded card — matched to PurchaseForm.jsx's own shell
-          (top-6/bottom-6/right-6 margin, rounded-[24px], 600px), so viewing
-          a record and editing it are the same surface instead of two
-          different container styles. */}
+      {/* Wide centered modal, matching Accounting.jsx's InvoiceViewer rather
+          than the narrow right-hand drawer the *forms* use. Chrome ignores
+          the #view=FitH / #zoom=... PDF open params for blob: URLs (they
+          only apply to real network requests), so a PDF's page width can't
+          be forced to shrink into a 600px panel — the page just gets
+          cropped. Giving it the room instead is the only reliable fix, so
+          PDF previews get this shell while forms keep dc-panel-card. */}
       <div
         className={`
-          fixed top-6 bottom-6 right-6 rounded-[24px] z-[10001]
-          w-full sm:w-[600px]
-          bg-white shadow-2xl flex flex-col overflow-hidden
-          transform transition-transform duration-300 ease-in-out
-          ${open ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+          fixed inset-0 z-[10001] flex items-center justify-center p-2
+          transition-opacity duration-300 ease-in-out
+          ${open ? "opacity-100" : "opacity-0"}
         `}
+        onClick={handleClose}
+      >
+      <div
+        className={`
+          bg-white rounded-xl w-full h-[97vh] max-w-[1400px]
+          shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out
+          ${open ? "scale-100" : "scale-95"}
+        `}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header — icon-only actions (edit / print / delete / close)
             instead of a text "Print" button, matching the reference. */}
@@ -86,6 +97,15 @@ const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete }) => {
             Purchase Preview
           </h2>
           <div className="flex items-center gap-1">
+            {onRecordPayment && purchase.status !== "Cancelled" && (
+              <button
+                onClick={onRecordPayment}
+                title="Record Payment"
+                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+              >
+                <IndianRupee className="w-4 h-4" />
+              </button>
+            )}
             {onEdit && (
               <button
                 onClick={onEdit}
@@ -124,13 +144,20 @@ const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete }) => {
         </div>
 
         {/* PDF */}
-        <div className="flex-1 overflow-hidden bg-gray-100">
+        <div className="flex-1 p-2 overflow-auto bg-gray-100">
           {pdfUrl ? (
             <iframe
               id="purchase-pdf-frame"
-              src={pdfUrl}
+              // navpanes=0 hides Chrome's left thumbnail rail, which it shows
+              // by default and which was squeezing the actual page into about
+              // half the available width. It's one of the few fragment params
+              // Chrome honors for blob: URLs — view=/zoom= are silently
+              // ignored for them, so full-width rendering comes from this plus
+              // the widened modal above, with overflow-auto here as a fallback
+              // on narrower screens.
+              src={`${pdfUrl}#navpanes=0`}
               title="Purchase PDF"
-              className="w-full h-full border-0"
+              className="w-full h-full border-0 rounded-lg"
             />
           ) : loadError ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -151,6 +178,7 @@ const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete }) => {
             </div>
           )}
         </div>
+      </div>
       </div>
     </>
   );

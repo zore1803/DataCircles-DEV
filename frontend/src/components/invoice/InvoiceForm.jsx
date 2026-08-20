@@ -33,6 +33,7 @@ import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultT
 
 import SearchIcon from "../common/SearchIcon";
 import InvoiceLivePreview from "./InvoiceLivePreview";
+import InsufficientStockDialog from "../common/InsufficientStockDialog";
 import TemplateDrawer from "./TemplateDrawer";
 import NotesTermsDrawer from "./NotesTermsDrawer";
 import { buildDocumentHtml, computeDocument } from "../../../../shared/documentTemplates.js";
@@ -185,8 +186,11 @@ const ItemSearchSelect = ({
       hsn: item.hsn || "",
       isVariant: item.isVariant || false,
       parentItemId: item.parentItemId || null,
-      discountType: "amount",
-      discount: 0,
+      // The product's own default discount (set in QuickItemDrawer's "More
+      // Details" -> Discount) — previously always started at 0, ignoring
+      // whatever default the product was configured with.
+      discountType: item.discount?.type || "amount",
+      discount: item.discount?.value || 0,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -456,6 +460,10 @@ const InvoiceForm = ({
               description: variant.description || item.description || "",
               sellingPrice: variant.sellingPrice || item.sellingPrice,
               hsnSac: variant.hsnSac || item.hsnSac || "",
+              // Discount only lives on the parent Item (variants have no
+              // discount field of their own) — same catalog default for
+              // every variant of a product.
+              discount: item.discount || { type: "percentage", value: 0 },
               type: item.type,
               category: item.category || "",
               primaryUnit:
@@ -472,6 +480,7 @@ const InvoiceForm = ({
               description: item.description || "",
               sellingPrice: item.sellingPrice,
               hsnSac: item.hsnSac || "",
+              discount: item.discount || { type: "percentage", value: 0 },
               type: item.type,
               category: item.category || "",
               primaryUnit: item.primaryUnit || "OTH OTHERS",
@@ -672,8 +681,11 @@ const InvoiceForm = ({
         ...itemData,
         quantity: newItems[index].quantity || 1,
         hsn: itemData.hsn || "",
-        discountType: newItems[index].discountType || "amount",
-        discount: newItems[index].discount || 0,
+        // Use the picked product's own discount (itemData already carries
+        // it from the catalog) — this used to fall back to the stale blank
+        // row's discount, which always overwrote it with 0.
+        discountType: itemData.discountType || "amount",
+        discount: itemData.discount || 0,
       };
       return {
         ...prev,
@@ -2201,6 +2213,7 @@ const CreateInvoicePanel = ({
   });
   const [catalogue, setCatalogue] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [stockErrorMessage, setStockErrorMessage] = useState(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
@@ -2409,6 +2422,10 @@ const CreateInvoicePanel = ({
                 isVariant: true,
                 parentItemId: item._id,
                 stock: v.stock ?? item.inventory?.currentStock ?? 0,
+                // Discount only lives on the parent Item (variants have no
+                // discount field of their own) — same catalog default for
+                // every variant of a product.
+                discount: v.discount || item.discount,
               }));
             }
             return [
@@ -2422,6 +2439,7 @@ const CreateInvoicePanel = ({
                 isVariant: false,
                 parentItemId: null,
                 stock: item.inventory?.currentStock ?? 0,
+                discount: item.discount,
               },
             ];
           });
@@ -2559,8 +2577,8 @@ const CreateInvoicePanel = ({
         hsn: picked.hsnSac || "",
         isVariant: picked.isVariant || false,
         parentItemId: picked.parentItemId || null,
-        discountType: "amount",
-        discount: 0,
+        discountType: picked.discount?.type || "amount",
+        discount: picked.discount?.value || 0,
         showDescription: false,
         gstRate: picked.gstRate || form.gstRate || 18,
         taxInclusive: !!picked.taxInclusive,
@@ -2741,10 +2759,18 @@ const CreateInvoicePanel = ({
       onCreated();
       onClose();
     } catch (err) {
-      toast.error(
-        err.response?.data?.error ||
-        `Failed to ${isEditing ? "update" : isDraft ? "save draft" : "create"} ${docName.toLowerCase()}`
-      );
+      const serverMessage = err.response?.data?.error || "";
+      if (/insufficient stock/i.test(serverMessage)) {
+        // A toast disappears before the user can act on it — this failure
+        // needs a deliberate response (go fix the quantity), not a passive
+        // notice, so it gets a dialog instead.
+        setStockErrorMessage(serverMessage);
+      } else {
+        toast.error(
+          serverMessage ||
+          `Failed to ${isEditing ? "update" : isDraft ? "save draft" : "create"} ${docName.toLowerCase()}`
+        );
+      }
       console.error(`${isEditing ? "Update" : "Create"} ${type} error:`, err);
     } finally {
       setSubmitting(false);
@@ -3935,10 +3961,11 @@ const CreateInvoicePanel = ({
                     _id: v._id, displayName: `${item.name} - ${v.name}`, name: v.name,
                     description: v.description || item.description || "", sellingPrice: v.sellingPrice || item.sellingPrice,
                     hsnSac: v.hsnSac || item.hsnSac || "", isVariant: true, parentItemId: item._id,
+                    discount: v.discount || item.discount,
                   }));
                 }
                 return [{ _id: item._id, displayName: item.name, name: item.name, description: item.description || "",
-                  sellingPrice: item.sellingPrice, hsnSac: item.hsnSac || "", isVariant: false, parentItemId: null }];
+                  sellingPrice: item.sellingPrice, hsnSac: item.hsnSac || "", isVariant: false, parentItemId: null, discount: item.discount }];
               });
               setCatalogue(flattened);
             } catch (err) { console.error(err); }
@@ -4070,6 +4097,12 @@ const CreateInvoicePanel = ({
           </div>,
           document.body
         )}
+
+      <InsufficientStockDialog
+        isOpen={!!stockErrorMessage}
+        message={stockErrorMessage}
+        onClose={() => setStockErrorMessage(null)}
+      />
     </div>
   );
 };
