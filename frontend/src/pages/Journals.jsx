@@ -667,8 +667,8 @@ export default function Journals() {
                     onMouseDown={(e) => startColumnDrag(e, col.id)}
                     title="Drag to move this column"
                     style={{ width: colWidths[col.id], opacity: isDragging ? 0.35 : 1, ...stickyStyleFor(col.id) }}
-                    className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
-                      isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
+                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
+                      isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-gray-100"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
