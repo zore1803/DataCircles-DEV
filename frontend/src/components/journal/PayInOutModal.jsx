@@ -232,11 +232,11 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
         internalNotes: form.internalNotes,
       });
 
-      toast.success(`${isIn ? "Pay In" : "Pay Out"} of ${money(amt)} recorded`);
+      toast.success(`${isIn ? "Received amount" : "Given amount"} of ${money(amt)} recorded`);
       onSuccess?.(res.data.journal, res.data.entry);
       handleClose();
     } catch (err) {
-      toast.error(err.response?.data?.error || `Failed to record ${isIn ? "Pay In" : "Pay Out"}`);
+      toast.error(err.response?.data?.error || `Failed to record ${isIn ? "received amount" : "given amount"}`);
     } finally {
       setLoading(false);
     }
@@ -264,7 +264,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
         <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
           <div className="min-w-0">
             <h2 className={`text-[14px] font-semibold leading-5 uppercase tracking-wide truncate ${accentText}`}>
-              {isIn ? "Pay In" : "Pay Out"}
+              {isIn ? "You Received" : "You Gave"}
             </h2>
             <p className="text-[11px] text-gray-400 truncate">Journal · {journal.name}</p>
           </div>
@@ -414,7 +414,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                       value={form.notes}
                       onChange={handleChange}
                       rows={2}
-                      placeholder={`Your notes on the ${isIn ? "pay in" : "pay out"}`}
+                      placeholder={`Your notes on the ${isIn ? "received amount" : "given amount"}`}
                       className="w-full px-3 py-2 border border-[#1F2937]/10 rounded-2xl text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none"
                     />
                   </div>

@@ -103,7 +103,9 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
       }
       handleClose();
     } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to save journal");
+      console.error("Save Journal Error:", err, err.response?.data);
+      const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Failed to save journal";
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
@@ -128,7 +130,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
         <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the QuickCompanyForm header spec */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+            <h2 className="text-base font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {editJournal ? "Edit Journal" : "Create New Journal"}
             </h2>
             <button
@@ -145,32 +147,32 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Journal Name
               </label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 placeholder="e.g. Petty Cash Journal"
               />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Journal Date
               </label>
               <input
                 type="date"
                 value={form.date}
                 onChange={(e) => handleFormChange("date", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Category
               </label>
               <CustomDropdown
@@ -179,12 +181,12 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                 onChange={(value) => handleFormChange("category", value)}
                 placeholder="Select Category"
                 searchable
-                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.category ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-left flex items-center justify-between transition-all bg-white font-inter ${form.category ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Opening Balance
               </label>
               <div className="flex items-center gap-2">
@@ -194,7 +196,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                       key={type}
                       type="button"
                       onClick={() => handleFormChange("balanceType", type)}
-                      className={`h-6 px-3 rounded-full text-[12px] font-medium transition-colors ${
+                      className={`h-6 px-3 rounded-full text-sm font-medium transition-colors ${
                         form.balanceType === type
                           ? type === "Debit"
                             ? "bg-red-50 text-red-600"
@@ -212,27 +214,27 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                   min="0"
                   value={form.openingBalance}
                   onChange={(e) => handleFormChange("openingBalance", e.target.value)}
-                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Notes
               </label>
               <textarea
                 value={form.notes}
                 onChange={(e) => handleFormChange("notes", e.target.value)}
                 rows={4}
-                className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 resize-none"
+                className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 resize-none"
                 placeholder="Optional notes for this journal entry"
               />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Attach Files
               </label>
               <div className="flex items-center gap-3">
@@ -242,7 +244,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                     attachments.length >= MAX_FILES ? "cursor-not-allowed opacity-50" : "cursor-pointer"
                   }`}
                 >
-                  <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
+                  <span className="text-sm leading-5 text-[#1F2937] opacity-50 truncate">
                     {attachments.length >= MAX_FILES
                       ? `Maximum ${MAX_FILES} files attached`
                       : "Click to upload files"}
@@ -265,7 +267,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                   className="hidden"
                 />
               </div>
-              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">
+              <p className="text-sm font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">
                 Up to {MAX_FILES} files ({attachments.length}/{MAX_FILES} attached)
               </p>
 
@@ -276,7 +278,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                       key={`${file.name}-${index}`}
                       className="flex items-center justify-between gap-2 px-3 h-8 rounded-full bg-[#F9F9FB] border border-[#1F2937]/10"
                     >
-                      <span className="text-[12px] text-[#1F2937] truncate">
+                      <span className="text-sm text-[#1F2937] truncate">
                         {file.name}
                       </span>
                       <button
