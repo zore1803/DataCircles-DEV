@@ -157,29 +157,33 @@ exports.getPurchaseItemsForReturn = async (req, res) => {
       organization: req.user.organization,
     })
       .populate("vendor", "name email phone")
-      .populate("items.itemId", "name description purchasePrice hsnSac gstRate variants");
+      .populate("items.itemId", "name description purchasePrice hsnSac gstRate variants type");
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
 
     const returnedMap = await getReturnedQuantities(purchase._id, req.user.organization, req.query.excludeReturnId);
 
-    const items = purchase.items.map((item) => {
-      const key = `${item.itemId?._id || item.itemId || ""}|${item.variantId || "none"}`;
-      const alreadyReturned = returnedMap.get(key) || 0;
-      const variant = item.variantId
-        ? item.itemId?.variants?.find((v) => String(v._id) === String(item.variantId))
-        : null;
-      return {
-        itemId: item.itemId?._id || item.itemId,
-        variantId: item.variantId || null,
-        variantName: variant?.name || null,
-        name: item.name,
-        sku: item.sku,
-        unitPrice: item.unitPrice,
-        purchasedQuantity: item.quantity,
-        alreadyReturned,
-        remaining: Math.max(0, item.quantity - alreadyReturned),
-      };
-    });
+    // A service was never stocked in the first place, so it can't be
+    // physically returned — only products are eligible here.
+    const items = purchase.items
+      .filter((item) => item.itemId?.type !== "service")
+      .map((item) => {
+        const key = `${item.itemId?._id || item.itemId || ""}|${item.variantId || "none"}`;
+        const alreadyReturned = returnedMap.get(key) || 0;
+        const variant = item.variantId
+          ? item.itemId?.variants?.find((v) => String(v._id) === String(item.variantId))
+          : null;
+        return {
+          itemId: item.itemId?._id || item.itemId,
+          variantId: item.variantId || null,
+          variantName: variant?.name || null,
+          name: item.name,
+          sku: item.sku,
+          unitPrice: item.unitPrice,
+          purchasedQuantity: item.quantity,
+          alreadyReturned,
+          remaining: Math.max(0, item.quantity - alreadyReturned),
+        };
+      });
 
     res.json({
       purchase: {

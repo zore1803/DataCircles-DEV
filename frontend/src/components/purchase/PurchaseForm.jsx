@@ -569,7 +569,7 @@ const PurchaseForm = ({
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-4 relative group space-y-3"
+                  className="bg-white rounded-xl border border-gray-200 p-4 relative group space-y-3"
                 >
                   {/* Remove Button for Item */}
                   {items.length > 1 && (

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { Save, FileText, PenSquare, Eye, Plus, Trash2, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
@@ -6,6 +6,18 @@ import SignatureModal from "./SignatureModal";
 import PdfFileNameSettings from "./PdfFileNameSettings";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import { DEFAULT_FORMATS } from "../../utils/pdfFilename";
+
+// Dynamic values Email/SMS templates can reference — shown to the user as
+// plain labels they click to insert, never as raw {placeholder} syntax they
+// have to remember or type themselves.
+const MESSAGE_PLACEHOLDER_TOKENS = [
+  { key: "customerName", label: "Customer Name" },
+  { key: "docType", label: "Document Type" },
+  { key: "number", label: "Document Number" },
+  { key: "amount", label: "Amount" },
+  { key: "link", label: "View Link" },
+  { key: "company", label: "Company Name" },
+];
 
 const documentTypeMeta = [
   { key: "invoice", label: "Invoice" },
@@ -65,6 +77,31 @@ function DocumentSettings() {
   // The template currently open in the inline editor, or null when showing
   // the list. `id: null` means "creating a new one".
   const [editingTemplate, setEditingTemplate] = useState(null);
+
+  // Cursor-aware insertion targets for the Email/SMS template editor — lets a
+  // token click drop the placeholder wherever the user's cursor last was,
+  // instead of always appending to the end.
+  const emailSubjectRef = useRef(null);
+  const emailBodyRef = useRef(null);
+  const smsBodyRef = useRef(null);
+
+  const insertPlaceholderToken = (ref, currentValue, onChange, tokenKey) => {
+    const placeholder = `{${tokenKey}}`;
+    const el = ref.current;
+    const value = currentValue || "";
+    if (!el) {
+      onChange(value + placeholder);
+      return;
+    }
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    onChange(value.slice(0, start) + placeholder + value.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + placeholder.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
 
   const genTemplateId = () =>
     (typeof crypto !== "undefined" && crypto.randomUUID)
@@ -737,14 +774,15 @@ function DocumentSettings() {
           ))}
         </div>
 
-        {/* Placeholder hint — shown for Email and SMS only (WhatsApp uses structured editor) */}
+        {/* Dynamic-info hint — shown for Email and SMS only (WhatsApp uses
+            structured editor). No {placeholder} syntax on screen: the actual
+            insertion happens via the token buttons under each field below. */}
         {templateTab !== "whatsapp" && (!editingTemplate || editingTemplate.channel === templateTab) && (
           <div className={`rounded-lg px-4 py-3 text-xs mb-4 border ${
             templateTab === "email"  ? "bg-blue-50 border-blue-100 text-blue-700" :
                                        "bg-purple-50 border-purple-100 text-purple-700"
           }`}>
-            <p className="font-semibold mb-1">Available placeholders:</p>
-            <code>{"{customerName}"} · {"{docType}"} · {"{number}"} · {"{amount}"} · {"{link}"} · {"{company}"}</code>
+            Click a field below, then use the buttons under it to insert dynamic info like the customer's name or the document link — it'll be filled in automatically when the message is sent.
           </div>
         )}
 
@@ -825,21 +863,61 @@ function DocumentSettings() {
                 <label className="block">
                   <span className="text-xs font-medium text-gray-500 mb-1.5 block">Subject Line</span>
                   <input
+                    ref={emailSubjectRef}
                     type="text"
                     value={editingTemplate.subject}
                     onChange={(e) => setEditingTemplate((p) => ({ ...p, subject: e.target.value }))}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
-                    placeholder="{docType} {number} from {company}"
+                    placeholder="e.g. Your Invoice from Acme Corp"
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {MESSAGE_PLACEHOLDER_TOKENS.map((token) => (
+                      <button
+                        key={token.key}
+                        type="button"
+                        onClick={() =>
+                          insertPlaceholderToken(
+                            emailSubjectRef,
+                            editingTemplate.subject,
+                            (val) => setEditingTemplate((p) => ({ ...p, subject: val })),
+                            token.key
+                          )
+                        }
+                        className="text-[11px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full px-2.5 py-1 transition-colors"
+                      >
+                        + {token.label}
+                      </button>
+                    ))}
+                  </div>
                 </label>
                 <label className="block">
                   <span className="text-xs font-medium text-gray-500 mb-1.5 block">Email Body</span>
                   <textarea
+                    ref={emailBodyRef}
                     rows={9}
                     value={editingTemplate.body}
                     onChange={(e) => setEditingTemplate((p) => ({ ...p, body: e.target.value }))}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 resize-y font-mono"
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {MESSAGE_PLACEHOLDER_TOKENS.map((token) => (
+                      <button
+                        key={token.key}
+                        type="button"
+                        onClick={() =>
+                          insertPlaceholderToken(
+                            emailBodyRef,
+                            editingTemplate.body,
+                            (val) => setEditingTemplate((p) => ({ ...p, body: val })),
+                            token.key
+                          )
+                        }
+                        className="text-[11px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full px-2.5 py-1 transition-colors"
+                      >
+                        + {token.label}
+                      </button>
+                    ))}
+                  </div>
                 </label>
                 <p className="text-xs text-gray-400">The PDF will be attached automatically when sent from the share menu.</p>
               </>
@@ -851,12 +929,32 @@ function DocumentSettings() {
                 <label className="block">
                   <span className="text-xs font-medium text-gray-500 mb-1.5 block">Template Message</span>
                   <textarea
+                    ref={smsBodyRef}
                     rows={4}
                     value={editingTemplate.body}
                     onChange={(e) => setEditingTemplate((p) => ({ ...p, body: e.target.value }))}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-purple-400 resize-y"
-                    placeholder="Your {docType} #{number} from {company} is ready. View & Download: {link}"
+                    placeholder="e.g. Your invoice is ready. View & Download:"
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {MESSAGE_PLACEHOLDER_TOKENS.map((token) => (
+                      <button
+                        key={token.key}
+                        type="button"
+                        onClick={() =>
+                          insertPlaceholderToken(
+                            smsBodyRef,
+                            editingTemplate.body,
+                            (val) => setEditingTemplate((p) => ({ ...p, body: val })),
+                            token.key
+                          )
+                        }
+                        className="text-[11px] font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-full px-2.5 py-1 transition-colors"
+                      >
+                        + {token.label}
+                      </button>
+                    ))}
+                  </div>
                 </label>
                 <p className="text-xs text-gray-400">
                   <span className={editingTemplate.body.length > 160 ? "text-red-500 font-medium" : ""}>{editingTemplate.body.length} chars</span>

@@ -222,6 +222,15 @@ async function applyStockMovement(req, res, direction) {
       return res.status(404).json({ error: "Item not found" });
     }
 
+    // Services aren't stock-tracked at all — the Inventory list already
+    // excludes them (see the `type: "product"` filter above this file), but
+    // guard the write endpoint itself too, since it can be called directly.
+    if (item.type !== "product") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Services don't carry stock — stock in/out only applies to products." });
+    }
+
     // Every product is stock-tracked, so there's no opt-in check here. Items created before the
     // inventory fields existed have no sub-document yet — create it on first movement rather
     // than rejecting the request.

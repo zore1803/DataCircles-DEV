@@ -2157,9 +2157,19 @@ const CreateInvoicePanel = ({
             false,
           transactionType: sourceDoc.transactionType || "intra",
           gstRate: sourceDoc.gstRate || 18,
-          invoicePrefix: sourceDoc[PREFIX_FIELD_BY_TYPE[type]] || sourceDoc.invoicePrefix || configuredPrefix,
-          invoiceSuffix: sourceDoc.invoiceSuffix || "",
-          invoiceNumber: sourceDoc.invoiceNumber || "",
+          // Read the SOURCE document's own type-specific numbering fields
+          // (e.g. deliveryChallanNumber, quotationPrefix) — not the generic
+          // invoicePrefix/invoiceSuffix/invoiceNumber names. Those literal
+          // field names happen to exist on an actual Invoice document, so
+          // when converting an Invoice into another document type, falling
+          // back to `sourceDoc.invoiceNumber` was picking up the SOURCE
+          // invoice's own number (e.g. "INV-SEED-3") instead of leaving it
+          // blank for a fresh auto-generated number, while every other
+          // source type (Quotation/Proforma/Delivery Challan) has no such
+          // field to collide with and worked correctly by accident.
+          invoicePrefix: sourceDoc[PREFIX_FIELD_BY_TYPE[type]] || configuredPrefix,
+          invoiceSuffix: sourceDoc[SUFFIX_FIELD_BY_TYPE[type]] || "",
+          invoiceNumber: sourceDoc[NUMBER_FIELD_BY_TYPE[type]] || "",
           nextInvoiceNumber: sourceDoc.nextInvoiceNumber || 1,
           items:
             sourceDoc.items && sourceDoc.items.length
@@ -2571,7 +2581,12 @@ const CreateInvoicePanel = ({
       if (!picked) return toast.error("Product not found in catalogue.");
       newItem = {
         _id: picked._id,
-        name: picked.name,
+        // displayName is "Item - Variant" for a variant (just the item name
+        // when there's no variant) — picked.name alone would be only the
+        // variant's own name ("Ornage" instead of "motto - Ornage"), which
+        // then also loses the item name if the user later edits or leaves
+        // this line untouched.
+        name: picked.displayName,
         description: picked.description ? picked.description.replace(/<[^>]*>/g, "").trim() : "",
         rate: picked.sellingPrice ?? 0,
         quantity: parseInt(quickAddQty) || 1,

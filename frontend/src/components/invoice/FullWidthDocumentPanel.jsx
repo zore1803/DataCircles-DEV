@@ -384,7 +384,9 @@ const FullWidthDocumentPanel = ({
                             if (!picked) return;
                             updateItem(index, {
                               _id: picked._id,
-                              name: picked.name,
+                              // displayName is "Item - Variant" — picked.name
+                              // alone would be just the variant's own name.
+                              name: picked.displayName,
                               description: stripHtml(picked.description),
                               rate: picked.sellingPrice ?? "",
                               hsn: picked.hsnSac || "",

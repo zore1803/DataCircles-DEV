@@ -15,6 +15,7 @@ import QuickVendorForm from "../vendor/QuickVendorForm";
 import API from "../../services/api";
 import { formatNumberFixed } from "../../utils/numberFormatter";
 import toast from "react-hot-toast";
+import ReactQuill from "react-quill-new";
 
 import SearchIcon from "../common/SearchIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
@@ -550,7 +551,7 @@ const PurchaseOrderForm = ({
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-4 relative group space-y-3"
+                  className="bg-white rounded-xl border border-gray-200 p-4 relative group space-y-3"
                 >
                   {/* Remove Button for Item */}
                   {items.length > 1 && (
@@ -707,37 +708,13 @@ const PurchaseOrderForm = ({
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Notes
               </label>
-              <div className="w-full bg-white border border-[#1F2937]/10 rounded-2xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 transition-all">
-                {/* Rich Text Editor Mock Toolbar */}
-                <div className="px-2 py-1.5 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto bg-gray-50/50">
-                  <div className="flex items-center gap-0.5">
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₁</button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₂</button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₃</button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 text-xs font-medium font-serif shadow-sm border border-transparent hover:border-gray-200">H₄</button>
-                  </div>
-                  <div className="w-px h-5 bg-gray-200 flex-shrink-0"></div>
-                  <div className="flex items-center gap-0.5">
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif font-bold text-sm shadow-sm border border-transparent hover:border-gray-200">B</button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif italic text-sm shadow-sm border border-transparent hover:border-gray-200">I</button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif underline text-sm shadow-sm border border-transparent hover:border-gray-200">U</button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 font-serif line-through text-sm shadow-sm border border-transparent hover:border-gray-200">S</button>
-                  </div>
-                  <div className="w-px h-5 bg-gray-200 flex-shrink-0"></div>
-                  <div className="flex items-center gap-0.5">
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 shadow-sm border border-transparent hover:border-gray-200">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                    </button>
-                    <button type="button" className="w-7 h-7 flex-shrink-0 flex justify-center items-center hover:bg-white rounded text-gray-500 shadow-sm border border-transparent hover:border-gray-200">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>
-                    </button>
-                  </div>
-                </div>
-                <textarea
+              <div className="border border-[#1F2937]/10 rounded-xl bg-white">
+                <ReactQuill
+                  theme="snow"
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={setNotes}
                   placeholder="Additional Notes"
-                  className="w-full px-3 py-2 text-[12px] focus:outline-none min-h-[100px] resize-none"
+                  className="[&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
                 />
               </div>
             </div>

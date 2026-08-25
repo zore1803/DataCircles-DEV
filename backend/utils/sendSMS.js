@@ -31,7 +31,12 @@ async function sendSMS({ phone, message }) {
   );
 
   if (!response.data?.return) {
-    throw new Error(response.data?.message?.[0] || "Fast2SMS returned failure");
+    // `message` is an array on the normal bulkV2 reject shape, but a plain
+    // string on some account-level failures (e.g. Fast2SMS's "complete a 100
+    // INR transaction" restriction) — indexing with [0] unconditionally would
+    // silently truncate that string down to its first character.
+    const msg = response.data?.message;
+    throw new Error((Array.isArray(msg) ? msg[0] : msg) || "Fast2SMS returned failure");
   }
 
   return response.data;

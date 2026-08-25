@@ -57,6 +57,7 @@ const ItemForm = ({
   const [existingImages, setExistingImages] = useState(form.images || []);
   const [newImageFiles, setNewImageFiles] = useState([]);
   const [newImagePreviews, setNewImagePreviews] = useState([]);
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null);
   const imageInputRef = useRef(null);
 
   useEffect(() => {
@@ -612,7 +613,31 @@ const ItemForm = ({
             </label>
             <select
               value={form.type}
-              onChange={(e) => handleFormChange("type", e.target.value)}
+              onChange={(e) => {
+                const nextType = e.target.value;
+                handleFormChange("type", nextType);
+                // A service can't have variants — clear any in-progress or
+                // saved ones so switching away from Product doesn't leave
+                // stale variant state around (which would also keep
+                // hasVariants true and wrongly disable the parent price/GST/
+                // stock fields below).
+                if (nextType === "service") {
+                  setVariants([]);
+                  setForm((prev) => ({ ...prev, type: nextType, variants: [] }));
+                  setShowVariantForm(false);
+                  setCurrentVariant({
+                    name: "",
+                    sku: "",
+                    attributes: {},
+                    purchasePrice: 0,
+                    sellingPrice: 0,
+                    stock: 0,
+                    isActive: true,
+                    gstRate: 0,
+                  });
+                  setVariantIndex(null);
+                }
+              }}
               className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               <option value="product">Product</option>
@@ -620,7 +645,11 @@ const ItemForm = ({
             </select>
           </div>
 
-          {/* Variants */}
+          {/* Variants — a service has nothing to stock or vary in price by
+              SKU, so this whole section (and everything it drives: variant
+              pricing, variant stock, variant-aware pickers elsewhere) simply
+              doesn't apply once Type is Service. */}
+          {form.type === "product" && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-gray-700">
@@ -909,18 +938,19 @@ const ItemForm = ({
               </div>
             ) : null}
           </div>
+          )}
 
           {/* Description */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Description
             </label>
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-lg">
               <ReactQuill
                 theme="snow"
                 value={form.description}
                 onChange={(val) => handleFormChange("description", val)}
-                className="h-32 mb-10"
+                className="h-48 mb-10"
               />
             </div>
           </div>
@@ -929,54 +959,52 @@ const ItemForm = ({
               carries its own price, and every item-picker across the app
               (Purchase/PO/Quotation/Invoice/Delivery Challan) already offers
               only the variants — not this parent price — once they exist. */}
+          {!hasVariants && (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Purchase Price {!hasVariants && <span className="text-red-500">*</span>}
+                Purchase Price <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 min="0"
                 value={form.purchasePrice}
-                disabled={hasVariants}
                 onChange={(e) =>
                   handleFormChange("purchasePrice", e.target.value)
                 }
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Purchase Price"
               />
-              {hasVariants && <p className="mt-1 text-[11px] text-gray-400">Managed by variants — set per-variant below.</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Selling Price {!hasVariants && <span className="text-red-500">*</span>}
+                Selling Price <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 min="0"
                 value={form.sellingPrice}
-                disabled={hasVariants}
                 onChange={(e) =>
                   handleFormChange("sellingPrice", e.target.value)
                 }
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Selling Price"
               />
-              {hasVariants && <p className="mt-1 text-[11px] text-gray-400">Managed by variants — set per-variant below.</p>}
             </div>
           </div>
+          )}
 
-          {/* Tax Inclusive + GST Rate — same "managed by variants" rule. */}
+          {/* Tax Inclusive + GST Rate */}
+          {!hasVariants && (
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={form.taxInclusive}
-                disabled={hasVariants}
                 onChange={(e) =>
                   handleFormChange("taxInclusive", e.target.checked)
                 }
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <label className="text-sm text-gray-700 font-medium">
                 Tax Inclusive
@@ -988,9 +1016,8 @@ const ItemForm = ({
               </label>
               <select
                 value={form.gstRate ?? 0}
-                disabled={hasVariants}
                 onChange={(e) => handleFormChange("gstRate", parseFloat(e.target.value) || 0)}
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
                 {GST_RATES.map((rate) => (
                   <option key={rate} value={rate}>{rate}%</option>
@@ -998,6 +1025,7 @@ const ItemForm = ({
               </select>
             </div>
           </div>
+          )}
 
           {/* Default Discount + Max Discount % */}
           <div className="grid grid-cols-2 gap-3">
@@ -1105,7 +1133,7 @@ const ItemForm = ({
             <div className="flex flex-wrap gap-3">
               {existingImages.map((url) => (
                 <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <img src={url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => setSelectedImageUrl(url)} />
                   <button
                     type="button"
                     onClick={() => handleRemoveExistingImage(url)}
@@ -1117,7 +1145,7 @@ const ItemForm = ({
               ))}
               {newImagePreviews.map((url, i) => (
                 <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <img src={url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => setSelectedImageUrl(url)} />
                   <button
                     type="button"
                     onClick={() => handleRemoveNewImage(i)}
@@ -1386,6 +1414,27 @@ const ItemForm = ({
                 Keep Editing
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedImageUrl && (
+        <div 
+          className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedImageUrl(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="absolute -top-10 right-0 text-white hover:text-gray-300"
+              onClick={() => setSelectedImageUrl(null)}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img 
+              src={selectedImageUrl} 
+              alt="Zoomed product preview" 
+              className="max-w-full max-h-[90vh] object-contain rounded shadow-2xl border border-white/10"
+            />
           </div>
         </div>
       )}

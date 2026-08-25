@@ -97,16 +97,27 @@ const createItem = async (req, res) => {
     itemData.additionalFields = parseJsonField(itemData.additionalFields);
     itemData.discount = parseJsonField(itemData.discount);
 
+    // A service is never stocked or varied by SKU — strip these regardless of
+    // what the client sent, so a service can never end up carrying stock/
+    // variant data that inventory-sync logic would otherwise have to guard
+    // against everywhere it's read.
+    if (itemData.type === "service") {
+      itemData.variants = [];
+    }
+
     // Inventory block from the item form. Every product is stock-tracked automatically, so this
     // is always populated (defaulting to a quantity of 0) rather than depending on an opt-in —
     // that's what makes a newly created product appear on the Inventory page immediately.
     // On create there's no ledger yet, so the opening stock becomes the starting currentStock
     // and gets its own ledger row after the item is saved.
     const inventoryInput = normalizeInventoryInput(parseJsonField(itemData.inventory)) || {};
-    const opening = inventoryInput.openingStock || 0;
+    // A service carries no stock at all — zero everything out and leave
+    // tracking off, instead of the "always on" default that applies to
+    // products.
+    const opening = itemData.type === "service" ? 0 : (inventoryInput.openingStock || 0);
     itemData.inventory = {
-      trackInventory: true,
-      lowStockThreshold: inventoryInput.lowStockThreshold || 0,
+      trackInventory: itemData.type !== "service",
+      lowStockThreshold: itemData.type === "service" ? 0 : (inventoryInput.lowStockThreshold || 0),
       openingStock: opening,
       currentStock: opening,
       lastMovementAt: opening !== 0 ? new Date() : null,
@@ -361,6 +372,12 @@ const updateItem = async (req, res) => {
     itemData.discount = parseJsonField(itemData.discount);
     const existingImages = parseJsonField(itemData.existingImages) || [];
     delete itemData.existingImages;
+
+    // Same as createItem: a service never carries variants, including if an
+    // item is switched from Product to Service on this edit.
+    if (itemData.type === "service") {
+      itemData.variants = [];
+    }
 
     // Only the two inventory SETTINGS are editable from the product form — never the stock level
     // itself. Assigning the whole posted object here would let a stale currentStock from the form

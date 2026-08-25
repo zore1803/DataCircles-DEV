@@ -89,6 +89,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(null);
 
   // Slide-in/out animation, matching the quick-drawer forms (CompanyForm,
   // ItemForm, CallLogForm) instead of popping open/closed instantly.
@@ -288,6 +289,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   /* shared input/label style matching the QuickDealForm quick-drawer pattern */
   const inp = "w-full border border-[#1F2937]/10 rounded-full px-4 h-11 text-sm text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter";
   const lbl = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2 font-inter";
+  const hasVariants = variants.length > 0 || showVariantForm;
 
   return (
     <>
@@ -339,7 +341,20 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   <button
                     key={t}
                     type="button"
-                    onClick={() => setType(t)}
+                    onClick={() => {
+                      setType(t);
+                      // A service can't have variants — clear any in-progress
+                      // or saved ones so switching away from Product doesn't
+                      // leave stale variant state around (which would also
+                      // keep hasVariants true and wrongly hide the Selling/
+                      // Purchase Price fields below).
+                      if (t === "Service") {
+                        setVariants([]);
+                        setShowVariantForm(false);
+                        setCurrentVariant(BLANK_VARIANT);
+                        setVariantIndex(null);
+                      }
+                    }}
                     className={`px-6 py-1.5 text-sm font-medium rounded-full transition-colors ${
                       type === t ? "bg-[#158FFF] text-white shadow" : "text-gray-600 hover:text-gray-900"
                     }`}
@@ -362,6 +377,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               </div>
 
               {/* Selling Price + Tax % */}
+              {!hasVariants && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Selling Price</label>
@@ -406,9 +422,11 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   </select>
                 </div>
               </div>
+              )}
 
               {/* Purchase Price + Primary Unit */}
               <div className="grid grid-cols-2 gap-4">
+                {!hasVariants && (
                 <div>
                   <label className={lbl}>Purchase Price</label>
                   <div className="flex h-11 border border-[#1F2937]/10 rounded-full overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 font-inter">
@@ -431,8 +449,9 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                     </select>
                   </div>
                 </div>
+                )}
 
-                <div>
+                <div className={hasVariants ? "col-span-2" : ""}>
                   <label className={lbl}>Primary Unit</label>
                   <CustomDropdown
                     options={UNIT_OPTIONS}
@@ -444,7 +463,10 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* ── Variants ── */}
+              {/* ── Variants — a service has nothing to stock or vary in
+                  price by SKU, so this section doesn't apply once the
+                  Product/Service toggle above is set to Service. ── */}
+              {type === "Product" && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className={lbl + " mb-0"}>Variants</label>
@@ -558,6 +580,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   </div>
                 )}
               </div>
+              )}
           </div>
 
           {/* ── Additional Information — flat section, no card wrapper ── */}
@@ -614,13 +637,13 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               </div>
               <div>
                 <label className={lbl}>Description</label>
-                <div className="border border-[#1F2937]/10 rounded-xl bg-white overflow-hidden">
+                <div className="border border-[#1F2937]/10 rounded-xl bg-white">
                   <ReactQuill
                     theme="snow"
                     value={form.description}
                     onChange={(val) => handleChange("description", val)}
                     placeholder="Add product description…"
-                    className="[&_.ql-editor]:min-h-[100px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                    className="[&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
                   />
                 </div>
               </div>
@@ -632,7 +655,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   <div className="flex flex-wrap gap-3">
                     {imagePreviews.map((url, i) => (
                       <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
-                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <img src={url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => setSelectedImageIndex(i)} />
                         <button
                           type="button"
                           onClick={() => handleRemoveImage(i)}
@@ -664,7 +687,9 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               </div>
           </div>
 
-          {/* ── Opening Stock — flat section, no card wrapper ── */}
+          {/* ── Opening Stock — flat section, no card wrapper. A service
+              carries no stock at all, not just "no variant-level" stock. ── */}
+          {type === "Product" && !hasVariants && (
           <div className="space-y-3">
             <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
               <div>
@@ -691,6 +716,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               <input type="number" min="0" value={form.openingStockValue} onChange={(e) => handleChange("openingStockValue", e.target.value)} onWheel={(e) => e.target.blur()} className={inp} />
             </div>
           </div>
+          )}
 
           {/* ── More Details collapsible ── */}
           <div className="border border-[#FDE3CC] bg-[#FFF8F1] rounded-2xl overflow-hidden">
@@ -780,6 +806,27 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           </button>
         </div>
       </div>
+
+      {selectedImageIndex !== null && (
+        <div 
+          className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedImageIndex(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="absolute -top-10 right-0 text-white hover:text-gray-300"
+              onClick={() => setSelectedImageIndex(null)}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img 
+              src={imagePreviews[selectedImageIndex]} 
+              alt="Zoomed product preview" 
+              className="max-w-full max-h-[90vh] object-contain rounded shadow-2xl border border-white/10"
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

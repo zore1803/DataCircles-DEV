@@ -233,6 +233,17 @@ router.post('/:type/:id/email', async (req, res) => {
   }
 });
 
+// Fast2SMS's `message` field is a string on some failure responses (e.g. the
+// "complete a 100 INR transaction" account-restriction error) but an array
+// of strings on its normal bulkV2 reject response — indexing with `[0]`
+// unconditionally silently truncated a string message down to its first
+// character, so the toast the user saw was a single garbled letter instead
+// of the actual reason.
+function extractFast2SmsMessage(data) {
+  const msg = data?.message;
+  return Array.isArray(msg) ? msg[0] : msg;
+}
+
 // POST /api/public/:type/:id/sms — send doc link via SMS (no auth, used from compose panel)
 // Message text is composed client-side (from the org's saved SMS template),
 // so this just relays it through Fast2SMS — no document lookup needed here.
@@ -258,19 +269,16 @@ router.post('/:type/:id/sms', async (req, res) => {
     if (response.data?.return !== true) {
       console.log(`❌ [SMS] FAILED to send to ${number} — ${JSON.stringify(response.data)}`);
       console.error('[public doc sms] Fast2SMS rejected:', response.data);
-      return res.status(500).json({ error: response.data?.message?.[0] || 'Failed to send SMS' });
+      return res.status(500).json({ error: extractFast2SmsMessage(response.data) || 'Failed to send SMS' });
     }
 
     console.log(`✅ [SMS] Sent to ${number}`);
     res.json({ message: 'SMS sent successfully' });
   } catch (err) {
     const fast2smsError = err.response?.data;
-    console.log(`❌ [SMS] FAILED to send to ${req.body?.phone} — ${fast2smsError?.message || err.message}`);
+    console.log(`❌ [SMS] FAILED to send to ${req.body?.phone} — ${extractFast2SmsMessage(fast2smsError) || err.message}`);
     console.error('[public doc sms]', fast2smsError || err.message);
-    // Fast2SMS's `message` field is a single string (not the array format
-    // used by its bulkV2 success/reject response above), so surface it as-is
-    // instead of indexing into it.
-    res.status(500).json({ error: fast2smsError?.message || 'Failed to send SMS' });
+    res.status(500).json({ error: extractFast2SmsMessage(fast2smsError) || 'Failed to send SMS' });
   }
 });
 
