@@ -2593,14 +2593,7 @@ function Contacts() {
             >
               <div className="flex items-center gap-2">
                 <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
-                <button
-                  type="button"
-                  onClick={() => setShowVideoTutorial(true)}
-                  className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
-                  title="Watch Contacts Module Video Guide"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                </button>
+                
               </div>
               <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
                 Manage your contacts and leads
@@ -2773,16 +2766,7 @@ function Contacts() {
                       </svg>
                       {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
                     </button>
-                    <button
-                      onClick={() => {
-                        setShowVideoTutorial(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      <FileText className="w-4 h-4 text-gray-400" />
-                      Video Tutorial
-                    </button>
+                    
                     <button
                       onClick={() => {
                         setShowImport(true);

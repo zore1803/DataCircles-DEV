@@ -15,7 +15,7 @@ const variantSchema = new mongoose.Schema({
   stock: { type: Number, default: 0 }, // optional for product inventory
   isActive: { type: Boolean, default: true },
   gstRate: { type: Number, default: 0 } // GST rate for this variant
-}, { _id: false }); // prevents auto _id for each variant
+}); // each variant gets its own persistent _id — purchases/POs/stock movements key off it
 
 // Values for the org-defined custom fields configured in ItemFields.
 // Same shape the other modules use for their additionalFields.

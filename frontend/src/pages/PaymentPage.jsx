@@ -485,10 +485,7 @@ const PaymentPage = () => {
             </div>
           </div>
           <div className="flex gap-2 mt-4 md:mt-0">
-            <VideoTutorialButton
-              onClick={() => setShowVideoTutorial(true)}
-              variant="minimal"
-            />
+            
             <button
               onClick={handleAddNew}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition shadow-sm"

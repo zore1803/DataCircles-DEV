@@ -22,6 +22,13 @@ const stockMovementSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Which variant of `item` moved, when the item has variants — null for a plain (no-variant)
+    // product or a movement against the parent aggregate. Without this, movements against a
+    // variant-carrying product were indistinguishable from one another in the ledger.
+    variantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
 
     // "in" adds stock (purchase, return, correction up), "out" removes it (sale, damage,
     // correction down). Sign is carried by this field; `quantity` is always positive.

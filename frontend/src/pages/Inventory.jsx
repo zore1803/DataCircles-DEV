@@ -1276,6 +1276,11 @@ export default function Inventory() {
                         <span className="text-xs font-medium text-gray-600 capitalize truncate">
                           {(m.reason || "").replace(/_/g, " ")}
                         </span>
+                        {m.variantId && (
+                          <span className="text-xs text-gray-400 truncate">
+                            · {historyFor.variants?.find((v) => String(v._id) === String(m.variantId))?.name || "Variant"}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
                         <span>{m.previousStock}</span>

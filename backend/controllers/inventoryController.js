@@ -201,6 +201,7 @@ async function applyStockMovement(req, res, direction) {
       category,
       recordDate,
       priceIncludesTax,
+      variantId,
     } = req.body || {};
 
     const qty = Number(quantity);
@@ -226,7 +227,20 @@ async function applyStockMovement(req, res, direction) {
     // than rejecting the request.
     if (!item.inventory) item.inventory = {};
 
-    const previousStock = Number(item.inventory.currentStock) || 0;
+    // When the item has variants, a movement targets one specific variant's own stock — the
+    // parent's `inventory.currentStock` is only ever the aggregate (kept in sync below), never
+    // the field a variant-carrying product's movement is actually recorded against.
+    let variant = null;
+    if (item.variants && item.variants.length > 0) {
+      variant = variantId ? item.variants.id(variantId) : null;
+      if (!variant) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ error: "This item has variants — select a variant to record stock against." });
+      }
+    }
+
+    const previousStock = variant ? Number(variant.stock) || 0 : Number(item.inventory.currentStock) || 0;
     const newStock = direction === "in" ? previousStock + qty : previousStock - qty;
 
     if (direction === "out" && newStock < 0 && !allowNegative) {
@@ -251,19 +265,21 @@ async function applyStockMovement(req, res, direction) {
     const parsedRecordDate =
       parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : new Date();
 
-    // Fall back to the item's own price so a movement always carries the value it was made at,
-    // even when the caller doesn't supply one.
+    // Fall back to the item's (or, when targeting a variant, that variant's own) price so a
+    // movement always carries the value it was made at, even when the caller doesn't supply one.
+    const priceSource = variant || item;
     const resolvedUnitPrice = Number.isFinite(Number(unitPrice))
       ? Number(unitPrice)
       : direction === "in"
-        ? Number(item.purchasePrice) || 0
-        : Number(item.sellingPrice) || 0;
+        ? Number(priceSource.purchasePrice) || 0
+        : Number(priceSource.sellingPrice) || 0;
 
     const [movement] = await StockMovement.create(
       [
         {
           organization: req.user.organization,
           item: item._id,
+          variantId: variant ? variant._id : null,
           direction,
           quantity: qty,
           previousStock,
@@ -282,7 +298,16 @@ async function applyStockMovement(req, res, direction) {
       { session }
     );
 
-    item.inventory.currentStock = newStock;
+    if (variant) {
+      // The variant's own stock is what actually moved; keep the parent's currentStock as the
+      // aggregate total in sync by the same delta, same dual-write pattern inventorySync.js
+      // uses for PO-driven movements.
+      const delta = direction === "in" ? qty : -qty;
+      variant.stock = newStock;
+      item.inventory.currentStock = (Number(item.inventory.currentStock) || 0) + delta;
+    } else {
+      item.inventory.currentStock = newStock;
+    }
     item.inventory.lastMovementAt = new Date();
     await item.save({ session });
 

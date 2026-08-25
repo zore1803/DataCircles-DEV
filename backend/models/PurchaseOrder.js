@@ -14,6 +14,12 @@ const purchaseOrderSchema = new mongoose.Schema({
       total: { type: Number, required: true },
       sku: { type: String },
       variantAttributes: { type: Map, of: String },
+      // Per-item GST/Tax-Inc. override — the form lets each line carry its own rate
+      // (seeded from the variant, if any). Was being sent by the frontend but silently
+      // dropped since this sub-schema never declared the fields.
+      gstRate: { type: Number, default: 0, min: 0 },
+      taxInclusive: { type: Boolean, default: false },
+      taxAmount: { type: Number, default: 0, min: 0 },
     }
   ],
   totalAmount: { type: Number, required: true },

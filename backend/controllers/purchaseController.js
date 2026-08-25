@@ -39,22 +39,38 @@ const calculateItemTotal = (quantity, unitPrice) => {
   return parseFloat(quantity) * parseFloat(unitPrice);
 };
 
-// Helper function to calculate subtotal
+// Helper function to calculate subtotal — legacy callers only (bulk import rows have no
+// gstRate/taxInclusive, so this is equivalent to summing gross line totals for them).
 const calculateSubtotal = (items) => {
   return items.reduce((sum, item) => sum + calculateItemTotal(item.quantity, item.unitPrice), 0);
 };
 
-// Helper function to calculate tax
-const calculateTax = (subtotal, gstRate, transactionType) => {
-  if (parseFloat(gstRate) <= 0) return 0;
-  if (transactionType === 'intra') {
-    const halfRate = parseFloat(gstRate) / 2;
-    const cgst = subtotal * (halfRate / 100);
-    const sgst = subtotal * (halfRate / 100);
-    return cgst + sgst;
-  } else {
-    return subtotal * (parseFloat(gstRate) / 100);
+// Computes one item's net (pre-tax) amount and tax amount from its own gstRate/taxInclusive —
+// seeded from the variant when one was selected. Mirrors PurchaseForm.jsx's own frontend math
+// exactly (lines computing `subtotal`/`totalTax`), so stored totals never disagree with what
+// the form displayed.
+const calculateItemNetAndTax = (quantity, unitPrice, gstRate, taxInclusive) => {
+  const gross = (parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0);
+  const rate = parseFloat(gstRate) || 0;
+  if (rate <= 0) return { net: gross, tax: 0 };
+  if (taxInclusive) {
+    const net = gross / (1 + rate / 100);
+    return { net, tax: gross - net };
   }
+  return { net: gross, tax: gross * (rate / 100) };
+};
+
+// Rolls calculateItemNetAndTax up across every line into subtotal/totalTax/grandTotal —
+// per-item GST, not a single document-level rate (see calculateItemNetAndTax's own comment).
+const calculateOrderTotals = (items) => {
+  let subtotal = 0;
+  let totalTax = 0;
+  for (const item of items) {
+    const { net, tax } = calculateItemNetAndTax(item.quantity, item.unitPrice, item.gstRate, item.taxInclusive);
+    subtotal += net;
+    totalTax += tax;
+  }
+  return { subtotal, totalTax, grandTotal: subtotal + totalTax };
 };
 
 // Helper function to generate unique Purchase number per organization
@@ -66,7 +82,7 @@ async function generatePurchaseNumber(organizationId) {
 // Create Purchase
 exports.createPurchase = async (req, res) => {
   try {
-    const { vendor, purchaseOrder, items, notes, status, transactionType, gstRate } = req.body;
+    const { vendor, purchaseOrder, items, notes, status, transactionType } = req.body;
 
     // Validate vendor within organization
     const vendorExists = await Vendor.findOne({
@@ -110,14 +126,10 @@ exports.createPurchase = async (req, res) => {
       return res.status(400).json({ message: "At least one item is required" });
     }
 
-    // Calculate subtotal
-    const subtotal = calculateSubtotal(items);
-
-    // Calculate tax and grand total
+    // Calculate subtotal/tax from each item's own GST (seeded from the variant when one was
+    // selected) — not a single document-level rate, see calculateOrderTotals.
     const calculatedTransactionType = transactionType || 'intra';
-    const calculatedGstRate = parseFloat(gstRate) || 0;
-    const totalTax = calculateTax(subtotal, calculatedGstRate, calculatedTransactionType);
-    const grandTotal = subtotal + totalTax;
+    const { subtotal, totalTax, grandTotal } = calculateOrderTotals(items);
 
     // Generate Purchase Number for organization
     const purchaseNumber = await generatePurchaseNumber(req.user.organization);
@@ -132,7 +144,6 @@ exports.createPurchase = async (req, res) => {
       })),
       subtotal,
       transactionType: calculatedTransactionType,
-      gstRate: calculatedGstRate,
       totalTax,
       grandTotal,
       notes,
@@ -235,7 +246,7 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
     // Execute queries in parallel for better performance
     const [purchases, totalCount] = await Promise.all([
       Purchase.find(query)
-        .populate("vendor", "name email")
+        .populate("vendor", "name email phone")
         .populate("purchaseOrder", "poNumber vendor")
         .populate("items.itemId", "name description purchasePrice hsnSac gstRate")
         .skip(skip)
@@ -325,7 +336,7 @@ exports.getPurchaseById = async (req, res) => {
 // Update Purchase
 exports.updatePurchase = async (req, res) => {
   try {
-    const { items, notes, status, purchaseOrder, transactionType, gstRate } = req.body;
+    const { items, notes, status, purchaseOrder, transactionType } = req.body;
 
     const purchase = await Purchase.findOne({
       _id: req.params.id,
@@ -342,11 +353,8 @@ exports.updatePurchase = async (req, res) => {
 
     // If items updated, recalc subtotal and item totals
     if (items) {
-      const subtotal = calculateSubtotal(items);
       const calculatedTransactionType = transactionType || purchase.transactionType;
-      const calculatedGstRate = parseFloat(gstRate) || purchase.gstRate;
-      const totalTax = calculateTax(subtotal, calculatedGstRate, calculatedTransactionType);
-      const grandTotal = subtotal + totalTax;
+      const { subtotal, totalTax, grandTotal } = calculateOrderTotals(items);
 
       purchase.items = items.map(item => ({
         ...item,
@@ -354,7 +362,6 @@ exports.updatePurchase = async (req, res) => {
       }));
       purchase.subtotal = subtotal;
       purchase.transactionType = calculatedTransactionType;
-      purchase.gstRate = calculatedGstRate;
       purchase.totalTax = totalTax;
       purchase.grandTotal = grandTotal;
     }
@@ -391,12 +398,6 @@ exports.updatePurchase = async (req, res) => {
     }
 
     if (transactionType !== undefined) purchase.transactionType = transactionType;
-    if (gstRate !== undefined) {
-      const calculatedGstRate = parseFloat(gstRate);
-      purchase.gstRate = calculatedGstRate;
-      purchase.totalTax = calculateTax(purchase.subtotal, calculatedGstRate, purchase.transactionType);
-      purchase.grandTotal = purchase.subtotal + purchase.totalTax;
-    }
 
     await purchase.save();
 

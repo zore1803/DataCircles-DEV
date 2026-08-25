@@ -7,9 +7,12 @@ const Invoice = require('../models/Invoice');
 const ProformaInvoice = require('../models/ProformaInvoice');
 const Quotation = require('../models/quotation');
 const DeliveryChallan = require('../models/deliveryChallan');
+const Purchase = require('../models/Purchase');
+const PurchaseOrder = require('../models/PurchaseOrder');
 const Branding = require('../models/Branding');
 const getDefaultBankDetails = require('../utils/getDefaultBankDetails');
 const htmlDocumentPdf = require('../utils/htmlDocumentPdf');
+const purchaseDocumentPdf = require('../utils/purchaseDocumentPdf');
 
 // canonical API path → model/meta
 // Also accepts Accounting.jsx tab keys (tax, performa, quotation, deliveryChallan)
@@ -19,13 +22,22 @@ const MODELS = {
   'performa-invoices': ProformaInvoice, performa: ProformaInvoice,
   quotations: Quotation,      quotation: Quotation,
   'delivery-challans': DeliveryChallan, deliveryChallan: DeliveryChallan,
+  purchase: Purchase,
+  purchaseOrder: PurchaseOrder,
 };
+
+// Purchase/PurchaseOrder are vendor-facing (not deal-based) and use their own
+// PDF template (utils/purchaseDocumentPdf.js) — every branch below checks
+// this set instead of hardcoding the two extra keys repeatedly.
+const VENDOR_DOC_TYPES = new Set(['purchase', 'purchaseOrder']);
 
 const NUMBER_KEYS = {
   invoices: 'invoiceNumber',          tax: 'invoiceNumber',
   'performa-invoices': 'performaInvoiceNumber', performa: 'performaInvoiceNumber',
   quotations: 'quotationNumber',      quotation: 'quotationNumber',
   'delivery-challans': 'deliveryChallanNumber', deliveryChallan: 'deliveryChallanNumber',
+  purchase: 'purchaseNumber',
+  purchaseOrder: 'poNumber',
 };
 
 const DOC_NAMES = {
@@ -33,6 +45,8 @@ const DOC_NAMES = {
   'performa-invoices': 'Pro Forma Invoice', performa: 'Pro Forma Invoice',
   quotations: 'Quotation',            quotation: 'Quotation',
   'delivery-challans': 'Delivery Challan', deliveryChallan: 'Delivery Challan',
+  purchase: 'Purchase',
+  purchaseOrder: 'Purchase Order',
 };
 
 const DOC_TYPES = {
@@ -40,11 +54,19 @@ const DOC_TYPES = {
   'performa-invoices': 'performaInvoice', performa: 'performaInvoice',
   quotations: 'quotation',            quotation: 'quotation',
   'delivery-challans': 'deliveryChallan', deliveryChallan: 'deliveryChallan',
+  purchase: 'purchase',
+  purchaseOrder: 'purchaseOrder',
 };
+
+function resolveAmount(doc, type) {
+  if (VENDOR_DOC_TYPES.has(type)) return doc.grandTotal ?? doc.totalAmount ?? 0;
+  return doc.amount;
+}
 
 async function loadDoc(type, id) {
   const Model = MODELS[type];
   if (!Model) return null;
+  if (VENDOR_DOC_TYPES.has(type)) return Model.findById(id).populate('vendor');
   return Model.findById(id).populate({
     path: 'deal',
     populate: ['contact', 'company'],
@@ -63,19 +85,20 @@ router.get('/:type/:id', async (req, res) => {
     const branding = await Branding.findOne({ organization: doc.organization }).sort({ updatedAt: -1 });
 
     const numKey = NUMBER_KEYS[type];
-    const customerName =
-      doc.deal?.contact?.name ||
-      doc.deal?.company?.name ||
-      doc.deal?.contactPerson ||
-      doc.deal?.title ||
-      'Customer';
+    const customerName = VENDOR_DOC_TYPES.has(type)
+      ? doc.vendor?.name || 'Vendor'
+      : doc.deal?.contact?.name ||
+        doc.deal?.company?.name ||
+        doc.deal?.contactPerson ||
+        doc.deal?.title ||
+        'Customer';
 
     res.json({
       number: doc[numKey],
-      date: doc.date,
+      date: doc.date || doc.purchaseDate || doc.createdAt,
       dueDate: doc.dueDate || null,
       status: doc.status,
-      amount: doc.amount,
+      amount: resolveAmount(doc, type),
       customerName,
       docName: DOC_NAMES[type],
       organizationName: branding?.companyName || 'Your Company',
@@ -95,16 +118,26 @@ router.get('/:type/:id/download', async (req, res) => {
     if (!MODELS[type]) return res.status(400).json({ error: 'Invalid document type' });
 
     const Model = MODELS[type];
-    const doc = await Model.findById(id)
-      .populate({ path: 'deal', populate: ['contact', 'company'] })
-      .populate('items.itemId');
+    const isVendorDoc = VENDOR_DOC_TYPES.has(type);
+    const doc = isVendorDoc
+      ? await Model.findById(id)
+          .populate('vendor')
+          .populate('items.itemId', 'name description purchasePrice hsnSac gstRate')
+      : await Model.findById(id)
+          .populate({ path: 'deal', populate: ['contact', 'company'] })
+          .populate('items.itemId');
 
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
-    const bankDetails = await getDefaultBankDetails(doc.organization);
     const orgDetails = await Branding.findOne({ organization: doc.organization }).sort({ updatedAt: -1 });
 
-    const pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
+    let pdfBuffer;
+    if (isVendorDoc) {
+      pdfBuffer = await purchaseDocumentPdf(doc, orgDetails, doc.vendor, DOC_TYPES[type]);
+    } else {
+      const bankDetails = await getDefaultBankDetails(doc.organization);
+      pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
+    }
 
     const numKey = NUMBER_KEYS[type];
     const filename = `${DOC_NAMES[type].replace(/ /g, '-')}-${doc[numKey] || id}.pdf`;
@@ -131,16 +164,26 @@ router.post('/:type/:id/email', async (req, res) => {
     if (!MODELS[type]) return res.status(400).json({ error: 'Invalid document type' });
 
     const Model = MODELS[type];
-    const doc = await Model.findById(id)
-      .populate({ path: 'deal', populate: ['contact', 'company'] })
-      .populate('items.itemId');
+    const isVendorDoc = VENDOR_DOC_TYPES.has(type);
+    const doc = isVendorDoc
+      ? await Model.findById(id)
+          .populate('vendor')
+          .populate('items.itemId', 'name description purchasePrice hsnSac gstRate')
+      : await Model.findById(id)
+          .populate({ path: 'deal', populate: ['contact', 'company'] })
+          .populate('items.itemId');
 
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
-    const bankDetails = await getDefaultBankDetails(doc.organization);
     const orgDetails = await Branding.findOne({ organization: doc.organization }).sort({ updatedAt: -1 });
 
-    const pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
+    let pdfBuffer;
+    if (isVendorDoc) {
+      pdfBuffer = await purchaseDocumentPdf(doc, orgDetails, doc.vendor, DOC_TYPES[type]);
+    } else {
+      const bankDetails = await getDefaultBankDetails(doc.organization);
+      pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
+    }
 
     const numKey = NUMBER_KEYS[type];
     const docName = DOC_NAMES[type];

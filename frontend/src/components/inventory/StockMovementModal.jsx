@@ -185,6 +185,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
     notes: "",
     unitPrice: "",
     priceIncludesTax: false,
+    variantId: "",
   });
   const [loading, setLoading] = useState(false);
   // Set when the server rejects an over-issue; turns the submit button into an explicit
@@ -192,6 +193,11 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
   const [negativeWarning, setNegativeWarning] = useState(null);
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
+
+  const hasVariants = (item?.variants?.length || 0) > 0;
+  const selectedVariant = hasVariants
+    ? item.variants.find((v) => String(v._id) === String(form.variantId)) || null
+    : null;
 
   // Slide-in/out animation, matching the other quick-drawer forms (ItemForm,
   // CallLogForm, CompanyForm) instead of popping open and vanishing instantly.
@@ -218,14 +224,22 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
       category: "",
       notes: "",
       // Seeded from the item so the value line is meaningful straight away: an in-movement is
-      // valued at what it costs to buy, an out-movement at what it sells for.
+      // valued at what it costs to buy, an out-movement at what it sells for. Re-seeded from the
+      // chosen variant's own price once one is picked, below.
       unitPrice: String((isIn ? item?.purchasePrice : item?.sellingPrice) ?? ""),
       priceIncludesTax: false,
+      variantId: "",
     });
     setNegativeWarning(null);
   }, [isOpen, direction, item?._id]);
 
-  const currentStock = Number(item?.inventory?.currentStock) || 0;
+  // A product with variants tracks stock per-variant — the parent's own currentStock is just
+  // the aggregate, so the movement (and its value line) has to be against the chosen variant.
+  const currentStock = selectedVariant
+    ? Number(selectedVariant.stock) || 0
+    : hasVariants
+      ? 0
+      : Number(item?.inventory?.currentStock) || 0;
   const qty = parseFloat(form.quantity);
   const hasQty = Number.isFinite(qty) && qty > 0;
   const projected = hasQty ? (isIn ? currentStock + qty : currentStock - qty) : currentStock;
@@ -240,9 +254,22 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
 
   const set = (patch) => setForm((p) => ({ ...p, ...patch }));
 
+  const handleVariantChange = (variantId) => {
+    const variant = item.variants.find((v) => String(v._id) === String(variantId)) || null;
+    set({
+      variantId,
+      unitPrice: String((isIn ? variant?.purchasePrice : variant?.sellingPrice) ?? ""),
+    });
+    setNegativeWarning(null);
+  };
+
   const submit = async (allowNegative = false) => {
     if (!hasQty) {
       toast.error("Enter a quantity greater than zero");
+      return;
+    }
+    if (hasVariants && !selectedVariant) {
+      toast.error("Select a variant");
       return;
     }
     setLoading(true);
@@ -254,6 +281,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
         notes: form.notes,
         unitPrice: form.unitPrice === "" ? undefined : Number(form.unitPrice),
         priceIncludesTax: form.priceIncludesTax,
+        ...(selectedVariant ? { variantId: selectedVariant._id } : {}),
         ...(allowNegative ? { allowNegative: true } : {}),
       });
       toast.success(`Stock ${isIn ? "added" : "removed"} successfully`);
@@ -329,9 +357,33 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
           <div>
             <h3 className="text-sm font-semibold text-gray-900 truncate">{item.name}</h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              {(item.primaryUnit || "").split(" ")[0]} · Current stock {currentStock}
+              {(item.primaryUnit || "").split(" ")[0]}
+              {!hasVariants || selectedVariant ? ` · Current stock ${currentStock}` : ""}
             </p>
           </div>
+
+          {hasVariants && (
+            <div>
+              <label className={labelClass}>
+                <span className="text-red-500">*</span> Variant
+              </label>
+              <select
+                value={form.variantId}
+                onChange={(e) => handleVariantChange(e.target.value)}
+                className={`${fieldClass} appearance-none cursor-pointer`}
+              >
+                <option value="">Select a variant</option>
+                {item.variants.map((v) => (
+                  <option key={v._id} value={v._id}>
+                    {v.name} — stock {Number(v.stock) || 0}
+                  </option>
+                ))}
+              </select>
+              <p className={helpClass}>
+                This product has variants — stock is tracked per variant, not on the product itself.
+              </p>
+            </div>
+          )}
 
           <div className="border-t border-gray-100 pt-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
@@ -364,13 +416,14 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
                     autoFocus
                     min="0"
                     step="any"
+                    disabled={hasVariants && !selectedVariant}
                     value={form.quantity}
                     onChange={(e) => {
                       set({ quantity: e.target.value });
                       setNegativeWarning(null);
                     }}
                     placeholder="0"
-                    className={`${fieldClass.replace("rounded-full", "rounded-l-full")} border-r-0`}
+                    className={`${fieldClass.replace("rounded-full", "rounded-l-full")} border-r-0 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
                   />
                   <span className="h-8 px-3 flex items-center border border-l-0 border-[#1F2937]/10 rounded-r-full bg-gray-50 text-[12px] font-semibold text-gray-600 whitespace-nowrap">
                     {(item.primaryUnit || "PCS").split(" ")[0]}

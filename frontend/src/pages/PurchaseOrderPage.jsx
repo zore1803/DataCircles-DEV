@@ -29,6 +29,7 @@ import {
   Eye,
   EyeOff,
   Download,
+  Share2,
   Clock,
   CheckCircle2,
   Pin,
@@ -38,6 +39,8 @@ import {
   Video,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import ShareFlyoutMenu from "../components/common/ShareFlyoutMenu";
+import SimpleComposeModal from "../components/common/SimpleComposeModal";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AppToaster from "../components/AppToaster";
@@ -247,6 +250,17 @@ const PurchaseOrderPage = () => {
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
 
+  // Share via WhatsApp/Email/SMS + Copy Link — same public share
+  // infrastructure Accounting.jsx uses (backend/routes/publicDocumentRoutes.js),
+  // reused here via ShareFlyoutMenu/SimpleComposeModal instead of a
+  // Purchase-Order-specific reimplementation.
+  const [shareMenu, setShareMenu] = useState(null); // { x, y, doc }
+  const [composeModal, setComposeModal] = useState(null); // { mode, to, subject, body, doc }
+  const [waTemplatesList, setWaTemplatesList] = useState([]);
+  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
+  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
+  const [shareCompanyName, setShareCompanyName] = useState("");
+
   // Column header menu (Pin/Sort/Hide) — also portaled.
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
@@ -388,6 +402,7 @@ const PurchaseOrderPage = () => {
 
   useEffect(() => {
     fetchVendors();
+    fetchShareSettings();
   }, []);
 
   const fetchVendors = async () => {
@@ -396,6 +411,24 @@ const PurchaseOrderPage = () => {
       setVendors(res.data.vendors || res.data || []);
     } catch {
       toast.error("Failed to load vendors");
+    }
+  };
+
+  // Same org-wide message templates + branding Accounting.jsx's share flow
+  // pulls from (Settings -> Message Templates / Branding) — reused as-is so
+  // WhatsApp/Email/SMS content stays consistent across modules.
+  const fetchShareSettings = async () => {
+    try {
+      const [settingsRes, brandingRes] = await Promise.all([
+        API.get("/document-settings"),
+        API.get("/branding").catch(() => null),
+      ]);
+      setWaTemplatesList(Array.isArray(settingsRes.data?.whatsappTemplates) ? settingsRes.data.whatsappTemplates : []);
+      setSmsTemplatesList(Array.isArray(settingsRes.data?.smsTemplates) ? settingsRes.data.smsTemplates : []);
+      setEmailTemplatesList(Array.isArray(settingsRes.data?.emailTemplates) ? settingsRes.data.emailTemplates : []);
+      if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
+    } catch (err) {
+      console.error("Failed to load share settings in PurchaseOrderPage", err);
     }
   };
 
@@ -473,6 +506,29 @@ const PurchaseOrderPage = () => {
   const handleView = (po) => {
     setSelectedPO(po);
     setShowPreview(true);
+  };
+
+  // Same authenticated per-module download route Accounting.jsx's Download
+  // button hits for its own tabs (/${apiPath}/download/${id}) — reused
+  // as-is rather than a Purchase-Order-specific PDF pipeline.
+  const handleDownload = async (po) => {
+    try {
+      const response = await API.get(`/purchase-orders/download/${po._id}`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Purchase-Order-${po.poNumber || po._id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Purchase order downloaded successfully");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to download purchase order");
+    }
   };
 
   const handleDelete = (id) => {
@@ -815,8 +871,8 @@ const PurchaseOrderPage = () => {
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 160;
             const MARGIN = 8;
-            // 3 items (View, Edit, Delete) + one divider + container padding.
-            const MENU_H = 148;
+            // View, Edit, Download, Share, Delete + two dividers + container padding.
+            const MENU_H = 232;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -832,6 +888,7 @@ const PurchaseOrderPage = () => {
             calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
             calcLeft = Math.max(calcLeft, MARGIN);
 
+            setShareMenu(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(po._id);
             setActiveRowMenuState("main");
@@ -898,6 +955,36 @@ const PurchaseOrderPage = () => {
                   >
                     <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      handleDownload(po);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Download className="w-3.5 h-3.5 text-green-600" />
+                    Download
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const DROPDOWN_W = 208;
+                      const anchorRight = rowActionsPos.left + 160;
+                      setOpenRowActionsId(null);
+                      setRowActionsPos(null);
+                      setShareMenu({
+                        doc: po,
+                        x: Math.max(4, anchorRight - DROPDOWN_W),
+                        y: rowActionsPos.top,
+                      });
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                    Share
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
@@ -1599,14 +1686,7 @@ const PurchaseOrderPage = () => {
                   <>
                     <div className="flex items-center gap-2">
                       <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Purchase Orders</h1>
-                      <button
-                        type="button"
-                        onClick={() => setShowVideoTutorial(true)}
-                        className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
-                        title="Watch Purchase Orders Module Video Guide"
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                      </button>
+                      
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                       Manage your purchase orders
@@ -1765,16 +1845,7 @@ const PurchaseOrderPage = () => {
                         <Settings className="w-4 h-4 text-gray-400" />
                         Columns
                       </button>
-                      <button
-                        onClick={() => {
-                          setShowVideoTutorial(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        <ClipboardList className="w-4 h-4 text-gray-400" />
-                        Video Tutorial
-                      </button>
+                      
                     </div>
                   )}
                 </div>
@@ -2044,6 +2115,43 @@ const PurchaseOrderPage = () => {
         subtitle="Find specific purchase orders quickly"
         emptyStateText="Add a rule to narrow down your purchase order list."
       />
+
+      {shareMenu && (
+        <ShareFlyoutMenu
+          x={shareMenu.x}
+          y={shareMenu.y}
+          onClose={() => setShareMenu(null)}
+          link={`${window.location.origin}/view/purchaseOrder/${shareMenu.doc._id}`}
+          docTypeLabel="Purchase Order"
+          docNumber={shareMenu.doc.poNumber}
+          recipientName={shareMenu.doc.vendor?.name}
+          recipientEmail={shareMenu.doc.vendor?.email}
+          recipientPhone={shareMenu.doc.vendor?.phone}
+          amountLabel={
+            shareMenu.doc.grandTotal != null
+              ? `₹${Number(shareMenu.doc.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+              : ""
+          }
+          companyName={shareCompanyName}
+          waTemplates={waTemplatesList}
+          emailTemplates={emailTemplatesList}
+          smsTemplates={smsTemplatesList}
+          onOpenEmail={(prefill) => setComposeModal({ mode: "email", doc: shareMenu.doc, ...prefill })}
+          onOpenSms={(prefill) => setComposeModal({ mode: "sms", doc: shareMenu.doc, ...prefill })}
+        />
+      )}
+
+      {composeModal && (
+        <SimpleComposeModal
+          mode={composeModal.mode}
+          apiPath="purchaseOrder"
+          docId={composeModal.doc._id}
+          to={composeModal.to}
+          subject={composeModal.subject}
+          body={composeModal.body}
+          onClose={() => setComposeModal(null)}
+        />
+      )}
     </div>
   );
 };

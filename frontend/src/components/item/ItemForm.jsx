@@ -773,15 +773,27 @@ const ItemForm = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Stock
+                        {form._id && variantIndex !== null ? "Current Stock" : "Opening Stock"}
                       </label>
                       <input
                         type="number"
                         name="stock"
+                        // Same reasoning as the parent's Current Stock field above: once a
+                        // variant already exists, its stock is owned by the StockMovement
+                        // ledger and must only change through Inventory's Stock In / Stock Out
+                        // — editing it here would silently overwrite real stock and bypass the
+                        // audit trail. A brand-new variant has no ledger yet, so its opening
+                        // stock is still set here, same as a brand-new item.
+                        disabled={!!(form._id && variantIndex !== null)}
                         value={currentVariant.stock}
                         onChange={handleVariantChange}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                       />
+                      {form._id && variantIndex !== null && (
+                        <p className="mt-1 text-[11px] text-gray-400">
+                          Use Stock In / Stock Out on the Inventory page to change stock.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">

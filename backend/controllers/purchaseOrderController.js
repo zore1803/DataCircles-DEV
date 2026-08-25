@@ -16,14 +16,37 @@ function calculateItemTotal(quantity, unitPrice) {
   return (parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0);
 }
 
-// Helper function to calculate subtotal
-function calculateSubtotal(items) {
-  return items.reduce((sum, item) => sum + calculateItemTotal(item.quantity, item.unitPrice), 0);
-}
-
 // Helper function to calculate tax (CGST+SGST for intra, IGST for inter — same split as purchaseController).
 function calculateTax(items) {
   return items.reduce((sum, item) => sum + (parseFloat(item.taxAmount) || 0), 0);
+}
+
+// Stamps each item's own per-item tax (from that item's own gstRate/taxInclusive — seeded from
+// the variant when one was selected) and rolls them up into subtotal/totalTax/grandTotal.
+// Mirrors PurchaseOrderForm.jsx's own frontend math exactly, so what's stored never disagrees
+// with what the form displayed. Shared by create and update so they can never drift apart.
+function formatOrderItems(items) {
+  const formattedItems = items.map((item) => {
+    const itemTotal = calculateItemTotal(item.quantity, item.unitPrice);
+    const gstRate = parseFloat(item.gstRate) || 0;
+    const taxInclusive = item.taxInclusive || false;
+    const taxAmount = taxInclusive
+      ? itemTotal - (itemTotal / (1 + gstRate / 100))
+      : itemTotal * (gstRate / 100);
+
+    return { ...item, total: itemTotal, gstRate, taxInclusive, taxAmount };
+  });
+
+  // subtotal is net-of-tax on tax-inclusive lines — using the gross itemTotal directly would
+  // double-count the tax already folded into that line's price.
+  const subtotal = formattedItems.reduce((sum, item) => {
+    const gross = calculateItemTotal(item.quantity, item.unitPrice);
+    return sum + (item.taxInclusive ? gross - item.taxAmount : gross);
+  }, 0);
+  const totalTax = calculateTax(formattedItems);
+  const grandTotal = subtotal + totalTax;
+
+  return { formattedItems, subtotal, totalTax, grandTotal };
 }
 
 // Attaches a `convertedPurchase` summary ({_id, purchaseNumber}) to each PO so
@@ -124,13 +147,10 @@ exports.createPurchaseOrder = async (req, res) => {
       return res.status(400).json({ message: "At least one item is required" });
     }
 
-    // Calculate totals
-    let totalAmount = 0;
-    const formattedItems = items.map(item => {
-      const itemTotal = item.quantity * item.unitPrice;
-      totalAmount += itemTotal;
-      return { ...item, total: itemTotal };
-    });
+    // Calculate totals — per-item GST (from each item's own gstRate/taxInclusive,
+    // seeded from the variant when one was selected), same math the edit form already used.
+    const { transactionType } = req.body;
+    const { formattedItems, subtotal, totalTax, grandTotal } = formatOrderItems(items);
 
     // Generate PO Number for organization
     const poNumber = await generatePONumber(req.user.organization);
@@ -139,7 +159,11 @@ exports.createPurchaseOrder = async (req, res) => {
       vendor: vendorId,
       poNumber,
       items: formattedItems,
-      totalAmount,
+      subtotal,
+      totalTax,
+      grandTotal,
+      totalAmount: grandTotal,
+      transactionType: transactionType || undefined,
       paymentTerms,
       notes,
       user: req.user.id,
@@ -337,20 +361,7 @@ exports.updatePurchaseOrder = async (req, res) => {
     // Update fields
     if (items) {
       const { transactionType } = req.body;
-      const formattedItems = items.map(item => {
-        const itemTotal = calculateItemTotal(item.quantity, item.unitPrice);
-        const gstRate = parseFloat(item.gstRate) || 0;
-        const taxInclusive = item.taxInclusive || false;
-        const taxAmount = taxInclusive 
-            ? itemTotal - (itemTotal / (1 + gstRate / 100))
-            : itemTotal * (gstRate / 100);
-            
-        return { ...item, total: itemTotal, gstRate, taxInclusive, taxAmount };
-      });
-
-      const subtotal = calculateSubtotal(formattedItems);
-      const totalTax = calculateTax(formattedItems);
-      const grandTotal = subtotal + totalTax;
+      const { formattedItems, subtotal, totalTax, grandTotal } = formatOrderItems(items);
 
       purchaseOrder.items = formattedItems;
       purchaseOrder.subtotal = subtotal;

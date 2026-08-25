@@ -61,6 +61,30 @@ function parseJsonField(value) {
   }
 }
 
+// Seeds the ledger so a tracked item's (or variant's) stock history starts from its opening
+// balance rather than from its first manual movement. Best-effort: the item is already saved
+// and correct, so a ledger failure is logged rather than failing the whole request.
+async function recordOpeningStock({ organization, itemId, variantId, openingStock, unitPrice, userId }) {
+  if (!openingStock) return;
+  try {
+    await StockMovement.create({
+      organization,
+      item: itemId,
+      variantId: variantId || null,
+      direction: openingStock >= 0 ? "in" : "out",
+      quantity: Math.abs(openingStock),
+      previousStock: 0,
+      newStock: openingStock,
+      reason: "opening_stock",
+      notes: "Opening stock",
+      unitPrice: unitPrice || 0,
+      user: userId,
+    });
+  } catch (ledgerErr) {
+    console.error("Failed to record opening stock movement:", ledgerErr);
+  }
+}
+
 const createItem = async (req, res) => {
   try {
     const itemData = {
@@ -127,26 +151,25 @@ const createItem = async (req, res) => {
     const item = new Item(itemData);
     await item.save();
 
-    // Seed the ledger so a tracked item's stock history starts from its opening balance rather
-    // than from its first manual movement. Best-effort: the item is already saved and correct, so
-    // a ledger failure is logged rather than failing the whole create.
-    if (item.inventory?.openingStock) {
-      try {
-        await StockMovement.create({
-          organization: req.user.organization,
-          item: item._id,
-          direction: item.inventory.openingStock >= 0 ? "in" : "out",
-          quantity: Math.abs(item.inventory.openingStock),
-          previousStock: 0,
-          newStock: item.inventory.openingStock,
-          reason: "opening_stock",
-          notes: "Opening stock",
-          unitPrice: parseFloat(item.purchasePrice) || 0,
-          user: req.user.id,
-        });
-      } catch (ledgerErr) {
-        console.error("Failed to record opening stock movement:", ledgerErr);
-      }
+    await recordOpeningStock({
+      organization: req.user.organization,
+      itemId: item._id,
+      openingStock: item.inventory?.openingStock,
+      unitPrice: parseFloat(item.purchasePrice) || 0,
+      userId: req.user.id,
+    });
+
+    // Every variant on a brand-new item is new, so each one with a starting stock gets its own
+    // opening_stock ledger row too — same reasoning as the parent above.
+    for (const variant of item.variants || []) {
+      await recordOpeningStock({
+        organization: req.user.organization,
+        itemId: item._id,
+        variantId: variant._id,
+        openingStock: variant.stock,
+        unitPrice: variant.purchasePrice,
+        userId: req.user.id,
+      });
     }
 
     res.status(201).json(item);
@@ -370,12 +393,18 @@ const updateItem = async (req, res) => {
       });
     }
 
-    // Validate variants if present
+    // Validate variants if present. A variant already carrying an `_id` is one that already
+    // exists (its `stock` field below is ignored by the frontend once the item exists — see
+    // ItemForm.jsx's variant Stock lock — but is left as posted here as defense in depth: it's
+    // simply never surfaced to the ledger). One with no `_id` is brand new and gets its own
+    // opening_stock ledger row once saved, same as a parent item's opening stock.
+    const newVariantIndexes = [];
     if (itemData.variants && Array.isArray(itemData.variants)) {
-      for (const variant of itemData.variants) {
+      itemData.variants.forEach((variant, idx) => {
         if (!variant.name || variant.name.trim() === "") {
-          return res.status(400).json({ error: "Variant name is required" });
+          throw Object.assign(new Error("Variant name is required"), { status: 400 });
         }
+        if (!variant._id) newVariantIndexes.push(idx);
         // Ensure numerical fields are properly formatted
         variant.purchasePrice = parseFloat(variant.purchasePrice) || 0;
         variant.sellingPrice = parseFloat(variant.sellingPrice) || 0;
@@ -384,7 +413,7 @@ const updateItem = async (req, res) => {
         variant.isActive = variant.isActive !== undefined ? variant.isActive : true;
         // Ensure attributes is a Map-like object
         variant.attributes = variant.attributes || {};
-      }
+      });
     }
 
     const item = await Item.findOneAndUpdate(
@@ -401,6 +430,19 @@ const updateItem = async (req, res) => {
 
     if (!item) {
       return res.status(404).json({ error: "Item not found" });
+    }
+
+    for (const idx of newVariantIndexes) {
+      const variant = item.variants[idx];
+      if (!variant) continue;
+      await recordOpeningStock({
+        organization: req.user.organization,
+        itemId: item._id,
+        variantId: variant._id,
+        openingStock: variant.stock,
+        unitPrice: variant.purchasePrice,
+        userId: req.user.id,
+      });
     }
 
     res.json(item);

@@ -1395,11 +1395,7 @@ const MergedInvoiceManager = () => {
             </div>
             {/* Right: Action buttons */}
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <VideoTutorialButton
-                onClick={() => setShowVideoTutorial(true)}
-                variant="minimal"
-                className="w-full sm:w-auto"
-              />
+              
               <button
                 onClick={async () => {
                   const canProceed = await checkBrandingBeforeInvoice();
@@ -1487,14 +1483,7 @@ const MergedInvoiceManager = () => {
                   ? "Quotations"
                   : "Delivery Challans"}
               </span>
-              <button
-                type="button"
-                onClick={() => setShowVideoTutorial(true)}
-                className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 transition-all flex-shrink-0 shadow-sm"
-                title="Watch Invoices Module Video Guide"
-              >
-                <Video className="w-3 h-3" />
-              </button>
+              
             </div>
           </div>
         </div>
