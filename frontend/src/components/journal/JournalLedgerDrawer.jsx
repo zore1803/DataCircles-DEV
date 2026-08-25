@@ -1,16 +1,30 @@
-import React, { useEffect, useState } from "react";
-import { X, BookText, ArrowDownCircle, ArrowUpCircle, Trash2 } from "lucide-react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { X, BookText, ArrowDownCircle, ArrowUpCircle, Trash2, FileSpreadsheet, FileText } from "lucide-react";
 import toast from "react-hot-toast";
+import SearchIcon from "../common/SearchIcon";
 import API from "../../services/api";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 const money = (n) =>
   `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const formatNumber = (n) =>
+  Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const formatDate = (d) => {
   if (!d) return "—";
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "—";
   return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
+
+const formatDateTime = (d) => {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
 // Same dc-panel-card quick-drawer chrome as QuickJournalForm/CallLogForm —
@@ -24,6 +38,14 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const limit = 10;
+  
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +69,7 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
   useEffect(() => {
     if (!isOpen || !journalId) return;
     setData(null);
+    setCurrentPage(1);
     fetchLedger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, journalId]);
@@ -79,39 +102,153 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
     }
   };
 
+  const journal = data?.journal;
+  const rawRows = data?.rows || [];
+  const summary = data?.summary;
+
+  const sortedRows = [...rawRows].reverse();
+  
+  const filteredRows = useMemo(() => {
+    return sortedRows.filter(row => {
+      if (startDate) {
+        const rowDate = new Date(row.createdAt || row.date);
+        const start = new Date(startDate);
+        start.setHours(0,0,0,0);
+        if (rowDate < start) return false;
+      }
+      if (endDate) {
+        const rowDate = new Date(row.createdAt || row.date);
+        const end = new Date(endDate);
+        end.setHours(23,59,59,999);
+        if (rowDate > end) return false;
+      }
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const party = (row.partyName || "").toLowerCase();
+        const desc = (row.notes || row.description || "").toLowerCase();
+        if (!party.includes(q) && !desc.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [sortedRows, startDate, endDate, searchTerm]);
+
+  const totalPages = Math.ceil(filteredRows.length / limit) || 1;
+  const paginatedRows = filteredRows.slice((currentPage - 1) * limit, currentPage * limit);
+
+  // When filters change, go to page 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [startDate, endDate, searchTerm]);
+
   if (!shouldRender) return null;
 
-  const journal = data?.journal;
-  const rows = data?.rows || [];
-  const summary = data?.summary;
+  const handleDownloadPDF = () => {
+    if (!journal || !filteredRows.length) return;
+    const doc = new jsPDF();
+    
+    doc.setFontSize(16);
+    doc.text(`Journal Ledger: ${journal.name}`, 14, 15);
+    
+    if (summary) {
+      doc.setFontSize(10);
+      doc.text(`Net Balance: Rs. ${formatNumber(Math.abs(summary.balance))} (${summary.balance < 0 ? 'To Pay' : 'To Receive'})`, 14, 22);
+    }
+
+    const tableColumn = ["Date Time", "Description", "Party", "Mode", "Amount (in Rupees)", "Payment Type", "Closing Balance (in Rupees)"];
+    const tableRows = filteredRows.map(row => {
+      const isOpening = row._id === `${journal._id}-opening`;
+      return [
+        formatDateTime(row.createdAt || row.date),
+        row.notes || row.description || "—",
+        row.partyName || "—",
+        row.paymentType || "—",
+        isOpening ? "—" : formatNumber(row.amount),
+        isOpening ? "—" : (row.type === "payin" ? "You Received" : "You Gave"),
+        formatNumber(row.balance)
+      ];
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 28,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [82, 88, 102] }
+    });
+
+    doc.save(`${journal.name}_Ledger.pdf`);
+    toast.success("PDF Downloaded successfully");
+  };
+
+  const handleDownloadExcel = () => {
+    if (!journal || !filteredRows.length) return;
+    
+    const tableData = filteredRows.map(row => {
+      const isOpening = row._id === `${journal._id}-opening`;
+      return {
+        "Date Time": formatDateTime(row.createdAt || row.date),
+        "Description": row.notes || row.description || "—",
+        "Party": row.partyName || "—",
+        "Mode": row.paymentType || "—",
+        "Amount (in Rupees)": isOpening ? "—" : row.amount,
+        "Payment Type": isOpening ? "—" : (row.type === "payin" ? "You Received" : "You Gave"),
+        "Closing Balance (in Rupees)": row.balance
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(tableData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ledger");
+    XLSX.writeFile(workbook, `${journal.name}_Ledger.xlsx`);
+    toast.success("Excel Downloaded successfully");
+  };
 
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
-        style={{ opacity: isSliding ? 1 : 0 }}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 flex items-center justify-center p-4 sm:p-6"
+        style={{ opacity: isSliding ? 1 : 0, pointerEvents: isSliding ? 'auto' : 'none' }}
         onClick={handleClose}
-      />
-      <div
-        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
-        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header — matches the CompanyForm/QuickJournalForm quick-drawer header spec */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <div className="min-w-0">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide truncate">
-              Ledger{journal ? ` · ${journal.name}` : ""}
+        <div
+          className={`relative w-full max-w-5xl h-[96vh] max-h-[96vh] bg-white shadow-2xl rounded-2xl flex flex-col overflow-hidden transform transition-all duration-300 ease-out ${isSliding ? "scale-100 translate-y-0" : "scale-95 translate-y-4"}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+        <div className="flex items-start justify-between px-6 py-5 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-4">
+          <div className="min-w-0 flex flex-col gap-1">
+            <h2 className="text-2xl font-bold text-gray-900 truncate">
+              {journal ? journal.name : "Ledger"}
             </h2>
+            {summary && (
+              <p className={`text-lg font-semibold ${summary.balance < 0 ? "text-red-600" : "text-green-600"}`}>
+                Net Balance: {money(Math.abs(summary.balance))}
+              </p>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            title="Close"
-            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-[18px] h-[18px]" strokeWidth={2} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleDownloadExcel}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold transition-colors"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Download Excel
+            </button>
+            <button 
+              onClick={handleDownloadPDF}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" /> Download PDF
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              title="Close"
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-[#1C1B1F] transition-colors flex-shrink-0 ml-2"
+              aria-label="Close"
+            >
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
@@ -134,36 +271,57 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                     Debit {money(summary.debit)}
                   </span>
                   <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
-                    Net {money(summary.net)}
-                  </span>
-                  <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${summary.balance < 0 ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}>
-                    Balance {money(summary.balance)}
+                    Total Volume {money(summary.net)}
                   </span>
                 </div>
-
-                {/* Record directly from the ledger, not just from the list's ⋮ menu */}
-                {journal?.status !== "cancelled" && (onOpenPayIn || onOpenPayOut) && (
-                  <div className="flex gap-2">
-                    {onOpenPayIn && (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="date"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="h-8 px-2 rounded-md border border-gray-200 text-xs text-gray-700 outline-none focus:border-blue-500"
+                    />
+                    <span className="text-gray-400 text-xs font-medium">to</span>
+                    <input 
+                      type="date"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="h-8 px-2 rounded-md border border-gray-200 text-xs text-gray-700 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  
+                  <div className={`relative h-8 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
+                    isSearchExpanded ? "w-[200px]" : "w-8"
+                  } max-w-full`}>
+                    <SearchIcon
+                      className="absolute left-2 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#525866]"
+                      onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
+                    />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onFocus={() => setIsSearchExpanded(true)}
+                      onBlur={() => { if (!searchTerm) setIsSearchExpanded(false); }}
+                      className={`w-full h-full pl-7 pr-7 bg-transparent text-xs focus:outline-none transition-opacity duration-200 cursor-pointer ${
+                        isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"
+                      }`}
+                      placeholder="Search person..."
+                    />
+                    {isSearchExpanded && searchTerm && (
                       <button
                         type="button"
-                        onClick={() => onOpenPayIn(journal)}
-                        className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setSearchTerm("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-4 h-4 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
                       >
-                        <ArrowDownCircle className="w-3.5 h-3.5" /> Pay In
-                      </button>
-                    )}
-                    {onOpenPayOut && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenPayOut(journal)}
-                        className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
-                      >
-                        <ArrowUpCircle className="w-3.5 h-3.5" /> Pay Out
+                        <X className="w-2.5 h-2.5" strokeWidth={2.5} />
                       </button>
                     )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Transaction table */}
@@ -174,42 +332,52 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                     `overflow-hidden` here silently clipped Balance and the delete
                     button off the visible edge instead of making them reachable. */}
                 <div className="border border-[#E1E4EA] rounded-xl overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-left">
+                  <table className="w-full min-w-[800px] text-left">
                     <thead className="bg-[#F5F7FA]">
                       <tr>
-                        <th className="px-3 py-2.5 text-xs font-bold text-[#525866] uppercase tracking-wide">Date</th>
-                        <th className="px-3 py-2.5 text-xs font-bold text-[#525866] uppercase tracking-wide">Description</th>
-                        <th className="px-3 py-2.5 text-xs font-bold text-[#525866] uppercase tracking-wide text-right">Pay In</th>
-                        <th className="px-3 py-2.5 text-xs font-bold text-[#525866] uppercase tracking-wide text-right">Pay Out</th>
-                        <th className="px-3 py-2.5 text-xs font-bold text-[#525866] uppercase tracking-wide text-right">Balance</th>
-                        <th className="px-3 py-2.5 w-10" />
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide">Date Time</th>
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide">Description</th>
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide">Party</th>
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide text-center">Mode</th>
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide text-right">Amount</th>
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide text-center">Payment Type</th>
+                        <th className="px-3 py-2 text-xs font-bold text-[#525866] uppercase tracking-wide text-right">Closing Balance</th>
+                        <th className="px-3 py-2 w-10" />
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-[#F1F1F5]">
-                      {rows.map((row) => {
+                      {paginatedRows.map((row) => {
                         // The Opening Balance row is synthesized (its _id is a string like
                         // "<journalId>-opening", never a real ObjectId) — it can't be deleted.
                         const isOpeningRow = row._id === `${journal?._id}-opening`;
                         return (
                           <tr key={row._id}>
-                            <td className="px-3 py-2.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(row.date)}</td>
-                            <td className="px-3 py-2.5 text-sm text-gray-900 font-medium truncate">{row.description}</td>
-                            <td className="px-3 py-2.5 text-sm text-emerald-600 font-semibold text-right whitespace-nowrap">
-                              {row.payIn != null ? money(row.payIn) : "—"}
+                            <td className="px-3 py-1.5 text-sm text-gray-600 whitespace-nowrap">{formatDateTime(row.createdAt || row.date)}</td>
+                            <td className="px-3 py-1.5 text-sm text-gray-900 font-medium truncate max-w-[150px]" title={row.notes || row.description}>{row.notes || row.description}</td>
+                            <td className="px-3 py-1.5 text-sm text-gray-700 whitespace-nowrap">{row.partyName || "—"}</td>
+                            <td className="px-3 py-1.5 text-sm text-gray-600 text-center whitespace-nowrap">{row.paymentType || "—"}</td>
+                            <td className={`px-3 py-1.5 text-sm font-semibold text-right whitespace-nowrap ${isOpeningRow ? "" : (row.type === "payin" ? "text-emerald-600" : "text-red-600")}`}>
+                              {isOpeningRow ? "—" : money(row.amount)}
                             </td>
-                            <td className="px-3 py-2.5 text-sm text-red-600 font-semibold text-right whitespace-nowrap">
-                              {row.payOut != null ? money(row.payOut) : "—"}
+                            <td className="px-3 py-1.5 text-center whitespace-nowrap">
+                              {isOpeningRow ? (
+                                <span className="text-sm text-gray-400">—</span>
+                              ) : (
+                                <span className={`px-2 py-1 rounded text-xs font-semibold ${row.type === "payin" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                                  {row.type === "payin" ? "You Received" : "You Gave"}
+                                </span>
+                              )}
                             </td>
-                            <td className={`px-3 py-2.5 text-sm font-bold text-right whitespace-nowrap ${row.balance < 0 ? "text-red-600" : "text-gray-900"}`}>
+                            <td className={`px-3 py-1.5 text-sm font-bold text-right whitespace-nowrap ${row.balance < 0 ? "text-red-600" : "text-gray-900"}`}>
                               {money(row.balance)}
                             </td>
-                            <td className="px-1 py-2.5 text-right">
+                            <td className="px-1 py-1.5 text-right">
                               {!isOpeningRow && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteEntry(row._id)}
                                   disabled={deletingId === row._id}
-                                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                  className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                                   title="Delete entry"
                                 >
                                   {deletingId === row._id ? (
@@ -226,9 +394,59 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                     </tbody>
                   </table>
                 </div>
+
               </div>
             </>
           )}
+        </div>
+
+        {/* Sticky Footer */}
+        {data && (
+          <div className="flex-shrink-0 flex justify-between items-center px-6 py-4 border-t border-[#D9D9D9] bg-white">
+            <div className="flex gap-2">
+              {journal?.status !== "cancelled" && (onOpenPayIn || onOpenPayOut) && (
+                <>
+                  {onOpenPayIn && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPayIn(journal)}
+                      className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors"
+                    >
+                      <ArrowDownCircle className="w-4 h-4" /> You Received
+                    </button>
+                  )}
+                  {onOpenPayOut && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPayOut(journal)}
+                      className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors"
+                    >
+                      <ArrowUpCircle className="w-4 h-4" /> You Gave
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end items-center gap-2 text-sm text-gray-600 font-medium">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {"<"}
+              </button>
+              <span>Page {currentPage} of {totalPages}</span>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {">"}
+              </button>
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </>

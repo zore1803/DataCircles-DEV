@@ -313,6 +313,13 @@ exports.getJournalLedger = async (req, res) => {
       ...entries.map((e) => ({
         _id: e._id,
         date: e.date,
+        createdAt: e.createdAt,
+        type: e.type,
+        partyName: e.partyName,
+        partyType: e.partyType,
+        paymentType: e.paymentType,
+        amount: e.amount,
+        notes: e.notes || e.internalNotes || "",
         description: e.partyName || (e.type === "payin" ? "Pay In" : "Pay Out"),
         payIn: e.type === "payin" ? e.amount : null,
         payOut: e.type === "payout" ? e.amount : null,
