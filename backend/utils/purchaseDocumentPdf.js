@@ -95,9 +95,10 @@ const getVendorAddress = (vendor) => {
   return [line1, line2, city, state, pincode, country].filter(Boolean).join(", ");
 };
 
-// type: "purchase" | "purchaseOrder"
+// type: "purchase" | "purchaseOrder" | "purchaseReturn"
 function buildHtml(doc, orgDetails, vendor, type) {
   const isPO = type === "purchaseOrder";
+  const isReturn = type === "purchaseReturn";
   const items = doc.items || [];
   const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const subtotal = doc.subtotal || 0;
@@ -110,13 +111,17 @@ function buildHtml(doc, orgDetails, vendor, type) {
   const sgstAmount = isIntra ? subtotal * (halfRate / 100) : 0;
   const igstAmount = !isIntra ? subtotal * (gstRate / 100) : 0;
 
-  const docLabel = isPO ? "PURCHASE ORDER" : "PURCHASE";
-  const numberLabel = isPO ? "PO Number" : "Purchase Number";
-  const numberValue = isPO ? doc.poNumber : doc.purchaseNumber;
-  const dateLabel = isPO ? "PO Date" : "Purchase Date";
-  const dateValue = isPO ? doc.createdAt : doc.purchaseDate;
-  const dueLabel = isPO ? "Payment By" : "Due Date";
-  const dueValue = isPO
+  const docLabel = isReturn ? "PURCHASE RETURN" : isPO ? "PURCHASE ORDER" : "PURCHASE";
+  const numberLabel = isReturn ? "Return Number" : isPO ? "PO Number" : "Purchase Number";
+  const numberValue = isReturn ? doc.returnNumber : isPO ? doc.poNumber : doc.purchaseNumber;
+  const dateLabel = isReturn ? "Return Date" : isPO ? "PO Date" : "Purchase Date";
+  const dateValue = isReturn ? doc.returnDate : isPO ? doc.createdAt : doc.purchaseDate;
+  // A return has no due date to speak of — show why the goods came back
+  // instead, so this meta row stays useful rather than blank.
+  const dueLabel = isReturn ? "Reason" : isPO ? "Payment By" : "Due Date";
+  const dueValue = isReturn
+    ? (doc.reason || "Not specified")
+    : isPO
     ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     : doc.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -190,7 +195,7 @@ function buildHtml(doc, orgDetails, vendor, type) {
         <div class="doc-title">${docLabel}</div>
         <div><span>${numberLabel}:</span><span>${escapeHtml(numberValue || "N/A")}</span></div>
         <div><span>${dateLabel}:</span><span>${formatDate(dateValue)}</span></div>
-        <div><span>${dueLabel}:</span><span>${formatDate(dueValue)}</span></div>
+        <div><span>${dueLabel}:</span><span>${isReturn ? escapeHtml(dueValue) : formatDate(dueValue)}</span></div>
       </div>
     </div>
 
@@ -206,7 +211,7 @@ function buildHtml(doc, orgDetails, vendor, type) {
         </div>
       </div>
       <div>
-        <div class="label">${isPO ? "Vendor Details" : "Bill To"}</div>
+        <div class="label">${isPO ? "Vendor Details" : isReturn ? "Return To" : "Bill To"}</div>
         <div class="small">
           <div class="b">${escapeHtml(vendor?.name || doc.vendor?.name || "N/A")}</div>
           ${vendor?.company ? `<div>${escapeHtml(vendor.company)}</div>` : ""}
@@ -243,10 +248,12 @@ function buildHtml(doc, orgDetails, vendor, type) {
 
     <div class="grid2">
       <div>
-        <div class="label">${isPO ? "Payment Terms" : "Terms &amp; Conditions"}</div>
+        <div class="label">${isPO ? "Payment Terms" : isReturn ? "Notes" : "Terms &amp; Conditions"}</div>
         ${
           isPO
             ? `<div class="terms">${escapeHtml(doc.paymentTerms || "Payment is due within the specified due date")}</div>`
+            : isReturn
+            ? `<div class="terms">${escapeHtml(doc.notes || "Goods returned as listed above.")}</div>`
             : `<ul class="terms">
                 <li>Payment is due within the specified due date</li>
                 <li>Please make checks payable to ${escapeHtml(orgDetails?.companyName || "Company Name")}</li>

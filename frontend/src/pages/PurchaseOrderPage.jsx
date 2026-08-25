@@ -1755,7 +1755,7 @@ const PurchaseOrderPage = () => {
                 {/* Advanced filter button — opens AdvancedFilterPanel slide-in panel */}
                 <button
                   onClick={() => setShowAdvancedFilters(true)}
-                  className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                  className={`flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                     activeFilters.length > 0
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
@@ -1779,28 +1779,9 @@ const PurchaseOrderPage = () => {
                     title="More options"
                   >
                     <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
-                    {activeFilters.length > 0 && (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
-                    )}
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                      {/* Mobile-only: open filter panel (desktop shows its own button) */}
-                      <button
-                        onClick={() => {
-                          setShowAdvancedFilters(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        <FilterIcon size={14} className="text-gray-400" />
-                        Filters
-                        {activeFilters.length > 0 && (
-                          <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                            {activeFilters.length}
-                          </span>
-                        )}
-                      </button>
                       <button
                         onClick={() => {
                           setShowImport(true);

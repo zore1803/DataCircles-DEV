@@ -582,9 +582,28 @@ exports.createMeeting = async (req, res) => {
 // first (if configured), then this org's connected Google account, and
 // always 200s with provider: null on failure/not-configured rather than
 // erroring — the frontend shows a message asking to configure a provider.
+// Turns a raw googleapis/axios error into a short, user-facing reason so the
+// frontend doesn't have to guess why link generation failed. Falls back to
+// a generic message for anything unrecognized rather than leaking raw error
+// internals to the UI.
+function describeGoogleError(err) {
+  const code = err?.response?.data?.error || err?.message;
+  if (code === "invalid_grant") {
+    return "Your Google connection has expired or was revoked. Reconnect it in Settings > Google Calendar & Meet.";
+  }
+  if (code === "invalid_client") {
+    return "Google integration is misconfigured on this server (invalid client credentials). Contact your administrator.";
+  }
+  if (err?.response?.status === 403) {
+    return "Google denied Calendar access for this account. Reconnect in Settings > Google Calendar & Meet and grant Calendar permission.";
+  }
+  return "Couldn't create a Google Meet link right now. Try reconnecting in Settings > Google Calendar & Meet.";
+}
+
 exports.generateVideoLink = async (req, res) => {
   try {
     const { title, scheduledAt, duration } = req.body;
+    let errorMessage = null;
 
     if (isZoomConfigured()) {
       try {
@@ -601,6 +620,7 @@ exports.generateVideoLink = async (req, res) => {
         });
       } catch (zoomErr) {
         console.error("Error generating Zoom link:", zoomErr.message);
+        errorMessage = "Couldn't create a Zoom link right now. Trying Google Meet instead…";
         // Fall through to Google Meet rather than failing outright.
       }
     }
@@ -622,16 +642,18 @@ exports.generateVideoLink = async (req, res) => {
         }
         // googleMeeting === null means this org hasn't connected a Google
         // account yet (Settings > Integrations) — not an error, just
-        // nothing to use.
+        // nothing to use. The frontend already has its own message for
+        // this case via googleStatus, so leave errorMessage untouched.
       } catch (googleErr) {
         console.error("Error generating Google Meet link:", googleErr.message);
+        errorMessage = describeGoogleError(googleErr);
       }
     }
 
-    res.status(200).json({ provider: null, zoomAvailable: false });
+    res.status(200).json({ provider: null, zoomAvailable: false, error: errorMessage });
   } catch (error) {
     console.error("Error generating video link:", error.message);
-    res.status(200).json({ provider: null, zoomAvailable: false });
+    res.status(200).json({ provider: null, zoomAvailable: false, error: "Couldn't generate a video-call link right now. Please try again." });
   }
 };
 

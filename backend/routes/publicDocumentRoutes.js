@@ -9,6 +9,7 @@ const Quotation = require('../models/quotation');
 const DeliveryChallan = require('../models/deliveryChallan');
 const Purchase = require('../models/Purchase');
 const PurchaseOrder = require('../models/PurchaseOrder');
+const PurchaseReturn = require('../models/PurchaseReturn');
 const Branding = require('../models/Branding');
 const getDefaultBankDetails = require('../utils/getDefaultBankDetails');
 const htmlDocumentPdf = require('../utils/htmlDocumentPdf');
@@ -24,12 +25,14 @@ const MODELS = {
   'delivery-challans': DeliveryChallan, deliveryChallan: DeliveryChallan,
   purchase: Purchase,
   purchaseOrder: PurchaseOrder,
+  purchaseReturn: PurchaseReturn,
 };
 
-// Purchase/PurchaseOrder are vendor-facing (not deal-based) and use their own
-// PDF template (utils/purchaseDocumentPdf.js) — every branch below checks
-// this set instead of hardcoding the two extra keys repeatedly.
-const VENDOR_DOC_TYPES = new Set(['purchase', 'purchaseOrder']);
+// Purchase/PurchaseOrder/PurchaseReturn are vendor-facing (not deal-based)
+// and use their own PDF template (utils/purchaseDocumentPdf.js) — every
+// branch below checks this set instead of hardcoding the extra keys
+// repeatedly.
+const VENDOR_DOC_TYPES = new Set(['purchase', 'purchaseOrder', 'purchaseReturn']);
 
 const NUMBER_KEYS = {
   invoices: 'invoiceNumber',          tax: 'invoiceNumber',
@@ -38,6 +41,7 @@ const NUMBER_KEYS = {
   'delivery-challans': 'deliveryChallanNumber', deliveryChallan: 'deliveryChallanNumber',
   purchase: 'purchaseNumber',
   purchaseOrder: 'poNumber',
+  purchaseReturn: 'returnNumber',
 };
 
 const DOC_NAMES = {
@@ -47,6 +51,7 @@ const DOC_NAMES = {
   'delivery-challans': 'Delivery Challan', deliveryChallan: 'Delivery Challan',
   purchase: 'Purchase',
   purchaseOrder: 'Purchase Order',
+  purchaseReturn: 'Purchase Return',
 };
 
 const DOC_TYPES = {
@@ -56,6 +61,7 @@ const DOC_TYPES = {
   'delivery-challans': 'deliveryChallan', deliveryChallan: 'deliveryChallan',
   purchase: 'purchase',
   purchaseOrder: 'purchaseOrder',
+  purchaseReturn: 'purchaseReturn',
 };
 
 function resolveAmount(doc, type) {

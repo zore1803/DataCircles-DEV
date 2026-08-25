@@ -25,6 +25,19 @@ import {
   Settings,
   Upload,
   Video,
+  Share2,
+  MessageCircle,
+  Mail,
+  Copy,
+  MessageSquare,
+  Lock,
+  Bold as BoldIcon,
+  Italic as ItalicIcon,
+  Underline as UnderlineIcon,
+  Strikethrough as StrikethroughIcon,
+  ListOrdered,
+  List as ListIcon,
+  Link as LinkIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
@@ -105,13 +118,20 @@ const PurchaseReturn = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportButtonRef = useRef(null);
   useEffect(() => {
-    const handleClickOutsideExport = (event) => {
+    const handleClickOutside = (event) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setIsMoreMenuOpen(false);
+      }
       if (exportButtonRef.current && !exportButtonRef.current.contains(event.target)) {
         setShowExportMenu(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutsideExport);
-    return () => document.removeEventListener("mousedown", handleClickOutsideExport);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    fetchShareSettings();
   }, []);
 
   const hasLoadedOnceRef = useRef(false);
@@ -154,6 +174,33 @@ const PurchaseReturn = () => {
   const [activeRowMenuState, setActiveRowMenuState] = useState("main");
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
+
+  const [shareMenu, setShareMenu] = useState(null);
+  const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  const [waTemplatesList, setWaTemplatesList] = useState([]);
+  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
+  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
+  const [shareCompanyName, setShareCompanyName] = useState("");
+
+  const [emailCompose, setEmailCompose] = useState(null);
+  const [emailComposeTo, setEmailComposeTo] = useState("");
+  const [emailComposeCc, setEmailComposeCc] = useState("");
+  const [emailComposeBcc, setEmailComposeBcc] = useState("");
+  const [showEmailCc, setShowEmailCc] = useState(false);
+  const [showEmailBcc, setShowEmailBcc] = useState(false);
+  const [emailComposeSubject, setEmailComposeSubject] = useState("");
+  const [emailComposeBody, setEmailComposeBody] = useState("");
+  const [emailComposeSending, setEmailComposeSending] = useState(false);
+  const [emailPreviewMode, setEmailPreviewMode] = useState(false);
+  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
+  const emailBodyEditorRef = useRef(null);
+  const EMAIL_FROM_ADDRESS = import.meta.env.VITE_SENDGRID_FROM_EMAIL || "";
+  const EMAIL_FROM_NAME = import.meta.env.VITE_SENDGRID_FROM_NAME || "";
+
+  const [smsCompose, setSmsCompose] = useState(null);
+  const [smsComposeTo, setSmsComposeTo] = useState("");
+  const [smsComposeBody, setSmsComposeBody] = useState("");
+  const [smsComposeSending, setSmsComposeSending] = useState(false);
 
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
@@ -308,6 +355,48 @@ const PurchaseReturn = () => {
   const handleDelete = (id) => {
     setReturnToDelete(id);
     setShowDeleteModal(true);
+  };
+
+  const handleDownload = async (ret) => {
+    const filename = `Purchase-Return-${ret.returnNumber || ret._id}`;
+    try {
+      const response = await API.get(`/purchase-returns/download/${ret._id}`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${filename}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Purchase return downloaded successfully");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to download purchase return");
+    }
+  };
+
+  const textToEmailHtml = (text) => (text || "").replace(/\n/g, "<br>");
+
+  // Same org-wide message templates + branding Accounting.jsx's/
+  // PurchaseOrderPage.jsx's share flow pulls from (Settings -> Message
+  // Templates / Branding) — reused as-is so WhatsApp/Email/SMS content stays
+  // consistent across modules.
+  const fetchShareSettings = async () => {
+    try {
+      const [settingsRes, brandingRes] = await Promise.all([
+        API.get("/document-settings"),
+        API.get("/branding").catch(() => null),
+      ]);
+      setWaTemplatesList(Array.isArray(settingsRes.data?.whatsappTemplates) ? settingsRes.data.whatsappTemplates : []);
+      setSmsTemplatesList(Array.isArray(settingsRes.data?.smsTemplates) ? settingsRes.data.smsTemplates : []);
+      setEmailTemplatesList(Array.isArray(settingsRes.data?.emailTemplates) ? settingsRes.data.emailTemplates : []);
+      if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
+    } catch (err) {
+      console.error("Failed to load share settings in PurchaseReturn", err);
+    }
   };
 
   const EXPORT_COLUMNS = [
@@ -557,20 +646,25 @@ const PurchaseReturn = () => {
 
   const renderRowActionsMenu = (p) => {
     const isOpen = openRowActionsId === p._id;
+    const closeRowMenu = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      setActiveRowMenuState("main");
+    };
     return (
-      <div className="relative flex-shrink-0" ref={isOpen ? rowActionsRef : null} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
         <button
+          title="More actions"
           onClick={(e) => {
             e.stopPropagation();
             if (isOpen) {
-              setOpenRowActionsId(null);
-              setRowActionsPos(null);
+              closeRowMenu();
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 160;
+            const MENU_W = 224;
             const MARGIN = 8;
-            const MENU_H = 148;
+            const MENU_H = 300;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -586,35 +680,38 @@ const PurchaseReturn = () => {
             calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
             calcLeft = Math.max(calcLeft, MARGIN);
 
+            setShareMenu(null);
+            setShareMenuChannel(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(p._id);
             setActiveRowMenuState("main");
           }}
-          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-          title="More actions"
+          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
-            <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }} />
+            <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
             <div
+              key={p._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
             >
               {activeRowMenuState === "status" ? (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-gray-500 hover:bg-gray-50 whitespace-nowrap mb-1"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
                   >
-                    ← Back
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
                   </button>
                   {statusOptions.map((st) => (
                     <button
                       key={st}
                       onClick={(e) => { e.stopPropagation(); updateSingleStatus(p._id, st); }}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal hover:bg-gray-50 whitespace-nowrap ${p.status === st ? "bg-blue-50 text-blue-600" : "text-[#161618]"}`}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${p.status === st ? "bg-blue-50 text-blue-600" : "text-gray-700"}`}
                     >
                       {st}
                     </button>
@@ -623,33 +720,51 @@ const PurchaseReturn = () => {
               ) : (
                 <>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setOpenRowActionsId(null); setRowActionsPos(null); handleView(p); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleView(p); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <Eye className="w-4 h-4 text-blue-600" />
                     View
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setOpenRowActionsId(null); setRowActionsPos(null); handleEdit(p); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleEdit(p); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <Edit2 className="w-4 h-4 text-blue-600" />
                     Edit
                   </button>
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
-                    onClick={(e) => { e.stopPropagation(); setOpenRowActionsId(null); setRowActionsPos(null); handleDelete(p._id); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleDownload(p); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
-                    Delete
+                    <Download className="w-4 h-4 text-green-600" />
+                    Download
                   </button>
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const DROPDOWN_W = 208;
+                      const anchorRight = rowActionsPos.left + 224;
+                      closeRowMenu();
+                      setShareMenu({
+                        doc: p,
+                        x: Math.max(4, anchorRight - DROPDOWN_W),
+                        y: rowActionsPos.top,
+                      });
+                      setShareMenuChannel(null);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    Change Status
+                    <Share2 className="w-4 h-4 text-blue-600" />
+                    Share via WhatsApp/Email/SMS
+                  </button>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={() => { closeRowMenu(); handleDelete(p._id); }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
                   </button>
                 </>
               )}
@@ -1114,6 +1229,409 @@ const PurchaseReturn = () => {
         onApply={(newFilters) => setActiveFilters(newFilters)}
       />
 
+      {shareMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+          <div
+            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            style={{ top: shareMenu.y, left: shareMenu.x }}
+          >
+            {(() => {
+              const link = `${window.location.origin}/view/purchaseReturn/${shareMenu.doc._id}`;
+              const num = shareMenu.doc.returnNumber;
+              const d = shareMenu.doc;
+              const customerName = d.vendor?.name || "Vendor";
+              const amt = d.grandTotal != null ? `₹${Number(d.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+              const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
+              const fillTpl = (tpl) => tpl
+                .replace(/{customerName}/g, customerName)
+                .replace(/{docType}/g, "Purchase Return")
+                .replace(/{number}/g, num || "—")
+                .replace(/{amount}/g, amt)
+                .replace(/{link}/g, link)
+                .replace(/{company}/g, shareCompanyName || "");
+
+              const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your Purchase Return is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
+              const buildSmsMsg = (tpl) => tpl?.body
+                ? fillTpl(tpl.body)
+                : `Your Purchase Return${num ? ` #${num}` : ""} from ${shareCompanyName || "us"} is ready. View & Download: ${link}`;
+              const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `Purchase Return ${num || ""}`;
+              const buildEmailBody = (tpl) => tpl?.body
+                ? fillTpl(tpl.body)
+                : `Hi ${customerName},\n\nPlease find attached your Purchase Return${num ? ` #${num}` : ""}.\n\nYou can also view and download it online:\n${link}\n\nThank you for your business!`;
+
+              const channels = {
+                whatsapp: {
+                  list: waTemplatesList,
+                  send: (tpl) => { window.open(`https://wa.me/?text=${encodeURIComponent(buildWaMsg(tpl))}`, "_blank"); closeMenu(); },
+                },
+                email: {
+                  list: emailTemplatesList,
+                  send: (tpl) => {
+                    setEmailComposeTo(d.vendor?.email || "");
+                    setEmailComposeSubject(buildEmailSubject(tpl));
+                    setEmailComposeBody(textToEmailHtml(buildEmailBody(tpl)));
+                    setEmailCompose({ doc: d });
+                    closeMenu();
+                  },
+                },
+                sms: {
+                  list: smsTemplatesList,
+                  send: (tpl) => {
+                    setSmsComposeTo(d.vendor?.phone || "");
+                    setSmsComposeBody(buildSmsMsg(tpl));
+                    setSmsCompose({ doc: d });
+                    closeMenu();
+                  },
+                },
+              };
+
+              const openChannel = (channel) => {
+                const { list, send } = channels[channel];
+                if (list.length <= 1) send(list[0] || null);
+                else setShareMenuChannel(channel);
+              };
+
+              if (shareMenuChannel) {
+                const { list, send } = channels[shareMenuChannel];
+                return (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                    >
+                      ← Back
+                    </button>
+                    {list.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        onClick={(e) => { e.stopPropagation(); send(tpl); }}
+                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="truncate">{tpl.name}</span>
+                        {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                      </button>
+                    ))}
+                  </>
+                );
+              }
+
+              const items = [
+                { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
+                { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
+                { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+              ];
+              return items.map(({ label, icon, onClick }) => (
+                <button
+                  key={label}
+                  onClick={(e) => { e.stopPropagation(); onClick(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  {icon}
+                  {label}
+                </button>
+              ));
+            })()}
+          </div>
+        </>,
+        document.body
+      )}
+      {emailCompose && (() => {
+        const dname = "Purchase Return";
+        const dnum = emailCompose.doc.returnNumber;
+        const link = `${window.location.origin}/view/purchaseReturn/${emailCompose.doc._id}`;
+        const cname = emailCompose.doc.vendor?.name || "Vendor";
+        const eAmt = emailCompose.doc.grandTotal != null
+          ? `₹${Number(emailCompose.doc.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+          : "";
+        const fillEmailTpl = (tpl) => tpl
+          .replace(/{customerName}/g, cname)
+          .replace(/{docType}/g, dname)
+          .replace(/{number}/g, dnum || "—")
+          .replace(/{amount}/g, eAmt)
+          .replace(/{link}/g, link)
+          .replace(/{company}/g, shareCompanyName || "");
+        const applyTemplate = (key) => {
+          const saved = emailTemplatesList.find((tpl) => tpl.id === key);
+          let nextSubject;
+          let nextBody;
+          if (saved) {
+            nextSubject = fillEmailTpl(saved.subject || "");
+            nextBody = textToEmailHtml(fillEmailTpl(saved.body || ""));
+          } else if (key === "standard") {
+            nextSubject = `${dname} ${dnum || ""}`;
+            nextBody = textToEmailHtml(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
+          } else if (key === "reminder") {
+            nextSubject = `Reminder: ${dname} ${dnum || ""} pending`;
+            nextBody = textToEmailHtml(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+          } else if (key === "followup") {
+            nextSubject = `Following up on ${dname} ${dnum || ""}`;
+            nextBody = textToEmailHtml(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+          }
+          setEmailComposeSubject(nextSubject);
+          setEmailComposeBody(nextBody);
+          if (emailBodyEditorRef.current) {
+            emailBodyEditorRef.current.innerHTML = nextBody;
+          }
+          setEmailTemplateOpen(false);
+        };
+        const doSend = async () => {
+          if (!emailComposeTo || emailComposeSending) return;
+          setEmailComposeSending(true);
+          try {
+            await API.post(`/public/purchaseReturn/${emailCompose.doc._id}/email`, {
+              email: emailComposeTo,
+              cc: emailComposeCc,
+              bcc: emailComposeBcc,
+              subject: emailComposeSubject,
+              body: emailComposeBody,
+            });
+            toast.success("Email sent successfully");
+            setEmailCompose(null);
+            setEmailComposeTo("");
+            setEmailComposeCc("");
+            setEmailComposeBcc("");
+            setShowEmailCc(false);
+            setShowEmailBcc(false);
+            setEmailComposeSubject("");
+            setEmailComposeBody("");
+            setEmailPreviewMode(false);
+          } catch (err) {
+            toast.error(err.response?.data?.error || "Failed to send email");
+          } finally {
+            setEmailComposeSending(false);
+          }
+        };
+        const execCmd = (cmd, value = null) => {
+          emailBodyEditorRef.current?.focus();
+          document.execCommand(cmd, false, value);
+          setEmailComposeBody(emailBodyEditorRef.current?.innerHTML || "");
+        };
+        const insertLink = () => {
+          const url = window.prompt("Enter URL");
+          if (url) execCmd("createLink", url);
+        };
+        const toolbarButtons = [
+          { icon: <BoldIcon className="w-3.5 h-3.5" />, title: "Bold", onClick: () => execCmd("bold") },
+          { icon: <ItalicIcon className="w-3.5 h-3.5" />, title: "Italic", onClick: () => execCmd("italic") },
+          { icon: <UnderlineIcon className="w-3.5 h-3.5" />, title: "Underline", onClick: () => execCmd("underline") },
+          { icon: <StrikethroughIcon className="w-3.5 h-3.5" />, title: "Strikethrough", onClick: () => execCmd("strikeThrough") },
+          { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Numbered list", onClick: () => execCmd("insertOrderedList") },
+          { icon: <ListIcon className="w-3.5 h-3.5" />, title: "Bulleted list", onClick: () => execCmd("insertUnorderedList") },
+          { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertLink },
+        ];
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
+            <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                  <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEmailPreviewMode((prev) => !prev)}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {emailPreviewMode ? "Edit" : "Preview"}
+                  </button>
+                  <button
+                    disabled={!emailComposeTo || emailComposeSending}
+                    onClick={doSend}
+                    className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                  >
+                    {emailComposeSending ? (
+                      <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                    ) : (
+                      <><Mail className="w-4 h-4" /> Send Email</>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                  <div className="flex items-center w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
+                    <span className="flex items-center gap-1.5 text-sm text-gray-600 flex-1 min-w-0">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0">DC</span>
+                      <span className="min-w-0 truncate">
+                        {EMAIL_FROM_NAME && <strong className="mr-1">{EMAIL_FROM_NAME}</strong>}
+                        {EMAIL_FROM_ADDRESS}
+                      </span>
+                      <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                      {!showEmailCc && (
+                        <button type="button" onClick={() => setShowEmailCc(true)} className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">Cc</button>
+                      )}
+                      {!showEmailBcc && (
+                        <button type="button" onClick={() => setShowEmailBcc(true)} className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">Bcc</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                  <input type="email" value={emailComposeTo} onChange={(e) => setEmailComposeTo(e.target.value)} placeholder="recipient@example.com" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                {showEmailCc && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-500">Cc</label>
+                      <button type="button" onClick={() => { setShowEmailCc(false); setEmailComposeCc(""); }} className="text-xs font-medium text-gray-400 hover:text-gray-600">Remove</button>
+                    </div>
+                    <input type="text" value={emailComposeCc} onChange={(e) => setEmailComposeCc(e.target.value)} placeholder="comma-separated addresses" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                )}
+                {showEmailBcc && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-500">Bcc</label>
+                      <button type="button" onClick={() => { setShowEmailBcc(false); setEmailComposeBcc(""); }} className="text-xs font-medium text-gray-400 hover:text-gray-600">Remove</button>
+                    </div>
+                    <input type="text" value={emailComposeBcc} onChange={(e) => setEmailComposeBcc(e.target.value)} placeholder="comma-separated addresses" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>
+                  <input type="text" value={emailComposeSubject} onChange={(e) => setEmailComposeSubject(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-500">Body</label>
+                    <button type="button" onClick={() => setEmailTemplateOpen((prev) => !prev)} className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                      + Add template <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {emailTemplateOpen && (
+                    <div className="absolute right-0 top-6 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
+                      {[
+                        ...emailTemplatesList.map((tpl) => ({
+                          key: tpl.id,
+                          label: tpl.name,
+                          desc: tpl.isDefault ? "Default · From Document Settings" : "From Document Settings",
+                        })),
+                        { key: "standard", label: "Standard", desc: "Thank you for your business" },
+                        { key: "reminder", label: "Reminder", desc: "Document pending review" },
+                        { key: "followup", label: "Follow-up", desc: "Check in on document" },
+                      ].map(({ key, label, desc }) => (
+                        <button key={key} onClick={() => applyTemplate(key)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                          <p className="text-sm font-medium text-gray-800">{label}</p>
+                          <p className="text-xs text-gray-400">{desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {emailPreviewMode ? (
+                    <div className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5" dangerouslySetInnerHTML={{ __html: emailComposeBody }} />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-0.5 border border-gray-200 border-b-0 rounded-t-lg bg-gray-50 px-1.5 py-1">
+                        {toolbarButtons.map(({ icon, title, onClick }) => (
+                          <button key={title} type="button" title={title} onMouseDown={(e) => { e.preventDefault(); onClick(); }} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded transition-colors">{icon}</button>
+                        ))}
+                      </div>
+                      <div
+                        ref={(el) => {
+                          emailBodyEditorRef.current = el;
+                          if (el && el.dataset.init !== "true") {
+                            el.innerHTML = emailComposeBody;
+                            el.dataset.init = "true";
+                          }
+                        }}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={(e) => setEmailComposeBody(e.currentTarget.innerHTML)}
+                        className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-b-lg text-sm focus:outline-none focus:border-blue-500 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+                <button
+                  disabled={!emailComposeTo || emailComposeSending}
+                  onClick={doSend}
+                  className="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  {emailComposeSending ? (
+                    <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                  ) : (
+                    <><Mail className="w-4 h-4" /> Send Email</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+      {smsCompose && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100011]" onClick={() => setSmsCompose(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 p-2 rounded-lg">
+                  <MessageSquare className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Send SMS</h2>
+                  <p className="text-xs text-gray-400">Purchase Return #{smsCompose.doc.returnNumber}</p>
+                </div>
+              </div>
+              <button onClick={() => setSmsCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">To (phone number)</label>
+                <input type="tel" value={smsComposeTo} onChange={(e) => setSmsComposeTo(e.target.value)} placeholder="+91 98765 43210" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Message</label>
+                <textarea rows={4} value={smsComposeBody} onChange={(e) => setSmsComposeBody(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 resize-none" />
+                <p className="text-xs text-gray-400 mt-1">{smsComposeBody.length} characters</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setSmsCompose(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
+              <button
+                disabled={!smsComposeTo || smsComposeSending}
+                onClick={async () => {
+                  if (!smsComposeTo || smsComposeSending) return;
+                  setSmsComposeSending(true);
+                  try {
+                    await API.post(`/public/purchaseReturn/${smsCompose.doc._id}/sms`, {
+                      phone: smsComposeTo,
+                      message: smsComposeBody,
+                    });
+                    toast.success("SMS sent successfully");
+                    setSmsCompose(null);
+                    setSmsComposeTo("");
+                    setSmsComposeBody("");
+                  } catch (err) {
+                    toast.error(err.response?.data?.error || "Failed to send SMS");
+                  } finally {
+                    setSmsComposeSending(false);
+                  }
+                }}
+                className="px-5 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {smsComposeSending ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                ) : (
+                  <><MessageSquare className="w-3.5 h-3.5" /> Send SMS</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BulkActions
         isOpen={showBulkActions}
         onClose={() => setShowBulkActions(false)}
@@ -1309,7 +1827,7 @@ const PurchaseReturn = () => {
                   <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
                     <button
                       onClick={() => setShowAdvancedFilters(true)}
-                      className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                      className={`flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                         activeFilters.length > 0 ? "border-[#0085FF] text-[#0085FF]" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                       }`}
                       title="Filters"
@@ -1329,22 +1847,9 @@ const PurchaseReturn = () => {
                         title="More options"
                       >
                         <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
-                        {activeFilters.length > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />}
                       </button>
                       {isMoreMenuOpen && (
                         <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                          <button
-                            onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
-                            className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <FilterIcon size={14} className="text-gray-400" />
-                            Filters
-                            {activeFilters.length > 0 && (
-                              <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                                {activeFilters.length}
-                              </span>
-                            )}
-                          </button>
                           <button
                             onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
