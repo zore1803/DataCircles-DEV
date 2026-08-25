@@ -885,29 +885,24 @@ const PurchaseOrderPage = () => {
 
   const renderRowActionsMenu = (po) => {
     const isOpen = openRowActionsId === po._id;
+    const closeRowMenu = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      setActiveRowMenuState("main");
+    };
     return (
-      <div
-        className="relative flex-shrink-0"
-        ref={isOpen ? rowActionsRef : null}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
         <button
+          title="More actions"
           onClick={(e) => {
             e.stopPropagation();
             if (isOpen) {
-              setOpenRowActionsId(null);
-              setRowActionsPos(null);
+              closeRowMenu();
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 200;
+            const MENU_W = 224;
             const MARGIN = 8;
-            // Conservative estimate for the tallest state (every optional row
-            // shown: View/Edit/Download/Share/Delete/Change Status/Convert) —
-            // same approach as Accounting.jsx's row menu. The panel itself
-            // also carries max-h-[70vh] + overflow-y-auto as a safety net, so
-            // an inaccurate estimate here can never cause the menu to render
-            // taller than its calculated position accounts for.
             const MENU_H = 340;
 
             const rect = e.currentTarget.getBoundingClientRect();
@@ -925,32 +920,31 @@ const PurchaseOrderPage = () => {
             calcLeft = Math.max(calcLeft, MARGIN);
 
             setShareMenu(null);
+            setShareMenuChannel(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(po._id);
             setActiveRowMenuState("main");
           }}
-          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-          title="More actions"
+          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
+            <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
             <div
-              className="fixed inset-0 z-[9998]"
-              onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
-            />
-            <div
+              key={po._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
             >
               {activeRowMenuState === "status" ? (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold text-gray-500 hover:bg-gray-50 whitespace-nowrap mb-1"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
                   >
-                    ← Back
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
                   </button>
                   {statusOptions.map(st => {
                     const optVal = st.value;
@@ -959,7 +953,7 @@ const PurchaseOrderPage = () => {
                       <button
                         key={optVal}
                         onClick={(e) => { e.stopPropagation(); updateSingleStatus(po._id, optVal); }}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal hover:bg-gray-50 whitespace-nowrap ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-[#161618]'}`}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-gray-700'}`}
                       >
                         {optLabel}
                       </button>
@@ -969,110 +963,83 @@ const PurchaseOrderPage = () => {
               ) : (
                 <>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenRowActionsId(null);
-                      setRowActionsPos(null);
-                      handleView(po);
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleView(po); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <Eye className="w-4 h-4 text-blue-600" />
                     View
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenRowActionsId(null);
-                      setRowActionsPos(null);
-                      handleEdit(po);
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleEdit(po); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <Edit2 className="w-4 h-4 text-blue-600" />
                     Edit
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenRowActionsId(null);
-                      setRowActionsPos(null);
-                      handleDownload(po);
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleDownload(po); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Download className="w-3.5 h-3.5 text-green-600" />
+                    <Download className="w-4 h-4 text-green-600" />
                     Download
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       const DROPDOWN_W = 208;
-                      const anchorRight = rowActionsPos.left + 200;
-                      setOpenRowActionsId(null);
-                      setRowActionsPos(null);
+                      const anchorRight = rowActionsPos.left + 224;
+                      closeRowMenu();
                       setShareMenu({
                         doc: po,
                         x: Math.max(4, anchorRight - DROPDOWN_W),
                         y: rowActionsPos.top,
                       });
+                      setShareMenuChannel(null);
                     }}
-                    className="w-full flex items-start gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 text-left"
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Share2 className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <Share2 className="w-4 h-4 text-blue-600" />
                     Share via WhatsApp/Email/SMS
                   </button>
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <div className="border-t border-gray-100 my-1" />
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenRowActionsId(null);
-                      setRowActionsPos(null);
-                      handleDelete(po._id);
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50 whitespace-nowrap"
+                    onClick={() => { closeRowMenu(); handleDelete(po._id); }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
+                    <Trash2 className="w-4 h-4" />
                     Delete
                   </button>
                   {po.status !== "Delivered" && (
                     <>
-                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                      <div className="border-t border-gray-100 my-1" />
                       <button
                         onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                       >
                         Change Status
                       </button>
                     </>
                   )}
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <div className="border-t border-gray-100 my-1" />
                   {po.convertedPurchase ? (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenRowActionsId(null);
-                        setRowActionsPos(null);
+                      onClick={() => {
+                        closeRowMenu();
                         // Route is "/purchase" (singular) — App.jsx. "/purchases"
                         // matches nothing and renders a blank page.
                         window.location.href = "/purchase?view=" + po.convertedPurchase._id;
                       }}
                       title={`Already converted to ${po.convertedPurchase.purchaseNumber}`}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap text-gray-500 hover:bg-gray-50"
+                      className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 flex items-center gap-2"
                     >
                       View {po.convertedPurchase.purchaseNumber}
                     </button>
                   ) : (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenRowActionsId(null);
-                        setRowActionsPos(null);
-                        handleConvertToPurchase(po);
-                      }}
+                      onClick={() => { closeRowMenu(); handleConvertToPurchase(po); }}
                       disabled={convertingPOId === po._id}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${
-                        po.status === "Approved" || po.status === "Delivered" ? "text-[#0085FF] hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+                        po.status === "Approved" || po.status === "Delivered" ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
                       } disabled:opacity-50`}
                     >
                       {convertingPOId === po._id ? "Converting…" : "Convert to Purchase"}
