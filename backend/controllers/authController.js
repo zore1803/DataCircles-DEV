@@ -1655,7 +1655,7 @@ exports.googleStatus = async (req, res) => {
     // A static GOOGLE_OAUTH_REFRESH_TOKEN in .env makes every meeting use
     // that account immediately — no per-org DB record, no consent click.
     if (isGoogleConnectedByDefault()) {
-      return res.json({ configured: true, connected: true, connectedEmail: null });
+      return res.json({ configured: true, connected: true, connectedEmail: null, staticDefault: true });
     }
 
     const integration = await GoogleIntegration.findOne({ organization: req.user.organization });
@@ -1663,9 +1663,29 @@ exports.googleStatus = async (req, res) => {
       configured: isGoogleConfigured(),
       connected: !!integration,
       connectedEmail: integration?.connectedEmail || null,
+      staticDefault: false,
     });
   } catch (error) {
     console.error("Error fetching Google integration status:", error);
     res.status(500).json({ error: "Failed to fetch Google integration status" });
+  }
+};
+
+// DELETE /api/auth/google/disconnect — removes this organization's stored
+// refresh token so Generate Link stops using this Google account. Only
+// applies to the per-org consent flow; when a static GOOGLE_OAUTH_REFRESH_TOKEN
+// is set there's no per-org record to remove, so this is a no-op in that mode.
+exports.googleDisconnect = async (req, res) => {
+  try {
+    if (isGoogleConnectedByDefault()) {
+      return res.status(400).json({
+        error: "This Google account is configured server-wide and can't be disconnected here.",
+      });
+    }
+    await GoogleIntegration.deleteOne({ organization: req.user.organization });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error disconnecting Google integration:", error);
+    res.status(500).json({ error: "Failed to disconnect Google account" });
   }
 };

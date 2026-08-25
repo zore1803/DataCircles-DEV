@@ -49,6 +49,7 @@ import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
 import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
 import CustomDomain from "../components/settings/CustomDomain";
+import GoogleIntegration, { GoogleGIcon } from "../components/settings/GoogleIntegration";
 import PageSkeleton from "../components/common/PageSkeleton";
 
 // Array of cool loading messages relevant for dashboard
@@ -84,6 +85,17 @@ const Settings = () => {
   const params = useParams();
   const [activeSection, setActiveSection] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // The Google OAuth callback redirects to /settings?googleMeet=... at the
+  // root (see backend authController.googleCallback) rather than the
+  // google-integration subsection, since that's the URL it can safely
+  // hardcode. Forward there so the connected/denied/error state actually
+  // renders somewhere that reads it.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("googleMeet") && params.section !== "google-integration") {
+      navigate(`/settings/google-integration${location.search}`, { replace: true });
+    }
+  }, [location.search, params.section, navigate]);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -327,6 +339,18 @@ const Settings = () => {
       hoverBg: "hover:bg-emerald-50",
       component: <FormsList />,
       category: "Customization",
+    },
+    {
+      id: "google-integration",
+      icon: <GoogleGIcon className="w-5 h-5" />,
+      label: "Google Calendar & Meet",
+      description: "Connect Google to create Calendar events and Meet links from meetings",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <GoogleIntegration />,
+      category: "General",
     },
     {
       id: "email-notifications",
