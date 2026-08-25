@@ -7,7 +7,16 @@ import { X } from "lucide-react";
 // toast body ourselves via the ToastBar children render-prop lets us add a close (X)
 // button without touching react-hot-toast's internals.
 const AppToaster = (props) => (
-  <Toaster position="top-right" toastOptions={{ duration: 5000 }} {...props}>
+  <Toaster
+    position="top-right"
+    toastOptions={{ duration: 5000 }}
+    // Full-width document panels (Invoice/Quotation/Pro Forma/Delivery Challan)
+    // render at z-[10000]+, above react-hot-toast's default z-index of 9999 —
+    // toasts fired while one of those is open were rendering invisibly behind
+    // it. Bumped above every z-index used in the app (highest seen: 100010).
+    containerStyle={{ zIndex: 999999 }}
+    {...props}
+  >
     {(t) => (
       <ToastBar toast={t}>
         {({ icon, message }) => (

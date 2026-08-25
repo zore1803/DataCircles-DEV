@@ -489,7 +489,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                       <label className="block text-sm font-semibold text-[#1F2937]">
                         {label}
                       </label>
-                      <div className="relative flex items-center h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+                      <div className="relative flex items-center h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
                         <select
                           value={section?.[kind] || ""}
                           onChange={(e) =>
@@ -516,12 +516,12 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                             }
                           }}
                           placeholder={`Add a new ${label.toLowerCase()}`}
-                          className="flex-1 h-10 rounded-[25px] border border-[#E1E4EA] px-3 text-[13px] focus:outline-none focus:border-[#0085FF]"
+                          className="flex-1 h-10 rounded-lg border border-[#E1E4EA] px-3 text-[13px] focus:outline-none focus:border-[#0085FF]"
                         />
                         <button
                           type="button"
                           onClick={() => addValue(kind)}
-                          className="h-10 px-4 rounded-[25px] border border-[#0085FF]/30 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors"
+                          className="h-10 px-4 rounded-lg border border-[#0085FF]/30 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors"
                         >
                           Add
                         </button>
@@ -540,7 +540,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                         min="1"
                         value={nextNumber}
                         onChange={(e) => setNextNumber(e.target.value)}
-                        className="w-40 h-10 rounded-[25px] border border-[#E1E4EA] px-3 text-[13px] focus:outline-none focus:border-[#0085FF]"
+                        className="w-40 h-10 rounded-lg border border-[#E1E4EA] px-3 text-[13px] focus:outline-none focus:border-[#0085FF]"
                       />
                     </div>
                   )}
@@ -549,7 +549,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                     type="button"
                     onClick={handleSaveNumbering}
                     disabled={savingNumbering}
-                    className="inline-flex items-center gap-2 h-10 px-5 rounded-[25px] bg-[#0085FF] text-white text-sm font-semibold hover:bg-blue-600 transition-colors disabled:opacity-60"
+                    className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-[#0085FF] text-white text-sm font-semibold hover:bg-blue-600 transition-colors disabled:opacity-60"
                   >
                     {savingNumbering ? "Saving…" : "Save numbering"}
                   </button>
@@ -577,7 +577,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                     setEditingSig(null);
                     setSigModalOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[25px] bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex-shrink-0"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex-shrink-0"
                 >
                   <Plus className="w-4 h-4" />
                   Add

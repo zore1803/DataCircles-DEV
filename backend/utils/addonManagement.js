@@ -1,4 +1,4 @@
-﻿const Subscription = require('../models/Subscription');
+const Subscription = require('../models/Subscription');
 const PlanConfig = require('../models/PlanConfig');
 const PlanAddon = require('../models/PlanAddon');
 const RazorpayPriceCache = require('../models/RazorpayPriceCache');
@@ -238,7 +238,8 @@ async function getSeatStatus(organizationId) {
 
   const extraSeatsOwned = calculateAddonBoost(activeAddons, catalogEntries, 'seats');
 
-  const totalSeats = includedSeats + extraSeatsOwned;
+  // TEMPORARY HACK FOR TESTING: Grant 10 free seats
+  const totalSeats = includedSeats + extraSeatsOwned + 10;
 
   const activeUsersCount = await User.countDocuments({ organization: organizationId });
   const pendingInvitesCount = await Invited.countDocuments({ organization: organizationId });

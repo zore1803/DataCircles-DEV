@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X, Calendar, Clock, Users, MapPin, FileText, Video, Phone,
   AlertTriangle, CheckCircle2, Search, Plus, Trash2, User,
@@ -15,6 +16,7 @@ const initialState = {
   duration: 60,
   priority: "medium",
   meetingType: "in-person",
+  meetingCategory: "",
   location: "",
   description: "",
 };
@@ -98,6 +100,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
+  const { meetingTypes } = useSystemSettings();
   const [shouldRender, setShouldRender] = useState(false);
   const [existingMeetings, setExistingMeetings] = useState([]);
   const [timeConflict, setTimeConflict] = useState(null);
@@ -586,6 +589,19 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                       <option value="in-person">In-person</option>
                       <option value="video-call">Video call</option>
                       <option value="phone-call">Phone call</option>
+                    </select>
+                  </FormField>
+
+                  <FormField label="Meeting Category" icon={FileText}>
+                    <select
+                      value={form.meetingCategory}
+                      onChange={(e) => handleChange("meetingCategory", e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">— Select category —</option>
+                      {meetingTypes.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
                     </select>
                   </FormField>
 

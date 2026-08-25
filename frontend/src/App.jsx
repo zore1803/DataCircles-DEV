@@ -41,6 +41,7 @@ import AllMeetings from "./pages/AllMeetings";
 import PurchaseOrderPage from "./pages/PurchaseOrderPage";
 import PurchasePage from "./pages/PurchasePage";
 import ProductsServices from "./pages/ProductsServices";
+import Inventory from "./pages/Inventory";
 import { SubscriptionProvider, useSubscription } from "./contexts/SubscriptionContext";
 import { Megaphone, X } from "lucide-react";
 import PaymentSuccess from "./pages/PaymentSuccess";
@@ -59,6 +60,7 @@ import AdminCalendar from "./pages/Calender";
 import Onboarding from "./pages/Onboarding";
 import PlanManagement from "./pages/PlanManagement";
 import Accounting from "./pages/Accounting";
+import PublicDocumentPage from "./pages/PublicDocumentPage";
 import PromotionsAndRewards from "./pages/PromotionsAndRewards";
 import SalesReturn from "./pages/SalesReturn";
 import SalesSubscription from "./pages/SalesSubscription";
@@ -235,9 +237,10 @@ function App() {
     "/reset-password",
     "/onboarding",
   ];
-  const shouldHideNavigation = authRoutes.some(
-    (route) => location.pathname === route || location.pathname === `${route}/`,
-  );
+  const shouldHideNavigation =
+    authRoutes.some(
+      (route) => location.pathname === route || location.pathname === `${route}/`,
+    ) || location.pathname.startsWith("/view/");
 
   const checklistItems = [
     {
@@ -420,9 +423,20 @@ function App() {
         <main
           className={`transition-all duration-300 ease-in-out py-6 px-4 sm:px-6 lg:px-8 ${
             userIsAuthenticated && !shouldHideNavigation
-              ? "pt-[70px] lg:pt-20 lg:ml-16"
+              ? "pt-[70px] lg:pt-20"
               : ""
           }`}
+          style={
+            userIsAuthenticated && !shouldHideNavigation
+              ? {
+                  marginLeft:
+                    window.innerWidth >= 1024
+                      ? "var(--sidebar-width, 64px)"
+                      : undefined,
+                  transition: "margin-left 300ms ease-in-out",
+                }
+              : undefined
+          }
         >
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -462,6 +476,7 @@ function App() {
               }
             />
             <Route path="/f/:slug" element={<PublicFormPage />} />
+            <Route path="/view/:type/:id" element={<PublicDocumentPage />} />
             <Route
               path="/deals"
               element={
@@ -710,6 +725,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <ProductsServices />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <PrivateRoute>
+                  <Inventory />
                 </PrivateRoute>
               }
             />

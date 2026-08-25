@@ -404,6 +404,30 @@ const getAllTasksPaginated = async (req, res) => {
   }
 };
 
+// Every org task with a due date, unpaginated — powers the Tasks & Meetings
+// calendar view, which needs the whole month/week in view at once rather
+// than whatever page the list happens to be on.
+const getAllTasksForCalendar = async (req, res) => {
+  try {
+    const query = { organization: req.user.organization };
+
+    const tasks = await Task.find(query)
+      .populate("relatedEntities.entityId")
+      .populate("users", "name email role profileUrl userData.mainData.profilePic")
+      .sort({ dueDate: -1 })
+      .lean()
+      .select("-__v");
+
+    res.json(tasks);
+  } catch (err) {
+    console.error("Error fetching calendar tasks:", err);
+    res.status(500).json({
+      error: "Failed to fetch calendar tasks",
+      message: err.message,
+    });
+  }
+};
+
 const getMyTask = async (req, res) => {
   try {
     const { search } = req.query;
@@ -814,6 +838,7 @@ module.exports = {
   createTask,
   getAllTask,
   getAllTasksPaginated,
+  getAllTasksForCalendar,
   updateTask,
   updateTaskStatus,
   deleteTask,

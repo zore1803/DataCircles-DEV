@@ -294,16 +294,20 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
         style={{ opacity: isOpen ? 1 : 0 }}
         onClick={handleClose}
       >
+        {/* Right-anchored slide-in panel — same dc-panel-card/dc-panel-w
+            convention as ImportClients.jsx (Companies), ImportContacts.jsx,
+            ImportDeals.jsx and ImportVendors.jsx, instead of the old
+            centered modal this file used to open with. */}
         <div
-          className="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 transform"
-          style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
+          className="fixed dc-panel-card dc-panel-w bg-white shadow-2xl z-[10001] overflow-hidden flex flex-col transition-transform duration-300"
+          style={{ transform: isOpen ? "translateX(0)" : "translateX(calc(100% + 2rem))" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="p-6">
+          <div className="p-6 overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold font-sf text-gray-900">

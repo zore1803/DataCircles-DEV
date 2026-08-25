@@ -67,6 +67,16 @@ router.get(
   invoiceController.downloadInvoice
 );
 
+// POST /api/invoices/bulk-email-grouped — must be before /:id routes
+router.post(
+  "/bulk-email-grouped",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.bulkEmailGrouped
+);
+
 // DELETE /api/invoices/:id (Delete - requires write permission)
 router.delete(
   "/:id",
@@ -97,6 +107,27 @@ router.put(
   invoiceController.updateStatus
 );
 
+// POST /api/invoices/bulk-status, /api/invoices/bulk-signature — bring
+// Invoice up to parity with Quotation/Proforma/Delivery Challan, which
+// already had these for the Accounting page's bulk toolbar.
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.bulkUpdateSignature
+);
+
 // routes/invoiceRoutes.js (append before module.exports)
 router.patch(
   "/number/:id",
@@ -105,6 +136,66 @@ router.patch(
   restrictByPlan("invoices", "write"),
   checkPermission("invoices", "read-write"),
   invoiceController.updateInvoiceNumber
+);
+
+// POST /api/invoices/:id/duplicate (Create a new Draft invoice cloned from an existing one)
+router.post(
+  "/:id/duplicate",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.duplicateInvoice
+);
+
+// GET /api/invoices/:id (Single invoice)
+router.get(
+  "/:id",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "read"),
+  checkPermission("invoices", "readonly"),
+  invoiceController.getInvoiceById
+);
+
+// GET /api/invoices/:id/payments (List payments)
+router.get(
+  "/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "read"),
+  checkPermission("invoices", "readonly"),
+  invoiceController.getInvoicePayments
+);
+
+// POST /api/invoices/:id/payments (Record a payment)
+router.post(
+  "/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.addInvoicePayment
+);
+
+// PUT /api/invoices/:id/payments/:paymentId (Update a payment)
+router.put(
+  "/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.updateInvoicePayment
+);
+
+// DELETE /api/invoices/:id/payments/:paymentId (Delete a payment)
+router.delete(
+  "/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("invoices", "write"),
+  checkPermission("invoices", "read-write"),
+  invoiceController.deleteInvoicePayment
 );
 
 module.exports = router;

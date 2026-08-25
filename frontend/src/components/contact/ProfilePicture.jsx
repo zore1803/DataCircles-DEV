@@ -33,7 +33,11 @@ const ProfilePicture = ({
   if (contact?.avatar) {
     return (
       <img
-        src={`${contact.avatar}`}
+        src={
+          contact.avatar.startsWith("http") || contact.avatar.startsWith("data:")
+            ? contact.avatar
+            : `${import.meta.env.VITE_APP_API_URL}${contact.avatar}`
+        }
         alt={contact.name}
         className={`${size} rounded-full object-cover border border-gray-200`}
       />

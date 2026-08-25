@@ -27,6 +27,13 @@ const app = express();
 console.log("JWT Secret Check:", process.env.SUPER_ADMIN_JWT_SECRET ? "LOADED" : "MISSING");
 
 // Enhanced CORS configuration
+// ALLOWED_ORIGINS (comma-separated) lets a new deploy target (e.g. a fresh
+// Vercel project URL) be whitelisted via env var alone, no code change/rebuild needed.
+const extraOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const corsOptions = {
   origin: [
     "https://crm-frontend-flax-tau.vercel.app",
@@ -38,6 +45,7 @@ const corsOptions = {
     "https://app.datacircles.in",
     "https://data-circles-crm-dev.vercel.app",
     "https://data-circles-dev.vercel.app",
+    ...extraOrigins,
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -100,6 +108,9 @@ app.use('/api/deals', dealRoutes);
 const taskRoutes = require('./routes/taskRoutes');
 app.use('/api/tasks', taskRoutes);
 
+const systemSettingsRoutes = require('./routes/systemSettingsRoutes');
+app.use('/api/system-settings', systemSettingsRoutes);
+
 const invoiceRoutes = require('./routes/invoiceRoutes');
 app.use('/api/invoices', invoiceRoutes);
 
@@ -112,8 +123,14 @@ app.use('/api/quotations', quotationRoutes);
 const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
 app.use('/api/delivery-challans', deliveryChallanRoutes);
 
+const paymentTimelineRoutes = require('./routes/paymentTimelineRoutes');
+app.use('/api/payments-timeline', paymentTimelineRoutes);
+
 const invoiceConverter = require('./routes/converterRoutes');
 app.use('/api/converter', invoiceConverter);
+
+const publicDocumentRoutes = require('./routes/publicDocumentRoutes');
+app.use('/api/public', publicDocumentRoutes);
 
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
@@ -163,6 +180,9 @@ app.use('/api/deal-fields', dealFieldsRoutes);
 const callLogRoutes = require("./routes/callLogRoutes");
 app.use("/api/call-logs", callLogRoutes);
 
+const journalRoutes = require("./routes/journalRoutes");
+app.use("/api/journals", journalRoutes);
+
 const vendorRoutes = require("./routes/vendorRoutes");
 app.use("/api/vendors", vendorRoutes);
 
@@ -178,11 +198,17 @@ app.use("/api/purchase-orders", purchaseOrderRoutes);
 const purchaseRoutes = require("./routes/purchase");
 app.use("/api/purchases", purchaseRoutes);
 
+const purchaseReturnRoutes = require("./routes/purchaseReturn");
+app.use("/api/purchase-returns", purchaseReturnRoutes);
+
 const itemFieldsRoutes = require('./routes/itemFields');
 app.use('/api/item-fields', itemFieldsRoutes);
 
 const itemRoutes = require("./routes/itemRoutes");
 app.use("/api/items", itemRoutes);
+
+const inventoryRoutes = require("./routes/inventoryRoutes");
+app.use("/api/inventory", inventoryRoutes);
 
 const organizationRoutes = require("./routes/organisation");
 app.use("/api/organisation", organizationRoutes);

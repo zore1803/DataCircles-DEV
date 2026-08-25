@@ -1,16 +1,7 @@
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail', // or use a custom SMTP
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS
-  }
-});
+const sendGridMail = require('./sendGridMail');
 
 const sendTaskReminder = async (to, task) => {
   const mailOptions = {
-    from: `"Task Manager" <${process.env.MAIL_USER}>`,
     to,
     subject: `🔔 Task Reminder: "${task.title}" is due soon`,
     html: `
@@ -23,7 +14,7 @@ const sendTaskReminder = async (to, task) => {
     `
   };
 
-  await transporter.sendMail(mailOptions);
+  await sendGridMail(mailOptions);
 };
 
 module.exports = { sendTaskReminder };

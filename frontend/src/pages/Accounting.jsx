@@ -11,7 +11,6 @@ import {
   Plus,
   SlidersHorizontal,
   FileText,
-  Printer,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -34,30 +33,57 @@ import {
   EyeOff,
   CheckSquare,
   LayoutTemplate,
-  Maximize2,
-  Minimize2,
   Settings,
-  ChevronsLeftRight,
   Search,
-  PenLine,
+  Share2,
+  MessageCircle,
+  Mail,
+  Copy,
+  MessageSquare,
+  Printer,
+  PenTool,
+  Eraser,
+  Layers,
+  Lock,
+  Bold as BoldIcon,
+  Italic as ItalicIcon,
+  Underline as UnderlineIcon,
+  Strikethrough as StrikethroughIcon,
+  ListOrdered,
+  List as ListIcon,
+  Link as LinkIcon,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { PDFDocument } from "pdf-lib";
 import API from "../services/api";
-import toast from "react-hot-toast";
+import SearchIcon from "../components/common/SearchIcon";
 import AppToaster from "../components/AppToaster";
+import { getDocumentSettings } from "../services/documentSettingsCache";
+import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
+import toast from "react-hot-toast";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import HighlightText from "../components/common/HighlightText";
-import InvoiceForm from "../components/invoice/InvoiceForm";
+import { formatNumberFixed } from "../utils/numberFormatter";
+import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
+import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
+import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
+import { CreateQuotationPanel } from "../components/quotation/QuotationForm";
+import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
+import { CreateChallanPanel } from "../components/deliveryChallan/DeliveryChallanForm";
+import DeliveryChallanFormFull from "../components/deliveryChallan/DeliveryChallanFormFull";
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
-import InvoiceLivePreview from "../components/invoice/InvoiceLivePreview";
 import TemplateDrawer from "../components/invoice/TemplateDrawer";
-import NotesTermsDrawer from "../components/invoice/NotesTermsDrawer";
-import { buildDocumentHtml } from "../../../shared/documentTemplates.js";
 import useNavReset from "../hooks/useNavReset";
+import RecordPaymentModal from "../components/common/RecordPaymentModal";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
+import BulkEmailGroupedModal from "../components/common/BulkEmailGroupedModal";
+import BulkSignatureModal from "../components/common/BulkSignatureModal";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import { getAncestorZoom } from "../utils/domUtils";
 import { exportToCSV } from "../utils/exportToCSV";
@@ -67,19 +93,7 @@ import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
-import SearchIcon from "../components/common/SearchIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
-const SectionHeader = ({ number, title }) => (
-  <div className="flex items-center gap-2.5 w-full mb-1.5 mt-2 first:mt-0">
-    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#F0F6FF] text-[#0085FF] text-[10px] font-semibold flex-shrink-0">
-      {number}
-    </div>
-    <span className="text-[15px] font-semibold text-[#1F2937] whitespace-nowrap">
-      {title}
-    </span>
-  </div>
-);
-
 /* Drops the organization's saved boilerplate (Settings → document defaults)
    into a notes/terms box, so the same footer text doesn't have to be retyped
    on every document. Disabled — with the reason in the tooltip — when there's
@@ -111,6 +125,7 @@ const TABS = [
 const statusOptions = [
   "Draft",
   "Sent",
+  "Partially Paid",
   "Paid",
   "Accepted",
   "Rejected",
@@ -154,6 +169,36 @@ const docNameFor = (type) =>
         ? "Quotation"
         : "Delivery Challan";
 
+// Intended accounting conversion directions — one-way only, no reverse or
+// arbitrary conversions. Same rules drive both the single-document Convert
+// menu and Bulk Convert:
+//   Quotation -> Pro Forma Invoice
+//   Quotation -> Invoice
+//   Pro Forma Invoice -> Invoice
+//   Invoice -> Delivery Challan
+//   Delivery Challan -> (nothing)
+const CONVERSION_TARGETS_BY_TYPE = {
+  quotation: ["performa", "tax"],
+  performa: ["tax"],
+  tax: ["deliveryChallan"],
+  deliveryChallan: [],
+};
+const getConversionTargets = (type) => CONVERSION_TARGETS_BY_TYPE[type] || [];
+
+// Plain-text template bodies (saved templates, built-in fallbacks) use \n for
+// line breaks; the email compose panel's body is a rich-text (HTML) editor,
+// so newlines need to become <br> for them to actually show up as breaks.
+const textToEmailHtml = (text) => (text || "").replace(/\n/g, "<br>");
+
+// Maps a valid (sourceType -> targetType) conversion to its backend bulk
+// endpoint. Only the 4 directions above exist server-side — anything else
+// isn't offered in the UI so this map never needs a fallback.
+const BULK_CONVERT_ENDPOINT = {
+  quotation: { performa: "/converter/quotations/bulk-convert-to-proforma", tax: "/converter/quotations/bulk-convert-to-tax" },
+  performa: { tax: "/converter/performa-invoices/bulk-convert-to-tax" },
+  tax: { deliveryChallan: "/converter/invoices/bulk-convert-to-delivery-challan" },
+};
+
 const pluralNameFor = (type) =>
   type === "tax"
     ? "Invoices"
@@ -172,7 +217,6 @@ const DEFAULT_COL_WIDTHS = {
   dueDate: 170,
   amount: 170,
   status: 170,
-  actions: 230,
 };
 const MIN_COL_WIDTH = 60;
 
@@ -191,13 +235,6 @@ const COLUMN_DEFS = [
   { id: "dueDate", label: "Due Date", icon: Clock, field: "dueDate" },
   { id: "amount", label: "Amount", icon: IndianRupee, field: "amount" },
   { id: "status", label: "Status", icon: CheckCircle2, field: "status" },
-  {
-    id: "actions",
-    label: "Actions",
-    icon: MoreVertical,
-    field: null,
-    required: true,
-  },
 ];
 
 /* Sits on the column's right-hand border. Module-scope + memo so the header
@@ -230,7 +267,7 @@ const cellText = (colId, doc, tab) => {
     case "dueDate":
       return doc.dueDate ? new Date(doc.dueDate).toLocaleDateString() : "N/A";
     case "amount":
-      return `₹${doc.amount?.toFixed(2) || "0.00"}`;
+      return `₹${formatNumberFixed(doc.amount)}`;
     case "status":
       return doc.status || "—";
     default:
@@ -246,6 +283,8 @@ const getStatusBadgeColor = (status) => {
       return "bg-blue-100 text-blue-800 border-blue-200";
     case "paid":
       return "bg-green-100 text-green-800 border-green-200";
+    case "partially paid":
+      return "bg-orange-100 text-orange-800 border-orange-200";
     case "accepted":
       return "bg-green-100 text-green-800 border-green-200";
     case "rejected":
@@ -335,6 +374,15 @@ const ConvertConfirmModal = ({
   );
 };
 
+// Fixed rendering order for stitched multi-copy PDFs — independent of the
+// order the user happened to check the boxes in.
+const COPY_TYPE_ORDER = ["original", "duplicate", "triplicate"];
+const COPY_TYPE_CHECKBOXES = [
+  { key: "original", label: "Customer" },
+  { key: "duplicate", label: "Transport" },
+  { key: "triplicate", label: "Supplier" },
+];
+
 const InvoiceViewer = ({
   isOpen,
   onClose,
@@ -348,6 +396,29 @@ const InvoiceViewer = ({
 }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
+  // Standard Indian GST invoice practice: the same document is printed as up
+  // to three otherwise-identical copies, distinguished only by this label —
+  // "ORIGINAL FOR RECIPIENT" for the customer, "DUPLICATE FOR TRANSPORTER"
+  // for the goods carrier, "TRIPLICATE FOR SUPPLIER" for the seller's own
+  // records. Any combination can be checked at once; when more than one is
+  // checked, each copy's own single-page PDF is fetched and stitched into
+  // one multi-page PDF client-side (same pdf-lib approach the bulk "merge
+  // selected documents" toolbar action already uses), always in
+  // original -> duplicate -> triplicate order regardless of check order.
+  const [copyTypes, setCopyTypes] = useState(["original"]);
+  const copyTypesKey = copyTypes.join(",");
+
+  const toggleCopyType = (key) => {
+    setCopyTypes((prev) => {
+      if (prev.includes(key)) {
+        // At least one copy must stay selected — otherwise there's nothing
+        // to render and the viewer would be left showing a stale PDF.
+        if (prev.length === 1) return prev;
+        return prev.filter((k) => k !== key);
+      }
+      return COPY_TYPE_ORDER.filter((k) => k === key || prev.includes(k));
+    });
+  };
 
   useEffect(() => {
     if (isOpen && id && type) {
@@ -357,20 +428,93 @@ const InvoiceViewer = ({
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, id, type]);
+  }, [isOpen, id, type, copyTypesKey]);
 
   const fetchPdf = async () => {
     try {
-      const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
-        responseType: "blob",
-      });
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      setPdfUrl(URL.createObjectURL(blob));
+      const orderedTypes = COPY_TYPE_ORDER.filter((k) => copyTypes.includes(k));
+      let fileBytes;
+      if (orderedTypes.length <= 1) {
+        const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+          responseType: "arraybuffer",
+          params: { copyType: orderedTypes[0] || "original" },
+        });
+        fileBytes = response.data;
+      } else {
+        const merged = await PDFDocument.create();
+        for (const ct of orderedTypes) {
+          const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+            responseType: "arraybuffer",
+            params: { copyType: ct },
+          });
+          const src = await PDFDocument.load(response.data);
+          const copiedPages = await merged.copyPages(src, src.getPageIndices());
+          copiedPages.forEach((page) => merged.addPage(page));
+        }
+        // pdf-lib doesn't carry the source PDFs' /Title metadata onto a
+        // freshly-created document — left unset, Chrome's PDF viewer falls
+        // back to showing the blob: URL's own UUID as the document title
+        // instead of our filename (only happened once merging kicked in,
+        // i.e. once more than one copy-type box got checked).
+        merged.setTitle(`${apiPathFor(type)}-${doc?.[numberKeyFor(type)] || id}`);
+        fileBytes = await merged.save();
+      }
+      // Named as a File (not a plain Blob) so the browser's built-in PDF
+      // viewer shows this document's actual name instead of "about:blank" —
+      // a bare Blob has no name, and Chrome's PDF viewer falls back to the
+      // blob URL's (nonexistent) location for its title/tab label.
+      const filename = `${apiPathFor(type)}-${doc?.[numberKeyFor(type)] || id}-${orderedTypes.join("+") || "original"}.pdf`;
+      const file = new File([fileBytes], filename, { type: "application/pdf" });
+      setPdfUrl(URL.createObjectURL(file));
     } catch (error) {
       toast.error("Failed to load PDF");
       console.error("PDF fetch error:", error);
       onClose();
     }
+  };
+
+  const handleDownloadCurrentCopy = () => {
+    if (!pdfUrl) return;
+    const orderedTypes = COPY_TYPE_ORDER.filter((k) => copyTypes.includes(k));
+    const link = document.createElement("a");
+    link.href = pdfUrl;
+    link.setAttribute("download", `${apiPathFor(type)}-${docNumber || id}-${orderedTypes.join("+") || "original"}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  // Prints whichever copy(ies) are currently checked/loaded — a hidden
+  // iframe on the already-fetched pdfUrl, same trick the bulk print action
+  // (handleBulkPrint) uses, so it's one native print job rather than
+  // reopening/downloading anything.
+  const handlePrintCurrentCopy = () => {
+    if (!pdfUrl) return;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.error("Print error", err);
+        toast.error("Couldn't open the print dialog — try downloading instead.");
+      }
+      setTimeout(() => iframe.remove(), 60000);
+    };
+    iframe.src = pdfUrl;
+    document.body.appendChild(iframe);
+  };
+
+  const handleWhatsAppShare = () => {
+    const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+    const text = `${title} #${docNumber || ""}\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
   const isTax =
@@ -383,43 +527,138 @@ const InvoiceViewer = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100002] p-4">
-      <div className="bg-white rounded-xl w-full h-[90vh] max-w-5xl flex flex-col shadow-2xl">
-        <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 p-2 rounded-lg">
-              <FileText className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">
-                {title} #{docNumber || "N/A"}
-              </h2>
-              <p className="text-sm text-gray-600">View and manage document</p>
-            </div>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100002] p-2">
+      {/* Chrome ignores the #view=FitH / #zoom=... PDF-viewer open params for
+          blob: URLs specifically (they only take effect for a real network
+          request), so the page's native width can't be forced to fit a
+          narrow panel — widened from max-w-5xl (1024px) so the full page
+          width fits without the right edge getting cropped. */}
+      <div className="bg-white rounded-xl w-full h-[97vh] max-w-[1400px] flex flex-col shadow-2xl">
+        <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-white rounded-t-xl gap-4">
+          {/* Which copies to include, each an independent checkbox — checking
+              more than one stitches them into one multi-page PDF (Customer
+              page, then Transport, then Supplier), matching printed GST
+              invoice practice of Original/Duplicate/Triplicate copies. */}
+          <div className="flex items-center gap-5 flex-wrap min-w-0">
+            <span className="text-sm font-semibold text-gray-900 truncate flex-shrink-0" title={`${title} #${docNumber || "N/A"}`}>
+              {docNumber || title}
+            </span>
+            {COPY_TYPE_CHECKBOXES.map((opt) => (
+              <label key={opt.key} className="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={copyTypes.includes(opt.key)}
+                  onChange={() => toggleCopyType(opt.key)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+                {opt.label}
+              </label>
+            ))}
+            <label
+              className="flex items-center gap-2 text-sm font-medium text-gray-400 cursor-not-allowed select-none flex-shrink-0"
+              title="Attaching a linked Delivery Challan isn't supported yet"
+            >
+              <input type="checkbox" checked={false} disabled className="w-4 h-4 rounded cursor-not-allowed" />
+              Delivery Challan
+            </label>
           </div>
-          <div className="flex gap-3 items-center">
-            <div className="flex gap-2">
+          <div className="flex gap-3 items-center flex-shrink-0">
+            <div className="flex items-center gap-2">
               <button
-                title="Edit"
                 onClick={onEdit}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="h-9 px-3 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium rounded-lg hover:bg-amber-100 transition-colors"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </button>
+              <button
+                onClick={onSend}
+                className="h-9 px-3 flex items-center gap-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Email
+              </button>
+              <button
+                onClick={handleWhatsAppShare}
+                className="h-9 px-3 flex items-center gap-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                Whatsapp
               </button>
               <button
                 title="Download"
-                onClick={onDownload}
-                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                onClick={handleDownloadCurrentCopy}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <Download className="w-4 h-4" />
               </button>
               <button
-                title="Send"
-                onClick={onSend}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                title="Print"
+                onClick={handlePrintCurrentCopy}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <Send className="w-4 h-4" />
+                <Printer className="w-4 h-4" />
               </button>
+              {/* Overflow for the less-common share paths (SMS / copy link) —
+                  WhatsApp and Email got promoted to their own labeled buttons
+                  above to match the reference layout, so this now only holds
+                  the two that didn't. */}
+              <div className="relative">
+                <button
+                  title="More share options"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenConvertMenu(openConvertMenu === "share" ? null : "share");
+                  }}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+                {openConvertMenu === "share" && (
+                  <div className="absolute right-0 mt-1 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      {[
+                        {
+                          label: "SMS",
+                          icon: MessageSquare,
+                          iconClass: "text-indigo-600",
+                          onClick: () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            const text = `${title} #${docNumber || ""} - ${url}`;
+                            window.location.href = `sms:?body=${encodeURIComponent(text)}`;
+                          },
+                        },
+                        {
+                          label: "Copy Link",
+                          icon: Copy,
+                          iconClass: "text-gray-600",
+                          onClick: async () => {
+                            const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              toast.success("Link copied to clipboard");
+                            } catch {
+                              toast.error("Failed to copy link");
+                            }
+                          },
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.label}
+                          onClick={() => {
+                            option.onClick();
+                            setOpenConvertMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                          <option.icon className={`w-4 h-4 ${option.iconClass}`} />
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="relative">
                 <button
                   title="Convert"
@@ -467,10 +706,24 @@ const InvoiceViewer = ({
             </button>
           </div>
         </div>
-        <div className="flex-1 p-4 overflow-hidden">
+        <div className="flex-1 p-2 overflow-auto">
           {pdfUrl ? (
             <iframe
-              src={pdfUrl}
+              // The browser's own PDF toolbar is left ON (unlike most other
+              // embeds in this app) specifically so its page-count indicator
+              // and next/prev controls are available — the only way to
+              // surface "page 1 of N" when multiple copy-type checkboxes are
+              // stitched into one multi-page PDF, without building a custom
+              // pager. navpanes=0 stays OFF though: Chrome shows a left
+              // thumbnail rail by default for multi-page PDFs, which was
+              // squeezing the actual page into what looked like "half
+              // width" — navpanes=0 is one of the few fragment params Chrome
+              // actually honors for blob: URLs (unlike view=/zoom=, which it
+              // silently ignores for blob: URLs, so those aren't relied on;
+              // the real fix for full-width rendering is this plus the
+              // widened modal above and overflow-auto here as a fallback on
+              // narrower screens).
+              src={`${pdfUrl}#navpanes=0`}
               width="100%"
               height="100%"
               title="Document PDF"
@@ -484,1780 +737,6 @@ const InvoiceViewer = ({
           )}
         </div>
       </div>
-    </div>
-  );
-};
-
-/* Same converter InvoiceForm.jsx uses for its "Amount in Words" line, so the
-   two Create-Invoice screens agree on wording. */
-function numberToWords(num) {
-  const ones = [
-    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
-    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
-    "Seventeen", "Eighteen", "Nineteen",
-  ];
-  const tens = [
-    "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy",
-    "Eighty", "Ninety",
-  ];
-
-  function toWords(n) {
-    if (n === 0) return "";
-    if (n < 20) return ones[n];
-    if (n < 100) {
-      return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
-    }
-    if (n < 1000) {
-      return (
-        ones[Math.floor(n / 100)] +
-        " Hundred" +
-        (n % 100 ? " " + toWords(n % 100) : "")
-      );
-    }
-    let result = "";
-    if (n >= 10000000) {
-      result += toWords(Math.floor(n / 10000000)) + " Crore ";
-      n %= 10000000;
-    }
-    if (n >= 100000) {
-      result += toWords(Math.floor(n / 100000)) + " Lakh ";
-      n %= 100000;
-    }
-    if (n >= 1000) {
-      result += toWords(Math.floor(n / 1000)) + " Thousand ";
-      n %= 1000;
-    }
-    if (n > 0) result += toWords(n);
-    return result.trim();
-  }
-
-  if (num === 0) return "Zero Rupees Only";
-  const integerPart = Math.floor(num);
-  const decimalPart = Math.round((num - integerPart) * 100);
-  let words = toWords(integerPart) + " Rupees";
-  if (decimalPart > 0) words += " and " + toWords(decimalPart) + " Paise";
-  words += " Only";
-  return words;
-}
-
-// Single source of truth for the template list — the same one the renderer and
-// the PDF generator use, so a template added there shows up here automatically.
-const GSTIN_REGEX =
-  /^[0-9]{2}[A-Z0-9]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/;
-
-const blankItem = () => ({
-  _id: null,
-  name: "",
-  description: "",
-  rate: "",
-  quantity: 1,
-  hsn: "",
-  isVariant: false,
-  parentItemId: null,
-  discountType: "amount",
-  discount: 0,
-});
-
-/* Small searchable select used for the Deal and Item pickers. Kept local so the
-   panel doesn't inherit behaviour from the older form's dropdowns. */
-const PickerSelect = ({
-  value,
-  options,
-  placeholder,
-  onSelect,
-  searchable = true,
-  icon: Icon,
-}) => {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [dropdownStyle, setDropdownStyle] = useState({});
-  const wrapRef = useRef(null);
-  const dropdownRef = useRef(null);
-
-  const updatePosition = useCallback(() => {
-    if (open && wrapRef.current) {
-      // rect is VISUAL px; this dropdown portals to document.body, which
-      // paints inside the app's dynamic <html> zoom, so every rect-derived
-      // value has to be divided by that zoom or it drifts off-position —
-      // same correction the column menu and drag ghost already apply.
-      const zoom = getAncestorZoom(document.body);
-      const rect = wrapRef.current.getBoundingClientRect();
-      const left = rect.left / zoom;
-      const top = rect.top / zoom;
-      const bottom = rect.bottom / zoom;
-      const triggerWidth = rect.width / zoom;
-      const viewportWidth = window.innerWidth / zoom;
-      const viewportHeight = window.innerHeight / zoom;
-      const spaceBelow = viewportHeight - bottom;
-      const spaceAbove = top;
-      const MARGIN = 8;
-
-      // Item pickers sit in narrow grid columns — tying the dropdown's width
-      // to the trigger's own width (as narrow as ~80px there) is what made
-      // it look like a crushed little box. Give it a real minimum width
-      // instead, and clamp so it never runs past the right edge.
-      const width = Math.max(triggerWidth, 260);
-      let left_ = Math.min(left, viewportWidth - width - MARGIN);
-      left_ = Math.max(left_, MARGIN);
-
-      let style = {
-        position: "fixed",
-        left: `${left_}px`,
-        width: `${width}px`,
-        zIndex: 99999, // Ensure it floats above dialogs
-      };
-
-      if (spaceBelow < 256 && spaceAbove > spaceBelow) {
-        style.bottom = `${viewportHeight - top + 4}px`;
-        style.maxHeight = `${Math.min(256, spaceAbove - 16)}px`;
-      } else {
-        style.top = `${bottom + 4}px`;
-        style.maxHeight = `${Math.min(256, spaceBelow - 16)}px`;
-      }
-      setDropdownStyle(style);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    }
-  }, [open, updatePosition]);
-
-  useEffect(() => {
-    const onDocClick = (e) => {
-      const clickedInWrap = wrapRef.current && wrapRef.current.contains(e.target);
-      const clickedInDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
-      if (!clickedInWrap && !clickedInDropdown) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  const selected = options.find((o) => o.value === value);
-  const filtered = query
-    ? options.filter((o) =>
-      o.label.toLowerCase().includes(query.toLowerCase())
-    )
-    : options;
-
-  return (
-    <div ref={wrapRef} className="relative w-full min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full h-10 flex items-center gap-2 px-3 rounded-[25px] border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
-      >
-        {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-        <span
-          className={`flex-1 truncate text-sm ${selected ? "text-[#1F2937]" : "text-[#99A0AE]"
-            }`}
-        >
-          {selected ? selected.label : placeholder}
-        </span>
-        <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
-      </button>
-
-      {open && createPortal(
-        <div
-          ref={dropdownRef}
-          style={dropdownStyle}
-          className="bg-white border border-[#E1E4EA] rounded-lg shadow-xl flex flex-col overflow-hidden"
-        >
-          {searchable && (
-            <div className="p-2 bg-white border-b border-[#E1E4EA] flex-shrink-0">
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search..."
-                className="w-full h-8 px-2 text-sm rounded-md border border-[#E1E4EA] focus:outline-none focus:border-[#0085FF]"
-              />
-            </div>
-          )}
-          <div className="overflow-y-auto flex-1">
-            {filtered.length === 0 && (
-              <p className="px-3 py-3 text-sm text-gray-400">No results</p>
-            )}
-            {filtered.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  onSelect(o);
-                  setOpen(false);
-                  setQuery("");
-                }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors ${o.value === value ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700"
-                  }`}
-              >
-                <span className="flex-1 truncate">{o.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-};
-
-const FieldLabel = ({ children, required }) => (
-  <label className="block text-xs text-[#525866] mb-1.5">
-    {children}
-    {required && <span className="text-red-500 ml-0.5">*</span>}
-  </label>
-);
-
-/* The "Add Invoice" experience for the Invoices tab: details on the left,
-   live preview on the right. */
-const CreateInvoicePanel = ({
-  deals,
-  onClose,
-  onCreated,
-  onAddDeal,
-  initialDoc = null,
-  onFullView,
-  type = "tax",
-}) => {
-  const isEditing = !!initialDoc;
-  // Per-type capabilities. Delivery challans have no GSTIN / tax / HSN; the
-  // quotation tax flag is stored under a different key.
-  const isChallan = type === "deliveryChallan";
-  const supportsTax = !isChallan;
-  const supportsGSTIN = !isChallan;
-  const taxFlagKey = type === "quotation" ? "isTaxQuotation" : "isTaxInvoice";
-  const docName = docNameFor(type);
-  // Section badges are numbered by position so a hidden section doesn't leave
-  // a gap in the sequence.
-  const sectionNo = (() => {
-    let n = 1;
-    const pad = (v) => String(v).padStart(2, "0");
-    const out = { details: pad(n++) };
-    if (supportsGSTIN) out.billing = pad(n++);
-    out.items = pad(n++);
-    out.notes = pad(n++);
-    out.terms = pad(n++);
-    out.signature = pad(n++);
-    out.summary = pad(n++);
-    return out;
-  })();
-  const [form, setForm] = useState(() =>
-    initialDoc
-      ? {
-          deal: initialDoc.deal?._id || initialDoc.deal || "",
-          style: initialDoc.style || "",
-          date: initialDoc.date ? initialDoc.date.slice(0, 10) : "",
-          dueDate: initialDoc.dueDate ? initialDoc.dueDate.slice(0, 10) : "",
-          receiverGSTIN: initialDoc.receiverGSTIN || "",
-          isTaxInvoice:
-            initialDoc[type === "quotation" ? "isTaxQuotation" : "isTaxInvoice"] ||
-            false,
-          transactionType: initialDoc.transactionType || "intra",
-          gstRate: initialDoc.gstRate || 18,
-          invoicePrefix: initialDoc.invoicePrefix || "INV-",
-          invoiceSuffix: initialDoc.invoiceSuffix || "",
-          invoiceNumber: initialDoc.invoiceNumber || "",
-          nextInvoiceNumber: initialDoc.nextInvoiceNumber || 1,
-          items:
-            initialDoc.items && initialDoc.items.length
-              ? initialDoc.items.map((item) => ({
-                  _id: item.itemId || item._id,
-                  name: item.name,
-                  description: item.description || "",
-                  rate: item.rate,
-                  quantity: item.quantity,
-                  hsn: item.hsn || "",
-                  isVariant: item.isVariant || false,
-                  parentItemId: item.parentItemId || null,
-                  discountType: item.discountType || "amount",
-                  discount: item.discount || 0,
-                }))
-              : [blankItem()],
-          discount: initialDoc.discount || { type: "fixed", value: 0 },
-          notes: initialDoc.notes || "",
-          terms: initialDoc.terms || "",
-          signature: initialDoc.signature || "",
-          status: initialDoc.status || "Draft",
-        }
-      : {
-          deal: "",
-          style: "",
-          date: "",
-          dueDate: "",
-          receiverGSTIN: "",
-          isTaxInvoice: false,
-          transactionType: "intra",
-          gstRate: 18,
-          invoicePrefix: "INV-",
-          invoiceSuffix: "",
-          invoiceNumber: "",
-          nextInvoiceNumber: 1,
-          items: [blankItem()],
-          discount: { type: "fixed", value: 0 },
-          notes: "",
-          terms: "",
-          signature: "",
-          status: "Draft",
-        }
-  );
-  const [catalogue, setCatalogue] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [orgDetails, setOrgDetails] = useState(null);
-  const [bankDetails, setBankDetails] = useState(null);
-  // Numbering (prefix/suffix/next number) comes from DocumentSettings.
-  const [docSettings, setDocSettings] = useState({
-    invoicePrefix: "INV-",
-    invoiceSuffix: "",
-    invoicePrefixes: ["INV-"],
-    invoiceSuffixes: [],
-    nextInvoiceNumber: 1,
-    defaultNotes: "",
-    defaultTerms: "",
-    documentTypeSettings: {
-      invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] },
-    },
-  });
-  // Rendering template comes from DocumentTemplateSettings — a separate model.
-  const [orgTemplate, setOrgTemplate] = useState("Classic");
-  // Signatures saved under Settings → Document Settings. New documents adopt
-  // the org's default; existing ones keep whatever was chosen when created.
-  const [savedSignatures, setSavedSignatures] = useState([]);
-  const [signaturesLoading, setSignaturesLoading] = useState(false);
-
-  // Draggable split between the form (left) and the preview (right).
-  const splitRef = useRef(null);
-  const [leftPct, setLeftPct] = useState(50);
-  // Collapses the preview entirely so the form gets the full width — useful
-  // when filling in a long item list on a narrow screen.
-  const [hidePreview, setHidePreview] = useState(false);
-  // null when closed; otherwise the section to focus ("notes" | "terms").
-  const [notesDrawer, setNotesDrawer] = useState(null);
-  // Width the two columns actually use; the split only applies while the
-  // preview is on screen.
-  const formWidth = hidePreview ? "100%" : `${leftPct}%`;
-
-  // Document number, renamed inline from the header. Only the trailing part
-  // after the last hyphen is editable — the prefix (INV-, QUO-, …) identifies
-  // the document type and must survive any rename.
-  const numberKey = numberKeyFor(type);
-  const [docNumber, setDocNumber] = useState(initialDoc?.[numberKey] || "");
-  const numberPrefix = docNumber.includes("-")
-    ? docNumber.slice(0, docNumber.lastIndexOf("-") + 1)
-    : "";
-  const numberSuffix = docNumber.slice(numberPrefix.length);
-  const [numberDraft, setNumberDraft] = useState(null); // null = not editing
-  const [savingNumber, setSavingNumber] = useState(false);
-
-  const saveDocNumber = async () => {
-    const suffix = (numberDraft || "").trim();
-    if (!suffix) return toast.error(`${docName} number cannot be empty.`);
-    const next = `${numberPrefix}${suffix}`;
-    if (next === docNumber) return setNumberDraft(null);
-    try {
-      setSavingNumber(true);
-      await API.patch(`/${apiPathFor(type)}/number/${initialDoc._id}`, {
-        [numberKey]: next,
-      });
-      setDocNumber(next);
-      setNumberDraft(null);
-      toast.success(`${docName} number updated.`);
-      onCreated?.(); // refresh the list behind the panel so it shows the new number
-    } catch (err) {
-      toast.error(
-        err?.response?.status === 409
-          ? `${next} already exists.`
-          : err?.response?.data?.error || "Failed to update the number."
-      );
-    } finally {
-      setSavingNumber(false);
-    }
-  };
-
-  // "Full view" renders the same live preview blown up in a modal rather than
-  // fetching the server's PDF — the PDF only knows the *saved* invoice, so
-  // opening it would silently discard whatever the user has edited since.
-  const [showFullView, setShowFullView] = useState(false);
-
-  // The preview renders at a fixed design width and is scaled to fit the panel
-  // (like zooming an image) so resizing never reflows the invoice layout.
-  const PREVIEW_BASE_W = 760;
-  const previewAreaRef = useRef(null);
-  const sheetRef = useRef(null);
-  const [previewScale, setPreviewScale] = useState(1);
-  const [sheetHeight, setSheetHeight] = useState(0);
-  useLayoutEffect(() => {
-    const area = previewAreaRef.current;
-    if (!area) return;
-    const update = () => {
-      const avail = area.clientWidth - 12; // minus the p-1.5 padding
-      const s = Math.max(0.1, avail / PREVIEW_BASE_W);
-      setPreviewScale(s);
-      if (sheetRef.current)
-        setSheetHeight(sheetRef.current.offsetHeight * s);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(area);
-    if (sheetRef.current) ro.observe(sheetRef.current);
-    return () => ro.disconnect();
-  }, [leftPct]);
-  const startSplitDrag = (e) => {
-    e.preventDefault();
-    const container = splitRef.current;
-    if (!container) return;
-    const onMove = (ev) => {
-      const rect = container.getBoundingClientRect();
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
-      setLeftPct(Math.min(70, Math.max(30, pct)));
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
-
-  // Same branding + bank details the backend feeds into the PDF, so the live
-  // preview shows the real seller header, GSTIN and bank block. The template
-  // chosen in the Template drawer renders every document of this type, which is
-  // exactly how the backend resolves it when generating the PDF.
-  // Re-runs when the drawer closes so a change made there shows up right away.
-  useEffect(() => {
-    if (showTemplates) return;
-    (async () => {
-      try {
-        const [b, bank, settings, docSettingsRes] = await Promise.allSettled([
-          API.get("/branding"),
-          API.get("/bank-details"),
-          API.get("/document-templates"),
-          API.get("/document-settings"),
-        ]);
-        if (b.status === "fulfilled") setOrgDetails(b.value.data || null);
-        if (bank.status === "fulfilled")
-          setBankDetails(bank.value.data || null);
-        if (settings.status === "fulfilled") {
-          const chosen = settings.value.data?.templates?.[type];
-          if (chosen) setOrgTemplate(chosen);
-        }
-        // Keep numbering in sync with edits made in the drawer's Numbering tab.
-        if (docSettingsRes.status === "fulfilled") {
-          const d = docSettingsRes.value.data || {};
-          setDocSettings((prev) => ({
-            ...prev,
-            invoicePrefix: d.invoicePrefix || "INV-",
-            invoiceSuffix: d.invoiceSuffix || "",
-            invoicePrefixes: d.invoicePrefixes || ["INV-"],
-            invoiceSuffixes: d.invoiceSuffixes || [],
-            nextInvoiceNumber: d.nextInvoiceNumber || 1,
-            documentTypeSettings: d.documentTypeSettings || prev.documentTypeSettings,
-          }));
-        }
-      } catch (err) {
-        console.error("Fetch branding/bank error:", err);
-      }
-    })();
-  }, [type, showTemplates]);
-
-  // The panel is an overlay, not a route. Push a history entry while it's open
-  // so the browser Back button closes the panel and stays on Accounting,
-  // instead of navigating away to the previous page.
-  useEffect(() => {
-    window.history.pushState({ accountingPanel: true }, "");
-    const handlePop = () => onClose();
-    window.addEventListener("popstate", handlePop);
-    return () => window.removeEventListener("popstate", handlePop);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const fetchItems = async () => {
-      try {
-        const res = await API.get("/items?search=&includeVariants=true");
-        const flattened = (res.data || [])
-          .filter((item) => item.isActive)
-          .flatMap((item) => {
-            const base = {
-              _id: item._id,
-              displayName: item.name,
-              name: item.name,
-              description: item.description || "",
-              sellingPrice: item.sellingPrice,
-              hsnSac: item.hsnSac || "",
-              isVariant: false,
-              parentItemId: null,
-            };
-            const variants = (item.variants || []).map((v) => ({
-              _id: v._id,
-              displayName: `${item.name} - ${v.name}`,
-              name: v.name,
-              description: v.description || item.description || "",
-              sellingPrice: v.sellingPrice || item.sellingPrice,
-              hsnSac: v.hsnSac || item.hsnSac || "",
-              isVariant: true,
-              parentItemId: item._id,
-            }));
-            return [base, ...variants];
-          });
-        setCatalogue(flattened);
-      } catch (err) {
-        console.error("Fetch items error:", err);
-      }
-    };
-    fetchItems();
-  }, []);
-
-  useEffect(() => {
-    const loadDocSettings = async () => {
-      try {
-        const res = await API.get("/document-settings");
-        setDocSettings({
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          invoicePrefixes: res.data?.invoicePrefixes || ["INV-"],
-          invoiceSuffixes: res.data?.invoiceSuffixes || [],
-          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
-          defaultNotes: res.data?.defaultNotes || "",
-          defaultTerms: res.data?.defaultTerms || "",
-          documentTypeSettings: res.data?.documentTypeSettings || { invoice: { prefix: "INV-", suffix: "", prefixes: ["INV-"], suffixes: [] } },
-        });
-        setForm((prev) => ({
-          ...prev,
-          invoicePrefix: res.data?.invoicePrefix || "INV-",
-          invoiceSuffix: res.data?.invoiceSuffix || "",
-          nextInvoiceNumber: res.data?.nextInvoiceNumber || 1,
-        }));
-      } catch (error) {
-        console.error("Failed to load document settings", error);
-      }
-    };
-
-    loadDocSettings();
-  }, []);
-
-  // Load the org's saved signatures and fall back to the one marked default
-  // whenever the document doesn't already carry a signature of its own — so
-  // every invoice gets the default unless someone picked a specific one. A
-  // document that stored its own custom signature keeps it untouched.
-  useEffect(() => {
-    const loadSignatures = async () => {
-      setSignaturesLoading(true);
-      try {
-        const res = await API.get("/document-settings/signatures");
-        const sigs = Array.isArray(res.data) ? res.data : [];
-        setSavedSignatures(sigs);
-        const defaultSig = sigs.find((s) => s.isDefault);
-        if (defaultSig) {
-          // Fall back to the default whenever the document isn't already
-          // pointing at one of the saved signatures — so a blank, stale, or
-          // never-set signature resolves to the default rather than nothing.
-          // A document that stored a still-valid custom signature keeps it.
-          setForm((prev) => {
-            const hasSavedMatch = sigs.some((s) => s.dataUrl === prev.signature);
-            return hasSavedMatch
-              ? prev
-              : { ...prev, signature: defaultSig.dataUrl || "" };
-          });
-        }
-      } catch (error) {
-        console.error("Failed to load signatures", error);
-        setSavedSignatures([]);
-      } finally {
-        setSignaturesLoading(false);
-      }
-    };
-
-    loadSignatures();
-  }, []);
-
-  const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
-
-  const updateItem = (index, patch) =>
-    setForm((p) => ({
-      ...p,
-      items: p.items.map((it, i) => (i === index ? { ...it, ...patch } : it)),
-    }));
-
-  const addItem = () =>
-    setForm((p) => ({ ...p, items: [...p.items, blankItem()] }));
-
-  const removeItem = (index) =>
-    setForm((p) => ({
-      ...p,
-      items:
-        p.items.length === 1 ? [blankItem()] : p.items.filter((_, i) => i !== index),
-    }));
-
-  // Same breakdown as InvoiceForm.jsx: line total -> per-item discount ->
-  // subtotal after item discounts -> invoice-level discount -> GST -> final.
-  const lineTotal = (item) =>
-    (parseFloat(item.rate) || 0) * (parseInt(item.quantity) || 0);
-
-  const itemDiscountAmount = (item) => {
-    const base = lineTotal(item);
-    const discount = parseFloat(item.discount) || 0;
-    return item.discountType === "percentage" ? (base * discount) / 100 : discount;
-  };
-
-  const subtotal = form.items.reduce((sum, it) => sum + lineTotal(it), 0);
-  const itemDiscountsTotal = form.items.reduce(
-    (sum, it) => sum + itemDiscountAmount(it),
-    0
-  );
-  const afterItemDiscounts = subtotal - itemDiscountsTotal;
-  const invoiceDiscountAmount =
-    form.discount.value > 0
-      ? form.discount.type === "percentage"
-        ? (afterItemDiscounts * form.discount.value) / 100
-        : form.discount.value
-      : 0;
-  const netTaxable = afterItemDiscounts - invoiceDiscountAmount;
-  const taxAmount = form.isTaxInvoice ? netTaxable * (form.gstRate / 100) : 0;
-  const finalTotal = netTaxable + taxAmount;
-
-  const money = (n) =>
-    `₹${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-  const submitInvoice = async (statusValue) => {
-    const isDraft = statusValue === "Draft";
-    if (!form.deal) return toast.error("Please select a deal.");
-    if (!form.date) return toast.error(`Please pick a ${docName} date.`);
-    // A quick draft only needs enough to identify the document; full GSTIN and
-    // item validation apply once it's actually being created for real.
-    if (!isDraft) {
-      if (supportsGSTIN) {
-        if (!form.receiverGSTIN.trim())
-          return toast.error("Receiver GSTIN is required.");
-        if (!GSTIN_REGEX.test(form.receiverGSTIN.trim().toUpperCase()))
-          return toast.error(
-            "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-          );
-      }
-      const needsHsn = supportsTax && form.isTaxInvoice;
-      const badItem = form.items.find(
-        (it) => !it.name || !it.rate || !it.quantity || (needsHsn && !it.hsn)
-      );
-      if (badItem)
-        return toast.error(
-          needsHsn
-            ? "Every item needs a name, rate, quantity and HSN."
-            : "Every item needs a name, rate and quantity."
-        );
-    }
-
-    try {
-      setSubmitting(true);
-      const payload = {
-        deal: form.deal,
-        date: form.date,
-        dueDate: form.dueDate,
-        status: statusValue,
-        // Saved blank on purpose when no style was picked: the document then
-        // follows the organization's template instead of freezing today's
-        // choice into the record.
-        transactionType: form.transactionType,
-        gstRate: form.gstRate,
-        discount: form.discount,
-        notes: form.notes,
-        terms: form.terms,
-        signature: form.signature,
-        amount: finalTotal,
-        items: form.items.map((it) => ({
-          itemId: it._id,
-          name: it.name,
-          description: it.description,
-          rate: parseFloat(it.rate) || 0,
-          quantity: parseInt(it.quantity) || 0,
-          hsn: it.hsn,
-          isVariant: it.isVariant,
-          parentItemId: it.parentItemId,
-          discountType: it.discountType,
-          discount: parseFloat(it.discount) || 0,
-        })),
-      };
-      if (supportsGSTIN) {
-        payload.receiverGSTIN = form.receiverGSTIN.trim().toUpperCase();
-      }
-      if (supportsTax) {
-        payload[taxFlagKey] = form.isTaxInvoice;
-      }
-      // Numbering is configured per document type and only wired up for
-      // invoices, so the prefix/suffix/next-number fields ride along on that
-      // type alone rather than on every document.
-      if (type === "tax") {
-        payload.invoicePrefix =
-          form.invoicePrefix?.trim() || docSettings.invoicePrefix || "INV-";
-        payload.invoiceSuffix = form.invoiceSuffix ?? docSettings.invoiceSuffix ?? "";
-        payload.invoiceNumber = form.invoiceNumber?.toString().trim() || undefined;
-        payload.nextInvoiceNumber =
-          form.nextInvoiceNumber ?? docSettings.nextInvoiceNumber ?? 1;
-      }
-
-      const path = apiPathFor(type);
-      if (isEditing) {
-        await API.put(`/${path}/${initialDoc._id}`, payload);
-        toast.success(isDraft ? "Saved as draft!" : `${docName} updated successfully!`);
-      } else {
-        await API.post(`/${path}`, payload);
-        toast.success(isDraft ? "Saved as draft!" : `${docName} created successfully!`);
-      }
-      onCreated();
-      onClose();
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error ||
-        `Failed to ${isEditing ? "update" : isDraft ? "save draft" : "create"} ${docName.toLowerCase()}`
-      );
-      console.error(`${isEditing ? "Update" : "Create"} ${type} error:`, err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSaveDraft = () => submitInvoice("Draft");
-
-  // The template this document renders with. The organization's choice wins
-  // outright: htmlDocumentPdf.resolveTemplate ignores the document's stored
-  // `style` entirely, and every document saved before that change still
-  // carries style:"Classic" from the old schema default. Honouring it here
-  // would pin the preview to Classic forever *and* disagree with the PDF.
-  // Used by the preview *and* the print window so all three agree.
-  const previewTemplate = orgTemplate;
-
-  // Prints exactly what the preview shows — the same shared fragment the PDF
-  // is rendered from — including edits that haven't been saved yet, rather
-  // than fetching the server's copy of the document.
-  const handlePrint = () => {
-    const html = buildDocumentHtml(
-      {
-        ...form,
-        isTaxInvoice: supportsTax && !!form.isTaxInvoice,
-        isTaxQuotation: supportsTax && !!form.isTaxInvoice,
-      },
-      {
-        type,
-        template: previewTemplate,
-        orgDetails,
-        bankDetails,
-        dealName: dealOptions.find((d) => d.value === form.deal)?.label,
-        documentNumber: docNumber,
-      }
-    );
-    const win = window.open("", "_blank", "width=900,height=1000");
-    if (!win) {
-      toast.error("Allow pop-ups for this site to print.");
-      return;
-    }
-    win.document.write(`<!doctype html>
-<html>
-<head><meta charset="utf-8" /><title>${docNumber || docName}</title>
-<style>
-  @page { size: A4; margin: 12mm; }
-  html, body { margin: 0; padding: 0; }
-  .dcsheet { padding: 0 !important; }
-  /* Browsers drop background fills when printing unless asked not to, which
-     would strip the header bands and tinted rows some templates rely on. */
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  /* The sheet is authored at 760px and Chrome scales it to the printable
-     width, so 1px rules land on fractions of a device pixel and get rounded
-     away — the <table> blocks keep theirs (collapsed borders round up), the
-     plain div boxes lose theirs entirely and only reappear when zoomed in.
-     Printing at a slightly thicker hairline survives the downscale. */
-  .dcsheet { --line-w: 1.5px; }
-</style>
-</head>
-<body>${html}</body>
-</html>`);
-    win.document.close();
-    win.focus();
-    // Give the styles (and the logo, if any) a moment to apply before the
-    // dialog snapshots the page. document.write can finish loading before
-    // onload is attached, so fall back to a timer rather than never printing.
-    let printed = false;
-    const print = () => {
-      if (printed) return;
-      printed = true;
-      win.print();
-    };
-    win.onload = print;
-    setTimeout(print, 500);
-  };
-  const handleSubmit = () => submitInvoice(form.status || "Draft");
-
-  const dealOptions = deals.map((d) => ({ value: d._id, label: d.title }));
-  const inputClass =
-    "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
-
-  // Catalogue descriptions can be stored as rich-text HTML; show plain text in
-  // the description field instead of raw markup.
-  const stripHtml = (html) => {
-    if (!html) return "";
-    if (!/[<&]/.test(html)) return html;
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
-  };
-
-  // Grid template for the wide (row/list) item layout — includes an HSN column
-  // only for tax invoices. Card layout ignores this and stacks fields.
-  // Description isn't a column any more — it's an optional box under each row.
-  const itemRowCols = form.isTaxInvoice
-    ? "@2xl:grid-cols-[1.9fr_0.7fr_0.7fr_0.55fr_1.1fr_0.9fr_32px]"
-    : "@2xl:grid-cols-[2.2fr_0.8fr_0.6fr_1.2fr_0.9fr_32px]";
-
-  return (
-    <div
-      className="fixed right-0 bottom-0 bg-white z-[60] flex flex-col top-[54px] lg:top-16"
-      style={{ left: "var(--sidebar-width, 0px)" }}
-    >
-      {/* Single continuous resizer line spanning the strip + panels, so the
-          divider reads as one line from the navbar down. */}
-      <div
-        onMouseDown={startSplitDrag}
-        title="Drag to resize"
-        style={{ left: `calc(0.5rem + (100% - 1rem) * ${leftPct / 100} + 3px)` }}
-        className={`${hidePreview ? "hidden" : "hidden lg:flex"} absolute top-0 bottom-0 w-4 -translate-x-1/2 cursor-col-resize items-center justify-center gap-[3px] z-20 group`}
-      >
-        {/* Two hairlines at rest; on hover the gap between them fills so the
-            pair reads as one solid blue bar. */}
-        <div className="flex h-full gap-[3px] rounded-full group-hover:bg-[#0085FF] group-active:bg-[#0085FF] transition-colors">
-          <span className="w-px h-full rounded-full bg-[#E1E4EA] group-hover:bg-[#0085FF] group-active:bg-[#0085FF] transition-colors" />
-          <span className="w-px h-full rounded-full bg-[#E1E4EA] group-hover:bg-[#0085FF] group-active:bg-[#0085FF] transition-colors" />
-        </div>
-
-        {/* Decoration only — it marks the divider so the split reads as
-            draggable. `pointer-events-none` is deliberate: clicks and drags
-            pass straight through to the resizer behind it, so grabbing the
-            knob resizes rather than doing nothing. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute top-24 left-1/2 -translate-x-1/2 z-30 w-7 h-7 flex items-center justify-center rounded-full bg-white border border-[#E1E4EA] text-[#525866] shadow-md group-hover:text-[#0085FF] group-hover:border-[#0085FF] group-active:text-[#0085FF] group-active:border-[#0085FF] transition-colors"
-        >
-          <ChevronsLeftRight className="w-3.5 h-3.5" />
-        </div>
-      </div>
-      {/* Fixed top strip — one 64px header bar (same height as the Companies
-          toolbar), not part of the scrolling panels. Same border + shadow as
-          the app navbar so the header reads as a separate layer above the
-          form. Each column draws its own divider *and* its own shadow, so the
-          two segments stay visually separate and the resizer gap between them
-          casts nothing. `relative z-10` matters: without it the panels below
-          paint their white background over the shadows and they vanish. */}
-      <div className="relative z-10 flex-shrink-0 h-16 flex items-stretch bg-white px-2">
-        {/* Left: form header */}
-        <div
-          style={{ width: formWidth }}
-          className={`flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch ${hidePreview ? "" : "max-lg:!w-1/2"}`}
-        >
-          <div className="w-full flex items-center justify-between gap-2 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
-            <div className="min-w-0">
-              {isEditing && docNumber ? (
-                <>
-                  {numberDraft === null ? (
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <h2 className="text-xl font-bold text-[#1F2937] truncate">
-                        {docNumber}
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => setNumberDraft(numberSuffix)}
-                        title={`Rename this ${docName.toLowerCase()}`}
-                        aria-label={`Rename this ${docName.toLowerCase()}`}
-                        className="p-1 rounded-md text-[#99A0AE] hover:text-[#0085FF] hover:bg-[#F0F6FF] transition-colors flex-shrink-0"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    // The prefix sits outside the input so it reads as part of
-                    // the number but can't be edited or deleted.
-                    <div className="flex items-center gap-1 min-w-0">
-                      <div className="flex items-center h-9 pl-2.5 pr-1 border border-[#E1E4EA] rounded-lg focus-within:border-[#0085FF] min-w-0">
-                        <span className="text-xl font-bold text-[#99A0AE] flex-shrink-0">
-                          {numberPrefix}
-                        </span>
-                        <input
-                          autoFocus
-                          value={numberDraft}
-                          disabled={savingNumber}
-                          onChange={(e) => setNumberDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveDocNumber();
-                            if (e.key === "Escape") setNumberDraft(null);
-                          }}
-                          className="w-28 min-w-0 px-1 text-xl font-bold text-[#1F2937] outline-none bg-transparent"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={saveDocNumber}
-                        disabled={savingNumber}
-                        className="h-7 px-2 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[11px] font-medium transition-colors disabled:opacity-60 flex-shrink-0"
-                      >
-                        {savingNumber ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNumberDraft(null)}
-                        disabled={savingNumber}
-                        className="h-7 px-2 rounded-lg border border-[#E1E4EA] text-[11px] font-medium text-[#525866] hover:bg-gray-50 transition-colors flex-shrink-0"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <h2 className="text-xl font-bold text-[#1F2937] truncate">
-                  {isEditing ? `Edit ${docName}` : `Create New ${docName}`}
-                </h2>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setHidePreview((v) => !v)}
-                title={hidePreview ? "Show preview" : "Hide preview — full width form"}
-                aria-pressed={hidePreview}
-                className="h-8 w-8 flex items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
-              >
-                {hidePreview ? (
-                  <Minimize2 className="w-3.5 h-3.5" />
-                ) : (
-                  <Maximize2 className="w-3.5 h-3.5" />
-                )}
-              </button>
-              {/* Document-level settings for this screen — distinct from the
-                  app's global Settings page. Saving moved to the sticky bar at
-                  the bottom of the form, so this slot hosts it instead.
-                  Reachable even with the preview hidden, unlike the "Change
-                  Template" button that lives in the preview header. */}
-              <button
-                type="button"
-                onClick={() => setShowTemplates(true)}
-                title={`${docName} settings`}
-                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
-              >
-                <Settings className="w-3.5 h-3.5 text-[#525866]" />
-                Settings
-              </button>
-              {/* Saving/creating lives in the sticky bar at the foot of the
-                  form; this slot offers the draft escape hatch instead. */}
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={submitting}
-                className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                Save as Draft
-              </button>
-            </div>
-          </div>
-        </div>
-        {/* Gap reserved for the absolute resizer line — no bottom border here,
-            so the strip line reads as two separate parts (left / right). */}
-        {!hidePreview && <div className="hidden lg:block w-1.5 flex-shrink-0 self-stretch" />}
-        {/* Right: preview header */}
-        <div
-          className={`flex-1 min-w-0 items-stretch px-3 lg:pl-6 self-stretch ${hidePreview ? "hidden" : "flex"}`}
-        >
-          <div className="w-full flex items-center justify-between gap-4 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold text-[#1F2937] truncate">
-              {docName} Preview
-            </h2>
-            <p className="text-xs text-[#99A0AE] truncate">
-              This is how your {docName.toLowerCase()} will appear to the customer.
-            </p>
-          </div>
-          {/* The template is an organization-wide setting, so this opens the
-              same Template drawer the Accounting toolbar uses rather than
-              pinning a style onto this one document. */}
-          <div className="flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowTemplates(true)}
-              className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-medium transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              Change Template
-            </button>
-          </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Frame 2147225003 — the two panels sit side by side, each scrolling
-          independently, so neither one's height depends on the other. */}
-      <div ref={splitRef} className="flex-1 min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 overflow-hidden">
-        {/* Left: form. Frame 1351649637
-            The scrolling element itself must NOT be a flex container: when a
-            flex item's parent has `overflow` other than visible, the spec
-            drops that item's min-height from `auto` to `0`, so flex-shrink:1
-            (the default) is free to squash it below its content size instead
-            of the overflow ever kicking in — exactly the "top of the item
-            list collapses to a sliver" bug reported at 100% zoom (less
-            available height = more squashing; zooming out to 90% just gave
-            the content more room, masking it). Fix: keep `overflow-y-auto`
-            on this outer box but make it a plain block, and put all the
-            flex-col spacing on a single inner wrapper instead — that
-            wrapper isn't itself inside an overflow context, so its children
-            keep their natural `min-height: auto` and the outer box scrolls
-            for real instead of silently crushing them. */}
-        <div
-          style={{ width: formWidth }}
-          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
-        >
-          <div className="w-full flex flex-col items-start gap-1">
-          <SectionHeader number={sectionNo.details} title={`${docName} Details`} />
-          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
-            <div className="flex flex-col gap-1">
-              <FieldLabel required>Select Deal</FieldLabel>
-              <div className="flex items-center gap-2">
-                <PickerSelect
-                  value={form.deal}
-                  options={dealOptions}
-                  placeholder="Search and select deal"
-                  icon={Search}
-                  onSelect={(o) => setField("deal", o.value)}
-                />
-                <button
-                  type="button"
-                  onClick={onAddDeal}
-                  title="Create a new deal"
-                  className="w-10 h-10 flex-shrink-0 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <FieldLabel required>{docName} Date</FieldLabel>
-              {/* Reserve the same 40px + gap the Select Deal "+" button takes,
-                  so this input lines up with the deal picker's width. */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setField("date", e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="w-10 flex-shrink-0" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <FieldLabel>Due Date</FieldLabel>
-              {/* Same reserved 40px + gap as the fields above, so this input
-                  ends flush with the deal picker instead of running past it. */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) => setField("dueDate", e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="w-10 flex-shrink-0" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
-
-          {supportsGSTIN && (
-          <>
-          <SectionHeader number={sectionNo.billing} title="Billing & Tax Information" />
-          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
-            <div className="flex flex-col gap-1">
-              <FieldLabel required>Receiver GSTIN</FieldLabel>
-              {/* Match the Select Deal picker width (reserve the "+" button space). */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={form.receiverGSTIN}
-                  onChange={(e) => setField("receiverGSTIN", e.target.value)}
-                  placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                  className={`${inputClass} flex-1 min-w-0`}
-                />
-                <div className="w-10 flex-shrink-0" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <FieldLabel>Tax Invoice</FieldLabel>
-              <div className="flex items-center gap-2.5 h-8">
-                <button
-                  type="button"
-                  onClick={() => setField("isTaxInvoice", !form.isTaxInvoice)}
-                  className="flex-shrink-0"
-                >
-                  <span
-                    className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${form.isTaxInvoice ? "bg-[#0085FF]" : "bg-[#E1E4EA]"
-                      }`}
-                  >
-                    <span
-                      className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.isTaxInvoice ? "translate-x-4" : "translate-x-0"
-                        }`}
-                    />
-                  </span>
-                </button>
-                <div className="flex flex-col">
-                  <span className="text-[12px] font-medium text-[#1F2937]">
-                    Enable Tax Invoice
-                  </span>
-                  <span className="text-[10px] text-[#99A0AE]">
-                    Include GST and tax details in this invoice
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          </>
-          )}
-
-          {/* Items — one card per line item, every field labelled and
-              full-width so nothing is cramped regardless of panel width. */}
-          <SectionHeader number={sectionNo.items} title={`${docName} Items`} />
-          <div className="w-full flex flex-col gap-2 @2xl:gap-0 mb-1">
-            {/* Column header — only shown in the wide (row/list) layout. */}
-            <div
-              className={`hidden @2xl:grid @2xl:items-center gap-2 px-2 pb-1 text-[11px] font-medium text-[#525866] ${itemRowCols}`}
-            >
-              <span>Item</span>
-              {form.isTaxInvoice && <span>HSN</span>}
-              <span>Rate (₹)</span>
-              <span>Qty</span>
-              <span>Discount</span>
-              <span className="text-right">Amount</span>
-              <span />
-            </div>
-
-            {form.items.map((item, index) => {
-              const numInput =
-                "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] text-[13px] focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
-              const txtInput =
-                "w-full h-10 px-2.5 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF]";
-              // Label shows in card mode, hidden in the wide row layout (the
-              // column header covers it there).
-              const lbl =
-                "text-[11px] font-medium text-[#525866] mb-1 block @2xl:hidden";
-              const hasDescription =
-                item.showDescription || !!item.description;
-              return (
-                <div
-                  key={index}
-                  className="border border-[#E1E4EA] rounded-lg bg-white p-3 @2xl:border-0 @2xl:border-b @2xl:rounded-none @2xl:p-0 @2xl:last:border-b-0"
-                >
-                <div
-                  className={`grid grid-cols-1 @md:grid-cols-2 gap-x-3 gap-y-2 @2xl:items-center @2xl:gap-2 @2xl:px-2 @2xl:py-1.5 ${itemRowCols}`}
-                >
-                  {/* Card-only header: index + remove (hidden in row layout) */}
-                  <div className="flex items-center justify-between mb-1 @md:col-span-2 @2xl:hidden">
-                    <span className="text-[12px] font-semibold text-[#1F2937]">
-                      Item {index + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      title="Remove item"
-                      disabled={form.items.length === 1}
-                      className="w-7 h-7 flex items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Item picker */}
-                  <div className="@md:col-span-2 @2xl:col-span-1 min-w-0">
-                    <label className={lbl}>Item</label>
-                    <PickerSelect
-                      value={item._id}
-                      options={catalogue.map((c) => ({
-                        value: c._id,
-                        label: c.displayName,
-                      }))}
-                      placeholder="Search items or variants"
-                      onSelect={(o) => {
-                        const picked = catalogue.find(
-                          (c) => c._id === o.value
-                        );
-                        if (!picked) return;
-                        updateItem(index, {
-                          _id: picked._id,
-                          name: picked.name,
-                          description: stripHtml(picked.description),
-                          rate: picked.sellingPrice ?? "",
-                          hsn: picked.hsnSac || "",
-                          isVariant: picked.isVariant,
-                          parentItemId: picked.parentItemId,
-                        });
-                      }}
-                    />
-                  </div>
-
-                  {/* HSN (tax invoices only) */}
-                  {form.isTaxInvoice && (
-                    <div className="min-w-0">
-                      <label className={lbl}>HSN / SAC</label>
-                      <input
-                        value={item.hsn}
-                        onChange={(e) =>
-                          updateItem(index, { hsn: e.target.value })
-                        }
-                        placeholder="HSN"
-                        className={txtInput}
-                      />
-                    </div>
-                  )}
-
-                  {/* Rate */}
-                  <div className="min-w-0">
-                    <label className={lbl}>Rate (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={item.rate}
-                      onChange={(e) =>
-                        updateItem(index, { rate: e.target.value })
-                      }
-                      placeholder="0.00"
-                      className={numInput}
-                    />
-                  </div>
-
-                  {/* Quantity */}
-                  <div className="min-w-0">
-                    <label className={lbl}>Qty</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateItem(index, { quantity: e.target.value })
-                      }
-                      placeholder="1"
-                      className={numInput}
-                    />
-                  </div>
-
-                  {/* Discount + type */}
-                  <div className="min-w-0">
-                    <label className={lbl}>Discount</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.discount}
-                        onChange={(e) => {
-                          const rawValue = e.target.value;
-                          const parsed = parseFloat(rawValue) || 0;
-                          const base = lineTotal(item);
-                          let clamped = rawValue;
-                          if (
-                            item.discountType === "amount" &&
-                            parsed > base
-                          ) {
-                            clamped = base;
-                            toast.error(
-                              "Item discount cannot exceed item total."
-                            );
-                          } else if (
-                            item.discountType === "percentage" &&
-                            parsed > 100
-                          ) {
-                            clamped = 100;
-                            toast.error(
-                              "Percentage discount cannot exceed 100%."
-                            );
-                          }
-                          updateItem(index, { discount: clamped });
-                        }}
-                        placeholder="0"
-                        className={`${numInput} flex-1 min-w-0`}
-                      />
-                      <select
-                        value={item.discountType}
-                        onChange={(e) =>
-                          updateItem(index, { discountType: e.target.value })
-                        }
-                        className="h-10 px-1.5 rounded-[25px] border border-[#E1E4EA] text-[13px] text-gray-700 bg-white focus:outline-none focus:border-[#0085FF] flex-shrink-0"
-                      >
-                        <option value="amount">₹</option>
-                        <option value="percentage">%</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Row-layout amount cell (hidden in card mode) */}
-                  <span className="hidden @2xl:block text-right text-[13px] font-semibold text-[#1F2937] pr-1">
-                    {money(lineTotal(item) - itemDiscountAmount(item))}
-                  </span>
-
-                  {/* Row-layout remove button (hidden in card mode) */}
-                  <button
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    title="Remove item"
-                    disabled={form.items.length === 1}
-                    className="hidden @2xl:flex w-8 h-8 items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-
-                  {/* Card-only amount footer (hidden in row layout) */}
-                  <div className="flex items-center justify-between border-t border-[#E1E4EA] mt-2 pt-2 @md:col-span-2 @2xl:hidden">
-                    <span className="text-[12px] text-[#525866]">Amount</span>
-                    <span className="text-[14px] font-semibold text-[#1F2937]">
-                      {money(lineTotal(item) - itemDiscountAmount(item))}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Optional description, printed under the item name on the
-                    document. Hidden behind a link until asked for, so a plain
-                    line item stays a single row. */}
-                <div className="mt-2 @2xl:mt-0 @2xl:px-2 @2xl:pb-2">
-                  {hasDescription ? (
-                    <textarea
-                      rows={2}
-                      autoFocus={item.showDescription && !item.description}
-                      value={item.description}
-                      onChange={(e) =>
-                        updateItem(index, { description: e.target.value })
-                      }
-                      onBlur={() => {
-                        // Collapse again if they opened it and typed nothing.
-                        if (!item.description)
-                          updateItem(index, { showDescription: false });
-                      }}
-                      placeholder="Describe this item — appears under its name on the document"
-                      className="w-full px-2.5 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateItem(index, { showDescription: true })
-                      }
-                      className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0085FF] hover:underline"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add description
-                    </button>
-                  )}
-                </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <button
-            type="button"
-            onClick={addItem}
-            className="w-full h-10 min-h-[40px] flex-shrink-0 flex items-center justify-center gap-2 rounded-lg bg-white border border-[#0085FF]/20 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Another Item
-          </button>
-
-          {/* Notes and terms — free text printed in the document's footer.
-              Left empty, that footer block simply doesn't appear. They sit
-              side by side: both are short, and the document prints them as one
-              footer block. Stacks again when the form is narrow. */}
-          <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-x-6 gap-y-2 w-full mt-3">
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between gap-2">
-                <SectionHeader number={sectionNo.notes} title="Notes" />
-                <OpenNotesTermsButton
-                  label="Add Notes"
-                  onClick={() => setNotesDrawer("notes")}
-                />
-              </div>
-              <textarea
-                rows={4}
-                value={form.notes}
-                onChange={(e) => setField("notes", e.target.value)}
-                placeholder={`A short message to the customer, e.g. "Thank you for the business!"`}
-                className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
-              />
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between gap-2">
-                <SectionHeader
-                  number={sectionNo.terms}
-                  title="Terms and Conditions"
-                />
-                <OpenNotesTermsButton
-                  label="Add Terms"
-                  onClick={() => setNotesDrawer("terms")}
-                />
-              </div>
-              <textarea
-                rows={4}
-                value={form.terms}
-                onChange={(e) => setField("terms", e.target.value)}
-                placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
-                className="w-full px-3 py-2 rounded-[25px] border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
-              />
-            </div>
-          </div>
-
-          {/* Signature — chosen from the signatures saved under Settings →
-              Document Settings. New documents pre-select the org's default; the
-              dropdown lets you swap it for another saved signature or clear it
-              for this document only. */}
-          <SectionHeader number={sectionNo.signature} title="Signature" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
-            <div className="flex flex-col gap-1">
-              <FieldLabel>Signature</FieldLabel>
-              <div className="relative flex items-center h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
-                <select
-                  value={form.signature}
-                  onChange={(e) => setField("signature", e.target.value)}
-                  disabled={signaturesLoading}
-                  className="flex-1 min-w-0 h-full pl-3 pr-8 text-[13px] bg-transparent appearance-none focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <option value="">No signature</option>
-                  {savedSignatures.map((sig) => (
-                    <option key={sig.id} value={sig.dataUrl}>
-                      {sig.name}
-                      {sig.isDefault ? " (Default)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              </div>
-              <p className="text-xs text-[#99A0AE]">
-                {signaturesLoading
-                  ? "Loading signatures…"
-                  : savedSignatures.length === 0
-                    ? "No saved signatures yet — add them in Settings → Document Settings → Signatures."
-                    : "The default is applied to every document unless you pick another here."}
-              </p>
-            </div>
-            <div className="flex flex-col gap-1">
-              <FieldLabel>Preview</FieldLabel>
-              <div className="h-[72px] flex items-center justify-center rounded-lg border border-dashed border-[#E1E4EA] bg-[#FAFBFC]">
-                {form.signature ? (
-                  <img
-                    src={form.signature}
-                    alt="Selected signature"
-                    className="max-h-16 max-w-full object-contain"
-                  />
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-[#99A0AE]">
-                    <PenLine className="w-3.5 h-3.5" />
-                    No signature selected
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <SectionHeader number={sectionNo.summary} title={`${docName} Summary`} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
-            {/* Invoice-level discount, applied after the per-item ones */}
-            <div className="flex flex-col gap-1">
-              <FieldLabel>{docName} Discount</FieldLabel>
-              {/* Leading unit (₹ / %) with an up/down toggle built into the
-                  field — switches the discount type in place, no separate
-                  switcher. Reserve the same trailing space as Invoice Date so
-                  the two fields line up in width. */}
-              <div className="flex items-center gap-2">
-              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-[25px] border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
-                <input
-                  type="number"
-                  min="0"
-                  value={form.discount.value}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const parsed = parseFloat(raw) || 0;
-                    let clamped = raw;
-                    if (
-                      form.discount.type === "percentage" &&
-                      parsed > 100
-                    ) {
-                      clamped = 100;
-                      toast.error("Percentage discount cannot exceed 100%.");
-                    } else if (
-                      form.discount.type === "fixed" &&
-                      parsed > afterItemDiscounts
-                    ) {
-                      clamped = afterItemDiscounts;
-                      toast.error(
-                        "Invoice discount cannot exceed subtotal after item discounts."
-                      );
-                    }
-                    setField("discount", { ...form.discount, value: clamped });
-                  }}
-                  className="flex-1 min-w-0 h-full px-2.5 text-[13px] focus:outline-none"
-                />
-                <div className="flex items-stretch h-full">
-                  <span className="w-7 flex items-center justify-center text-[13px] font-semibold text-[#0085FF]">
-                    {form.discount.type === "percentage" ? "%" : "₹"}
-                  </span>
-                  <div className="flex flex-col justify-center">
-                    {[ChevronUp, ChevronDown].map((Icon, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        title="Switch between ₹ and %"
-                        onClick={() =>
-                          setField("discount", {
-                            ...form.discount,
-                            type:
-                              form.discount.type === "percentage"
-                                ? "fixed"
-                                : "percentage",
-                          })
-                        }
-                        className={`w-5 h-2.5 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded transition-colors ${i === 1 ? "-mt-0.5" : ""}`}
-                      >
-                        <Icon className="w-3 h-3" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-                <div className="w-10 flex-shrink-0" aria-hidden="true" />
-              </div>
-            </div>
-
-            {/* Breakdown + Create Invoice */}
-            <div className="flex flex-col gap-1.5">
-              <div className="space-y-1 text-[13px]">
-                <div className="flex justify-between text-gray-600">
-                  <span>Subtotal</span>
-                  <span className="font-medium text-[#1F2937]">
-                    {money(subtotal)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-red-500">
-                  <span>Item Discounts</span>
-                  <span>- {money(itemDiscountsTotal)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>After Item Discounts</span>
-                  <span className="font-medium text-[#1F2937]">
-                    {money(afterItemDiscounts)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-red-500">
-                  <span>Invoice Discount</span>
-                  <span>- {money(invoiceDiscountAmount)}</span>
-                </div>
-                {form.isTaxInvoice && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>GST ({form.gstRate}%)</span>
-                    <span className="font-medium text-[#1F2937]">
-                      {money(taxAmount)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center px-2.5 py-1.5 rounded-lg bg-[#F0F6FF]">
-                  <span className="font-bold text-[#0085FF]">Final Total</span>
-                  <span className="font-bold text-[#0085FF]">
-                    {money(finalTotal)}
-                  </span>
-                </div>
-                <div className="pt-1">
-                  <p className="text-xs text-[#99A0AE]">Amount in Words</p>
-                  <p className="text-xs font-medium text-[#525866]">
-                    {numberToWords(finalTotal)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Running total + primary actions, pinned to the bottom of the form
-              column. It sticks inside this scroll container rather than being
-              fixed to the viewport, so it stays inside the form even when the
-              preview is showing and the split is dragged. */}
-          {/* Sized to its contents and centred, so it reads as a floating bar
-              over the form rather than another full-width section. The wrapper
-              ignores pointer events so the empty space either side of the pill
-              doesn't block the fields underneath it. */}
-          <div className="sticky bottom-0 z-20 w-full pt-3 pb-1 flex justify-center pointer-events-none">
-            <div className="pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-5 rounded-full border border-[#E1E4EA] bg-white/95 backdrop-blur-sm pl-6 pr-2.5 py-2.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.22)]">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold tracking-wide text-[#99A0AE] uppercase leading-none">
-                  Total
-                </p>
-                <p className="text-[18px] font-bold text-[#1F2937] leading-tight truncate">
-                  {money(finalTotal)}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="h-9 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-full text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors whitespace-nowrap"
-                >
-                  <Printer className="w-3.5 h-3.5 text-[#525866]" />
-                  Print
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="h-9 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {submitting
-                    ? isEditing
-                      ? "Updating..."
-                      : "Creating..."
-                    : isEditing
-                      ? `Update ${docName}`
-                      : `Create ${docName}`}
-                  {!submitting && <ChevronRight className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-
-        {/* Gap reserved for the absolute resizer line (rendered at panel level). */}
-        {!hidePreview && <div className="hidden lg:block w-1.5 flex-shrink-0" />}
-
-        {/* Right: preview. Frame 1351649638 — stretches to fill whatever's left beside the form panel. */}
-        <div
-          className={`relative w-full lg:flex-1 min-w-0 bg-white p-3 lg:pl-6 flex-col items-start gap-4 self-stretch ${hidePreview ? "hidden" : "flex"}`}
-        >
-          {/* Live invoice preview — mirrors the structure of the downloaded /
-              printed document and reflects the form's changes in real time. */}
-          <div
-            ref={previewAreaRef}
-            className="group w-full flex-1 min-h-0 self-stretch overflow-y-auto overflow-x-hidden relative p-1.5"
-          >
-            {/* Full-view button — appears on hover, opens the same document
-                viewer as the eye action in the list (edit mode only). */}
-            {isEditing && (
-              <button
-                type="button"
-                onClick={() => setShowFullView(true)}
-                title="Full view"
-                className="absolute top-3 right-3 z-10 flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1F2937] text-white text-xs font-medium shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Full view
-              </button>
-            )}
-            {/* Fixed-width sheet scaled to fit — resizing zooms the invoice
-                instead of reflowing it. Outer div reserves the scaled height. */}
-            <div style={{ height: sheetHeight || undefined }}>
-              <div
-                ref={sheetRef}
-                style={{
-                  width: PREVIEW_BASE_W,
-                  transform: `scale(${previewScale})`,
-                  transformOrigin: "top left",
-                }}
-              >
-                <InvoiceLivePreview
-                  form={form}
-                  orgDetails={orgDetails}
-                  bankDetails={bankDetails}
-                  type={type}
-                  template={previewTemplate}
-                  supportsTax={supportsTax}
-                  invoiceNumber={docNumber}
-                  dealName={dealOptions.find((d) => d.value === form.deal)?.label}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Full view — the same live preview at full size, driven by the current
-          (possibly unsaved) form state, so it always shows what's on screen. */}
-      {/* Opened by the "Add Notes" / "Add Terms" links beside those sections.
-          Writes to the same form fields the inline boxes use, so the preview
-          updates as you type either way. */}
-      <NotesTermsDrawer
-        isOpen={notesDrawer !== null}
-        focus={notesDrawer || "notes"}
-        onClose={() => setNotesDrawer(null)}
-        type={type}
-        docName={docName}
-        onApplyNotes={(v) => setField("notes", v)}
-        onApplyTerms={(v) => setField("terms", v)}
-      />
-
-      {/* Opened by "Change Template" above — edits the organization-wide
-          choice, so closing it refreshes orgTemplate and the preview restyles. */}
-      <TemplateDrawer
-        isOpen={showTemplates}
-        onClose={() => setShowTemplates(false)}
-        type={type}
-        docLabel={docName}
-      />
-
-      {showFullView &&
-        createPortal(
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100002] flex flex-col"
-            onClick={() => setShowFullView(false)}
-          >
-            <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 bg-white border-b border-[#E1E4EA]">
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-[#1F2937] truncate">
-                  {docName} Preview
-                  {initialDoc?.[numberKeyFor(type)]
-                    ? ` #${initialDoc[numberKeyFor(type)]}`
-                    : ""}
-                </h2>
-                <p className="text-xs text-[#99A0AE] truncate">
-                  Showing your current edits, including unsaved changes.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFullView(false)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 overflow-auto p-6">
-              <div
-                className="mx-auto bg-white shadow-2xl"
-                style={{ width: PREVIEW_BASE_W }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <InvoiceLivePreview
-                  form={form}
-                  orgDetails={orgDetails}
-                  bankDetails={bankDetails}
-                  type={type}
-                  template={previewTemplate}
-                  supportsTax={supportsTax}
-                  invoiceNumber={docNumber}
-                  dealName={dealOptions.find((d) => d.value === form.deal)?.label}
-                />
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
     </div>
   );
 };
@@ -2294,6 +773,46 @@ const Accounting = () => {
   };
 
   const [deals, setDeals] = useState([]);
+  const [documentTypeSettings, setDocumentTypeSettings] = useState({});
+  const [defaultDueDateDays, setDefaultDueDateDays] = useState(null);
+  // Notes/Terms boilerplate from Settings → Document Settings, keyed by
+  // document type (tax | performa | quotation | deliveryChallan), with the
+  // legacy flat fields as a fallback for orgs that haven't set per-type text.
+  const [defaultNotesByType, setDefaultNotesByType] = useState({});
+  const [defaultTermsByType, setDefaultTermsByType] = useState({});
+  const [defaultNotesFlat, setDefaultNotesFlat] = useState("");
+  const [defaultTermsFlat, setDefaultTermsFlat] = useState("");
+  // Named template libraries loaded from Settings → Message Templates. Each
+  // entry is {id, name, ...content, isDefault}; the share menu picks the
+  // default automatically when there's only one, or lets the user choose
+  // when there are several.
+  const [waTemplatesList, setWaTemplatesList] = useState([]);
+  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
+  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
+  const [shareCompanyName, setShareCompanyName] = useState("");
+  const [brandSignatureUrl, setBrandSignatureUrl] = useState("");
+  // Which channel's template picker is expanded inside the share dropdown,
+  // or null to show the main WhatsApp/Email/SMS/Copy-Link list.
+  const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
+  const [emailCompose, setEmailCompose] = useState(null); // { doc, type }
+  const [emailComposeTo, setEmailComposeTo] = useState("");
+  const [emailComposeCc, setEmailComposeCc] = useState("");
+  const [emailComposeBcc, setEmailComposeBcc] = useState("");
+  const [showEmailCc, setShowEmailCc] = useState(false);
+  const [showEmailBcc, setShowEmailBcc] = useState(false);
+  const [emailComposeSubject, setEmailComposeSubject] = useState("");
+  const [emailComposeBody, setEmailComposeBody] = useState(""); // HTML, kept in sync with the rich-text editor's innerHTML
+  const [emailComposeSending, setEmailComposeSending] = useState(false);
+  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
+  const [emailPreviewMode, setEmailPreviewMode] = useState(false);
+  const emailBodyEditorRef = useRef(null);
+  const EMAIL_FROM_ADDRESS = import.meta.env.VITE_SENDGRID_FROM_EMAIL || "";
+  const EMAIL_FROM_NAME = import.meta.env.VITE_SENDGRID_FROM_NAME || "";
+  const [smsCompose, setSmsCompose] = useState(null); // { doc, type }
+  const [smsComposeTo, setSmsComposeTo] = useState("");
+  const [smsComposeBody, setSmsComposeBody] = useState("");
+  const [smsComposeSending, setSmsComposeSending] = useState(false);
   const [documents, setDocuments] = useState({
     tax: [],
     performa: [],
@@ -2305,6 +824,12 @@ const Accounting = () => {
     performa: false,
     quotation: false,
     deliveryChallan: false,
+  });
+  const fetchSequenceRef = useRef({
+    tax: 0,
+    performa: 0,
+    quotation: 0,
+    deliveryChallan: 0,
   });
   const [searchTerms, setSearchTerms] = useState(emptyByType);
   const [debouncedSearchTerms, setDebouncedSearchTerms] = useState(emptyByType);
@@ -2604,8 +1129,12 @@ const Accounting = () => {
 
   // UI state
   const [selectedIds, setSelectedIds] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [editPanelDoc, setEditPanelDoc] = useState(null);
+  const [conversionData, setConversionData] = useState(null);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -2613,6 +1142,21 @@ const Accounting = () => {
   const searchInputRef = useRef(null);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // Every document type opens in the shared split view (form + live preview)
+  // by default; the header's expand button swaps to that type's dedicated
+  // full-width screen. Each flag is a per-tab VIEW PREFERENCE, deliberately
+  // NOT reset when the panel closes — it persists across opens/closes and
+  // across switching tabs, same as the other three, until the user
+  // explicitly collapses it back via that screen's own minimize button.
+  const [quotationFullWidth, setQuotationFullWidth] = useState(false);
+  const [invoiceFullWidth, setInvoiceFullWidth] = useState(false);
+  const [performaFullWidth, setPerformaFullWidth] = useState(false);
+  const [challanFullWidth, setChallanFullWidth] = useState(false);
+  // Snapshot of the currently-open document's in-progress form, handed off
+  // the moment the user toggles between split/full width so switching views
+  // never drops unsaved edits (see CreateInvoicePanel/InvoiceFormFull etc.).
+  // Only one document panel is ever open at a time, so a single slot is enough.
+  const [formHandoff, setFormHandoff] = useState(null);
   const [editing, setEditing] = useState(null);
   const [editingType, setEditingType] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -2624,6 +1168,12 @@ const Accounting = () => {
   const [viewerDoc, setViewerDoc] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
   const [convertMenuPos, setConvertMenuPos] = useState(null);
+  // Single "⋮" menu per row, replacing the old strip of individual icon
+  // buttons — every row action lives here now, with Convert as a nested
+  // submenu (rowMenuConvertOpen) instead of its own flyout.
+  const [openRowMenu, setOpenRowMenu] = useState(null);
+  const [rowMenuPos, setRowMenuPos] = useState(null);
+  const [rowMenuConvertOpen, setRowMenuConvertOpen] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showBrandingModal, setShowBrandingModal] = useState(false);
@@ -2634,8 +1184,17 @@ const Accounting = () => {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
+  const [showBulkSignatureModal, setShowBulkSignatureModal] = useState(false);
+  const [bulkSignatureLoading, setBulkSignatureLoading] = useState(false);
+  const [showBulkEmailGroupedModal, setShowBulkEmailGroupedModal] = useState(false);
   const [bulkUpdateStatus, setBulkUpdateStatus] = useState("");
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [bulkShowMoreMenu, setBulkShowMoreMenu] = useState(false);
+  const [bulkConvertMenuOpen, setBulkConvertMenuOpen] = useState(false);
+  const [bulkConverting, setBulkConverting] = useState(false);
+  const [bulkSignatureUpdating, setBulkSignatureUpdating] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkPrinting, setBulkPrinting] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in-left entrance) — same as
   // the Companies page.
@@ -2658,6 +1217,8 @@ const Accounting = () => {
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertDocId, setConvertDocId] = useState(null);
   const [convertDocType, setConvertDocType] = useState(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
   const [convertTargetType, setConvertTargetType] = useState(null);
 
   // Clicking "Accounting" in the sidebar while already here should come back to
@@ -2696,6 +1257,9 @@ const Accounting = () => {
     };
     // The convert menu is fixed-positioned, so any scroll would leave it
     // floating at stale coordinates — close it instead of tracking.
+    // (The row "⋮" menu below closes via its own full-screen portal overlay,
+    // same pattern as Companies.jsx's row-actions menu, instead of this
+    // document-listener approach.)
     const handleScroll = () => {
       if (openConvertMenu) {
         setOpenConvertMenu(null);
@@ -2718,6 +1282,10 @@ const Accounting = () => {
         ...prev,
         [activeTab]: searchTerms[activeTab],
       }));
+      setPaginations((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], currentPage: 1 },
+      }));
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerms, activeTab]);
@@ -2728,16 +1296,13 @@ const Accounting = () => {
         ...prev,
         [activeTab]: filterStatuses[activeTab],
       }));
+      setPaginations((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab], currentPage: 1 },
+      }));
     }, 300);
     return () => clearTimeout(timer);
   }, [filterStatuses, activeTab]);
-
-  useEffect(() => {
-    setPaginations((prev) => ({
-      ...prev,
-      [activeTab]: { ...prev[activeTab], currentPage: 1 },
-    }));
-  }, [debouncedSearchTerms, debouncedFilterStatuses, activeTab]);
 
   // The fetch effects below key off these primitives rather than the whole
   // per-tab objects, so they're statically checkable and only re-run when the
@@ -2756,17 +1321,39 @@ const Accounting = () => {
 
   useEffect(() => {
     fetchData(activeTab);
+    // One request effect covers paging, sorting, search and status changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePage, activeLimit, activeSort, activeTab]);
-
-  useEffect(() => {
-    if (activePage === 1) fetchData(activeTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSearch, activeStatusFilter, activeTab]);
+  }, [activePage, activeLimit, activeSort.key, activeSort.direction, activeSearch, activeStatusFilter, activeTab]);
 
   useEffect(() => {
     fetchDeals();
+    fetchDocSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchDocSettings = useCallback(async () => {
+    try {
+      const [settingsRes, brandingRes] = await Promise.all([
+        API.get("/document-settings"),
+        API.get("/branding").catch(() => null),
+      ]);
+      const res = settingsRes;
+      setDocumentTypeSettings(res.data?.documentTypeSettings || {});
+      if (res.data && res.data.defaultDueDateDays != null) {
+        setDefaultDueDateDays(res.data.defaultDueDateDays);
+      }
+      setDefaultNotesByType(res.data?.defaultNotesByType || {});
+      setDefaultTermsByType(res.data?.defaultTermsByType || {});
+      setDefaultNotesFlat(res.data?.defaultNotes || "");
+      setDefaultTermsFlat(res.data?.defaultTerms || "");
+      setWaTemplatesList(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
+      setSmsTemplatesList(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
+      setEmailTemplatesList(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
+      if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
+      if (brandingRes?.data?.signatureUrl) setBrandSignatureUrl(brandingRes.data.signatureUrl);
+    } catch (err) {
+      console.error("Failed to load doc settings in accounting", err);
+    }
   }, []);
 
   const fetchDeals = useCallback(async () => {
@@ -2780,6 +1367,7 @@ const Accounting = () => {
   }, []);
 
   const fetchData = async (type) => {
+    const requestSequence = ++fetchSequenceRef.current[type];
     setLoading((prev) => ({ ...prev, [type]: true }));
     const params = new URLSearchParams({
       page: paginations[type].currentPage.toString(),
@@ -2798,6 +1386,11 @@ const Accounting = () => {
       const res = await API.get(
         `/${apiPathFor(type)}/pagination?${params.toString()}`
       );
+      if (requestSequence !== fetchSequenceRef.current[type]) return;
+      const serverPagination = res.data.pagination;
+      const safeCurrentPage = serverPagination.totalPages > 0
+        ? Math.min(serverPagination.currentPage, serverPagination.totalPages)
+        : 1;
       setDocuments((prev) => ({
         ...prev,
         [type]: res.data[dataKeyFor(type)] || [],
@@ -2806,21 +1399,24 @@ const Accounting = () => {
         ...prev,
         [type]: {
           ...prev[type],
-          currentPage: res.data.pagination.currentPage,
-          totalPages: res.data.pagination.totalPages,
-          totalCount: res.data.pagination.totalCount,
-          hasNextPage: res.data.pagination.hasNextPage,
-          hasPrevPage: res.data.pagination.hasPrevPage,
+          currentPage: safeCurrentPage,
+          totalPages: serverPagination.totalPages,
+          totalCount: serverPagination.totalCount,
+          hasNextPage: safeCurrentPage < serverPagination.totalPages,
+          hasPrevPage: safeCurrentPage > 1,
         },
       }));
     } catch (err) {
+      if (requestSequence !== fetchSequenceRef.current[type]) return;
       toast.error(
         err.response?.data?.error || `Failed to load ${pluralNameFor(type)}`
       );
       console.error(`Fetch ${type} documents error:`, err.response?.data);
     } finally {
-      setLoading((prev) => ({ ...prev, [type]: false }));
-      hasLoadedOnceRef.current[type] = true;
+      if (requestSequence === fetchSequenceRef.current[type]) {
+        setLoading((prev) => ({ ...prev, [type]: false }));
+        hasLoadedOnceRef.current[type] = true;
+      }
     }
   };
 
@@ -2846,6 +1442,10 @@ const Accounting = () => {
   };
 
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.length === currentDocuments.length && currentDocuments.length > 0
         ? []
@@ -2854,9 +1454,42 @@ const Accounting = () => {
   };
 
   const handleSelectOne = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
+
+  const handleBulkSignatureUpdate = async (signatureData, isRemove = false) => {
+    if (selectedIds.length === 0) return;
+    const type = activeTab;
+    try {
+      setBulkSignatureLoading(true);
+      setShowBulkSignatureModal(false);
+      setBulkShowMoreMenu(false);
+      
+      const payload = {
+        ids: selectedIds,
+        signature: signatureData || "",
+        signatureType: signatureData ? "image" : "text"
+      };
+
+      await API.post(`/${apiPathFor(type)}/bulk-signature`, payload);
+      
+      toast.success(
+        `${selectedIds.length} ${docNameFor(type)}${selectedIds.length !== 1 ? "s" : ""} signature ${isRemove ? 'removed' : 'updated'} successfully`
+      );
+      
+      setSelectedIds([]);
+      await fetchData(type);
+    } catch (err) {
+      toast.error(err.response?.data?.error || `Failed to ${isRemove ? 'remove' : 'update'} signatures`);
+    } finally {
+      setBulkSignatureLoading(false);
+    }
   };
 
   // Bulk delete every selected document on the active tab. There's no
@@ -2955,6 +1588,161 @@ const Accounting = () => {
     }
   };
 
+  // Fetches every selected document's PDF and merges them into one combined
+  // PDF via pdf-lib, so bulk download/print produce a single file instead of
+  // N separate ones. Returns the merged bytes, or null (after toasting) if
+  // nothing could be included.
+  const mergeSelectedDocumentsPdf = async () => {
+    const type = activeTab;
+    const merged = await PDFDocument.create();
+    let failedCount = 0;
+    for (const id of selectedIds) {
+      try {
+        const response = await API.get(`/${apiPathFor(type)}/download/${id}`, {
+          responseType: "arraybuffer",
+        });
+        const src = await PDFDocument.load(response.data);
+        const copiedPages = await merged.copyPages(src, src.getPageIndices());
+        copiedPages.forEach((page) => merged.addPage(page));
+      } catch (err) {
+        failedCount += 1;
+        console.error(`Failed to fetch/merge PDF for ${id}`, err);
+      }
+    }
+    if (failedCount > 0) {
+      toast.error(
+        `${failedCount} of ${selectedIds.length} document${selectedIds.length !== 1 ? "s" : ""} could not be included.`
+      );
+    }
+    if (merged.getPageCount() === 0) {
+      toast.error("Couldn't generate a combined PDF.");
+      return null;
+    }
+    return merged.save();
+  };
+
+  const handleBulkDownloadPdf = async () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    setBulkDownloading(true);
+    // A single loading toast, updated in place (by id) rather than a
+    // fire-and-forget one that auto-dismisses on its own timer — it should
+    // stay on screen for the whole merge and only resolve once the file has
+    // actually been handed to the browser to download.
+    // AppToaster sets a global 5s duration for every toast type, including
+    // "loading" ones (which react-hot-toast otherwise never auto-dismisses)
+    // — without this override the loading toast was vanishing 5s in, mid-
+    // merge, regardless of how long the actual work took.
+    const toastId = toast.loading(`Merging ${count} document${count !== 1 ? "s" : ""} into one PDF...`, { duration: Infinity });
+    try {
+      const bytes = await mergeSelectedDocumentsPdf();
+      if (!bytes) {
+        toast.dismiss(toastId);
+        return;
+      }
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${docNameFor(activeTab)}s-merged-${count}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${count} document${count !== 1 ? "s" : ""} as one PDF`, { id: toastId });
+    } catch (err) {
+      console.error("Bulk download error", err);
+      toast.error("Failed to download the merged PDF.", { id: toastId });
+    } finally {
+      setBulkDownloading(false);
+    }
+  };
+
+  // Merges the selection into one PDF, loads it into a hidden iframe, and
+  // triggers the browser's native print dialog on that iframe — so printing
+  // multiple documents produces one combined print job instead of N
+  // separate ones (or N popup windows).
+  const handleBulkPrint = async () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    setBulkPrinting(true);
+    // Same persistent, id-updated toast as bulk download — stays visible
+    // through the merge and only resolves once the print dialog has
+    // actually been opened (or failed to).
+    const toastId = toast.loading(`Merging ${count} document${count !== 1 ? "s" : ""} for printing...`, { duration: Infinity });
+    try {
+      const bytes = await mergeSelectedDocumentsPdf();
+      if (!bytes) {
+        toast.dismiss(toastId);
+        return;
+      }
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          toast.success(`Ready to print ${count} document${count !== 1 ? "s" : ""}`, { id: toastId });
+        } catch (err) {
+          console.error("Bulk print error", err);
+          toast.error("Couldn't open the print dialog — try downloading instead.", { id: toastId });
+        } finally {
+          setBulkPrinting(false);
+        }
+        // Give the print dialog time to open before cleaning up — removing
+        // the iframe too early can cancel the print job in some browsers.
+        setTimeout(() => {
+          iframe.remove();
+          window.URL.revokeObjectURL(url);
+        }, 60000);
+      };
+      iframe.src = url;
+      document.body.appendChild(iframe);
+    } catch (err) {
+      console.error("Bulk print error", err);
+      toast.error("Failed to prepare the merged PDF for printing.", { id: toastId });
+      setBulkPrinting(false);
+    }
+  };
+
+
+
+  // Bulk conversion is restricted to the same one-way directions as the
+  // single-document Convert menu (see CONVERSION_TARGETS_BY_TYPE) — the
+  // endpoint map only has entries for those, so there's no path to a reverse
+  // or arbitrary conversion here.
+  const handleBulkConvert = async (targetType) => {
+    if (selectedIds.length === 0) return;
+    const endpoint = BULK_CONVERT_ENDPOINT[activeTab]?.[targetType];
+    if (!endpoint) return;
+
+    setBulkConvertMenuOpen(false);
+    setBulkConverting(true);
+    try {
+      const res = await API.post(endpoint, { ids: selectedIds });
+      const successCount = res.data?.successfulIds?.length || 0;
+      const failCount = res.data?.failedIds?.length || 0;
+      if (successCount > 0) {
+        toast.success(`${successCount} ${docNameFor(activeTab)}${successCount !== 1 ? "s" : ""} converted to ${docNameFor(targetType)}`);
+      }
+      if (failCount > 0) {
+        toast.error(`${failCount} ${docNameFor(activeTab)}${failCount !== 1 ? "s" : ""} could not be converted`);
+      }
+      setSelectedIds([]);
+      fetchData(activeTab);
+      fetchData(targetType);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Bulk conversion failed");
+    } finally {
+      setBulkConverting(false);
+    }
+  };
+
   const checkBrandingBeforeInvoice = async () => {
     try {
       const response = await API.get("/branding/invoice-check");
@@ -2970,34 +1758,15 @@ const Accounting = () => {
     }
   };
 
+  // Repointed to the same two-pane CreateInvoicePanel the document number/
+  // title click and the "Add [Document]" button use, so the pencil icon no
+  // longer opens the legacy per-type *Form.jsx components. CreateInvoicePanel
+  // does its own item/date normalization from the raw doc, same as the
+  // number-click handler below.
   const handleEdit = (doc, type) => {
-    try {
-      setEditing({
-        ...doc,
-        items: doc.items.map((item) => ({
-          _id: item.itemId,
-          name: item.name,
-          description: item.description || "",
-          rate: item.rate,
-          quantity: item.quantity,
-          hsn: item.hsn || "",
-          isVariant: item.isVariant || false,
-          parentItemId: item.parentItemId || null,
-          discountType: item.discountType || "amount",
-          discount: item.discount || 0,
-        })),
-        date: doc.date ? new Date(doc.date).toISOString().slice(0, 10) : "",
-        dueDate: doc.dueDate
-          ? new Date(doc.dueDate).toISOString().slice(0, 10)
-          : "",
-        discount: doc.discount || { type: "fixed", value: 0 },
-      });
-      setEditingType(type);
-      setShowForm(true);
-    } catch (err) {
-      toast.error("Failed to prepare document for editing");
-      console.error("Edit error:", err);
-    }
+    if (activeTab !== type) setActiveTab(type);
+    setEditPanelDoc(doc);
+    setShowCreatePanel(true);
   };
 
   const handleDelete = (id, type) => {
@@ -3025,6 +1794,25 @@ const Accounting = () => {
     }
   };
 
+  // Clones an existing document into a brand-new Draft document with its own
+  // number via the backend's duplicate endpoint. Distinct from "Convert":
+  // duplicate stays on the same document type and never touches the source.
+  const handleDuplicate = async (id, type) => {
+    try {
+      setLoading((prev) => ({ ...prev, [type]: true }));
+      await API.post(`/${apiPathFor(type)}/${id}/duplicate`);
+      await fetchData(type);
+      toast.success(`${docNameFor(type)} duplicated successfully`);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error || `Failed to duplicate ${type} document`
+      );
+      console.error(`Duplicate ${type} document error:`, err);
+    } finally {
+      setLoading((prev) => ({ ...prev, [type]: false }));
+    }
+  };
+
   const handleConvert = (id, sourceType, targetType) => {
     setConvertDocId(id);
     setConvertDocType(sourceType);
@@ -3033,41 +1821,57 @@ const Accounting = () => {
   };
 
   const confirmConvert = async () => {
-    const sourcePath = `converter/${apiPathFor(convertDocType)}/convert-to`;
-    const targetPath =
-      convertTargetType === "tax"
-        ? "tax"
-        : convertTargetType === "performa"
-          ? "proforma"
-          : convertTargetType === "quotation"
-            ? "quotation"
-            : "delivery-challan";
-    try {
-      setLoading((prev) => ({ ...prev, [convertDocType]: true }));
-      await API.post(`/${sourcePath}-${targetPath}/${convertDocId}`);
-      await Promise.all([
-        fetchData(convertDocType),
-        fetchData(convertTargetType),
-      ]);
-      toast.success(`Converted to ${docNameFor(convertTargetType)} successfully`);
-      setShowViewer(false);
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error ||
-        `Failed to convert ${convertDocType} document`
-      );
-      console.error(`Convert ${convertDocType} document error:`, err);
-    } finally {
-      setLoading((prev) => ({ ...prev, [convertDocType]: false }));
-      setShowConvertModal(false);
-      setConvertDocId(null);
-      setConvertDocType(null);
-      setConvertTargetType(null);
+    const sourceDoc = documents[convertDocType].find((d) => d._id === convertDocId);
+    if (!sourceDoc) {
+      toast.error("Source document not found. Please refresh.");
+      return;
     }
+
+    setShowConvertModal(false);
+    setOpenConvertMenu(null);
+
+    // Open the target's create form in whichever view (split vs full-width)
+    // the source type was last shown in, so converting a document doesn't
+    // unexpectedly switch the user to a different layout.
+    const sourceIsFullWidth = {
+      tax: invoiceFullWidth,
+      quotation: quotationFullWidth,
+      performa: performaFullWidth,
+      deliveryChallan: challanFullWidth,
+    }[convertDocType];
+    const setTargetFullWidth = {
+      tax: setInvoiceFullWidth,
+      quotation: setQuotationFullWidth,
+      performa: setPerformaFullWidth,
+      deliveryChallan: setChallanFullWidth,
+    }[convertTargetType];
+    setTargetFullWidth?.(!!sourceIsFullWidth);
+
+    setConversionData(sourceDoc);
+    setActiveTab(convertTargetType);
+    setShowCreatePanel(true);
+    setShowViewer(false);
+
+    setConvertDocId(null);
+    setConvertDocType(null);
+    setConvertTargetType(null);
   };
 
   const handleDownload = async (id, type) => {
     const path = apiPathFor(type);
+
+    // Resolve filename silently from saved org settings
+    const tabDocs = documents[type] ?? [];
+    const doc = tabDocs.find((d) => d._id === id);
+    let filename = `${path.split('-').join('')}-${id}`;
+    try {
+      const settings = await getDocumentSettings();
+      const formats = settings?.pdfFilenameFormats || DEFAULT_FORMATS;
+      const tokens = formats[type] || DEFAULT_FORMATS[type];
+      const orgName = settings?.companyName || "";
+      filename = buildFilename(tokens, extractDocData(doc || {}, type, orgName));
+    } catch (_) { /* fall back to default */ }
+
     try {
       setLoading((prev) => ({ ...prev, [type]: true }));
       const response = await API.get(`/${path}/download/${id}`, {
@@ -3077,7 +1881,7 @@ const Accounting = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${path.split("-").join("")}-${id}.pdf`);
+      link.setAttribute("download", `${filename}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -3098,31 +1902,25 @@ const Accounting = () => {
     setShowViewer(true);
   };
 
-  const handleSend = async (id, type) => {
-    const path = apiPathFor(type);
-    try {
-      const response = await API.get(`/${path}/download/${id}`, {
-        responseType: "blob",
-      });
-      const file = new File(
-        [response.data],
-        `${path.split("-").join("")}-${id}.pdf`,
-        { type: "application/pdf" }
-      );
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Share ${docNameFor(type)}`,
-          text: "Here is the document PDF",
-        });
-        toast.success("Shared successfully");
-      } else {
-        toast.error("Sharing not supported in this browser");
-      }
-    } catch (error) {
-      toast.error(`Failed to prepare ${type} document for sharing`);
-      console.error(`Send ${type} document error:`, error);
-    }
+  // Opens the same "Send Email" compose drawer the row-menu's template flow
+  // uses (prefilled To/Subject/Body), rather than the OS-level Web Share
+  // sheet — that's a different, file-sharing feature (WhatsApp/Discord/
+  // Nearby Sharing/etc.) that doesn't belong behind an "Email" button.
+  const handleSend = (doc, type) => {
+    if (!doc) return;
+    const link = `${window.location.origin}/view/${apiPathFor(type)}/${doc._id}`;
+    const num = doc[numberKeyFor(type)];
+    const customerName = doc.deal?.contactPerson || doc.deal?.title || "Customer";
+    setEmailComposeTo(doc.deal?.contact?.email || doc.deal?.company?.email || doc.deal?.email || "");
+    setEmailComposeCc("");
+    setEmailComposeBcc("");
+    setEmailComposeSubject(`${docNameFor(type)} ${num || ""}`);
+    setEmailComposeBody(
+      textToEmailHtml(
+        `Hi ${customerName},\n\nPlease find attached your ${docNameFor(type)}${num ? ` #${num}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`
+      )
+    );
+    setEmailCompose({ doc, type });
   };
 
   const handleStatusChange = async (id, newStatus, type) => {
@@ -3150,8 +1948,8 @@ const Accounting = () => {
   // it for 300ms so a fast fetch doesn't flash the placeholders.
   const showLoadingSkeleton = useMinDelay(
     currentLoading &&
-      currentDocuments.length === 0 &&
-      !hasLoadedOnceRef.current[activeTab],
+    currentDocuments.length === 0 &&
+    !hasLoadedOnceRef.current[activeTab],
     300
   );
   useTopLoadingSignal(currentLoading);
@@ -3176,6 +1974,220 @@ const Accounting = () => {
     setEditingPage(false);
     setPageInput("");
   }, [activeTab]);
+
+  // Every row action lives behind one "⋮" trigger, instead of a dedicated
+  // "Actions" table column (there is no such column any more — the trigger
+  // is appended into whichever data column ends up rendering last, so it
+  // keeps following the last column through reordering/pinning). Convert is
+  // a nested submenu (rowMenuConvertOpen) inside the same panel rather than
+  // its own separate flyout. Positioning/closing mirrors Companies.jsx's
+  // row-actions menu exactly (also used by Deals): portal to document.body
+  // so it's never clipped by an ancestor's stacking context, a full-screen
+  // invisible overlay to close on outside click (no fragile
+  // document-listener/stopPropagation dance), and top/left clamped on both
+  // ends so it can never render off-screen or behind the sticky header.
+  const renderRowActions = (doc) => {
+    const conversionTargets = getConversionTargets(activeTab);
+    const menuOpen = openRowMenu === doc._id;
+    const closeRowMenu = () => {
+      setOpenRowMenu(null);
+      setRowMenuPos(null);
+      setRowMenuConvertOpen(false);
+    };
+    return (
+      <div className="relative flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          title="More actions"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (menuOpen) {
+              closeRowMenu();
+              return;
+            }
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 224;
+            const MARGIN = 8;
+            // Conservative estimate for the tallest state (main menu
+            // with every optional item shown) — clamped below so it can
+            // never render off-screen regardless of the real height.
+            const MENU_H = 300;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+
+            // Only one row flyout at a time, and always starts fresh on
+            // the main menu even if a different row's Convert submenu
+            // was left open.
+            setOpenConvertMenu(null);
+            setConvertMenuPos(null);
+            setShareMenu(null);
+            setShareMenuChannel(null);
+            setRowMenuConvertOpen(false);
+            setRowMenuPos({ top: calcTop, left: calcLeft });
+            setOpenRowMenu(doc._id);
+          }}
+          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {menuOpen && rowMenuPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
+            <div
+              key={doc._id}
+              style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
+              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
+            >
+              {!rowMenuConvertOpen ? (
+                <>
+                  {activeTab === "tax" && doc.status !== "Paid" && (
+                    <button
+                      onClick={() => {
+                        closeRowMenu();
+                        setSelectedInvoiceForPayment(doc);
+                        setPaymentModalOpen(true);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <IndianRupee className="w-4 h-4 text-emerald-600" />
+                      Record Payment
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleView(doc, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4 text-blue-600" />
+                    View
+                  </button>
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleEdit(doc, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Pencil className="w-4 h-4 text-blue-600" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleDownload(doc._id, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4 text-green-600" />
+                    Download
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Anchor the share flyout off this menu's own
+                      // position rather than the (now-closed) trigger
+                      // button's rect.
+                      const DROPDOWN_W = 208;
+                      const anchorRight = rowMenuPos.left + 224;
+                      closeRowMenu();
+                      setShareMenu({
+                        doc,
+                        type: activeTab,
+                        x: Math.max(4, anchorRight - DROPDOWN_W),
+                        y: rowMenuPos.top,
+                      });
+                      setShareMenuChannel(null);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4 text-blue-600" />
+                    Share via WhatsApp/Email/SMS
+                  </button>
+                  {conversionTargets.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRowMenuConvertOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-orange-600" />
+                        Convert
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleDuplicate(doc._id, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Copy className="w-4 h-4 text-indigo-600" />
+                    Duplicate
+                  </button>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={() => {
+                      closeRowMenu();
+                      handleDelete(doc._id, activeTab);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRowMenuConvertOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                  {conversionTargets.map((targetType) => (
+                    <button
+                      key={targetType}
+                      onClick={() => {
+                        handleConvert(doc._id, activeTab, targetType);
+                        closeRowMenu();
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <Repeat className="w-4 h-4 text-orange-600" />
+                      Convert to{" "}
+                      {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
+      </div>
+    );
+  };
 
   const renderCell = (colId, doc) => {
     const searchQuery = searchTerms[activeTab];
@@ -3238,12 +2250,23 @@ const Accounting = () => {
           </span>
         );
 
-      case "amount":
+      case "amount": {
+        const paidSoFar = (doc.payments || []).reduce((sum, p) => sum + p.amount, 0);
+        const dueAmount = doc.amount - paidSoFar;
+        const showDue = activeTab === "tax" && paidSoFar > 0 && dueAmount > 0.01;
         return (
-          <span className="text-sm font-semibold text-gray-900">
-            ₹<HighlightText text={doc.amount?.toFixed(2) || "0.00"} query={searchQuery} />
-          </span>
+          <div>
+            <span className="text-sm font-semibold text-gray-900">
+              ₹<HighlightText text={formatNumberFixed(doc.amount)} query={searchQuery} />
+            </span>
+            {showDue && (
+              <div className="text-[11px] font-medium text-orange-600 mt-0.5">
+                ₹{formatNumberFixed(dueAmount)} due
+              </div>
+            )}
+          </div>
         );
+      }
 
       case "status":
         return (
@@ -3266,109 +2289,8 @@ const Accounting = () => {
             {searchQuery && searchQuery.trim() && doc.status
               ?.toLowerCase()
               .includes(searchQuery.trim().toLowerCase()) && (
-              <span className="absolute inset-0 rounded-lg ring-2 ring-yellow-300 pointer-events-none" />
-            )}
-          </div>
-        );
-
-      case "actions":
-        return (
-          <div className="flex items-center gap-1">
-            <button
-              title="View"
-              onClick={() => handleView(doc, activeTab)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              title="Edit"
-              onClick={() => handleEdit(doc, activeTab)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
-            <button
-              title="Download"
-              onClick={() => handleDownload(doc._id, activeTab)}
-              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            <button
-              title="Send"
-              onClick={() => handleSend(doc._id, activeTab)}
-              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-            <div className="relative">
-              <button
-                title="Convert"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (openConvertMenu === doc._id) {
-                    setOpenConvertMenu(null);
-                    setConvertMenuPos(null);
-                    return;
-                  }
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const MENU_WIDTH = 240;
-                  const MENU_HEIGHT = 160;
-                  // Open leftward so the menu never runs off the right edge,
-                  // and flip above the button when it would overflow the bottom.
-                  const left = Math.max(8, rect.right - MENU_WIDTH);
-                  const openUp =
-                    rect.bottom + MENU_HEIGHT > window.innerHeight;
-                  const top = openUp
-                    ? rect.top - MENU_HEIGHT - 4
-                    : rect.bottom + 4;
-                  setConvertMenuPos({ top, left });
-                  setOpenConvertMenu(doc._id);
-                }}
-                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-              >
-                <Repeat className="w-4 h-4" />
-              </button>
-              {openConvertMenu === doc._id && convertMenuPos && (
-                <div
-                  style={{
-                    position: "fixed",
-                    top: convertMenuPos.top,
-                    left: convertMenuPos.left,
-                  }}
-                  className="w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-[100]"
-                >
-                  <div className="py-1">
-                    {["tax", "performa", "quotation", "deliveryChallan"]
-                      .filter((t) => t !== activeTab)
-                      .map((targetType) => (
-                        <button
-                          key={targetType}
-                          onClick={() => {
-                            handleConvert(doc._id, activeTab, targetType);
-                            setOpenConvertMenu(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                        >
-                          <Repeat className="w-4 h-4 text-orange-600" />
-                          Convert to{" "}
-                          {targetType === "tax"
-                            ? "Tax Invoice"
-                            : docNameFor(targetType)}
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                <span className="absolute inset-0 rounded-lg ring-2 ring-yellow-300 pointer-events-none" />
               )}
-            </div>
-            <button
-              title="Delete"
-              onClick={() => handleDelete(doc._id, activeTab)}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
           </div>
         );
 
@@ -3381,12 +2303,28 @@ const Accounting = () => {
     <>
       <AppToaster />
 
+      {/* Slim indeterminate bar pinned to the very top of the viewport while
+          a bulk merge (download or print) is running — the toast alone can
+          get lost in a long list, this is the "is something happening"
+          signal that's visible no matter where on the page you're looking. */}
+      {(bulkDownloading || bulkPrinting) && (
+        <div className="fixed top-0 left-0 right-0 h-1 z-[100025] bg-blue-100 overflow-hidden">
+          <div className="h-full w-1/3 bg-blue-600 animate-[bulkProgress_1.1s_ease-in-out_infinite]" />
+          <style>{`
+            @keyframes bulkProgress {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(300%); }
+            }
+          `}</style>
+        </div>
+      )}
+
       <div className="bg-[#F9FAFB] min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 -mt-6">
         {/* Bulk selection strip — overlays the toolbar when rows are selected,
             mirroring the Companies page layout and slide animation. */}
         {showBulkStrip && (
           <div
-            className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+            className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
@@ -3397,7 +2335,7 @@ const Accounting = () => {
     between buttons, rounding only on the two outer corners, and each
     border pulled left by 1px onto its neighbour so touching borders
     don't double up. Only the icons carry each action's colour. */}
-<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
                 <button
                   onClick={handleExportSelected}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
@@ -3415,6 +2353,125 @@ const Accounting = () => {
                   <Pencil className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
+                <button
+                  onClick={handleBulkDownloadPdf}
+                  disabled={bulkDownloading}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+                >
+                  {bulkDownloading ? (
+                    <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 text-indigo-600" />
+                  )}
+                  Download Merged PDF
+                </button>
+                {activeTab === "tax" && (
+                  <button
+                    onClick={() => setShowBulkEmailGroupedModal(true)}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  >
+                    <Mail className="w-4 h-4 text-blue-600" />
+                    Send Email (Grouped)
+                  </button>
+                )}
+                {getConversionTargets(activeTab).length > 0 && (
+                  <div className="relative flex items-center">
+                    <button
+                      onClick={() => setBulkConvertMenuOpen((p) => !p)}
+                      disabled={bulkConverting}
+                      className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+                    >
+                      {bulkConverting ? (
+                        <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Repeat className="w-4 h-4 text-orange-600" />
+                      )}
+                      Convert
+                    </button>
+                    {bulkConvertMenuOpen && (
+                      <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
+                        {getConversionTargets(activeTab).map((targetType) => (
+                          <button
+                            key={targetType}
+                            onClick={() => handleBulkConvert(targetType)}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                          >
+                            <Repeat className="w-4 h-4 text-orange-600" />
+                            Convert to{" "}
+                            {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="relative flex items-center">
+                  <button
+                    onClick={() => setBulkShowMoreMenu(!bulkShowMoreMenu)}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  >
+                    <MoreVertical className="w-4 h-4 text-gray-600" />
+                    More
+                  </button>
+                  {bulkShowMoreMenu && (
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
+                      {activeTab === "tax" && (
+                        <button
+                          onClick={() => { setBulkShowMoreMenu(false); toast.error("Record Payment coming soon"); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                        >
+                          <IndianRupee className="w-4 h-4 text-emerald-600" />
+                          Record Payment
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); handleBulkPrint(); }}
+                        disabled={bulkPrinting}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
+                      >
+                        <Printer className="w-4 h-4 text-gray-600" />
+                        Print
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); setShowBulkSignatureModal(true); }}
+                        disabled={bulkSignatureLoading}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
+                      >
+                        <PenTool className="w-4 h-4 text-blue-600" />
+                        Change Signature
+                      </button>
+                      <button
+                        onClick={() => { 
+                          if(window.confirm(`Are you sure you want to remove the signature from ${selectedIds.length} documents?`)) {
+                            handleBulkSignatureUpdate("", true);
+                          } else {
+                            setBulkShowMoreMenu(false);
+                          }
+                        }}
+                        disabled={bulkSignatureLoading}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
+                      >
+                        <X className="w-4 h-4 text-red-600" />
+                        Remove Signature
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); toast.info("Digital signing feature coming soon. You will be able to send documents for e-signature here."); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
+                      >
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        Digital Sign
+                      </button>
+                      <button
+                        onClick={() => { setBulkShowMoreMenu(false); handleBulkDownloadPdf(); }}
+                        disabled={bulkDownloading}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors disabled:opacity-50"
+                      >
+                        <Layers className="w-4 h-4 text-indigo-600" />
+                        Merge
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={bulkDeleting}
@@ -3459,13 +2516,13 @@ const Accounting = () => {
         )}
         {/* 2nd Header - Tab Bar & Actions Row */}
         <div
-          className="fixed right-0 h-[72px] px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
               mounted and clickable while the table loads. */}
-          <div className="relative flex-shrink-0 inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
+          <div className="relative flex-shrink-0 inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}
@@ -3475,9 +2532,9 @@ const Accounting = () => {
                 key={tab.key}
                 ref={(el) => (tabRefs.current[tab.key] = el)}
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.key
-                    ? "text-[#0085FF]"
-                    : "text-gray-700 hover:text-gray-900"
+                className={`relative z-10 flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.key
+                  ? "text-[#0085FF]"
+                  : "text-gray-700 hover:text-gray-900"
                   }`}
               >
                 {tab.label}
@@ -3488,20 +2545,20 @@ const Accounting = () => {
           {/* Right Side: Search, Filter, More, Add */}
           {showLoadingSkeleton ? (
             <div className="flex flex-row items-center gap-2 flex-shrink-0">
-              <Skeleton width={44} height={44} shape="circle" />
-              <Skeleton width={44} height={44} shape="circle" />
-              <Skeleton width={44} height={44} shape="circle" />
-              <Skeleton width={146} height={44} shape="circle" className="ml-1" />
+              <Skeleton width={40} height={40} shape="circle" />
+              <Skeleton width={40} height={40} shape="circle" />
+              <Skeleton width={40} height={40} shape="circle" />
+              <Skeleton width={140} height={40} shape="circle" className="ml-1" />
             </div>
           ) : (
             <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
               {/* Search field — expands in place from the search icon,
                   matching the Companies strip behaviour. */}
               <div
-                className={`relative h-11 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-11"} max-w-full flex-shrink-0`}
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
               >
                 <SearchIcon
-                  className="absolute left-3.5 text-[#1F2937] w-[18px] h-[18px] cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+                  className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
                   onClick={() => {
                     setIsSearchExpanded(true);
                     searchInputRef.current?.focus();
@@ -3550,19 +2607,17 @@ const Accounting = () => {
                     e.stopPropagation();
                     setShowFilterMenu((v) => !v);
                   }}
-                  className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${filterStatuses[activeTab]
-                      ? "border-[#0085FF] text-[#0085FF]"
-                      : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
+                  className={`flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${filterStatuses[activeTab]
+                    ? "border-[#0085FF] text-[#0085FF]"
+                    : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                     }`}
                 >
                   <SlidersHorizontal
-                    size={18}
-                    strokeWidth={2}
-                    className={
-                      filterStatuses[activeTab]
+                    strokeWidth={2.5}
+                    className={`w-4 h-4 ${filterStatuses[activeTab]
                         ? "text-[#0085FF]"
-                        : "text-[#1F2937]"
-                    }
+                        : "text-gray-800"
+                      }`}
                   />
                 </button>
                 {showFilterMenu && (
@@ -3581,8 +2636,8 @@ const Accounting = () => {
                           setShowFilterMenu(false);
                         }}
                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${filterStatuses[activeTab] === status
-                            ? "text-[#0085FF] font-medium"
-                            : "text-gray-700"
+                          ? "text-[#0085FF] font-medium"
+                          : "text-gray-700"
                           }`}
                       >
                         {status || "All Statuses"}
@@ -3600,9 +2655,9 @@ const Accounting = () => {
                     e.stopPropagation();
                     setShowMoreMenu((v) => !v);
                   }}
-                  className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors bg-white"
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
                 >
-                  <MoreVertical size={18} strokeWidth={2} className="text-[#1F2937]" />
+                  <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
                 </button>
                 {showMoreMenu && (
                   <div
@@ -3622,6 +2677,7 @@ const Accounting = () => {
                   </div>
                 )}
               </div>
+
 
               {/* Add Button */}
               <button
@@ -3643,7 +2699,7 @@ const Accounting = () => {
                 style={{
                   width: activeTab === "tax" ? 146 : undefined,
                   minWidth: 146,
-                  height: 44,
+                  height: 40,
                   padding: 12,
                   gap: 6,
                   background: "#0085FF",
@@ -3664,7 +2720,7 @@ const Accounting = () => {
             region Companies.jsx uses: edge to edge under the tab bar, stopping
             above the pagination bar. */}
         <div
-          className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[126px] lg:top-[136px]"
+          className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[118px] lg:top-[128px]"
           style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
         >
           <table
@@ -3730,22 +2786,17 @@ const Accounting = () => {
                             <Pin
                               size={12}
                               className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1"
-                            style={{ transform: "rotate(45deg)" }}
+                              style={{ transform: "rotate(45deg)" }}
                             />
                           )}
                         </span>
-                        {/* Actions isn't a data column — nothing to sort, pin or
-                          hide, so it gets no options button at all instead of
-                          a menu whose items would all be no-ops. */}
-                        {col.id !== "actions" && (
-                          <button
-                            onClick={(e) => openColumnMenu(e, col.id)}
-                            title="Column options"
-                            className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => openColumnMenu(e, col.id)}
+                          title="Column options"
+                          className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <ResizeHandle colId={col.id} />
                       {boundaryShadowSideFor(col.id) && (
@@ -3800,21 +2851,31 @@ const Accounting = () => {
                     </div>
                   </td>
 
-                  {orderedColumns.map((col) => (
-                    <td
-                      key={col.id}
-                      style={{
-                        width: colWidths[col.id],
-                        ...stickyStyleFor(col.id),
-                      }}
-                      className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
-                    >
-                      {renderCell(col.id, doc)}
-                      {boundaryShadowSideFor(col.id) && (
-                        <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
-                      )}
-                    </td>
-                  ))}
+                  {orderedColumns.map((col, colIdx) => {
+                    const isLastCol = colIdx === orderedColumns.length - 1;
+                    return (
+                      <td
+                        key={col.id}
+                        style={{
+                          width: colWidths[col.id],
+                          ...stickyStyleFor(col.id),
+                        }}
+                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                      >
+                        {isLastCol ? (
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            {renderCell(col.id, doc)}
+                            {renderRowActions(doc)}
+                          </div>
+                        ) : (
+                          renderCell(col.id, doc)
+                        )}
+                        {boundaryShadowSideFor(col.id) && (
+                          <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -3854,8 +2915,8 @@ const Accounting = () => {
                           setColumnPin(col.id, "left");
                         }}
                         className={`${itemClass} ${side === "left"
-                            ? "bg-blue-50 text-blue-700"
-                            : "text-[#161618] hover:bg-gray-50"
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
                         {side === "left" ? (
@@ -3871,8 +2932,8 @@ const Accounting = () => {
                           setColumnPin(col.id, "right");
                         }}
                         className={`${itemClass} ${side === "right"
-                            ? "bg-blue-50 text-blue-700"
-                            : "text-[#161618] hover:bg-gray-50"
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
                         {side === "right" ? (
@@ -3944,8 +3005,8 @@ const Accounting = () => {
                           setHiddenCols((prev) => [...prev, col.id]);
                         }}
                         className={`${itemClass} ${col.required
-                            ? "text-gray-300 cursor-not-allowed"
-                            : "text-[#161618] hover:bg-gray-50"
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-[#161618] hover:bg-gray-50"
                           }`}
                       >
                         <EyeOff
@@ -4142,8 +3203,8 @@ const Accounting = () => {
                             isCurrent ? "Double-click to type a page number" : undefined
                           }
                           className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent
-                              ? "bg-[#0085FF] text-white"
-                              : "bg-white border border-[#E1E4EA] text-gray-700 hover:bg-gray-50"
+                            ? "bg-[#0085FF] text-white"
+                            : "bg-white border border-[#E1E4EA] text-gray-700 hover:bg-gray-50"
                             }`}
                         >
                           {item}
@@ -4166,20 +3227,35 @@ const Accounting = () => {
           </div>
         )}
 
-        {/* Two-pane create/edit screen — shared by all document types. */}
-        {showCreatePanel && (
-          <CreateInvoicePanel
-            key={`${activeTab}-${editPanelDoc?._id || "new"}`}
-            type={activeTab}
-            deals={deals}
-            initialDoc={editPanelDoc}
-            onFullView={(doc) => handleView(doc, activeTab)}
-            onClose={() => {
+        {/* Two-pane create/edit screen — each document type uses its own
+            thin wrapper around the shared CreateInvoicePanel. */}
+        {showCreatePanel && (() => {
+          const panelProps = {
+            key: `${activeTab}-${editPanelDoc?._id || "new"}`,
+            deals,
+            initialDoc: editPanelDoc,
+            conversionData,
+            defaultDueDateDays,
+            documentTypeSettings,
+            defaultNotesByType,
+            defaultTermsByType,
+            defaultNotesFlat,
+            defaultTermsFlat,
+            onFullView: (doc) => handleView(doc, activeTab),
+            onClose: () => {
               setShowCreatePanel(false);
               setEditPanelDoc(null);
-            }}
-            onCreated={() => fetchData(activeTab)}
-            onAddDeal={async () => {
+              setConversionData(null);
+              setFormHandoff(null);
+              // Deliberately NOT resetting invoiceFullWidth/quotationFullWidth/
+              // performaFullWidth/challanFullWidth here — each is a per-tab view
+              // preference that should persist across opens/closes (and across
+              // switching tabs) exactly like the other three already do, until
+              // the user explicitly collapses it back via that document type's
+              // own onExitFullWidth (the minimize button).
+            },
+            onCreated: () => fetchData(activeTab),
+            onAddDeal: async () => {
               if (companies.length === 0 || contacts.length === 0) {
                 try {
                   const [c, ct] = await Promise.all([
@@ -4193,9 +3269,139 @@ const Accounting = () => {
                 }
               }
               setShowQuickDealForm(true);
-            }}
-          />
-        )}
+            },
+          };
+          switch (activeTab) {
+            case "tax": return invoiceFullWidth ? (
+              <InvoiceFormFull
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setInvoiceFullWidth(false); }}
+                formOverride={formHandoff}
+                fetchData={() => fetchData("tax")}
+                editingInvoice={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
+                defaultDueDateDays={defaultDueDateDays}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
+                onPreview={(formData) => {
+                  if (!formData.style) {
+                    toast.error("Please select an invoice style to preview.");
+                    return;
+                  }
+                  setPreviewStyle(formData.style);
+                  setPreviewType("tax");
+                  setShowPreview(true);
+                }}
+              />
+            ) : (
+              <CreateInvoicePanel
+                {...panelProps}
+                type="tax"
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setInvoiceFullWidth(true); }}
+              />
+            );
+            // Split view by default; the panel's expand button flips
+            // quotationFullWidth, swapping in the full-width QuotationForm
+            // (its own fixed overlay), which flips back via onExitFullWidth.
+            case "quotation": return quotationFullWidth ? (
+              <QuotationForm
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setQuotationFullWidth(false); }}
+                formOverride={formHandoff}
+                fetchData={() => fetchData("quotation")}
+                editingQuotation={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
+                defaultDueDateDays={defaultDueDateDays}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
+                onPreview={(formData) => {
+                  if (!formData.style) {
+                    toast.error("Please select a Quotation style to preview.");
+                    return;
+                  }
+                  setPreviewStyle(formData.style);
+                  setPreviewType("quotation");
+                  setShowPreview(true);
+                }}
+              />
+            ) : (
+              <CreateQuotationPanel
+                {...panelProps}
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setQuotationFullWidth(true); }}
+              />
+            );
+            case "performa": return performaFullWidth ? (
+              <PerformaInvoiceFormFull
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setPerformaFullWidth(false); }}
+                formOverride={formHandoff}
+                fetchData={() => fetchData("performa")}
+                editingPerformaInvoice={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
+                defaultDueDateDays={defaultDueDateDays}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
+                onPreview={(formData) => {
+                  if (!formData.style) {
+                    toast.error("Please select a Pro Forma invoice style to preview.");
+                    return;
+                  }
+                  setPreviewStyle(formData.style);
+                  setPreviewType("performa");
+                  setShowPreview(true);
+                }}
+              />
+            ) : (
+              <CreatePerformaPanel
+                {...panelProps}
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setPerformaFullWidth(true); }}
+              />
+            );
+            case "deliveryChallan": return challanFullWidth ? (
+              <DeliveryChallanFormFull
+                deals={deals}
+                isOpen={true}
+                onClose={panelProps.onClose}
+                onExitFullWidth={(currentForm) => { setFormHandoff(currentForm); setChallanFullWidth(false); }}
+                formOverride={formHandoff}
+                fetchData={() => fetchData("deliveryChallan")}
+                editingDeliveryChallan={panelProps.initialDoc}
+                conversionData={panelProps.conversionData}
+                documentTypeSettings={documentTypeSettings}
+                defaultDueDateDays={defaultDueDateDays}
+                defaultNotesByType={defaultNotesByType}
+                defaultTermsByType={defaultTermsByType}
+                defaultNotesFlat={defaultNotesFlat}
+                defaultTermsFlat={defaultTermsFlat}
+              />
+            ) : (
+              <CreateChallanPanel
+                {...panelProps}
+                formOverride={formHandoff}
+                onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setChallanFullWidth(true); }}
+              />
+            );
+            default: return null;
+          }
+        })()}
         {showQuickDealForm && (
           <QuickDealForm
             companies={companies}
@@ -4210,48 +3416,124 @@ const Accounting = () => {
 
         {/* Forms — reused as-is from the Invoices module */}
         {showForm && editingType === "tax" && (
-          <InvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("tax")}
-            editingInvoice={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select an invoice style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("tax");
-              setShowPreview(true);
-            }}
-          />
+          invoiceFullWidth ? (
+            <InvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setInvoiceFullWidth(false);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              onExitFullWidth={() => setInvoiceFullWidth(false)}
+              documentTypeSettings={documentTypeSettings}
+              defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <InvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              defaultDueDateDays={defaultDueDateDays}
+              documentTypeSettings={documentTypeSettings}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
+              onRequestFullWidth={() => setInvoiceFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "performa" && (
-          <PerformaInvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("performa")}
-            editingPerformaInvoice={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select a Pro Forma invoice style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("performa");
-              setShowPreview(true);
-            }}
-          />
+          performaFullWidth ? (
+            <PerformaInvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setPerformaFullWidth(false);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              onExitFullWidth={() => setPerformaFullWidth(false)}
+              documentTypeSettings={documentTypeSettings}
+              defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select a Pro Forma invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <PerformaInvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              defaultDueDateDays={defaultDueDateDays}
+              documentTypeSettings={documentTypeSettings}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
+              onRequestFullWidth={() => setPerformaFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select a Pro Forma invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "quotation" && (
           <QuotationForm
@@ -4264,6 +3546,12 @@ const Accounting = () => {
             }}
             fetchData={() => fetchData("quotation")}
             editingQuotation={editing}
+            documentTypeSettings={documentTypeSettings}
+            defaultDueDateDays={defaultDueDateDays}
+            defaultNotesByType={defaultNotesByType}
+            defaultTermsByType={defaultTermsByType}
+            defaultNotesFlat={defaultNotesFlat}
+            defaultTermsFlat={defaultTermsFlat}
             onPreview={(formData) => {
               if (!formData.style) {
                 toast.error("Please select a Quotation style to preview.");
@@ -4276,26 +3564,46 @@ const Accounting = () => {
           />
         )}
         {showForm && editingType === "deliveryChallan" && (
-          <DeliveryChallanForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("deliveryChallan")}
-            editingDeliveryChallan={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select a Delivery Challan style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("deliveryChallan");
-              setShowPreview(true);
-            }}
-          />
+          challanFullWidth ? (
+            <DeliveryChallanFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setChallanFullWidth(false);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onExitFullWidth={() => setChallanFullWidth(false)}
+              documentTypeSettings={documentTypeSettings}
+              defaultDueDateDays={defaultDueDateDays}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
+            />
+          ) : (
+            <DeliveryChallanForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              defaultDueDateDays={defaultDueDateDays}
+              documentTypeSettings={documentTypeSettings}
+              defaultNotesByType={defaultNotesByType}
+              defaultTermsByType={defaultTermsByType}
+              defaultNotesFlat={defaultNotesFlat}
+              defaultTermsFlat={defaultTermsFlat}
+              onRequestFullWidth={() => setChallanFullWidth(true)}
+            />
+          )
         )}
 
         {showPreview && previewType === "performa" ? (
@@ -4347,7 +3655,7 @@ const Accounting = () => {
             handleEdit(viewerDoc, viewerType);
           }}
           onDownload={() => handleDownload(viewerId, viewerType)}
-          onSend={() => handleSend(viewerId, viewerType)}
+          onSend={() => handleSend(viewerDoc, viewerType)}
           onConvert={(targetType) =>
             handleConvert(viewerId, viewerType, targetType)
           }
@@ -4453,6 +3761,19 @@ const Accounting = () => {
           docType={convertDocType}
           targetType={convertTargetType}
         />
+        <RecordPaymentModal
+          isOpen={paymentModalOpen}
+          onClose={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoiceForPayment(null);
+          }}
+          invoice={selectedInvoiceForPayment}
+          onSuccess={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoiceForPayment(null);
+            fetchData("tax");
+          }}
+        />
         <QuickBrandingModal
           isOpen={showBrandingModal}
           onClose={() => {
@@ -4461,16 +3782,542 @@ const Accounting = () => {
           }}
           onComplete={() => {
             if (pendingInvoiceCreation) {
-              setEditing(null);
-              setEditingType(activeTab);
-              setShowForm(true);
+              // Same two-pane panel the "Add [Document]" button opens when
+              // branding is already complete — branding-gated tax invoices
+              // now land in the same place as every other create/edit flow.
+              setEditPanelDoc(null);
+              setShowCreatePanel(true);
               setPendingInvoiceCreation(false);
             }
           }}
         />
+
+        <BulkEmailGroupedModal
+          isOpen={showBulkEmailGroupedModal}
+          onClose={() => setShowBulkEmailGroupedModal(false)}
+          selectedIds={selectedIds}
+          documents={documents["tax"] || []}
+          onSuccess={() => {
+            setSelectedIds([]);
+            fetchData("tax");
+          }}
+        />
+        <BulkSignatureModal
+          isOpen={showBulkSignatureModal}
+          onClose={() => setShowBulkSignatureModal(false)}
+          onConfirm={(dataUrl) => handleBulkSignatureUpdate(dataUrl, false)}
+        />
+        {shareMenu && createPortal(
+          <>
+            <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+            <div
+              className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+              style={{ top: shareMenu.y, left: shareMenu.x }}
+            >
+              {(() => {
+                const link = `${window.location.origin}/view/${apiPathFor(shareMenu.type)}/${shareMenu.doc._id}`;
+                const num = shareMenu.doc[numberKeyFor(shareMenu.type)];
+                const d = shareMenu.doc;
+                const t = shareMenu.type;
+                const customerName = d.deal?.contactPerson || d.deal?.title || "Customer";
+                const amt = d.amount != null ? `₹${Number(d.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+                const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
+                const fillTpl = (tpl) => tpl
+                  .replace(/{customerName}/g, customerName)
+                  .replace(/{docType}/g, docNameFor(t))
+                  .replace(/{number}/g, num || "—")
+                  .replace(/{amount}/g, amt)
+                  .replace(/{link}/g, link)
+                  .replace(/{company}/g, shareCompanyName || "");
+
+                // Matches the fixed shape shown in Settings → Message Templates →
+                // WhatsApp preview: greeting/details/footer are fixed, only the
+                // two lines are user-editable.
+                const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your " + docNameFor(t) + " is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
+                const buildSmsMsg = (tpl) => tpl?.body
+                  ? fillTpl(tpl.body)
+                  : `Your ${docNameFor(t)}${num ? ` #${num}` : ""} is ready. View & Download: ${link}`;
+                const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `${docNameFor(t)} ${num || ""}`;
+                const buildEmailBody = (tpl) => tpl?.body
+                  ? fillTpl(tpl.body)
+                  : `Hi ${customerName},\n\nPlease find attached your ${docNameFor(t)}${num ? ` #${num}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`;
+
+                const channels = {
+                  whatsapp: {
+                    list: waTemplatesList,
+                    send: (tpl) => { window.open(`https://wa.me/?text=${encodeURIComponent(buildWaMsg(tpl))}`, "_blank"); closeMenu(); },
+                  },
+                  email: {
+                    list: emailTemplatesList,
+                    send: (tpl) => {
+                      setEmailComposeTo(d.deal?.contact?.email || d.deal?.company?.email || d.deal?.email || "");
+                      setEmailComposeSubject(buildEmailSubject(tpl));
+                      setEmailComposeBody(textToEmailHtml(buildEmailBody(tpl)));
+                      setEmailCompose({ doc: d, type: t });
+                      closeMenu();
+                    },
+                  },
+                  sms: {
+                    list: smsTemplatesList,
+                    send: (tpl) => {
+                      setSmsComposeTo(d.deal?.contact?.phone || d.deal?.company?.phone || d.deal?.phone || "");
+                      setSmsComposeBody(buildSmsMsg(tpl));
+                      setSmsCompose({ doc: d, type: t });
+                      closeMenu();
+                    },
+                  },
+                };
+
+                // 0 or 1 saved template → send straight away with it (or the
+                // built-in fallback). 2+ → let the user pick which one.
+                const openChannel = (channel) => {
+                  const { list, send } = channels[channel];
+                  if (list.length <= 1) send(list[0] || null);
+                  else setShareMenuChannel(channel);
+                };
+
+                if (shareMenuChannel) {
+                  const { list, send } = channels[shareMenuChannel];
+                  return (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                      >
+                        ← Back
+                      </button>
+                      {list.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          onClick={(e) => { e.stopPropagation(); send(tpl); }}
+                          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="truncate">{tpl.name}</span>
+                          {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                        </button>
+                      ))}
+                    </>
+                  );
+                }
+
+                const items = [
+                  { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                  { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
+                  { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
+                  { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+                ];
+                return items.map(({ label, icon, onClick }) => (
+                  <button
+                    key={label}
+                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                ));
+              })()}
+            </div>
+          </>,
+          document.body
+        )}
+        {emailCompose && (() => {
+          const dname = docNameFor(emailCompose.type);
+          const dnum = emailCompose.doc[numberKeyFor(emailCompose.type)];
+          const link = `${window.location.origin}/view/${apiPathFor(emailCompose.type)}/${emailCompose.doc._id}`;
+          const cname = emailCompose.doc.deal?.contactPerson || emailCompose.doc.deal?.title || "Customer";
+          const eAmt = emailCompose.doc.amount != null
+            ? `₹${Number(emailCompose.doc.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+            : "";
+          const fillEmailTpl = (tpl) => tpl
+            .replace(/{customerName}/g, cname)
+            .replace(/{docType}/g, dname)
+            .replace(/{number}/g, dnum || "—")
+            .replace(/{amount}/g, eAmt)
+            .replace(/{link}/g, link)
+            .replace(/{company}/g, shareCompanyName || "");
+          const applyTemplate = (key) => {
+            const saved = emailTemplatesList.find((tpl) => tpl.id === key);
+            let nextSubject;
+            let nextBody;
+            if (saved) {
+              nextSubject = fillEmailTpl(saved.subject || "");
+              nextBody = textToEmailHtml(fillEmailTpl(saved.body || ""));
+            } else if (key === "standard") {
+              nextSubject = `${dname} ${dnum || ""}`;
+              nextBody = textToEmailHtml(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
+            } else if (key === "reminder") {
+              nextSubject = `Reminder: ${dname} ${dnum || ""} pending`;
+              nextBody = textToEmailHtml(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+            } else if (key === "followup") {
+              nextSubject = `Following up on ${dname} ${dnum || ""}`;
+              nextBody = textToEmailHtml(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+            }
+            setEmailComposeSubject(nextSubject);
+            setEmailComposeBody(nextBody);
+            // The body editor is an uncontrolled contentEditable (React can't
+            // own its innerHTML without breaking cursor position while
+            // typing), so template application has to push the new HTML into
+            // the live DOM node directly, not just into state.
+            if (emailBodyEditorRef.current) {
+              emailBodyEditorRef.current.innerHTML = nextBody;
+            }
+            setEmailTemplateOpen(false);
+          };
+          const doSend = async () => {
+            if (!emailComposeTo || emailComposeSending) return;
+            setEmailComposeSending(true);
+            try {
+              await API.post(`/public/${apiPathFor(emailCompose.type)}/${emailCompose.doc._id}/email`, {
+                email: emailComposeTo,
+                cc: emailComposeCc,
+                bcc: emailComposeBcc,
+                subject: emailComposeSubject,
+                body: emailComposeBody,
+              });
+              toast.success("Email sent successfully");
+              setEmailCompose(null);
+              setEmailComposeTo("");
+              setEmailComposeCc("");
+              setEmailComposeBcc("");
+              setShowEmailCc(false);
+              setShowEmailBcc(false);
+              setEmailComposeSubject("");
+              setEmailComposeBody("");
+              setEmailPreviewMode(false);
+            } catch (err) {
+              toast.error(err.response?.data?.error || "Failed to send email");
+            } finally {
+              setEmailComposeSending(false);
+            }
+          };
+          // execCommand is deprecated but still the simplest way to drive a
+          // handful of basic rich-text commands (bold/italic/underline/lists)
+          // against a contentEditable div without pulling in an editor library.
+          const execCmd = (cmd, value = null) => {
+            emailBodyEditorRef.current?.focus();
+            document.execCommand(cmd, false, value);
+            setEmailComposeBody(emailBodyEditorRef.current?.innerHTML || "");
+          };
+          const insertLink = () => {
+            const url = window.prompt("Enter URL");
+            if (url) execCmd("createLink", url);
+          };
+          const toolbarButtons = [
+            { icon: <BoldIcon className="w-3.5 h-3.5" />, title: "Bold", onClick: () => execCmd("bold") },
+            { icon: <ItalicIcon className="w-3.5 h-3.5" />, title: "Italic", onClick: () => execCmd("italic") },
+            { icon: <UnderlineIcon className="w-3.5 h-3.5" />, title: "Underline", onClick: () => execCmd("underline") },
+            { icon: <StrikethroughIcon className="w-3.5 h-3.5" />, title: "Strikethrough", onClick: () => execCmd("strikeThrough") },
+            { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Numbered list", onClick: () => execCmd("insertOrderedList") },
+            { icon: <ListIcon className="w-3.5 h-3.5" />, title: "Bulleted list", onClick: () => execCmd("insertUnorderedList") },
+            { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertLink },
+          ];
+          return (
+            <>
+              <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
+              {/* Same inset, rounded quick-drawer chrome as CompanyForm/ItemForm/CallLogForm
+                  (dc-panel-card) — this panel just keeps its own wider, taller compose width
+                  instead of the standard dc-panel-w. */}
+              <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                    <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEmailPreviewMode((p) => !p)}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      {emailPreviewMode ? "Edit" : "Preview"}
+                    </button>
+                    <button
+                      disabled={!emailComposeTo || emailComposeSending}
+                      onClick={doSend}
+                      className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    >
+                      {emailComposeSending ? (
+                        <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                      ) : (
+                        <><Mail className="w-4 h-4" /> Send Email</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                  {/* From row — same label+value layout as To/Subject */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                    <div className="flex items-center w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
+                      <span className="flex items-center gap-1.5 text-sm text-gray-600 flex-1 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0">
+                          DC
+                        </span>
+                        <span className="min-w-0 truncate">
+                          {EMAIL_FROM_NAME && <strong className="mr-1">{EMAIL_FROM_NAME}</strong>}
+                          {EMAIL_FROM_ADDRESS}
+                        </span>
+                        <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                        {!showEmailCc && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEmailCc(true)}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          >
+                            Cc
+                          </button>
+                        )}
+                        {!showEmailBcc && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEmailBcc(true)}
+                            className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          >
+                            Bcc
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                    <input
+                      type="email"
+                      value={emailComposeTo}
+                      onChange={(e) => setEmailComposeTo(e.target.value)}
+                      placeholder="recipient@example.com"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  {showEmailCc && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-500">Cc</label>
+                        <button
+                          type="button"
+                          onClick={() => { setShowEmailCc(false); setEmailComposeCc(""); }}
+                          className="text-xs font-medium text-gray-400 hover:text-gray-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={emailComposeCc}
+                        onChange={(e) => setEmailComposeCc(e.target.value)}
+                        placeholder="comma-separated addresses"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+                  {showEmailBcc && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-500">Bcc</label>
+                        <button
+                          type="button"
+                          onClick={() => { setShowEmailBcc(false); setEmailComposeBcc(""); }}
+                          className="text-xs font-medium text-gray-400 hover:text-gray-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={emailComposeBcc}
+                        onChange={(e) => setEmailComposeBcc(e.target.value)}
+                        placeholder="comma-separated addresses"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>
+                    <input
+                      type="text"
+                      value={emailComposeSubject}
+                      onChange={(e) => setEmailComposeSubject(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-500">Body</label>
+                      <button
+                        type="button"
+                        onClick={() => setEmailTemplateOpen((p) => !p)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      >
+                        + Add template <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {emailTemplateOpen && (
+                      <div className="absolute right-0 top-6 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
+                        {[
+                          ...emailTemplatesList.map((tpl) => ({
+                            key: tpl.id,
+                            label: tpl.name,
+                            desc: tpl.isDefault ? "Default · From Document Settings" : "From Document Settings",
+                          })),
+                          { key: "standard", label: "Standard", desc: "Thank you for your business" },
+                          { key: "reminder", label: "Reminder", desc: "Document pending review" },
+                          { key: "followup", label: "Follow-up", desc: "Check in on document" },
+                        ].map(({ key, label, desc }) => (
+                          <button
+                            key={key}
+                            onClick={() => applyTemplate(key)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-800">{label}</p>
+                            <p className="text-xs text-gray-400">{desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {emailPreviewMode ? (
+                      <div
+                        className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                        dangerouslySetInnerHTML={{ __html: emailComposeBody }}
+                      />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-0.5 border border-gray-200 border-b-0 rounded-t-lg bg-gray-50 px-1.5 py-1">
+                          {toolbarButtons.map(({ icon, title, onClick }) => (
+                            <button
+                              key={title}
+                              type="button"
+                              title={title}
+                              // Mousedown (not click) so the editor's text
+                              // selection survives — a click first steals
+                              // focus/selection away from the contentEditable.
+                              onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+                              className="p-1.5 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                        <div
+                          ref={(el) => {
+                            emailBodyEditorRef.current = el;
+                            if (el && el.dataset.init !== "true") {
+                              el.innerHTML = emailComposeBody;
+                              el.dataset.init = "true";
+                            }
+                          }}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onInput={(e) => setEmailComposeBody(e.currentTarget.innerHTML)}
+                          className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-b-lg text-sm focus:outline-none focus:border-blue-500 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+                  <button
+                    disabled={!emailComposeTo || emailComposeSending}
+                    onClick={doSend}
+                    className="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {emailComposeSending ? (
+                      <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                    ) : (
+                      <><Mail className="w-4 h-4" /> Send Email</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+        {smsCompose && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100011]" onClick={() => setSmsCompose(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="bg-purple-100 p-2 rounded-lg">
+                    <MessageSquare className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900">Send SMS</h2>
+                    <p className="text-xs text-gray-400">{docNameFor(smsCompose.type)} #{smsCompose.doc[numberKeyFor(smsCompose.type)]}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSmsCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">To (phone number)</label>
+                  <input
+                    type="tel"
+                    value={smsComposeTo}
+                    onChange={(e) => setSmsComposeTo(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Message</label>
+                  <textarea
+                    rows={4}
+                    value={smsComposeBody}
+                    onChange={(e) => setSmsComposeBody(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 resize-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{smsComposeBody.length} characters</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+                <button onClick={() => setSmsCompose(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
+                <button
+                  disabled={!smsComposeTo || smsComposeSending}
+                  onClick={async () => {
+                    if (!smsComposeTo || smsComposeSending) return;
+                    setSmsComposeSending(true);
+                    try {
+                      await API.post(`/public/${apiPathFor(smsCompose.type)}/${smsCompose.doc._id}/sms`, {
+                        phone: smsComposeTo,
+                        message: smsComposeBody,
+                      });
+                      toast.success("SMS sent successfully");
+                      setSmsCompose(null);
+                      setSmsComposeTo("");
+                      setSmsComposeBody("");
+                    } catch (err) {
+                      toast.error(err.response?.data?.error || "Failed to send SMS");
+                    } finally {
+                      setSmsComposeSending(false);
+                    }
+                  }}
+                  className="px-5 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {smsComposeSending ? (
+                    <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                  ) : (
+                    <><MessageSquare className="w-3.5 h-3.5" /> Send SMS</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </>
   );
-};
+}
 
 export default Accounting;

@@ -44,6 +44,21 @@ router.post('/add-link',
   folderController.addLink
 );
 
+// PUT update a hyperlink in a folder
+router.put('/:folderId/links/:fileId',
+  requireAuth,
+  restrictByPlan('folders', 'write'),
+  folderController.updateLink
+);
+
+// PATCH rename an uploaded file without replacing its stored object
+router.patch('/:folderId/files/:fileId',
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('folders', 'write'),
+  folderController.renameFile
+);
+
 // GET all folders (optionally by company)
 router.get('/',
   requireAuth,

@@ -2,9 +2,10 @@ const DeliveryChallan = require("../models/deliveryChallan");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
-const nodemailer = require("nodemailer");
+const sendGridMail = require("../utils/sendGridMail");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -28,12 +29,16 @@ exports.createDeliveryChallan = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       signature,
       signatureType,
       discount,
+      billingAddress,
+      shippingAddress,
+      deliveryChallanPrefix,
+      deliveryChallanSuffix,
+      deliveryChallanNumber: clientDeliveryChallanNumber,
     } = req.body;
 
     // Validate required fields
@@ -64,23 +69,46 @@ exports.createDeliveryChallan = async (req, res) => {
       }
     }
 
-    // Generate unique delivery challan number
-    const extractNumber = (number) => {
-      const match = number?.match(/^DC-(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
-    const deliveryChallans = await DeliveryChallan.find({
-      organization: req.user.organization,
-      deliveryChallanNumber: { $regex: /^DC-\d+$/ },
-    })
-      .select("deliveryChallanNumber")
-      .session(session);
-    let maxNumber = 0;
-    deliveryChallans.forEach((dc) => {
-      const num = extractNumber(dc.deliveryChallanNumber);
-      if (num > maxNumber) maxNumber = num;
-    });
-    const deliveryChallanNumber = `DC-${maxNumber + 1}`;
+    // Delivery challan number: Document Settings' configured prefix
+    // (documentTypeSettings.deliveryChallan.prefix) is the source of truth
+    // when the client doesn't send one. Previously this type had no
+    // prefix-acceptance at all — every challan was hardcoded "DC-N"
+    // regardless of what Settings said. Numbering is scoped to the resolved
+    // prefix specifically, so switching prefixes restarts (or resumes)
+    // cleanly instead of continuing another prefix's sequence.
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalDCPrefix = (deliveryChallanPrefix && deliveryChallanPrefix.trim()) || documentSettings.documentTypeSettings?.deliveryChallan?.prefix || "DC-";
+    const finalDCSuffix = (deliveryChallanSuffix ?? documentSettings.documentTypeSettings?.deliveryChallan?.suffix ?? "").toString().trim();
+    let deliveryChallanNumber;
+    try {
+      deliveryChallanNumber = await resolveDocumentNumber({
+        Model: DeliveryChallan,
+        numberField: "deliveryChallanNumber",
+        organization: req.user.organization,
+        documentTypeKey: "deliveryChallan",
+        prefix: finalDCPrefix,
+        suffix: finalDCSuffix,
+        providedNumber: clientDeliveryChallanNumber && String(clientDeliveryChallanNumber).trim() ? clientDeliveryChallanNumber : null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+    }
 
     const deliveryChallan = new DeliveryChallan({
       deal,
@@ -90,12 +118,13 @@ exports.createDeliveryChallan = async (req, res) => {
       amount,
       status,
       items,
-      style: style || "",
       notes: notes || "",
       terms: terms || "",
       signature,
       signatureType: signatureType || "text",
-      discount,
+      discount: discount || { type: "fixed", value: 0 },
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       user: req.user.id,
       organization: req.user.organization,
     });
@@ -114,11 +143,97 @@ exports.createDeliveryChallan = async (req, res) => {
   }
 };
 
+// Duplicate: clones an existing delivery challan into a brand-new Draft
+// challan with a freshly generated number. Does not touch the source.
+exports.duplicateDeliveryChallan = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await DeliveryChallan.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Delivery challan not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalDCPrefix = documentSettings.documentTypeSettings?.deliveryChallan?.prefix || "DC-";
+    const finalDCSuffix = (documentSettings.documentTypeSettings?.deliveryChallan?.suffix ?? "").toString().trim();
+
+    let newDeliveryChallanNumber;
+    try {
+      newDeliveryChallanNumber = await resolveDocumentNumber({
+        Model: DeliveryChallan,
+        numberField: "deliveryChallanNumber",
+        organization: req.user.organization,
+        documentTypeKey: "deliveryChallan",
+        prefix: finalDCPrefix,
+        suffix: finalDCSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older challans can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new DeliveryChallan({
+      deal: source.deal,
+      deliveryChallanNumber: newDeliveryChallanNumber,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      notes: source.notes,
+      terms: source.terms,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate delivery challan: ${err.message}` });
+  }
+};
+
 // Get All Delivery Challans
 exports.getAllDeliveryChallans = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       const matchingDeals = await Deal.find(
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
@@ -154,6 +269,11 @@ exports.getAllDeliveryChallansPaginated = async (req, res) => {
     } = req.query;
 
     const query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       const matchingDeals = await Deal.find(
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
@@ -235,10 +355,12 @@ exports.downloadDeliveryChallan = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
-    const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
+    const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
+      ? req.query.copyType
+      : "original";
+    const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan", copyType);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -283,12 +405,13 @@ exports.updateDeliveryChallan = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       signature,
       signatureType,
       discount,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     const requiredFields = ["deal", "date", "amount", "status", "discount"];
@@ -311,8 +434,24 @@ exports.updateDeliveryChallan = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+    }
+
     const deliveryChallan = await DeliveryChallan.findOneAndUpdate(
-      { _id: req.params.id, organization: req.user.organization },
+      {
+        _id: req.params.id,
+        organization: req.user.organization,
+      },
       {
         deal,
         date,
@@ -320,12 +459,13 @@ exports.updateDeliveryChallan = async (req, res) => {
         amount,
         status,
         items,
-        style,
         notes,
         terms,
         signature,
         signatureType,
         discount,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
       },
       { new: true }
     );
@@ -396,21 +536,11 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const mailOptions = {
-      from: process.env.EMAIL_USER,
       to: deliveryChallan.deal.email || req.body.email,
       subject: `Delivery Challan ${deliveryChallan.deliveryChallanNumber}`,
       text: `Dear ${
@@ -425,7 +555,7 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       ],
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendGridMail(mailOptions);
     deliveryChallan.status = "Sent";
     await deliveryChallan.save();
 
@@ -480,5 +610,48 @@ exports.updateDeliveryChallanNumber = async (req, res) => {
   } catch (err) {
     console.error("updateDeliveryChallanNumber error:", err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.bulkUpdateStatus = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !ids.length || !status) {
+      return res.status(400).json({ error: "ids and status are required" });
+    }
+    await DeliveryChallan.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { status }
+    );
+    res.json({ message: `Updated ${ids.length} delivery challans to status: ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.bulkUpdateSignature = async (req, res) => {
+  try {
+    const { ids, signature, signatureType } = req.body;
+    if (!ids || !ids.length) {
+      return res.status(400).json({ error: "ids are required" });
+    }
+    const challans = await DeliveryChallan.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = challans.map(c => c._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    
+    if (validIds.length > 0) {
+      await DeliveryChallan.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    
+    res.json({
+      message: `Updated signature for ${validIds.length} delivery challans`,
+      successfulIds: validIds,
+      failedIds
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

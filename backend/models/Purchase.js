@@ -10,6 +10,11 @@ const purchaseItemSchema = new mongoose.Schema(
     total: { type: Number, min: 0 }, // per item total (quantity * unitPrice)
     sku: { type: String },
     variantAttributes: { type: Map, of: String },
+    // Per-item GST/Tax-Inc. override (PurchaseForm.jsx lets each line carry its own rate,
+    // separate from the document-level gstRate above) — was being sent by the frontend but
+    // silently dropped since this schema never declared the fields.
+    gstRate: { type: Number, default: 0, min: 0 },
+    taxInclusive: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -40,16 +45,38 @@ const purchaseSchema = new mongoose.Schema(
     grandTotal: { type: Number, default: 0, min: 0 },
     status: {
       type: String,
-      enum: ["Draft", "Pending", "Received", "Partial", "Cancelled"],
+      // "Paid" was "Received" — renamed to match the frontend's terminology
+      // (PurchasePage.jsx's status dropdown/badges have always said "Paid";
+      // sending that value 400'd against this enum, which is the root cause
+      // of "Failed to update status" / net::ERR on the status dropdown).
+      enum: ["Draft", "Pending", "Paid", "Partial", "Cancelled"],
       default: "Draft",
     },
     notes: { type: String, default: "" },
+    // Payment records against this Purchase — same shape as Invoice.payments,
+    // so vendor payments can be recorded/tracked the same way customer
+    // payments are, including partial payments.
+    payments: [{
+      amount: { type: Number, required: true },
+      paymentDate: { type: Date, default: Date.now },
+      paymentMethod: {
+        type: String,
+        enum: ['Cash', 'UPI', 'Net Banking', 'Cheque', 'Card', 'NEFT', 'RTGS', 'IMPS', 'EMI', 'TDS', 'Other'],
+        default: 'UPI',
+      },
+      reference: { type: String, default: '' },
+      notes: { type: String, default: '' },
+      internalNotes: { type: String, default: '' },
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      recordedAt: { type: Date, default: Date.now },
+    }],
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     organization: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
     },
+    stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
   },
   { timestamps: true }
 );

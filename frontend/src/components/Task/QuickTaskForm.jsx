@@ -25,12 +25,13 @@ import QuickCompanyForm from "../company/QuickCompanyForm";
 import QuickContactForm from "../contact/QuickContactForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import QuickVendorForm from "../vendor/QuickVendorForm";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 // isOpen/onOpenChange are controlled by the parent form (a single shared
 // "which dropdown is open" key) rather than each instance owning its own
 // state — otherwise opening Status doesn't close Priority, and their option
 // lists render stacked on top of each other.
-const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOpenChange }) => {
+const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOpenChange, dropUp = false }) => {
   const selectedOption = options.find((opt) => opt.value === value) || options[0];
 
   return (
@@ -39,20 +40,23 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, isOpen, onOp
         type="button"
         disabled={disabled}
         onClick={() => onOpenChange(!isOpen)}
-        className={`w-full flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all ${disabled ? "cursor-not-allowed" : "cursor-pointer"
-          } ${selectedOption.className}`}
+        className={`w-full flex items-center justify-between gap-2 px-3 h-8 rounded-full text-[12px] font-medium focus:outline-none transition-all border border-[#1F2937]/10 bg-white ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
       >
         <div className="flex items-center gap-1.5">
-          {selectedOption.icon && <selectedOption.icon className="w-3 h-3" />}
-          <span className="capitalize">{selectedOption.label}</span>
+          {selectedOption.icon && (
+            <span className={`flex items-center justify-center w-5 h-5 rounded-full ${selectedOption.className}`}>
+              <selectedOption.icon className="w-3 h-3" />
+            </span>
+          )}
+          <span className="capitalize text-[#1F2937]">{selectedOption.label}</span>
         </div>
-        {!disabled && <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
+        {!disabled && <ChevronDown className={`w-3.5 h-3.5 text-[#1F2937] opacity-50 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
       </button>
 
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
-          <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="absolute right-0 top-[calc(100%+8px)] w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -96,13 +100,15 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityLabel, displayK
       <button
         type="button"
         onClick={() => onOpenChange(!isOpen)}
-        className="flex items-center justify-end gap-2 px-3 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all bg-gray-50 text-gray-700 cursor-pointer hover:bg-gray-100"
+        className="w-full flex items-center justify-between gap-2 px-3 h-8 rounded-full text-[12px] font-medium focus:outline-none transition-all border border-[#1F2937]/10 bg-white cursor-pointer"
       >
-        <Icon className="w-3 h-3 flex-shrink-0" />
-        <span className="truncate max-w-[140px]">
-          {selected ? selected[displayKey] || selected.name : `Select ${entityLabel}`}
-        </span>
-        <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Icon className="w-3.5 h-3.5 flex-shrink-0 text-[#1F2937] opacity-50" />
+          <span className={`truncate ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}>
+            {selected ? selected[displayKey] || selected.name : `Select ${entityLabel}`}
+          </span>
+        </div>
+        <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 text-[#1F2937] opacity-50 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen && (
@@ -160,12 +166,13 @@ const QuickTaskForm = ({
   onTaskUpdated,
   onRequestClose,
   editTask = null,
+  initialDueDate = "",
 }) => {
   const isEditing = !!editTask;
   const [form, setForm] = useState({
     title: "",
-    dueDate: "",
-    selectedDate: "",
+    dueDate: initialDueDate,
+    selectedDate: initialDueDate,
     description: "",
     status: "Pending",
     priority: "medium",
@@ -194,11 +201,14 @@ const QuickTaskForm = ({
   const [localContacts, setLocalContacts] = useState(contacts);
   const [validationErrors, setValidationErrors] = useState({});
 
-  const statusOptions = [
-    { value: "Pending", label: "Pending", icon: Clock, className: "bg-amber-50 text-amber-600" },
-    { value: "In Progress", label: "In Progress", icon: Loader2, className: "bg-blue-50 text-blue-600" },
-    { value: "Completed", label: "Completed", icon: CheckIcon, className: "bg-emerald-50 text-emerald-600" },
-  ];
+  const { taskStatuses } = useSystemSettings();
+
+  const statusOptions = taskStatuses.map(status => {
+    if (status === "Pending") return { value: "Pending", label: "Pending", icon: Clock, className: "bg-amber-50 text-amber-600" };
+    if (status === "In Progress") return { value: "In Progress", label: "In Progress", icon: Loader2, className: "bg-blue-50 text-blue-600" };
+    if (status === "Completed") return { value: "Completed", label: "Completed", icon: CheckIcon, className: "bg-emerald-50 text-emerald-600" };
+    return { value: status, label: status, icon: Clock, className: "bg-gray-50 text-gray-600" };
+  });
 
   const priorityOptions = [
     { value: "low", label: "Low", icon: Flag, className: "bg-green-50 text-green-600" },
@@ -563,16 +573,18 @@ const QuickTaskForm = ({
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
-            <h3 className="text-lg font-bold text-gray-900">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Task" : "Add New Task"}
-            </h3>
+            </h2>
             <button
               type="button"
               onClick={handleClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
@@ -580,176 +592,172 @@ const QuickTaskForm = ({
           <div className="flex-1 overflow-y-auto">
             <form onSubmit={handleSubmit} className="flex flex-col h-full">
               {/* Content */}
-              <div className="p-6 space-y-8">
-                <div className="space-y-4">
+              <div className="px-8 py-6 space-y-6">
+                <div>
+                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Task Title <span className="text-[#FF4935]">*</span>
+                  </label>
                   <input
                     type="text"
                     value={form.title}
                     onChange={(e) => handleFormChange("title", e.target.value)}
-                    className={`w-full text-3xl font-bold border-none bg-transparent placeholder-gray-300 focus:outline-none focus:ring-0 ${validationErrors.title ? "text-red-600" : "text-gray-900"
+                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? "border-red-300 ring-1 ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                       }`}
-                    placeholder="Task Title"
+                    placeholder="Enter Task Title"
                   />
                   {validationErrors.title && (
-                    <p className="text-xs text-red-500 font-medium">*{validationErrors.title}</p>
+                    <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.title}</p>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Description
+                  </label>
                   <textarea
                     value={form.description}
                     onChange={(e) => handleFormChange("description", e.target.value)}
-                    rows={6}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:border-blue-500 transition-all focus:outline-none resize-none text-sm text-gray-600"
-                    placeholder="Description the task objectives, requirements and important details"
+                    rows={4}
+                    className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 resize-none"
+                    placeholder="Describe the task objectives, requirements and important details"
                   />
                 </div>
-              </div>
 
-              {/* Meta */}
-              <div className="px-6 pb-6 space-y-6 bg-white border-t border-gray-100 pt-6">
-                <div className="space-y-4">
-                  {/* Related to (entity type) */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <UserIcon className="w-4 h-4" />
-                      <span>Related to</span>
+                {/* Related to (entity type) */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Related To
+                  </label>
+                  <SingleSelectDropdown
+                    options={relationOptions}
+                    value={form.relationModel}
+                    onChange={(val) => handleFormChange("relationModel", val)}
+                    isOpen={openDropdown === "relationModel"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "relationModel" : null)}
+                  />
+                </div>
+
+                {/* The record itself, with a quick-create shortcut */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    {form.relationModel}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <EntityPickerDropdown
+                        entities={getOptions()}
+                        value={form.relatedTo}
+                        onChange={(val) => handleFormChange("relatedTo", val)}
+                        entityLabel={form.relationModel}
+                        displayKey={getDisplayKey()}
+                        isOpen={openDropdown === "entity"}
+                        onOpenChange={(open) => setOpenDropdown(open ? "entity" : null)}
+                      />
                     </div>
-                    <SingleSelectDropdown
-                      options={relationOptions}
-                      value={form.relationModel}
-                      onChange={(val) => handleFormChange("relationModel", val)}
-                      isOpen={openDropdown === "relationModel"}
-                      onOpenChange={(open) => setOpenDropdown(open ? "relationModel" : null)}
-                    />
+                    <button
+                      type="button"
+                      onClick={openQuickCreate}
+                      title={`Add New ${form.relationModel}`}
+                      className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                    >
+                      <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                    </button>
                   </div>
+                  {validationErrors.relatedTo && (
+                    <p className="text-red-500 text-xs mt-1 font-inter">
+                      {validationErrors.relatedTo}
+                    </p>
+                  )}
+                </div>
 
-                  {/* The record itself, with a quick-create shortcut */}
-                  <div>
-                    <div className="flex items-center justify-between group">
-                      <div className="flex items-center gap-2 text-gray-600 text-sm">
-                        <Building className="w-4 h-4" />
-                        <span>{form.relationModel}</span>
+                {/* Selected Date (Start Date) */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Selected Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.selectedDate}
+                    onChange={(e) => handleFormChange("selectedDate", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+                  />
+                </div>
+
+                {/* Due Date */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) => handleFormChange("dueDate", e.target.value)}
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+                  />
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Status
+                  </label>
+                  <SingleSelectDropdown
+                    options={statusOptions}
+                    value={form.status}
+                    onChange={(val) => handleFormChange("status", val)}
+                    isOpen={openDropdown === "status"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
+                    dropUp={true}
+                  />
+                </div>
+
+                {/* Priority */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Priority
+                  </label>
+                  <SingleSelectDropdown
+                    options={priorityOptions}
+                    value={form.priority}
+                    onChange={(val) => handleFormChange("priority", val)}
+                    isOpen={openDropdown === "priority"}
+                    onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
+                    dropUp={true}
+                  />
+                </div>
+
+                {/* Assignees */}
+                <div>
+                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Assignees
+                  </label>
+
+                  <div className="space-y-2 relative">
+                    {assignedUsers.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {assignedUsers.map((user) => (
+                          <div
+                            key={user._id}
+                            className="w-6 h-6 rounded-full overflow-hidden border-2 border-white ring-1 ring-gray-100 flex items-center justify-center bg-gray-100"
+                            title={user.name || user.email}
+                          >
+                            <UserIcon className="w-3 h-3 text-gray-400" />
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <EntityPickerDropdown
-                          entities={getOptions()}
-                          value={form.relatedTo}
-                          onChange={(val) => handleFormChange("relatedTo", val)}
-                          entityLabel={form.relationModel}
-                          displayKey={getDisplayKey()}
-                          isOpen={openDropdown === "entity"}
-                          onOpenChange={(open) => setOpenDropdown(open ? "entity" : null)}
-                        />
-                        <button
-                          type="button"
-                          onClick={openQuickCreate}
-                          className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                          title={`Add New ${form.relationModel}`}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    {validationErrors.relatedTo && (
-                      <p className="text-[10px] text-red-500 font-medium text-right mt-1">
-                        {validationErrors.relatedTo}
-                      </p>
                     )}
-                  </div>
 
-                  {/* Selected Date (Start Date) */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>Selected Date</span>
-                    </div>
-                    <input
-                      type="date"
-                      value={form.selectedDate}
-                      onChange={(e) => handleFormChange("selectedDate", e.target.value)}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Due Date */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>Due Date</span>
-                    </div>
-                    <input
-                      type="date"
-                      value={form.dueDate}
-                      onChange={(e) => handleFormChange("dueDate", e.target.value)}
-                      className="text-sm font-medium text-gray-900 border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Status */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Timer className="w-4 h-4" />
-                      <span>Status</span>
-                    </div>
-                    <SingleSelectDropdown
-                      options={statusOptions}
-                      value={form.status}
-                      onChange={(val) => handleFormChange("status", val)}
-                      isOpen={openDropdown === "status"}
-                      onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
-                    />
-                  </div>
-
-                  {/* Priority */}
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Flag className="w-4 h-4" />
-                      <span>Priority</span>
-                    </div>
-                    <SingleSelectDropdown
-                      options={priorityOptions}
-                      value={form.priority}
-                      onChange={(val) => handleFormChange("priority", val)}
-                      isOpen={openDropdown === "priority"}
-                      onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
-                    />
-                  </div>
-
-                  {/* Assignees */}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Users className="w-4 h-4" />
-                      <span>Assignees</span>
-                    </div>
-
-                    <div className="space-y-2 relative">
-                      {assignedUsers.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {assignedUsers.map((user) => (
-                            <div
-                              key={user._id}
-                              className="w-6 h-6 rounded-full overflow-hidden border-2 border-white ring-1 ring-gray-100 flex items-center justify-center bg-gray-100"
-                              title={user.name || user.email}
-                            >
-                              <UserIcon className="w-3 h-3 text-gray-400" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => setShowUserSelector(!showUserSelector)}
-                        className={`w-full flex items-center justify-between px-3 py-2 bg-gray-50 border rounded-xl text-xs hover:bg-gray-100 transition-colors focus:outline-none ${validationErrors.users ? "border-red-300" : "border-gray-200"
-                          }`}
-                      >
-                        <span className="text-gray-500">
-                          {form.users.length > 0 ? `${form.users.length} selected` : "Select Users"}
-                        </span>
-                        <Plus className="w-3 h-3 text-gray-400" />
-                      </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUserSelector(!showUserSelector)}
+                      className={`w-full flex items-center justify-between px-3 h-8 rounded-full text-[12px] focus:outline-none transition-all border bg-white ${validationErrors.users ? "border-red-300" : "border-[#1F2937]/10"
+                        }`}
+                    >
+                      <span className="text-[#1F2937] opacity-50">
+                        {form.users.length > 0 ? `${form.users.length} selected` : "Select Users"}
+                      </span>
+                      <Plus className="w-3.5 h-3.5 text-[#1F2937] opacity-50" />
+                    </button>
 
                       {showUserSelector && (
                         <>
@@ -797,17 +805,16 @@ const QuickTaskForm = ({
                       )}
                     </div>
                   </div>
-                </div>
               </div>
             </form>
           </div>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors font-inter"
             >
               Cancel
             </button>
@@ -815,15 +822,12 @@ const QuickTaskForm = ({
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-inter flex items-center gap-2"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  {isEditing ? "Update Task" : "Create Task"}
-                </>
+                <>{isEditing ? "Update Task" : "Create Task"}</>
               )}
             </button>
           </div>

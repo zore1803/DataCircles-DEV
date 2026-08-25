@@ -1,6 +1,7 @@
 // components/vendor/PaymentReceipt.jsx
 import React, { useRef } from "react";
-import { X, Printer, Download } from "lucide-react";
+import { Building2, Download, Printer } from "lucide-react";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import { useReactToPrint } from "react-to-print";
 import html2canvas from "html2canvas-pro"; // Changed to html2canvas-pro
 import jsPDF from "jspdf";
@@ -228,7 +229,7 @@ const PaymentReceipt = ({ payment, onClose, companyDetails }) => {
                     </td>
                     <td className="border border-gray-800 px-4 py-3 text-right">
                       <p className="text-base font-bold text-gray-900">
-                        ₹{payment.amount?.toFixed(2) || "0.00"}
+                        ₹{formatNumberFixed(payment.amount)}
                       </p>
                     </td>
                   </tr>
@@ -243,7 +244,7 @@ const PaymentReceipt = ({ payment, onClose, companyDetails }) => {
                   TOTAL AMOUNT
                 </p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ₹{payment.amount?.toFixed(2) || "0.00"}
+                  ₹{formatNumberFixed(payment.amount)}
                 </p>
               </div>
             </div>

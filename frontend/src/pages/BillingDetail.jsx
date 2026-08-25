@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { formatNumberToIndian } from "../utils/numberFormatter";
+import { formatNumberToIndian, formatNumberFixed } from "../utils/numberFormatter";
 import {
   ArrowLeft,
   Building,
@@ -24,6 +24,7 @@ import {
   Timer,
   ReceiptIndianRupeeIcon,
   Ban,
+  Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
@@ -874,7 +875,8 @@ const BillingDetail = () => {
     const mediumGray = [156, 163, 175];
 
     const formatCurrency = (amount, currency = "INR") => {
-      const value = amount.toFixed(2);
+      if (amount == null) return "₹0.00";
+      const value = formatNumberFixed(amount);
       return `${currency} ${value}`;
     };
 

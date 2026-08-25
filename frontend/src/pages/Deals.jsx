@@ -1,4 +1,6 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../utils/domUtils";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -9,6 +11,7 @@ import { applyAdvancedFilters } from "../utils/advancedFilters";
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   pointerWithin,
   rectIntersection,
   KeyboardSensor,
@@ -63,6 +66,7 @@ import {
   Handshake,
   ClipboardList,
   Eye,
+  Video,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -74,12 +78,12 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import ExportModal from "../components/common/ExportModal";
 import DealQuickView from "../components/deal/DealQuickView";
-// Add these to your existing lucide-react imports:
-
-// Add these to your component imports:
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import AppToaster from "../components/AppToaster";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -161,7 +165,7 @@ class PDFExporter {
       const dealData = [
         index + 1,
         deal.title || "—",
-        `₹${formatNumberToIndian(parseInt(deal.amount || 0))}`,
+        `Rs. ${formatNumberToIndian(parseFloat(String(deal.amount || 0).replace(/,/g, '')) || 0)}`,
         deal.status || "—",
         deal.company?.name || "—",
         deal.contact?.name || "—",
@@ -325,7 +329,20 @@ const DealSettingSidebar = ({ isOpen, onClose, staleDays, setStaleDays }) => {
 
 // --- MODERN UI COMPONENTS (New) ---
 
-const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
+const ModernDealCard = React.memo(({ deal, onClick, isStale, colorTheme = "blue", selected = false, onToggleSelect, onQuickView, onEditDeal, onDeleteDeal }) => {
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [actionsPos, setActionsPos] = useState(null);
+  const actionsRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+        setIsActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const {
     attributes,
     listeners,
@@ -349,21 +366,109 @@ const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, width: "300px", height: "132px", boxSizing: "border-box" }}
+      style={{
+        ...style,
+        width: "300px",
+        height: "132px",
+        boxSizing: "border-box",
+        ...(selected ? { borderColor: "#0085FF", background: "#F5FAFF" } : null),
+      }}
       {...attributes}
       {...listeners}
       onClick={() => onClick(deal)}
-      className="flex flex-col items-start bg-white border border-[#E5E5EC] rounded-[10px] p-4 gap-4 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group relative"
+      className="flex flex-col items-start bg-white border border-[#E5E5EC] rounded-[10px] p-4 gap-4 hover:shadow-md transition-shadow cursor-default group relative"
     >
       <div className="flex flex-col items-start gap-2 w-full">
-        <div className="flex items-center justify-between w-full">
-          <span
-            className="truncate"
-            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
-          >
-            {deal.title}
-          </span>
-          <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {onToggleSelect && (
+              <span
+                className="flex items-center flex-shrink-0"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggleSelect(deal._id)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  aria-label={`Select ${deal.title || "deal"}`}
+                />
+              </span>
+            )}
+            <span
+              className="truncate"
+              style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "14px", lineHeight: "150%", letterSpacing: "-0.02em", color: "#161618" }}
+            >
+              {deal.title}
+            </span>
+          </div>
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (isActionsOpen) {
+                  setIsActionsOpen(false);
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body) || 1;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                const MENU_W = 160;
+                const MENU_H = 120;
+
+                const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                let calcTop = rowCenter - MENU_H / 2;
+                calcTop = Math.max(8, Math.min(calcTop, viewportH - MENU_H - 8));
+                let calcLeft = rect.right / zMenu - MENU_W - 12;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - 8);
+                calcLeft = Math.max(calcLeft, 8);
+
+                setActionsPos({ top: calcTop, left: calcLeft });
+                setIsActionsOpen(true);
+              }}
+              className="p-1 cursor-pointer hover:bg-gray-100 rounded-md transition-colors z-10"
+              title="More actions"
+            >
+              <MoreVertical className="w-4 h-4 text-[#BEBEC8]" />
+            </button>
+            {isActionsOpen && actionsPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); }} />
+                <div
+                  ref={actionsRef}
+                  style={{ position: "fixed", top: actionsPos.top, left: actionsPos.left }}
+                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-xl p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); onQuickView && onQuickView(deal._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Quick View
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); onEditDeal && onEditDeal(deal); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit Deal
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); onDeleteDeal && onDeleteDeal(deal._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Deal
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         </div>
         <div
           className="w-full"
@@ -401,19 +506,34 @@ const ModernDealCard = ({ deal, onClick, isStale, colorTheme = "blue" }) => {
       </div>
     </div>
   );
-};
+});
 
-const ModernKanbanColumn = ({
+const ModernKanbanColumn = React.memo(({
   status,
   deals,
+  totalDealsCount,
   colorTheme = "blue",
   onAddClick,
   handleEditDeal,
+  handleDeleteDeal,
+  onQuickView,
   isStale,
   loading = false,
+  selectedDeals = [],
+  onToggleSelect,
+  onToggleColumnSelect,
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
+
+  // Header select-all state for this column: fully ticked when every card here
+  // is selected, indeterminate (native dash) when only some are.
+  const allSelected = dealIds.length > 0 && dealIds.every((id) => selectedDeals.includes(id));
+  const someSelected = dealIds.some((id) => selectedDeals.includes(id));
+  const headerCbRef = useRef(null);
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
+  }, [someSelected, allSelected]);
 
   const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
   const formattedTotal = formatNumberToIndian(totalAmount);
@@ -448,6 +568,17 @@ const ModernKanbanColumn = ({
         style={{ height: "46px", padding: "0 18px", background: "#F5F7FA" }}
       >
         <div className="flex items-center gap-1.5">
+          {onToggleColumnSelect && !loading && dealIds.length > 0 && (
+            <input
+              ref={headerCbRef}
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onToggleColumnSelect(dealIds)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              title={`Select all in ${status}`}
+              aria-label={`Select all deals in ${status}`}
+            />
+          )}
           <span
             className="truncate"
             style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#44444A" }}
@@ -457,7 +588,8 @@ const ModernKanbanColumn = ({
           <span
             className="flex items-center justify-center flex-shrink-0"
             style={{
-              width: "22px",
+              minWidth: "22px",
+              padding: "0 6px",
               height: "22px",
               background: "#FFFFFF",
               border: "1px solid #E5E5EC",
@@ -471,7 +603,7 @@ const ModernKanbanColumn = ({
               color: "#161618",
             }}
           >
-            {loading ? <Skeleton width={14} height={12} /> : deals.length}
+            {loading ? <Skeleton width={14} height={12} /> : (totalDealsCount !== undefined ? `${deals.length}/${totalDealsCount}` : deals.length)}
           </span>
         </div>
         <button
@@ -553,6 +685,11 @@ const ModernKanbanColumn = ({
                     onClick={handleEditDeal}
                     isStale={isStale}
                     colorTheme={colorTheme}
+                    selected={selectedDeals.includes(deal._id)}
+                    onToggleSelect={onToggleSelect}
+                    onQuickView={onQuickView}
+                    onEditDeal={handleEditDeal}
+                    onDeleteDeal={handleDeleteDeal}
                   />
                 ))}
               </SortableContext>
@@ -564,7 +701,7 @@ const ModernKanbanColumn = ({
       </div>
     </div>
   );
-};
+});
 
 const WonDealsIcon = (props) => (
   <svg viewBox="0 0 18 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -603,14 +740,31 @@ function Deals() {
   const showKanbanSkeleton = loading && deals.length === 0;
   useTopLoadingSignal(showKanbanSkeleton);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeAdvancedFilters, setActiveAdvancedFilters] = useState([]);
+  const [activeAdvancedFilters, setActiveAdvancedFiltersState] = useState(() => {
+    try {
+      const saved = localStorage.getItem("deals_advanced_filters");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const setActiveAdvancedFilters = (filtersOrFn) => {
+    setActiveAdvancedFiltersState((prev) => {
+      const next = typeof filtersOrFn === "function" ? filtersOrFn(prev) : filtersOrFn;
+      try {
+        localStorage.setItem("deals_advanced_filters", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const dealFilterColumns = [
     { key: "dealId", label: "Deal ID" },
     { key: "title", label: "Deal Name" },
     { key: "company", label: "Company" },
     { key: "contact", label: "Contact" },
-    { key: "status", label: "Stage" },
+    { key: "status", label: "Stage", options: statuses },
     { key: "amount", label: "Amount" },
     { key: "dueDate", label: "Due Date" },
   ];
@@ -687,13 +841,21 @@ function Deals() {
   const [showImport, setShowImport] = useState(false);
   const [staleDays, setStaleDays] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedRows, setSelectedRows] = useState([]);
+  const [selectedDeals, setSelectedDeals] = useState([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Bulk row selection requires Growth+
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in-left entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
   useEffect(() => {
-    if (selectedRows.length > 0) {
+    if (selectedDeals.length > 0) {
       setBulkStripClosing(false);
       setShowBulkStrip(true);
     } else if (showBulkStrip) {
@@ -704,7 +866,7 @@ function Deals() {
       }, 300);
       return () => clearTimeout(t);
     }
-  }, [selectedRows.length]);
+  }, [selectedDeals.length]);
   const [activeDeal, setActiveDeal] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -726,23 +888,36 @@ function Deals() {
   // Add these states at the top of your Deals component
   const [selectionMode, setSelectionMode] = useState(false);
   const [longPressTimer, setLongPressTimer] = useState(null);
-  const [showBulkActions, setShowBulkActions] = useState(false);
   const [users, setUsers] = useState([]);
-  const [overId, setOverId] = useState(null);
+  // Write-only outside handleDragOver (nothing in the render tree reads it) —
+  // a ref instead of state, so tracking it doesn't force a full-board
+  // re-render on every pointer-move during a drag. It used to be useState,
+  // and that was firing hundreds of re-renders across every card in every
+  // column mid-drag, which is what made the drag stutter/slow down the
+  // longer it went on.
+  const overIdRef = useRef(null);
+  // Visual-only column override during drag. handleDragOver only writes this —
+  // never deals[]. The dealsByStatus useMemo reads it so the dragged card appears
+  // in the hovered column without touching deals[] or re-running filteredDeals.
+  const [dragOverStatus, setDragOverStatus] = useState(null);
 
   const [showExportModal, setShowExportModal] = useState(false);
-  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
   // 👉 NEW: Column Settings State & Logic
   const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   const defaultColumns = useMemo(() => {
+    // Keys must match DealsTable's own column `id`s (see the `columns` useMemo
+    // in DealsTable.jsx) — this is what makes hiding/reordering here actually
+    // affect the rendered table via the visibleColumns/columnOrder props below.
     const baseColumns = [
-      { key: "title", label: "Deal Title", visible: true, order: 0, required: true, defaultVisible: true, sortable: true },
-      { key: "amount", label: "Amount", visible: true, order: 1, sortable: true },
-      { key: "status", label: "Stage", visible: true, order: 2, sortable: true },
-      { key: "company", label: "Company", visible: true, order: 3, sortable: true },
-      { key: "contact", label: "Contact", visible: true, order: 4, sortable: true },
+      { key: "dealId", label: "Deal ID", visible: true, order: 0, sortable: false },
+      { key: "title", label: "Deal Title", visible: true, order: 1, required: true, defaultVisible: true, sortable: true },
+      { key: "amount", label: "Amount", visible: true, order: 2, sortable: true },
+      { key: "status", label: "Stage", visible: true, order: 3, sortable: true },
+      { key: "company", label: "Company", visible: true, order: 4, sortable: true },
+      { key: "contact", label: "Contact", visible: true, order: 5, sortable: true },
+      { key: "dueDate", label: "Due Date", visible: true, order: 6, sortable: false },
     ];
 
     if (dealFields && dealFields.length > 0) {
@@ -767,6 +942,17 @@ function Deals() {
   );
 
   const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
+  // Non-custom-field columns the user has hidden via the Columns panel —
+  // DealsTable unions this with its own per-session "Hide Column" quick
+  // action, so both routes to hiding a column keep working.
+  const persistedHiddenColumnKeys = useMemo(
+    () => columns.filter((c) => !c.visible && !c.isCustomField).map((c) => c.key),
+    [columns]
+  );
+  const persistedColumnOrderKeys = useMemo(
+    () => visibleColumns.filter((c) => !c.isCustomField).map((c) => c.key),
+    [visibleColumns]
+  );
   // ----------------------------------------------------
 
   const toggleStar = async (e, dealId) => {
@@ -807,9 +993,7 @@ function Deals() {
   const handleRowMouseDown = (dealId) => {
     const timer = setTimeout(() => {
       setSelectionMode(true);
-      if (!selectedRows.includes(dealId)) {
-        setSelectedRows([...selectedRows, dealId]);
-      }
+      handleSelectDeal(dealId);
     }, 500); // 500ms for long press
     setLongPressTimer(timer);
   };
@@ -824,9 +1008,9 @@ function Deals() {
 
   // Long-press-to-select is disabled on touch devices — mobile rows should
   // only enter selection via the checkbox itself, never by holding the row.
-  const handleRowTouchStart = () => {};
+  const handleRowTouchStart = () => { };
 
-  const handleRowTouchEnd = () => {};
+  const handleRowTouchEnd = () => { };
 
   // Bulk delete handler
   // Bulk handlers
@@ -835,7 +1019,7 @@ function Deals() {
     try {
       await Promise.all(itemIds.map((id) => API.delete(`/deals/${id}`)));
       await fetchDeals();
-      setSelectedRows([]);
+      setSelectedDeals([]);
       setSelectionMode(false);
       toast.success(`Successfully deleted ${itemIds.length} deals`);
     } catch (err) {
@@ -855,7 +1039,7 @@ function Deals() {
         }),
       );
       await fetchDeals();
-      setSelectedRows([]);
+      setSelectedDeals([]);
       setSelectionMode(false);
       toast.success(`Successfully updated ${itemIds.length} deals`);
     } catch (err) {
@@ -877,6 +1061,8 @@ function Deals() {
     ],
   };
 
+  const DND_MEASURING = { droppable: { strategy: MeasuringStrategy.BeforeDragging } };
+
   // dnd-kit sensors configuration
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -893,9 +1079,9 @@ function Deals() {
   // against every droppable (cards + column containers + quick-drop zones).
   // Right at a column boundary two containers sit almost equidistant, so the
   // winning target flip-flopped between pointer-move events — each flip fired
-  // handleDragOver, which calls setDeals and re-renders the whole board, so
-  // the flicker/freeze the user hit picking a card between two columns was
-  // really collision-detection oscillation, not an animation bug. pointerWithin
+  // handleDragOver, which triggers dragOverStatus updates and minor re-renders.
+  // The flicker/freeze at column boundaries was collision-detection oscillation
+  // (target flip-flopping), not an animation bug. pointerWithin
   // only matches droppables the pointer is literally inside, so there's no
   // ambiguous "closest" candidate to flip between; rectIntersection is kept as
   // a fallback for the rare frame where the pointer is briefly outside every
@@ -1235,11 +1421,10 @@ function Deals() {
     }
   };
 
-  const handleEditDeal = (deal) => {
-    // Edit via the shared QuickDealForm (same as create).
+  const handleEditDeal = useCallback((deal) => {
     setEditDeal(deal);
     setShowQuickAdd(true);
-  };
+  }, []);
 
   const handleDeleteDeal = (dealId) => {
     if (permission !== "read-write") {
@@ -1284,8 +1469,8 @@ function Deals() {
       setDeals((prevDeals) =>
         prevDeals.filter((deal) => deal._id !== dealToDelete),
       );
-      // Remove from selected rows if it was selected
-      setSelectedRows((prev) => prev.filter((id) => id !== dealToDelete));
+      // Remove from selected deals if it was selected
+      setSelectedDeals((prev) => prev.filter((id) => id !== dealToDelete));
       toast.success("Deal deleted successfully!", {
         id: loadingToast,
         style: {
@@ -1331,88 +1516,70 @@ function Deals() {
   const handleDragStart = (event) => {
     const { active } = event;
     const deal = deals.find((d) => d._id.toString() === active.id.toString());
-    setActiveDeal(deal);
+    // Shallow copy so activeDeal._id is the pre-drag snapshot, independent of
+    // whatever deals[] looks like at drop time.
+    setActiveDeal(deal ? { ...deal } : null);
+    setDragOverStatus(null);
   };
 
   const handleDragOver = (event) => {
     const { active, over } = event;
 
     if (!over) {
-      setOverId(null);
+      overIdRef.current = null;
+      setDragOverStatus(null);
       return;
     }
 
-    setOverId(over.id);
+    overIdRef.current = over.id;
 
     const activeId = active.id.toString();
     const overId = over.id.toString();
-
     if (activeId === overId) return;
 
-    // Find which status the active deal belongs to
-    const activeDeal = deals.find((d) => d._id.toString() === activeId);
-    if (!activeDeal) return;
-
-    const activeStatus = activeDeal.status;
-
-    // Find which status we're hovering over
-    // Check if overId is a status (column) or another deal
+    // Resolve which column we're hovering over
     let overStatus;
-
-    // Handle Quick Drop Zones
     if (overId.startsWith("quick-")) {
       overStatus = overId.replace("quick-", "");
     } else if (statuses.includes(overId)) {
-      // Dropped on a column header
       overStatus = overId;
     } else {
-      // Find the deal we're hovering over
       const overDeal = deals.find((d) => d._id.toString() === overId);
-      if (overDeal) {
-        overStatus = overDeal.status;
-      }
+      if (overDeal) overStatus = overDeal.status;
     }
+    if (!overStatus) return;
 
-    if (!overStatus || activeStatus === overStatus) {
-      // Same column, no need to update
-      return;
-    }
+    // Back over origin column: clear override so card renders in home column
+    const dragged = deals.find((d) => d._id.toString() === activeId);
+    setDragOverStatus(overStatus === dragged?.status ? null : overStatus);
+  };
 
-    // IMPORTANT: Optimistically update the UI for cross-column dragging
-    // This makes other items create space immediately
-    setDeals((prevDeals) => {
-      const newDeals = prevDeals.map((deal) => {
-        if (deal._id.toString() === activeId) {
-          return { ...deal, status: overStatus };
-        }
-        return deal;
-      });
-      return newDeals;
-    });
+  const handleDragCancel = () => {
+    setActiveDeal(null);
+    setDragOverStatus(null);
   };
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;
 
-    setActiveDeal(null);
-    setOverId(null);
+    // Capture activeDeal before clearing it — state setter is async, the
+    // closure value is still the pre-drop snapshot set in handleDragStart.
+    const draggedDeal = activeDeal;
 
-    if (!over) {
-      console.log("Dropped outside droppable area");
-      await fetchDeals();
-      return;
-    }
+    setActiveDeal(null);
+    overIdRef.current = null;
+    setDragOverStatus(null);
+
+    if (!over) return;
 
     if (permission !== "read-write") {
       toast.error("You do not have permission to update deal status.");
-      await fetchDeals();
       return;
     }
 
     const dealId = active.id.toString();
     let newStatus = over.id.toString();
 
-    // Handle Quick Drop Zones
     if (newStatus.startsWith("quick-")) {
       newStatus = newStatus.replace("quick-", "");
     }
@@ -1422,53 +1589,44 @@ function Deals() {
       newStatus = droppedOnDeal.status;
     }
 
-    // IMPORTANT: Find the ORIGINAL deal from the initial deals state
-    // NOT from the current deals which was updated by onDragOver
     const originalDeal = deals.find((deal) => deal._id.toString() === dealId);
+    if (!originalDeal) return;
 
-    if (!originalDeal) {
-      console.error("Deal not found:", dealId);
-      await fetchDeals();
-      return;
-    }
+    const oldStatus = draggedDeal?.status || originalDeal.status;
+    if (oldStatus === newStatus) return;
 
-    // Get OLD status from activeDeal that was saved in handleDragStart
-    // This is the status BEFORE any drag operation
-    const oldStatus = activeDeal?.status || originalDeal.status;
-
-    if (oldStatus === newStatus) {
-      console.log("Dropped in same column");
-      return;
-    }
-
-    console.log(`Moving deal from ${oldStatus} to ${newStatus}`);
+    // Optimistic update: move the card into the destination column immediately
+    // so there's no snap-back animation while waiting for the API.
+    setDeals((prevDeals) =>
+      prevDeals.map((deal) =>
+        deal._id.toString() === dealId ? { ...deal, status: newStatus } : deal,
+      ),
+    );
 
     try {
-      const response = await API.post(`/deals/${dealId}/status`, {
-        oldStatus, // Use oldStatus here
-        newStatus,
-      });
+      const response = await API.post(`/deals/${dealId}/status`, { oldStatus, newStatus });
 
+      // Sync with the server's canonical response (updatedAt, etc.)
       setDeals((prevDeals) =>
         prevDeals.map((deal) =>
           deal._id.toString() === dealId ? response.data : deal,
         ),
       );
 
-      // CHECK WITH oldStatus (not originalStatus)
       if (newStatus === "Won" && oldStatus !== "Won") {
-        console.log("🎉 DEAL WON! Triggering celebration...");
         setCelebrationDeal(response.data);
-        toast.success(`🎉 ${response.data.title} marked as Won!`, {
-          duration: 5000,
-          icon: "🏆",
-        });
+        toast.success(`🎉 ${response.data.title} marked as Won!`, { duration: 5000, icon: "🏆" });
       } else {
         toast.success("Deal status updated successfully");
       }
     } catch (error) {
       console.error("Error updating deal status:", error);
-      await fetchDeals();
+      // Revert optimistic update on failure
+      setDeals((prevDeals) =>
+        prevDeals.map((deal) =>
+          deal._id.toString() === dealId ? { ...deal, status: oldStatus } : deal,
+        ),
+      );
       if (error.response?.status === 402) {
         toast.error(error.response?.data?.message || "An active subscription is required to make changes.");
       } else {
@@ -1509,18 +1667,23 @@ function Deals() {
       setDeals((prevDeals) =>
         prevDeals?.map((deal) => (deal._id === dealId ? response.data : deal)),
       );
-      toast.success("Deal status updated successfully", {
-        style: {
-          zIndex: 99999,
-          background: "#ffffff",
-          border: "1px solid #e5e7eb",
-          borderRadius: "8px",
-          color: "#374151",
-          padding: "10px",
-          fontSize: "14px",
-          maxWidth: "90vw",
-        },
-      });
+      if (newStatus === "Won" && oldStatus !== "Won") {
+        setCelebrationDeal(response.data);
+        toast.success(`🎉 ${response.data.title} marked as Won!`, { duration: 5000, icon: "🏆" });
+      } else {
+        toast.success("Deal status updated successfully", {
+          style: {
+            zIndex: 99999,
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "8px",
+            color: "#374151",
+            padding: "10px",
+            fontSize: "14px",
+            maxWidth: "90vw",
+          },
+        });
+      }
     } catch (error) {
       console.error("Error updating deal status:", error);
       if (error.response?.status === 409) {
@@ -1567,11 +1730,11 @@ function Deals() {
     }
   };
 
-  const isStale = (createdAt) => {
+  const isStale = useCallback((createdAt) => {
     if (staleDays <= 0) return false;
     const daysDiff = (new Date() - new Date(createdAt)) / (1000 * 60 * 60 * 24);
     return daysDiff > staleDays;
-  };
+  }, [staleDays]);
 
   // Filter strategies
   class StatusFilter {
@@ -1674,7 +1837,27 @@ function Deals() {
     });
   }, [deals, filters, staleDays, activeAdvancedFilters]);
 
-  const sortedTableDeals = getSortedDeals(filteredDeals);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sortedTableDeals = useMemo(() => getSortedDeals(filteredDeals), [filteredDeals, sortConfig]);
+
+  // Kanban column grouping: mirrors CompanyDealsKanban's dealsByStatus pattern.
+  // Placing this in useMemo with dragOverStatus as a dep means:
+  //  - During drag (same column): dragOverStatus unchanged → cache hit → zero column re-renders
+  //  - On column crossing: recomputes only the 3 simple filter calls, not the whole sort pipeline
+  //  - activeDeal included so card appears in hovered column during drag
+  const dealsByStatus = useMemo(() => {
+    const map = {};
+    statuses.forEach((status) => {
+      map[status] = sortedTableDeals.filter((d) => {
+        if (activeDeal && d._id.toString() === activeDeal._id.toString() && dragOverStatus) {
+          return dragOverStatus === status;
+        }
+        return d.status === status;
+      });
+    });
+    return map;
+  }, [sortedTableDeals, activeDeal, dragOverStatus, statuses]);
+
   const dealsTotalPages = Math.max(1, Math.ceil(sortedTableDeals.length / dealsPerPage));
   const dealsCurrentPageClamped = Math.min(dealsCurrentPage, dealsTotalPages);
   const paginatedTableDeals = sortedTableDeals.slice(
@@ -1685,8 +1868,8 @@ function Deals() {
   // NEW: Calculate statistics for all deals or selected deals
   const dealStatistics = useMemo(() => {
     const dealsToCalculate =
-      selectedRows.length > 0
-        ? sortedTableDeals.filter((deal) => selectedRows.includes(deal._id))
+      selectedDeals.length > 0
+        ? sortedTableDeals.filter((deal) => selectedDeals.includes(deal._id))
         : sortedTableDeals;
 
     const totalPipeline = dealsToCalculate.reduce(
@@ -1765,29 +1948,33 @@ function Deals() {
       totalLost,
       averageDealSize,
       avgClosingDays,
-      isFiltered: selectedRows.length > 0,
+      isFiltered: selectedDeals.length > 0,
     };
-  }, [sortedTableDeals, selectedRows]);
+  }, [sortedTableDeals, selectedDeals]);
 
   // NEW: Handle row selection
-  const handleRowSelect = (dealId) => {
-    setSelectedRows((prev) => {
-      if (prev.includes(dealId)) {
-        return prev.filter((id) => id !== dealId);
-      } else {
-        return [...prev, dealId];
-      }
-    });
-  };
+  const handleSelectDeal = useCallback((dealId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setSelectedDeals((prev) =>
+      prev.includes(dealId) ? prev.filter((id) => id !== dealId) : [...prev, dealId]
+    );
+  }, [hasBulkAccess]);
 
   // NEW: Handle select all
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     const pageIds = paginatedTableDeals.map((deal) => deal._id);
-    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedRows.includes(id));
+    const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedDeals.includes(id));
     if (allPageSelected) {
-      setSelectedRows((prev) => prev.filter((id) => !pageIds.includes(id)));
+      setSelectedDeals((prev) => prev.filter((id) => !pageIds.includes(id)));
     } else {
-      setSelectedRows((prev) => [...new Set([...prev, ...pageIds])]);
+      setSelectedDeals((prev) => [...new Set([...prev, ...pageIds])]);
     }
   };
 
@@ -1797,12 +1984,25 @@ function Deals() {
   // counterpart: it doesn't clear the selection outright (that's "Cancel")
   // — it steps back down to only the rows on the current page.
   const handleSelectAllAcrossPages = () => {
-    setSelectedRows(sortedTableDeals.map((deal) => deal._id));
+    setSelectedDeals(sortedTableDeals.map((deal) => deal._id));
   };
 
   const handleDeselectAllExtra = () => {
-    setSelectedRows(paginatedTableDeals.map((deal) => deal._id));
+    setSelectedDeals(paginatedTableDeals.map((deal) => deal._id));
   };
+
+  // Kanban column-header "select all in this column" checkbox: given that
+  // column's deal ids, unions them in, or — if every one is already
+  // selected — removes just those ids, leaving other columns' selections
+  // untouched. Same handler is reused for every column.
+  const handleToggleColumnSelect = useCallback((dealIds) => {
+    setSelectedDeals((prev) => {
+      const allSelected = dealIds.every((id) => prev.includes(id));
+      return allSelected
+        ? prev.filter((id) => !dealIds.includes(id))
+        : [...new Set([...prev, ...dealIds])];
+    });
+  }, []);
 
   const handleExport = (format) => {
     if (permission === "readonly") {
@@ -2109,7 +2309,7 @@ function Deals() {
     between buttons, rounding only on the two outer corners, and each
     border pulled left by 1px onto its neighbour so touching borders
     don't double up. Only the icons carry each action's colour. */}
-<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+            <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
@@ -2135,7 +2335,7 @@ function Deals() {
               <button
                 onClick={() => {
                   setSelectionMode(false);
-                  setSelectedRows([]);
+                  setSelectedDeals([]);
                 }}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
@@ -2146,7 +2346,7 @@ function Deals() {
             <div className="flex items-center gap-3 flex-shrink-0">
               <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
               <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
-                {selectedRows.length} deal{selectedRows.length !== 1 ? "s" : ""} selected
+                {selectedDeals.length} deal{selectedDeals.length !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
@@ -2165,350 +2365,355 @@ function Deals() {
             </div>
           </div>
         ) : (
-        <>
-        <div
-          className={`flex flex-col gap-1.5 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
-        >
-          <h2
-            className="m-0 font-medium truncate text-sm sm:text-base"
-            style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
-          >
-            Deals
-          </h2>
-          <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
-            Manage Your Sales Pipeline
-          </p>
-        </div>
+          <>
+            <div
+              className={`flex flex-col gap-1 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
+            >
+              <div className="flex items-center gap-2">
+                <h2
+                  className="m-0 font-medium truncate text-sm sm:text-base"
+                  style={{ lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
+                >
+                  Deals
+                </h2>
+                
+              </div>
+              <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
+                Manage Your Sales Pipeline
+              </p>
+            </div>
 
-        {/* Search — flex-1 so it fills exactly the space freed by the title collapsing, same as Companies */}
-        <div className="relative flex-1 min-w-0 flex items-center justify-end">
-          <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
-          >
-            <SearchIcon
-              className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
-              onClick={() => {
-                setIsSearchExpanded(true);
-                searchInputRef.current?.focus();
-              }}
-            />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={filters.searchTerm}
-              onChange={(e) =>
-                setFilters({ ...filters, searchTerm: e.target.value })
-              }
-              onFocus={() => setIsSearchExpanded(true)}
-              onBlur={() => {
-                if (!filters.searchTerm) setIsSearchExpanded(false);
-              }}
-              className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-              placeholder="Search deals by title, company, or status..."
-            />
-            {/* Clears the typed text only — box stays open. mousedown+
+            {/* Search — flex-1 so it fills exactly the space freed by the title collapsing, same as Companies */}
+            <div className="relative flex-1 min-w-0 flex items-center justify-end">
+              <div
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}
+              >
+                <SearchIcon
+                  className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+                  onClick={() => {
+                    setIsSearchExpanded(true);
+                    searchInputRef.current?.focus();
+                  }}
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={filters.searchTerm}
+                  onChange={(e) =>
+                    setFilters({ ...filters, searchTerm: e.target.value })
+                  }
+                  onFocus={() => setIsSearchExpanded(true)}
+                  onBlur={() => {
+                    if (!filters.searchTerm) setIsSearchExpanded(false);
+                  }}
+                  className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                  placeholder="Search deals by title, company, or status..."
+                />
+                {/* Clears the typed text only — box stays open. mousedown+
                 preventDefault stops the input's onBlur (which would collapse
                 the box) from firing before the click lands. */}
-            {isSearchExpanded && filters.searchTerm && (
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setFilters({ ...filters, searchTerm: "" })}
-                aria-label="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Filters, Switcher, Actions — fixed-size group */}
-        <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
-          {/* Filters — folded into the three-dot menu on mobile */}
-          <button
-            onClick={() => setShowFilters(true)}
-            className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
-            title="Filters"
-          >
-            <FilterIcon size={15} />
-            {activeAdvancedFilters.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                {activeAdvancedFilters.length}
-              </span>
-            )}
-          </button>
-
-          {/* List / Kanban Toggle — folded into the three-dot menu on mobile */}
-          <div className="hidden lg:flex relative items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
-            <span
-              className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
-              style={{ left: showKanban ? 36 : 4 }}
-            />
-            <button
-              onClick={() => setShowKanban(false)}
-              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-              title="List View"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setShowKanban(true)}
-              className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-              title="Kanban View"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
-              </svg>
-            </button>
-          </div>
-
-          {/* More options */}
-          <div className="relative" ref={moreMenuRef}>
-            <button
-              onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
-              title="More options"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-
-            {isMoreMenuOpen && (
-              <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
-                {/* Filters + List/Kanban: mobile-only entries, folded in here instead of their own controls */}
-                <button
-                  onClick={() => {
-                    setShowFilters(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FilterIcon size={15} className="text-gray-400" />
-                  Filters
-                  {activeAdvancedFilters.length > 0 && (
-                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                      {activeAdvancedFilters.length}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowKanban(false);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <List className="w-4 h-4 text-gray-400" />
-                  List View
-                  {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowKanban(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                  </svg>
-                  Kanban View
-                  {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowStats((prev) => !prev);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Eye className="w-4 h-4 text-gray-400" />
-                  {showStats ? "Hide KPIs" : "Unhide KPIs"}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowVideoTutorial(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  Video Tutorial
-                </button>
-                <button
-                  onClick={() => {
-                    setShowImport(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Upload className="w-4 h-4 text-gray-400" />
-                  Import
-                </button>
-                <div className="relative" ref={exportButtonRef}>
+                {isSearchExpanded && filters.searchTerm && (
                   <button
-                    onClick={() => setShowExportMenu((prev) => !prev)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setFilters({ ...filters, searchTerm: "" })}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100 transition-colors"
                   >
-                    <Download className="w-4 h-4 text-gray-400" />
-                    Export
+                    <X className="w-3.5 h-3.5" strokeWidth={2.5} />
                   </button>
-                  {showExportMenu && (
-                    <div className="absolute left-full top-0 ml-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-xl">
-                      <button
-                        onClick={() => {
-                          handleExport("excel");
-                          setShowExportMenu(false);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-lg flex items-center gap-2"
-                      >
-                        Export as Excel
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleExport("pdf");
-                          setShowExportMenu(false);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-lg flex items-center gap-2"
-                      >
-                        Export as PDF
-                      </button>
-                    </div>
-                  )}
-                </div>
+                )}
+              </div>
+            </div>
+
+            {/* Filters, Switcher, Actions — fixed-size group */}
+            <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+              {/* Filters — folded into the three-dot menu on mobile */}
+              <button
+                onClick={() => setShowFilters(true)}
+                className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
+                title="Filters"
+              >
+                <FilterIcon size={15} />
+                {activeAdvancedFilters.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {activeAdvancedFilters.length}
+                  </span>
+                )}
+              </button>
+
+              {/* List / Kanban Toggle — folded into the three-dot menu on mobile */}
+              <div className="hidden lg:flex relative items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+                <span
+                  className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+                  style={{ left: showKanban ? 36 : 4 }}
+                />
                 <button
-                  onClick={() => {
-                    setShowSettings(true);
-                    setIsMoreMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={() => setShowKanban(false)}
+                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                  title="List View"
                 >
-                  <Settings className="w-4 h-4 text-gray-400" />
-                  Deal Settings
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowKanban(true)}
+                  className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                  title="Kanban View"
+                >
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
+                  </svg>
                 </button>
               </div>
-            )}
-          </div>
 
-          {/* Add Deal Button — icon-only on mobile */}
-          <button
-            onClick={() => {
-              setEditDeal(null);
-              setShowQuickAdd((v) => !v);
-            }}
-            title={showQuickAdd && !editDeal ? "Cancel" : "New Deal"}
-            className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-          >
-            <Plus className="w-4 h-4 flex-shrink-0" />
-            <span className="hidden lg:inline">{showQuickAdd && !editDeal ? "Cancel" : "New Deal"}</span>
-          </button>
-        </div>
-        </>
+              {/* More options */}
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                  title="More options"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isMoreMenuOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
+                    {/* Filters + List/Kanban: mobile-only entries, folded in here instead of their own controls */}
+                    <button
+                      onClick={() => {
+                        setShowFilters(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FilterIcon size={15} className="text-gray-400" />
+                      Filters
+                      {activeAdvancedFilters.length > 0 && (
+                        <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                          {activeAdvancedFilters.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowKanban(false);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <List className="w-4 h-4 text-gray-400" />
+                      List View
+                      {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowKanban(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
+                      </svg>
+                      Kanban View
+                      {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowStats((prev) => !prev);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Eye className="w-4 h-4 text-gray-400" />
+                      {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowImport(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      Import
+                    </button>
+                    <div className="relative" ref={exportButtonRef}>
+                      <button
+                        onClick={() => setShowExportMenu((prev) => !prev)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Download className="w-4 h-4 text-gray-400" />
+                        Export
+                      </button>
+                      {showExportMenu && (
+                        <div className="absolute left-full top-0 ml-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-xl">
+                          <button
+                            onClick={() => {
+                              handleExport("excel");
+                              setShowExportMenu(false);
+                              setIsMoreMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-lg flex items-center gap-2"
+                          >
+                            Export as Excel
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExport("pdf");
+                              setShowExportMenu(false);
+                              setIsMoreMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-lg flex items-center gap-2"
+                          >
+                            Export as PDF
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowColumnSettings(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Columns
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowSettings(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Deal Settings
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Add Deal Button — icon-only on mobile */}
+              <button
+                onClick={() => {
+                  setEditDeal(null);
+                  setShowQuickAdd((v) => !v);
+                }}
+                title={showQuickAdd && !editDeal ? "Cancel" : "New Deal"}
+                className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden lg:inline">{showQuickAdd && !editDeal ? "Cancel" : "New Deal"}</span>
+              </button>
+            </div>
+          </>
         )}
       </div>
 
       {showStats && (
-      <div
-        className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
-        style={{
-          left: "var(--sidebar-width, 0px)",
-          zIndex: 39,
-          boxSizing: "border-box",
-        }}
-      >
-        {/* KPI Strip */}
-        <div className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-center lg:gap-6 self-stretch">
-          {[
-            { label: "Pipeline Summary", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: PipelineSummaryIcon, trend: `${Math.abs(dealStatistics.trends.pipeline)}% this week`, trendUp: dealStatistics.trends.pipeline >= 0 },
-            { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
-            { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: ClipboardList, iconClassName: "w-7 h-7", trend: `${Math.abs(dealStatistics.trends.avgSize)}% this week`, trendUp: dealStatistics.trends.avgSize >= 0 },
-            { label: "Deals Lost", value: dealStatistics.lostCount, icon: DealsLostIcon, trend: `${Math.abs(dealStatistics.trends.lost)}% this week`, trendUp: dealStatistics.trends.lost >= 0 },
-          ].map(({ label, value, icon: Icon, iconClassName, trend, trendUp }) => (
-            <div
-              key={label}
-              className="box-border flex flex-row justify-start items-center relative w-full h-[89px] lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0 bg-white"
-              style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
-            >
-              <div className="flex flex-row items-center w-full min-w-0" style={{ gap: "14px" }}>
-                {/* Mobile: plain icon, no badge/border */}
-                <Icon className={`flex lg:hidden flex-shrink-0 ${iconClassName || "w-5 h-5"}`} style={{ color: "#0085FF" }} />
-                {/* Desktop: original bordered icon box */}
-                <div
-                  className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                  style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
-                >
-                  <Icon className={iconClassName || "w-6 h-6"} style={{ color: "#0085FF" }} />
-                </div>
-                <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: "4px" }}>
-                  <span
-                    className="truncate w-full text-[10px] sm:text-xs"
-                    style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, lineHeight: "120%", color: "#525866" }}
+        <div
+          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            zIndex: 39,
+            boxSizing: "border-box",
+          }}
+        >
+          {/* KPI Strip */}
+          <div className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-center lg:gap-6 self-stretch">
+            {[
+              { label: "Pipeline Summary", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: PipelineSummaryIcon, trend: `${Math.abs(dealStatistics.trends.pipeline)}% this week`, trendUp: dealStatistics.trends.pipeline >= 0 },
+              { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
+              { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: ClipboardList, iconClassName: "w-7 h-7", trend: `${Math.abs(dealStatistics.trends.avgSize)}% this week`, trendUp: dealStatistics.trends.avgSize >= 0 },
+              { label: "Deals Lost", value: dealStatistics.lostCount, icon: DealsLostIcon, trend: `${Math.abs(dealStatistics.trends.lost)}% this week`, trendUp: dealStatistics.trends.lost >= 0 },
+            ].map(({ label, value, icon: Icon, iconClassName, trend, trendUp }) => (
+              <div
+                key={label}
+                className="box-border flex flex-row justify-start items-center relative w-full h-[89px] lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0 bg-white"
+                style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
+              >
+                <div className="flex flex-row items-center w-full min-w-0" style={{ gap: "14px" }}>
+                  {/* Mobile: plain icon, no badge/border */}
+                  <Icon className={`flex lg:hidden flex-shrink-0 ${iconClassName || "w-5 h-5"}`} style={{ color: "#0085FF" }} />
+                  {/* Desktop: original bordered icon box */}
+                  <div
+                    className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
+                    style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
                   >
-                    {label}
-                  </span>
-                  <span
-                    className="truncate w-full text-base sm:text-lg"
-                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                  >
-                    {value}
-                  </span>
-                  {/* Trend, inline under the value on mobile */}
-                  {trend && (
-                    <div className="flex lg:hidden flex-row items-center" style={{ gap: 4 }}>
-                      {trendUp ? (
-                        <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                      ) : (
-                        <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                      )}
-                      <span
-                        className="truncate min-w-0 text-[9px]"
-                        style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                      >
-                        {trend}
-                      </span>
-                    </div>
-                  )}
+                    <Icon className={iconClassName || "w-6 h-6"} style={{ color: "#0085FF" }} />
+                  </div>
+                  <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: "4px" }}>
+                    <span
+                      className="truncate w-full text-[10px] sm:text-xs"
+                      style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, lineHeight: "120%", color: "#525866" }}
+                    >
+                      {label}
+                    </span>
+                    <span
+                      className="truncate w-full text-base sm:text-lg"
+                      style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
+                    >
+                      {value}
+                    </span>
+                    {/* Trend, inline under the value on mobile */}
+                    {trend && (
+                      <div className="flex lg:hidden flex-row items-center" style={{ gap: 4 }}>
+                        {trendUp ? (
+                          <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
+                        ) : (
+                          <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
+                        )}
+                        <span
+                          className="truncate min-w-0 text-[9px]"
+                          style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
+                        >
+                          {trend}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {/* Trend, absolute bottom-right on desktop */}
+                {trend && (
+                  <div
+                    className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
+                    style={{ gap: 4, right: 16, bottom: 16 }}
+                  >
+                    {trendUp ? (
+                      <TrendingUp size={14} style={{ color: "#00C950" }} />
+                    ) : (
+                      <TrendingDown size={14} style={{ color: "#E82222" }} />
+                    )}
+                    <span
+                      className="whitespace-nowrap"
+                      style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
+                    >
+                      {trend}
+                    </span>
+                  </div>
+                )}
               </div>
-              {/* Trend, absolute bottom-right on desktop */}
-              {trend && (
-                <div
-                  className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-                  style={{ gap: 4, right: 16, bottom: 16 }}
-                >
-                  {trendUp ? (
-                    <TrendingUp size={14} style={{ color: "#00C950" }} />
-                  ) : (
-                    <TrendingDown size={14} style={{ color: "#E82222" }} />
-                  )}
-                  <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                  >
-                    {trend}
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
       )}
 
       <div
-        className={`-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8 ${
-          showStats
+        className={`-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8 ${showStats
             ? showKanban ? "mt-[302px] lg:mt-[184px]" : "mt-[286px] lg:mt-[168px]"
             : showKanban ? "mt-16" : "mt-12"
-        }`}
+          }`}
       >
         {/* Modals & Overlays */}
         <AdvancedFilterPanel
           isOpen={showFilters}
           onClose={() => setShowFilters(false)}
           columns={dealFilterColumns}
+          data={deals}
+          getFieldValue={getDealFieldValue}
           filters={activeAdvancedFilters}
           setFilters={setActiveAdvancedFilters}
           onApply={(newFilters) => setActiveAdvancedFilters(newFilters)}
@@ -2606,9 +2811,11 @@ function Deals() {
           <DndContext
             sensors={sensors}
             collisionDetection={collisionDetectionStrategy}
+            measuring={DND_MEASURING}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
           >
             {/* overflow-y no longer hidden here — columns now size to their
                 natural content height (like CompanyDealsKanban.jsx's board),
@@ -2621,7 +2828,7 @@ function Deals() {
             >
               <div className="flex min-w-max" style={{ gap: "16px" }}>
                 {statuses?.map((status) => {
-                  const columnDeals = sortedTableDeals.filter((d) => d.status === status);
+                  const columnDeals = dealsByStatus[status] ?? [];
                   const colorTheme =
                     status === "Won" ? "green" : status === "Lost" ? "red" : "blue";
                   return (
@@ -2629,21 +2836,30 @@ function Deals() {
                       key={status}
                       status={status}
                       deals={columnDeals}
+                      totalDealsCount={sortedTableDeals.length}
                       colorTheme={colorTheme}
                       onAddClick={toggleForm}
                       handleEditDeal={handleEditDeal}
+                      handleDeleteDeal={handleDeleteDeal}
+                      onQuickView={setQuickViewDealId}
                       isStale={isStale}
                       loading={showKanbanSkeleton}
+                      selectedDeals={selectedDeals}
+                      onToggleSelect={handleSelectDeal}
+                      onToggleColumnSelect={handleToggleColumnSelect}
                     />
                   );
                 })}
               </div>
             </div>
-            <DragOverlay>
-              {activeDeal ? (
-                <ModernDealCard deal={activeDeal} onClick={() => {}} isStale={isStale} />
-              ) : null}
-            </DragOverlay>
+            {createPortal(
+              <DragOverlay dropAnimation={null}>
+                {activeDeal ? (
+                  <ModernDealCard deal={activeDeal} onClick={() => { }} isStale={isStale} />
+                ) : null}
+              </DragOverlay>,
+              document.body,
+            )}
           </DndContext>
         ) : (
           <div>
@@ -2656,9 +2872,9 @@ function Deals() {
                 <DealsTable
                   scrollContainerRef={tableScrollRef}
                   sortedTableDeals={paginatedTableDeals}
-                  selectedRows={selectedRows}
+                  selectedRows={selectedDeals}
                   handleSelectAll={handleSelectAll}
-                  handleRowSelect={handleRowSelect}
+                  handleRowSelect={handleSelectDeal}
                   handleRowMouseDown={handleRowMouseDown}
                   handleRowMouseUp={handleRowMouseUp}
                   handleRowTouchStart={handleRowTouchStart}
@@ -2676,11 +2892,13 @@ function Deals() {
                   loading={loading}
                   skeletonRows={dealsPerPage}
                   searchTerm={filters.searchTerm}
+                  externalHiddenColumns={persistedHiddenColumnKeys}
+                  externalColumnOrder={persistedColumnOrderKeys}
                 />
               </div>
             </div>
 
-            {sortedTableDeals.length > 0 && (
+            {sortedTableDeals.length > 0 && !showKanban && (
               <div
                 className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
                 style={{
@@ -2707,112 +2925,112 @@ function Deals() {
                 </div>
 
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-700 font-inter">
-                    Showing{" "}
-                    <span className="font-semibold">
-                      {(dealsCurrentPageClamped - 1) * dealsPerPage + 1}
-                    </span>{" "}
-                    to{" "}
-                    <span className="font-semibold">
-                      {Math.min(dealsCurrentPageClamped * dealsPerPage, sortedTableDeals.length)}
-                    </span>{" "}
-                    of <span className="font-semibold">{sortedTableDeals.length}</span> results
-                  </p>
-                  <div className="relative ml-2">
-                    <select
-                      value={dealsPerPage}
-                      onChange={(e) => {
-                        setDealsPerPage(parseInt(e.target.value));
-                        setDealsCurrentPage(1);
-                      }}
-                      className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                    >
-                      <option value={10}>10 per page</option>
-                      <option value={20}>20 per page</option>
-                      <option value={50}>50 per page</option>
-                      <option value={100}>100 per page</option>
-                    </select>
-                    <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                  <div className="flex items-center space-x-2">
+                    <p className="text-sm text-gray-700 font-inter">
+                      Showing{" "}
+                      <span className="font-semibold">
+                        {(dealsCurrentPageClamped - 1) * dealsPerPage + 1}
+                      </span>{" "}
+                      to{" "}
+                      <span className="font-semibold">
+                        {Math.min(dealsCurrentPageClamped * dealsPerPage, sortedTableDeals.length)}
+                      </span>{" "}
+                      of <span className="font-semibold">{sortedTableDeals.length}</span> results
+                    </p>
+                    <div className="relative ml-2">
+                      <select
+                        value={dealsPerPage}
+                        onChange={(e) => {
+                          setDealsPerPage(parseInt(e.target.value));
+                          setDealsCurrentPage(1);
+                        }}
+                        className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                      >
+                        <option value={10}>10 per page</option>
+                        <option value={20}>20 per page</option>
+                        <option value={50}>50 per page</option>
+                        <option value={100}>100 per page</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setDealsCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={dealsCurrentPageClamped === 1}
-                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setDealsCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={dealsCurrentPageClamped === 1}
+                      className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
 
-                  {(() => {
-                    const commitPage = () => {
-                      const n = parseInt(dealsPageInput, 10);
-                      if (!Number.isNaN(n)) setDealsCurrentPage(Math.min(Math.max(n, 1), dealsTotalPages));
-                      setDealsEditingPage(false);
-                    };
-                    const items = [1];
-                    if (dealsCurrentPageClamped > 2) items.push("left-dots");
-                    if (dealsCurrentPageClamped !== 1 && dealsCurrentPageClamped !== dealsTotalPages) items.push(dealsCurrentPageClamped);
-                    if (dealsCurrentPageClamped < dealsTotalPages - 1) items.push("right-dots");
-                    if (dealsTotalPages > 1) items.push(dealsTotalPages);
+                    {(() => {
+                      const commitPage = () => {
+                        const n = parseInt(dealsPageInput, 10);
+                        if (!Number.isNaN(n)) setDealsCurrentPage(Math.min(Math.max(n, 1), dealsTotalPages));
+                        setDealsEditingPage(false);
+                      };
+                      const items = [1];
+                      if (dealsCurrentPageClamped > 2) items.push("left-dots");
+                      if (dealsCurrentPageClamped !== 1 && dealsCurrentPageClamped !== dealsTotalPages) items.push(dealsCurrentPageClamped);
+                      if (dealsCurrentPageClamped < dealsTotalPages - 1) items.push("right-dots");
+                      if (dealsTotalPages > 1) items.push(dealsTotalPages);
 
-                    return items.map((item, index) => {
-                      if (item === "left-dots" || item === "right-dots") {
+                      return items.map((item, index) => {
+                        if (item === "left-dots" || item === "right-dots") {
+                          return (
+                            <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                              ....
+                            </span>
+                          );
+                        }
+                        const isCurrent = item === dealsCurrentPageClamped;
+                        if (isCurrent && dealsEditingPage) {
+                          return (
+                            <input
+                              key="page-edit"
+                              autoFocus
+                              type="number"
+                              min={1}
+                              max={dealsTotalPages}
+                              value={dealsPageInput}
+                              onChange={(e) => setDealsPageInput(e.target.value)}
+                              onBlur={commitPage}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitPage();
+                                if (e.key === "Escape") setDealsEditingPage(false);
+                              }}
+                              className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                          );
+                        }
                         return (
-                          <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
-                            ....
-                          </span>
-                        );
-                      }
-                      const isCurrent = item === dealsCurrentPageClamped;
-                      if (isCurrent && dealsEditingPage) {
-                        return (
-                          <input
-                            key="page-edit"
-                            autoFocus
-                            type="number"
-                            min={1}
-                            max={dealsTotalPages}
-                            value={dealsPageInput}
-                            onChange={(e) => setDealsPageInput(e.target.value)}
-                            onBlur={commitPage}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitPage();
-                              if (e.key === "Escape") setDealsEditingPage(false);
+                          <button
+                            key={`page-${item}`}
+                            onClick={() => setDealsCurrentPage(item)}
+                            onDoubleClick={() => {
+                              if (isCurrent) {
+                                setDealsPageInput(String(dealsCurrentPageClamped));
+                                setDealsEditingPage(true);
+                              }
                             }}
-                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
+                            title={isCurrent ? "Double-click to type a page number" : undefined}
+                            className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                          >
+                            {item}
+                          </button>
                         );
-                      }
-                      return (
-                        <button
-                          key={`page-${item}`}
-                          onClick={() => setDealsCurrentPage(item)}
-                          onDoubleClick={() => {
-                            if (isCurrent) {
-                              setDealsPageInput(String(dealsCurrentPageClamped));
-                              setDealsEditingPage(true);
-                            }
-                          }}
-                          title={isCurrent ? "Double-click to type a page number" : undefined}
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          {item}
-                        </button>
-                      );
-                    });
-                  })()}
+                      });
+                    })()}
 
-                  <button
-                    onClick={() => setDealsCurrentPage((p) => Math.min(dealsTotalPages, p + 1))}
-                    disabled={dealsCurrentPageClamped === dealsTotalPages}
-                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+                    <button
+                      onClick={() => setDealsCurrentPage((p) => Math.min(dealsTotalPages, p + 1))}
+                      disabled={dealsCurrentPageClamped === dealsTotalPages}
+                      className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2821,7 +3039,7 @@ function Deals() {
               isOpen={showBulkActions}
               onClose={() => setShowBulkActions(false)}
               selectedItems={sortedTableDeals.filter((d) =>
-                selectedRows.includes(d._id),
+                selectedDeals.includes(d._id),
               )}
               onBulkUpdate={handleBulkUpdateDeals}
               fieldConfig={dealFieldConfig}
@@ -2833,7 +3051,7 @@ function Deals() {
               isOpen={showExportModal}
               onClose={() => setShowExportModal(false)}
               columns={exportColumns}
-              selectedIds={selectedRows}
+              selectedIds={selectedDeals}
               exportUrl="/deals/export-selected"
               fileName="Exported_Deals.csv"
             />
@@ -2851,7 +3069,7 @@ function Deals() {
                     </h3>
                     <p className="text-sm text-gray-500 font-inter mb-6">
                       Are you sure you want to delete{" "}
-                      <strong>{selectedRows.length}</strong> deals? This action
+                      <strong>{selectedDeals.length}</strong> deals? This action
                       cannot be undone.
                     </p>
                     <div className="flex gap-3 justify-center">
@@ -2864,7 +3082,7 @@ function Deals() {
                       </button>
                       <button
                         onClick={async () => {
-                          await handleBulkDeleteDeals(selectedRows);
+                          await handleBulkDeleteDeals(selectedDeals);
                           setShowBulkDeleteModal(false);
                         }}
                         disabled={loading}

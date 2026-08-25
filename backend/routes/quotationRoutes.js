@@ -43,6 +43,14 @@ router.get(
   checkPermission("quotations", "readonly"),
   quotationController.downloadQuotation
 );
+router.post(
+  "/:id/duplicate",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("quotations", "write"),
+  checkPermission("quotations", "read-write"),
+  quotationController.duplicateQuotation
+);
 router.delete(
   "/:id",
   requireAuth,
@@ -88,6 +96,24 @@ router.patch(
   restrictByPlan("quotations", "write"),
   checkPermission("quotations", "read-write"),
   quotationController.updateQuotationNumber
+);
+
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("quotations", "write"),
+  checkPermission("quotations", "read-write"),
+  quotationController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("quotations", "write"),
+  checkPermission("quotations", "read-write"),
+  quotationController.bulkUpdateSignature
 );
 
 module.exports = router;

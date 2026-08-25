@@ -36,6 +36,24 @@ router.get("/pagination",
   purchaseController.getAllPurchasesWithPagination
 );
 
+// Export Selected Purchases
+router.post("/export-selected",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'read'),
+  checkPermission("purchases", "readonly"),
+  purchaseController.exportSelectedPurchases
+);
+
+// Bulk Import Purchases (specific route before generic /:id)
+router.post("/bulk-import",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.bulkImportPurchases
+);
+
 // Get Purchases for a Vendor (specific route before generic /:id)
 router.get("/vendor/:vendorId",
   requireAuth,
@@ -43,6 +61,15 @@ router.get("/vendor/:vendorId",
   restrictByPlan('purchases', 'read'),
   checkPermission("purchases", "readonly"),
   purchaseController.getPurchasesByVendor
+);
+
+// Download Purchase as PDF (specific route before generic /:id)
+router.get("/download/:id",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'read'),
+  checkPermission("purchases", "readonly"),
+  purchaseController.downloadPurchase
 );
 
 // Get Single Purchase
@@ -79,6 +106,42 @@ router.delete("/:id",
   restrictByPlan('purchases', 'write'),
   checkPermission("purchases", "read-write"),
   purchaseController.deletePurchase
+);
+
+// GET /api/purchases/:id/payments (List payments)
+router.get("/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'read'),
+  checkPermission("purchases", "readonly"),
+  purchaseController.getPurchasePayments
+);
+
+// POST /api/purchases/:id/payments (Record a payment)
+router.post("/:id/payments",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.addPurchasePayment
+);
+
+// PUT /api/purchases/:id/payments/:paymentId (Update a payment)
+router.put("/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.updatePurchasePayment
+);
+
+// DELETE /api/purchases/:id/payments/:paymentId (Delete a payment)
+router.delete("/:id/payments/:paymentId",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan('purchases', 'write'),
+  checkPermission("purchases", "read-write"),
+  purchaseController.deletePurchasePayment
 );
 
 module.exports = router;

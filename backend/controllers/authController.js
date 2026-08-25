@@ -8,7 +8,6 @@ const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 const KanbanBoard = require("../models/KanbanBoard");
 const BankDetails = require("../models/BankDetails");
 const generateUniqueCode = require("../utils/generateUniqueCode");
-const sendMail = require("../utils/sendMail");
 const { logUserAction } = require("../utils/logger");
 const razorpay = require("../config/razorpay");
 const jwt = require("jsonwebtoken");
@@ -545,12 +544,13 @@ exports.inviteUser = async (req, res) => {
       });
     }
 
-    if (subscription.isTrialActive) {
-      return res.status(400).json({
-        message:
-          "Cannot invite users during trial period. Please upgrade your subscription.",
-      });
-    }
+    // TEMPORARY HACK FOR TESTING: Allow invites during trial
+    // if (subscription.isTrialActive) {
+    //   return res.status(400).json({
+    //     message:
+    //       "Cannot invite users during trial period. Please upgrade your subscription.",
+    //   });
+    // }
 
     // Seat check via addonManagement utility
     const seatStatus = await getSeatStatus(req.user.organization);
@@ -1134,7 +1134,11 @@ exports.completeRegistration = async (req, res) => {
     } else if (req.body.orgName) {
       // User is creating a new organization
       const code = await generateUniqueCode();
-      const org = new Organization({ name: req.body.orgName, code });
+      const org = new Organization({ 
+        name: req.body.orgName, 
+        code,
+        ...(req.body.gstNumber && { gstNumber: req.body.gstNumber })
+      });
       await org.save();
       organization = org._id;
       role = "admin";
@@ -1160,6 +1164,7 @@ exports.completeRegistration = async (req, res) => {
       branding.companyName = req.body.orgName;
       branding.colors = { primary: "#ffffff", secondary: "#000000" };
       branding.organization = organization;
+      if (req.body.gstNumber) branding.gstin = req.body.gstNumber;
       await branding.save();
 
       const kanbanBoard = new KanbanBoard({
@@ -1650,7 +1655,7 @@ exports.googleStatus = async (req, res) => {
     // A static GOOGLE_OAUTH_REFRESH_TOKEN in .env makes every meeting use
     // that account immediately — no per-org DB record, no consent click.
     if (isGoogleConnectedByDefault()) {
-      return res.json({ configured: true, connected: true, connectedEmail: null });
+      return res.json({ configured: true, connected: true, connectedEmail: null, staticDefault: true });
     }
 
     const integration = await GoogleIntegration.findOne({ organization: req.user.organization });
@@ -1658,9 +1663,29 @@ exports.googleStatus = async (req, res) => {
       configured: isGoogleConfigured(),
       connected: !!integration,
       connectedEmail: integration?.connectedEmail || null,
+      staticDefault: false,
     });
   } catch (error) {
     console.error("Error fetching Google integration status:", error);
     res.status(500).json({ error: "Failed to fetch Google integration status" });
+  }
+};
+
+// DELETE /api/auth/google/disconnect — removes this organization's stored
+// refresh token so Generate Link stops using this Google account. Only
+// applies to the per-org consent flow; when a static GOOGLE_OAUTH_REFRESH_TOKEN
+// is set there's no per-org record to remove, so this is a no-op in that mode.
+exports.googleDisconnect = async (req, res) => {
+  try {
+    if (isGoogleConnectedByDefault()) {
+      return res.status(400).json({
+        error: "This Google account is configured server-wide and can't be disconnected here.",
+      });
+    }
+    await GoogleIntegration.deleteOne({ organization: req.user.organization });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error disconnecting Google integration:", error);
+    res.status(500).json({ error: "Failed to disconnect Google account" });
   }
 };

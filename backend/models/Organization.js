@@ -8,6 +8,7 @@ const organizationSchema = new mongoose.Schema(
     address: { type: String },
     state: { type: String },
     logo: { type: String },
+    gstNumber: { type: String, trim: true },
   },
   { timestamps: true },
 );

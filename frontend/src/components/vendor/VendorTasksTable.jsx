@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Skeleton from "../common/Skeleton";
-import { Plus, Calendar, Search, Trash2, Eye } from "lucide-react";
+import StatTileSkeleton from "../common/StatTileSkeleton";
+import { Plus, Calendar, Search, Trash2, Eye, Edit3, ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import DataTable from "../common/DataTable";
+import RowActionsMenu from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
@@ -58,7 +60,7 @@ const formatDate = (iso) =>
     ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "—";
 
-const VendorTasksTable = ({ vendorId }) => {
+const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, onAutoOpenCreateConsumed }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -76,8 +78,19 @@ const VendorTasksTable = ({ vendorId }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   
   const [columnOrder, setColumnOrder] = useState(() => [
-    "selection", "title", "description", "assignedTo", "status", "priority", "dueDate", "actions"
+    "selection", "title", "description", "assignedTo", "status", "priority", "dueDate"
   ]);
+
+  // "New Entry" menu on the vendor header (VendorDetailsPageNew.jsx) sets
+  // autoOpenCreate + switches to this tab in the same click — same
+  // pendingCreate pattern CompanyProfilePage.jsx uses for its tabs.
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setEditingTask(null);
+      setShowTaskForm(true);
+      onAutoOpenCreateConsumed?.();
+    }
+  }, [autoOpenCreate, onAutoOpenCreateConsumed]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -429,63 +442,68 @@ const VendorTasksTable = ({ vendorId }) => {
           );
         },
       },
-      {
-        id: "actions",
-        size: 100,
-        enableResizing: false,
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedTask(row.original);
-                setIsTaskModalOpen(true);
-              }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="View"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm("Delete this task?")) handleTaskDelete(row.original._id);
-              }}
-              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      },
     ],
     [paginatedTasks, selectedItems, selectAll, clearSelection, toggleItem],
+  );
+
+  // No dedicated "Actions" column — a single ⋮ button (RowActionsMenu) that
+  // pops View/Delete as a small action card renders inside whichever
+  // column currently ends up last (see finalColumns below), the same way
+  // CompanyContactsTab.jsx puts its "open contact" icon on the last
+  // visible column instead of a fixed Actions column.
+  const taskActionButtons = (task) => (
+    <RowActionsMenu
+      actions={[
+        { label: "View", icon: Eye, onClick: () => { setSelectedTask(task); setIsTaskModalOpen(true); } },
+        { label: "Edit", icon: Edit3, onClick: () => handleEditTask(task) },
+        { label: "Delete", icon: Trash2, danger: true, onClick: () => { if (window.confirm("Delete this task?")) handleTaskDelete(task._id); } },
+      ]}
+    />
   );
 
   const finalColumns = useMemo(() => {
     const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const actionsCol = visibleBase.find(c => c.id === "actions");
-    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
     const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
-    
+
     const leftCols = otherCols.filter(c => leftPinnedKeys.has(c.id));
     const rightCols = otherCols.filter(c => rightPinnedKeys.has(c.id));
     const midCols = otherCols.filter(c => !leftPinnedKeys.has(c.id) && !rightPinnedKeys.has(c.id));
-    
+
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
-    
-    return [
+
+    const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
-      ...(actionsCol ? [actionsCol] : [])
     ];
+
+    let lastIdx = -1;
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].id !== "selection") {
+        lastIdx = i;
+        break;
+      }
+    }
+    if (lastIdx !== -1) {
+      const original = ordered[lastIdx];
+      const originalCell = original.cell;
+      ordered[lastIdx] = {
+        ...original,
+        cell: (props) => (
+          <div className="flex items-center justify-between gap-2 w-full min-w-0">
+            <div className="min-w-0 flex-1">{originalCell(props)}</div>
+            {taskActionButtons(props.row.original)}
+          </div>
+        ),
+      };
+    }
+
+    return ordered;
   }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
@@ -516,8 +534,57 @@ const VendorTasksTable = ({ vendorId }) => {
     // The skeleton is handled by DataTable's loading prop now.
   }
 
+  const totalTasksCount = tasks.length;
+  const pendingTasksCount = tasks.filter((t) => t.status !== "Completed").length;
+  const overdueTasksCount = tasks.filter(
+    (t) => t.status !== "Completed" && t.dueDate && new Date(t.dueDate) < new Date(),
+  ).length;
+  const completedTasksCount = tasks.filter((t) => t.status === "Completed").length;
+  const taskCompletionRate = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  const taskKpiTiles = [
+    { label: "Total Tasks", value: totalTasksCount, icon: ListChecks, subtitle: "All time" },
+    { label: "Pending Tasks", value: pendingTasksCount, icon: Clock, subtitle: "Awaiting action", subtitleClass: "text-amber-600" },
+    { label: "Overdue Tasks", value: overdueTasksCount, icon: AlertCircle, subtitle: "Action Required", subtitleClass: "text-red-600" },
+    { label: "Completed Tasks", value: completedTasksCount, icon: CheckCircle, subtitle: `${taskCompletionRate}% Completion Rate`, subtitleClass: "text-green-600" },
+  ];
+
   return (
     <div className="h-full mt-0">
+      {/* KPI Tiles — same statTiles markup as CompanyTasksTab.jsx's KPI row.
+          Visibility is driven by the parent page's own Financial Summary
+          strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
+      {showKPIs && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {loading && !tasks.length
+          ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
+          : taskKpiTiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
+              >
+                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                  <tile.icon size={18} strokeWidth={1.5} />
+                </div>
+                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                  <tile.icon size={20} strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
+                    <p className="text-base font-semibold text-gray-900 truncate">{tile.value}</p>
+                  </div>
+                  {tile.subtitle && (
+                    <span className={`hidden sm:inline text-[11px] flex-shrink-0 ${tile.subtitleClass || "text-gray-400"}`}>
+                      {tile.subtitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+      </div>
+      )}
+
       {/* Action Buttons are portaled from here into the Tab Header using ReactDOM.createPortal. */}
       {stripVisible ? (
         <BulkActionBar
@@ -590,7 +657,7 @@ const VendorTasksTable = ({ vendorId }) => {
           visibleColumns={visibleColumnsForGhost}
           getGhostPreview={getGhostPreview}
           variant="card"
-          maxHeight={290}
+          maxHeight={400}
           loading={loading}
           rowClassName={(t) => (selectedItems.includes(t._id) ? "!bg-blue-50" : "")}
           loadingContent={

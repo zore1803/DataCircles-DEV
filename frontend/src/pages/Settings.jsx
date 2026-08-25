@@ -47,6 +47,10 @@ import Referrals from "../components/settings/Referrals";
 import Wallet from "../components/settings/Wallet";
 import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
+import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
+import CustomDomain from "../components/settings/CustomDomain";
+import GoogleIntegration, { GoogleGIcon } from "../components/settings/GoogleIntegration";
+import PageSkeleton from "../components/common/PageSkeleton";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -81,6 +85,17 @@ const Settings = () => {
   const params = useParams();
   const [activeSection, setActiveSection] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // The Google OAuth callback redirects to /settings?googleMeet=... at the
+  // root (see backend authController.googleCallback) rather than the
+  // google-integration subsection, since that's the URL it can safely
+  // hardcode. Forward there so the connected/denied/error state actually
+  // renders somewhere that reads it.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("googleMeet") && params.section !== "google-integration") {
+      navigate(`/settings/google-integration${location.search}`, { replace: true });
+    }
+  }, [location.search, params.section, navigate]);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -194,6 +209,18 @@ const Settings = () => {
       category: "General",
     },
     {
+      id: "custom-domain",
+      icon: <Globe className="w-5 h-5" />,
+      label: "Custom Domain",
+      description: "Use your own domain for public document links",
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-50",
+      borderColor: "border-indigo-200",
+      hoverBg: "hover:bg-indigo-50",
+      component: <CustomDomain />,
+      category: "General",
+    },
+    {
       id: "bank",
       icon: <CreditCard className="w-5 h-5" />,
       label: "Banks",
@@ -285,8 +312,20 @@ const Settings = () => {
       color: "text-teal-600",
       bgColor: "bg-teal-50",
       borderColor: "border-teal-200",
-      hoverBg: "hover:bg-teal-50",
+      hoverBg: "hover:bg-amber-50",
       component: <ItemFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "system-defaults",
+      icon: <SettingsIcon className="w-5 h-5" />,
+      label: "System Defaults",
+      description: "Manage custom task statuses and note types",
+      color: "text-slate-600",
+      bgColor: "bg-slate-50",
+      borderColor: "border-slate-200",
+      hoverBg: "hover:bg-slate-50",
+      component: <SystemDefaultsSettings />,
       category: "Customization",
     },
     {
@@ -300,6 +339,18 @@ const Settings = () => {
       hoverBg: "hover:bg-emerald-50",
       component: <FormsList />,
       category: "Customization",
+    },
+    {
+      id: "google-integration",
+      icon: <GoogleGIcon className="w-5 h-5" />,
+      label: "Google Calendar & Meet",
+      description: "Connect Google to create Calendar events and Meet links from meetings",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <GoogleIntegration />,
+      category: "General",
     },
     {
       id: "email-notifications",
@@ -381,7 +432,18 @@ const Settings = () => {
 
   if (activeSection) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div
+        className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
+        style={{
+          marginTop: -24,
+          marginLeft: -32,
+          marginRight: -32,
+          paddingTop: 24,
+          paddingLeft: 24,
+          paddingRight: 24,
+          boxSizing: "border-box",
+        }}
+      >
         <div>
           {/* Enhanced Header with back button */}
           <div className="mb-8">
@@ -423,10 +485,9 @@ const Settings = () => {
                     </h2>
                     {activeSection.badge && (
                       <span
-                        className={`px-3 py-1 ${
-                          activeSection.badgeColor ||
+                        className={`px-3 py-1 ${activeSection.badgeColor ||
                           "bg-yellow-100 text-yellow-800"
-                        } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
+                          } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
                       >
                         <Sparkles className="w-3 h-3" />
                         {activeSection.badge}
@@ -449,32 +510,37 @@ const Settings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div>
-        {/* Enhanced Page Header */}
-        <div className="mb-6">
-          <div className="">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                    Settings
-                  </h1>
-                  <p className="text-gray-600 text-sm md:text-base mt-2">
-                    Customize and configure your CRM system
-                  </p>
-                </div>
-              </div>
-              <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-                <Shield className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-700">
-                  Admin Panel
-                </span>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+      {/* Fixed page-header strip */}
+      <div
+        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 40,
+          minHeight: "64px",
+          maxHeight: "64px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="flex items-center justify-between w-full">
+          <div className="flex flex-col justify-center gap-1.5">
+            <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">
+              Settings
+            </h1>
+            <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+              Customize and configure your CRM system
+            </p>
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+            <Shield className="w-4 h-4 text-blue-600" />
+            <span className="text-sm font-semibold text-blue-700">
+              Admin Panel
+            </span>
           </div>
         </div>
+      </div>
 
+      <div className="pt-[118px] lg:pt-[128px]">
         {/* Settings by Category */}
         <div className="space-y-8">
           {categoryOrder.map((category) => {
@@ -516,10 +582,9 @@ const Settings = () => {
                           </div>
                           {item.badge && (
                             <span
-                              className={`px-2.5 py-1 ${
-                                item.badgeColor ||
+                              className={`px-2.5 py-1 ${item.badgeColor ||
                                 "bg-yellow-100 text-yellow-800"
-                              } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
+                                } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
                             >
                               <Sparkles className="w-3 h-3" />
                               {item.badge}
@@ -600,4 +665,3 @@ const Settings = () => {
 };
 
 export default Settings;
-import PageSkeleton from "../components/common/PageSkeleton";

@@ -34,6 +34,18 @@
   min-height: 100vh;
 }
 
+/* Dozens of page toolbars/headers pin themselves to the sidebar edge via
+   `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
+   whenever the sidebar expands/collapses/pins. Most of those inline styles
+   never declared a transition of their own, so their `left` snapped
+   instantly while the sidebar itself slid smoothly — one shared rule here
+   keeps every one of them in step without having to touch each call site.
+   The attribute selector matches because React's `left` style ends up
+   reflected in the element's serialized `style` attribute. */
+[style*="var(--sidebar-width"] {
+  transition: left 300ms ease-in-out;
+}
+
 @media (min-width: 1024px) {
   .dc-loader-fill {
     min-height: calc(100vh / var(--dynamic-zoom, 1));
@@ -84,11 +96,21 @@
   width: 100%;
 }
 
+.payment-panel {
+  top: 4rem;
+  bottom: 4rem;
+}
+
 @media (min-width: 1024px) {
   .dc-panel-w {
     width: 33.333vw;
     min-width: 440px;
     max-width: 100%;
+  }
+
+  .payment-panel {
+    width: min(45vw, 720px);
+    min-width: 560px;
   }
 }
 
@@ -126,6 +148,12 @@
 
 .overflow-x-auto::-webkit-scrollbar {
   height: 8px;
+  /* Customizing ::-webkit-scrollbar on an element requires declaring both
+     axes explicitly — leaving `width` unset collapsed the vertical
+     scrollbar to invisible on any container (like PaymentsTimeline's table
+     wrapper) that combines this class with overflow-y-auto, even though
+     the horizontal bar (height) rendered fine. */
+  width: 8px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-track {

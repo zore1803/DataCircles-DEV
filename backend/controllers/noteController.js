@@ -4,24 +4,28 @@ const Deal = require("../models/Deal");
 // CREATE Note
 exports.createNote = async (req, res) => {
   try {
-    const { title, note, company, deal, taggedContacts = [], noteType, visibility } = req.body;
+    const { title, note, company, deal, taggedContacts = [], taggedDeals = [], taggedInvoices = [], noteType, visibility } = req.body;
     const newNote = await Note.create({
       title,
       note,
       company,
       deal: deal || undefined,
       taggedContacts,
+      taggedDeals,
+      taggedInvoices,
       noteType,
       visibility,
       user: req.user._id,
       organization: req.user.organization
     });
-    
+
     const populatedNote = await Note.findById(newNote._id)
       .populate('taggedContacts', 'name email phone avatar')
+      .populate('taggedDeals', 'title amount')
+      .populate('taggedInvoices', 'invoiceNumber amount')
       .populate('company', 'name industry')
       .populate('user', 'name email profileUrl userData.mainData.profilePic');
-    
+
     res.status(201).json(populatedNote);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create note', details: err.message });
@@ -129,6 +133,8 @@ exports.getNotesByContact = async (req, res) => {
       organization: req.user.organization 
     })
       .populate('taggedContacts', 'name email phone avatar')
+      .populate('taggedDeals', 'title amount')
+      .populate('taggedInvoices', 'invoiceNumber amount')
       .populate('company', 'name industry')
       .populate('user', 'name email profileUrl userData.mainData.profilePic')
       .sort({ createdAt: -1 });
@@ -147,6 +153,8 @@ exports.getNotesByDeal = async (req, res) => {
       organization: req.user.organization
     })
       .populate('taggedContacts', 'name email phone avatar')
+      .populate('taggedDeals', 'title amount')
+      .populate('taggedInvoices', 'invoiceNumber amount')
       .populate('company', 'name industry')
       .populate('user', 'name email profileUrl userData.mainData.profilePic')
       .sort({ createdAt: -1 });
@@ -220,6 +228,8 @@ exports.getAllNotes = async (req, res) => {
     
     const notes = await Note.find(query)
       .populate('taggedContacts', 'name email phone avatar')
+      .populate('taggedDeals', 'title amount')
+      .populate('taggedInvoices', 'invoiceNumber amount')
       .populate('company', 'name industry')
       .populate('user', 'name email profileUrl userData.mainData.profilePic')
       .sort({ createdAt: -1 })
@@ -239,6 +249,8 @@ exports.getNoteById = async (req, res) => {
       organization: req.user.organization
     })
       .populate('taggedContacts', 'name email phone avatar')
+      .populate('taggedDeals', 'title amount')
+      .populate('taggedInvoices', 'invoiceNumber amount')
       .populate('company', 'name industry')
       .populate('user', 'name email profileUrl userData.mainData.profilePic');
       
@@ -255,24 +267,26 @@ exports.getNoteById = async (req, res) => {
 // UPDATE note content or tags
 exports.updateNote = async (req, res) => {
   try {
-    const { title, note, taggedContacts, noteType, visibility } = req.body;
+    const { title, note, taggedContacts, taggedDeals, taggedInvoices, noteType, visibility } = req.body;
 
     const updated = await Note.findOneAndUpdate(
       {
         _id: req.params.id,
         organization: req.user.organization
       },
-      { title, note, taggedContacts, noteType, visibility },
+      { title, note, taggedContacts, taggedDeals, taggedInvoices, noteType, visibility },
       { new: true }
     )
       .populate('taggedContacts', 'name email phone avatar')
+      .populate('taggedDeals', 'title amount')
+      .populate('taggedInvoices', 'invoiceNumber amount')
       .populate('company', 'name industry')
       .populate('user', 'name email profileUrl userData.mainData.profilePic');
-      
+
     if (!updated) {
       return res.status(404).json({ error: 'Note not found' });
     }
-    
+
     res.json(updated);
   } catch (err) {
     res.status(400).json({ error: 'Failed to update note' });

@@ -3,7 +3,7 @@ const ProformaInvoice = require('../models/ProformaInvoice');
 const Quotation = require('../models/quotation');
 const DeliveryChallan = require('../models/deliveryChallan');
 const mongoose = require('mongoose');
-const Counter = require('../models/Counter');
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require('../utils/documentNumbering');
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -14,22 +14,34 @@ const formatDate = (date) => {
   return `${year}${month}${day}`;
 };
 
-// Atomic document number generation - prevents duplicate numbers for same document type
-const generateDocumentNumber = async (prefix, organization, session) => {
-  const counterId = `${organization}_${prefix}`; // Unique counter per org + document type
-  
-  const counter = await Counter.findOneAndUpdate(
-    { _id: counterId },
-    { $inc: { seq: 1 } }, // Atomic increment
-    { 
-      new: true, // Return updated document
-      upsert: true, // Create if doesn't exist
-      session, // Use transaction session
-      setDefaultsOnInsert: true 
-    }
-  );
-  
-  return `${prefix}-${counter.seq}`;
+const DOCUMENT_TYPE_MAP = {
+  invoice: { Model: Invoice, numberField: 'invoiceNumber', settingsKey: 'invoice', defaultPrefix: 'INV-' },
+  proformaInvoice: { Model: ProformaInvoice, numberField: 'performaInvoiceNumber', settingsKey: 'proformaInvoice', defaultPrefix: 'PI' },
+  quotation: { Model: Quotation, numberField: 'quotationNumber', settingsKey: 'quote', defaultPrefix: 'QT' },
+  deliveryChallan: { Model: DeliveryChallan, numberField: 'deliveryChallanNumber', settingsKey: 'deliveryChallan', defaultPrefix: 'DC' },
+};
+
+// Generates the next number for a converted document using the organization's
+// configured prefix/suffix and the same persistent per-document-type counter
+// that direct creation uses (see backend/utils/documentNumbering.js) — so a
+// Quotation converted to a Proforma Invoice draws the next number from the
+// exact same sequence a directly-created Proforma Invoice would, instead of a
+// separate hardcoded-prefix ("PI"/"QUO"/"DC"/"INV") sequence that ignored
+// Settings entirely.
+const generateDocumentNumber = async (documentTypeKey, organization, session) => {
+  const { Model, numberField, settingsKey, defaultPrefix } = DOCUMENT_TYPE_MAP[documentTypeKey];
+  const documentSettings = await getDocumentSettingsForOrganization(organization);
+  const typeSettings = documentSettings.documentTypeSettings?.[settingsKey] || {};
+  return resolveDocumentNumber({
+    Model,
+    numberField,
+    organization,
+    documentTypeKey,
+    prefix: typeSettings.prefix || defaultPrefix,
+    suffix: typeSettings.suffix || '',
+    providedNumber: null,
+    session,
+  });
 };
 
 // Validate required fields
@@ -61,7 +73,7 @@ exports.convertToProformaInvoice = async (req, res) => {
       return res.status(404).json({ message: 'Invoice not found' });
     }
 
-    const performaInvoiceNumber = await generateDocumentNumber('PI', invoice.organization, session);
+    const performaInvoiceNumber = await generateDocumentNumber('proformaInvoice', invoice.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const proformaInvoiceData = {
@@ -111,7 +123,7 @@ exports.convertToQuotation = async (req, res) => {
       return res.status(404).json({ message: 'Invoice not found' });
     }
 
-    const quotationNumber = await generateDocumentNumber('QUO', invoice.organization, session);
+    const quotationNumber = await generateDocumentNumber('quotation', invoice.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const quotationData = {
@@ -163,7 +175,7 @@ exports.convertToDeliveryChallan = async (req, res) => {
       return res.status(404).json({ message: 'Invoice not found' });
     }
 
-    const deliveryChallanNumber = await generateDocumentNumber('DC', invoice.organization, session);
+    const deliveryChallanNumber = await generateDocumentNumber('deliveryChallan', invoice.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const deliveryChallanData = {
@@ -220,7 +232,7 @@ exports.convertToTaxInvoice = async (req, res) => {
       return res.status(404).json({ message: 'Proforma Invoice not found' });
     }
 
-    const invoiceNumber = await generateDocumentNumber('INV', proformaInvoice.organization, session);
+    const invoiceNumber = await generateDocumentNumber('invoice', proformaInvoice.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const invoiceData = {
@@ -271,7 +283,7 @@ exports.convertProformaToQuotation = async (req, res) => {
       return res.status(404).json({ message: 'Proforma Invoice not found' });
     }
 
-    const quotationNumber = await generateDocumentNumber('QUO', proformaInvoice.organization, session);
+    const quotationNumber = await generateDocumentNumber('quotation', proformaInvoice.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const quotationData = {
@@ -323,7 +335,7 @@ exports.convertProformaToDeliveryChallan = async (req, res) => {
       return res.status(404).json({ message: 'Proforma Invoice not found' });
     }
 
-    const deliveryChallanNumber = await generateDocumentNumber('DC', proformaInvoice.organization, session);
+    const deliveryChallanNumber = await generateDocumentNumber('deliveryChallan', proformaInvoice.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const deliveryChallanData = {
@@ -384,7 +396,7 @@ exports.convertQuotationToTaxInvoice = async (req, res) => {
     //   return res.status(400).json({ message: 'Quotation must be accepted to convert to invoice' });
     // }
 
-    const invoiceNumber = await generateDocumentNumber('INV', quotation.organization, session);
+    const invoiceNumber = await generateDocumentNumber('invoice', quotation.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const invoiceData = {
@@ -441,7 +453,7 @@ exports.convertQuotationToProforma = async (req, res) => {
     //   return res.status(400).json({ message: 'Quotation must be accepted to convert to proforma invoice' });
     // }
 
-    const performaInvoiceNumber = await generateDocumentNumber('PI', quotation.organization, session);
+    const performaInvoiceNumber = await generateDocumentNumber('proformaInvoice', quotation.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const proformaInvoiceData = {
@@ -498,7 +510,7 @@ exports.convertQuotationToDeliveryChallan = async (req, res) => {
     //   return res.status(400).json({ message: 'Quotation must be accepted to convert to delivery challan' });
     // }
 
-    const deliveryChallanNumber = await generateDocumentNumber('DC', quotation.organization, session);
+    const deliveryChallanNumber = await generateDocumentNumber('deliveryChallan', quotation.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const deliveryChallanData = {
@@ -561,7 +573,7 @@ exports.convertDeliveryChallanToTaxInvoice = async (req, res) => {
     //   return res.status(400).json({ message: 'Delivery Challan must be delivered to convert to invoice' });
     // }
 
-    const invoiceNumber = await generateDocumentNumber('INV', deliveryChallan.organization, session);
+    const invoiceNumber = await generateDocumentNumber('invoice', deliveryChallan.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const invoiceData = {
@@ -618,7 +630,7 @@ exports.convertDeliveryChallanToProforma = async (req, res) => {
     //   return res.status(400).json({ message: 'Delivery Challan must be delivered to convert to proforma invoice' });
     // }
 
-    const performaInvoiceNumber = await generateDocumentNumber('PI', deliveryChallan.organization, session);
+    const performaInvoiceNumber = await generateDocumentNumber('proformaInvoice', deliveryChallan.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const proformaInvoiceData = {
@@ -674,7 +686,7 @@ exports.convertDeliveryChallanToQuotation = async (req, res) => {
     //   return res.status(400).json({ message: 'Delivery Challan must be delivered to convert to quotation' });
     // }
 
-    const quotationNumber = await generateDocumentNumber('QUO', deliveryChallan.organization, session);
+    const quotationNumber = await generateDocumentNumber('quotation', deliveryChallan.organization, session);
 
     const newId = new mongoose.Types.ObjectId();
     const quotationData = {
@@ -711,4 +723,217 @@ exports.convertDeliveryChallanToQuotation = async (req, res) => {
     session.endSession();
     res.status(500).json({ message: `Failed to convert delivery challan: ${error.message}` });
   }
+};
+exports.bulkConvertQuotationToTaxInvoice = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+  
+  const successfulIds = [];
+  const failedIds = [];
+  
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const quotation = await Quotation.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!quotation) {
+        throw new Error('Quotation not found or unauthorized');
+      }
+
+      const invoiceNumber = await generateDocumentNumber('invoice', quotation.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const invoiceData = {
+        ...quotation.toObject(),
+        _id: newId,
+        invoiceNumber,
+        isTaxInvoice: quotation.isTaxQuotation,
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete invoiceData.quotationNumber;
+
+      const requiredFields = ['deal', 'invoiceNumber', 'date', 'amount', 'user', 'organization', 'status', 'discount'];
+      const validationError = validateRequiredFields(invoiceData, requiredFields, invoiceData.items);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      const invoice = new Invoice(invoiceData);
+      await invoice.save({ session });
+
+      quotation.status = 'Void';
+      await quotation.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+  
+  res.status(200).json({ successfulIds, failedIds });
+};
+
+exports.bulkConvertQuotationToProforma = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+  
+  const successfulIds = [];
+  const failedIds = [];
+  
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const quotation = await Quotation.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!quotation) {
+        throw new Error('Quotation not found or unauthorized');
+      }
+
+      const performaInvoiceNumber = await generateDocumentNumber('proformaInvoice', quotation.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const proformaData = {
+        ...quotation.toObject(),
+        _id: newId,
+        performaInvoiceNumber,
+        isTaxInvoice: quotation.isTaxQuotation,
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete proformaData.quotationNumber;
+
+      const requiredFields = ['deal', 'performaInvoiceNumber', 'date', 'amount', 'user', 'organization', 'status', 'discount'];
+      const validationError = validateRequiredFields(proformaData, requiredFields, proformaData.items);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      const proformaInvoice = new ProformaInvoice(proformaData);
+      await proformaInvoice.save({ session });
+
+      quotation.status = 'Void';
+      await quotation.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+  
+  res.status(200).json({ successfulIds, failedIds });
+};
+
+exports.bulkConvertInvoiceToDeliveryChallan = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+
+  const successfulIds = [];
+  const failedIds = [];
+
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const invoice = await Invoice.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!invoice) {
+        throw new Error('Invoice not found or unauthorized');
+      }
+
+      const deliveryChallanNumber = await generateDocumentNumber('deliveryChallan', invoice.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const deliveryChallanData = {
+        ...invoice.toObject(),
+        _id: newId,
+        deliveryChallanNumber,
+        status: 'Draft',
+        items: invoice.items.map(item => ({
+          ...item,
+          hsn: undefined,
+        })),
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete deliveryChallanData.invoiceNumber;
+      delete deliveryChallanData.isTaxInvoice;
+      delete deliveryChallanData.receiverGSTIN;
+
+      const deliveryChallan = new DeliveryChallan(deliveryChallanData);
+      await deliveryChallan.save({ session });
+
+      await Invoice.findByIdAndDelete(id).session(session);
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+
+  res.status(200).json({ successfulIds, failedIds });
+};
+
+exports.bulkConvertProformaToTaxInvoice = async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: 'ids array required' });
+  
+  const successfulIds = [];
+  const failedIds = [];
+  
+  for (const id of ids) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const proformaInvoice = await ProformaInvoice.findOne({ _id: id, organization: req.user.organization }).session(session);
+      if (!proformaInvoice) {
+        throw new Error('Proforma Invoice not found or unauthorized');
+      }
+
+      const invoiceNumber = await generateDocumentNumber('invoice', proformaInvoice.organization, session);
+
+      const newId = new mongoose.Types.ObjectId();
+      const invoiceData = {
+        ...proformaInvoice.toObject(),
+        _id: newId,
+        invoiceNumber,
+        isTaxInvoice: proformaInvoice.items.some(item => item.hsn && item.hsn.trim() !== ''),
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+      delete invoiceData.performaInvoiceNumber;
+
+      const requiredFields = ['deal', 'invoiceNumber', 'date', 'amount', 'user', 'organization', 'status', 'discount'];
+      const validationError = validateRequiredFields(invoiceData, requiredFields, invoiceData.items);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      const invoice = new Invoice(invoiceData);
+      await invoice.save({ session });
+
+      await ProformaInvoice.findByIdAndDelete(id).session(session);
+
+      await session.commitTransaction();
+      session.endSession();
+      successfulIds.push(id);
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      failedIds.push(id);
+    }
+  }
+  
+  res.status(200).json({ successfulIds, failedIds });
 };

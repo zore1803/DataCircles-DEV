@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import BulkActionBar from "../common/BulkActionBar";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -60,9 +63,11 @@ import {
   Tag,
   IndianRupee,
   Calendar,
+  X,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
+import confetti from "canvas-confetti";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
 import FilterIcon from "../common/FilterIcon";
@@ -178,7 +183,21 @@ const DEAL_CARD_CLASS =
 // Inner markup only — no drag wiring, no navigation. Rendered by both shells below.
 // `selectSlot` is an optional node dropped in front of the title (the selection
 // checkbox on the in-list card); the drag overlay passes nothing so it stays clean.
-const DealCardContent = ({ deal, selectSlot = null }) => {
+const DealCardContent = ({ deal, selectSlot = null, setDealToDelete }) => {
+  const navigate = useNavigate();
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [actionsPos, setActionsPos] = useState(null);
+  const actionsRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+        setIsActionsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const tagLabel = deal.company?.name || deal.company?.industry || deal.contact?.name;
   const avatarNames = [deal.contact?.name, deal.user?.name].filter(Boolean);
 
@@ -195,7 +214,72 @@ const DealCardContent = ({ deal, selectSlot = null }) => {
               {deal.title || "Deal Name"}
             </span>
           </div>
-          <MoreHorizontal className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+          <div className="relative flex-shrink-0 pointer-events-auto">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (isActionsOpen) {
+                  setIsActionsOpen(false);
+                  return;
+                }
+                const zMenu = getAncestorZoom(document.body) || 1;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const viewportH = window.innerHeight / zMenu;
+                const viewportW = window.innerWidth / zMenu;
+                const MENU_W = 160;
+                const MENU_H = 110;
+
+                const rowCenter = (rect.top + rect.bottom) / (2 * zMenu);
+                let calcTop = rowCenter - MENU_H / 2;
+                calcTop = Math.max(8, Math.min(calcTop, viewportH - MENU_H - 8));
+                let calcLeft = rect.right / zMenu - MENU_W - 12;
+                calcLeft = Math.min(calcLeft, viewportW - MENU_W - 8);
+                calcLeft = Math.max(calcLeft, 8);
+
+                setActionsPos({ top: calcTop, left: calcLeft });
+                setIsActionsOpen(true);
+              }}
+              className="p-1 cursor-pointer hover:bg-gray-100 rounded-md transition-colors z-10"
+              title="More actions"
+            >
+              <MoreHorizontal className="w-4 h-4 text-[#BEBEC8]" />
+            </button>
+            {isActionsOpen && actionsPos && createPortal(
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); }} />
+                <div
+                  ref={actionsRef}
+                  style={{ position: "fixed", top: actionsPos.top, left: actionsPos.left }}
+                  className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); navigate(`/deals/${deal._id}`); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    View Deal
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); navigate(`/deals/${deal._id}`); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Edit Deal
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); setDealToDelete && setDealToDelete(deal); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Deal
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         </div>
         <span
           className="w-full"
@@ -233,7 +317,7 @@ const DealCardContent = ({ deal, selectSlot = null }) => {
 // the sensor's 8px activation constraint means a click never starts a drag, and a
 // drag never fires the link. `transition` (which useDraggable did not provide) is
 // what lets neighbouring cards glide aside instead of snapping.
-const DealCard = ({ deal, selected = false, onToggleSelect }) => {
+const DealCard = React.memo(({ deal, selected = false, onToggleSelect, setDealToDelete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: deal._id, animateLayoutChanges });
 
@@ -279,7 +363,7 @@ const DealCard = ({ deal, selected = false, onToggleSelect }) => {
       style={style}
       {...listeners}
       {...attributes}
-      className={`${DEAL_CARD_CLASS} cursor-grab active:cursor-grabbing`}
+      className={`${DEAL_CARD_CLASS} cursor-default`}
     >
       <Link
         to={`/deals/${deal._id}`}
@@ -292,11 +376,11 @@ const DealCard = ({ deal, selected = false, onToggleSelect }) => {
         aria-label={`Open ${deal.title || "deal"}`}
       />
       <div className="relative z-10 w-full flex flex-col items-start gap-4 pointer-events-none">
-        <DealCardContent deal={deal} selectSlot={selectSlot} />
+        <DealCardContent deal={deal} selectSlot={selectSlot} setDealToDelete={setDealToDelete} />
       </div>
     </div>
   );
-};
+});
 
 // The floating preview. Deliberately a plain <div>, not a <Link>: it must never be
 // clickable or navigable, and pointer-events-none keeps it from stealing hit-testing
@@ -314,7 +398,7 @@ const DealCardOverlay = ({ deal }) => (
 // company-profile Deals tab and the standalone /deals board look identical:
 // same 340px shell, #F5F7FA header, pill counter, per-status tinted summary card
 // and week-over-week trend badge.
-const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddClick, loading = false, selectedDeals = [], onToggleSelect, onToggleColumnSelect }) => {
+const KanbanColumn = React.memo(({ status, deals, amountDeals, totalDealsCount, colorTheme = "blue", onAddClick, loading = false, selectedDeals = [], onToggleSelect, onToggleColumnSelect, setDealToDelete }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
 
@@ -385,7 +469,8 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
           <span
             className="flex items-center justify-center flex-shrink-0"
             style={{
-              width: "22px",
+              minWidth: "22px",
+              padding: "0 6px",
               height: "22px",
               background: "#FFFFFF",
               border: "1px solid #E5E5EC",
@@ -399,7 +484,7 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
               color: "#161618",
             }}
           >
-            {loading ? <Skeleton width={14} height={12} /> : deals.length}
+            {loading ? <Skeleton width={14} height={12} /> : (totalDealsCount !== undefined ? `${deals.length}/${totalDealsCount}` : deals.length)}
           </span>
         </div>
         <button
@@ -468,6 +553,7 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
                 deal={deal}
                 selected={selectedDeals.includes(deal._id)}
                 onToggleSelect={onToggleSelect}
+                setDealToDelete={setDealToDelete}
               />
             ))}
           </SortableContext>
@@ -478,7 +564,7 @@ const KanbanColumn = ({ status, deals, amountDeals, colorTheme = "blue", onAddCl
       </div>
     </div>
   );
-};
+});
 
 export default function CompanyDealsKanban({
   deals,
@@ -504,6 +590,7 @@ export default function CompanyDealsKanban({
   // the DragOverlay, and it preserves the ORIGINAL status — which onDragOver
   // overwrites in `deals` as soon as the pointer crosses into another column.
   const [activeDeal, setActiveDeal] = useState(null);
+  const [celebrationDeal, setCelebrationDeal] = useState(null);
   // Which column the dragged card is currently hovered over. Kept as local
   // state instead of writing the new status into `deals` on every column
   // crossing (as before) — `deals` is owned by the parent page, so every
@@ -782,6 +869,9 @@ export default function CompanyDealsKanban({
 
   // Row selection + bulk actions
   const [selectedDeals, setSelectedDeals] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Delays the bulk-strip's unmount so it can play a slide-out-right exit
   // animation on deselect (mirroring the slide-in entrance).
   const [showBulkStrip, setShowBulkStrip] = useState(false);
@@ -815,24 +905,37 @@ export default function CompanyDealsKanban({
   const [bulkTaskDesc, setBulkTaskDesc] = useState("");
 
   const handleSelectAllDeals = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) =>
       prev.length === paginatedDeals.length ? [] : paginatedDeals.map((d) => d._id),
     );
   };
-  const handleSelectDeal = (id) => {
+  const handleSelectDeal = useCallback((id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
+  }, [hasBulkAccess]);
+  const handleAddDealClick = useCallback(() => setManualDealFormOpen(true), []);
 
   // Column header select-all: if every card in the column is already selected,
   // clicking clears just those; otherwise it adds them all to the selection.
-  const handleToggleColumnSelect = (ids) => {
+  const handleToggleColumnSelect = useCallback((ids) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals((prev) => {
       const allSelected = ids.length > 0 && ids.every((id) => prev.includes(id));
       return allSelected
         ? prev.filter((id) => !ids.includes(id))
         : [...new Set([...prev, ...ids])];
     });
-  };
+  }, [hasBulkAccess]);
 
   const handleBulkDeleteDeals = async () => {
     setBulkLoading(true);
@@ -1138,6 +1241,10 @@ export default function CompanyDealsKanban({
   // counterpart: it doesn't clear the selection outright — it steps back
   // down to only the rows on the current page.
   const handleSelectAllAcrossPages = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedDeals(sortedDeals.map((d) => d._id));
   };
 
@@ -1312,8 +1419,17 @@ export default function CompanyDealsKanban({
     );
 
     try {
-      await API.post(`/deals/${dealId}/status`, { oldStatus, newStatus });
-      toast.success("Deal status updated");
+      const response = await API.post(`/deals/${dealId}/status`, { oldStatus, newStatus });
+      const updatedDeal = response.data || { ...dragged, status: newStatus };
+      setDeals((prev) =>
+        prev.map((d) => (d._id.toString() === dealId ? updatedDeal : d)),
+      );
+      if (newStatus === "Won" && oldStatus !== "Won") {
+        setCelebrationDeal(updatedDeal);
+        toast.success(`🎉 ${updatedDeal.title} marked as Won!`, { duration: 5000, icon: "🏆" });
+      } else {
+        toast.success("Deal status updated");
+      }
     } catch (err) {
       console.error("Failed to update deal status:", err);
       toast.error("Failed to update deal status");
@@ -1336,8 +1452,47 @@ export default function CompanyDealsKanban({
     closeDealForm();
   };
 
+  const ConfettiCelebration = ({ deal, onClose }) => {
+    useEffect(() => {
+      const animationEnd = Date.now() + 5000;
+      confetti({ particleCount: 150, spread: 180, origin: { y: 0.6 }, zIndex: 99999 });
+      const interval = setInterval(() => {
+        if (Date.now() > animationEnd) { clearInterval(interval); return; }
+        confetti({ particleCount: 2, angle: 90 + (Math.random() - 0.5) * 60, spread: 80, origin: { x: Math.random(), y: Math.random() * 0.5 }, gravity: 0.4, ticks: 400, zIndex: 99999 });
+      }, 100);
+      const timeout = setTimeout(onClose, 5000);
+      return () => { clearInterval(interval); clearTimeout(timeout); };
+    }, [onClose]);
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-[99998] pointer-events-none p-4">
+        <div className="absolute inset-0 bg-black/5 pointer-events-auto" onClick={onClose} />
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 pointer-events-auto max-w-md w-full relative z-[99999]">
+          <div className="p-10 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="bg-green-500 rounded-full w-16 h-16 flex items-center justify-center shadow-lg">
+                <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Deal Won!</h2>
+            <p className="text-base text-gray-700 mb-3 font-medium">{deal.title}</p>
+            <div className="mb-6">
+              <h6 className="text-2xl font-bold text-gray-900">₹{formatNumberToIndian(parseInt(deal.amount || 0))}</h6>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">Great job! Keep up the amazing work! 💪</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
+      {celebrationDeal && (
+        <ConfettiCelebration deal={celebrationDeal} onClose={() => setCelebrationDeal(null)} />
+      )}
       {/* KPI Tiles */}
       {showStats && (
         <>
@@ -1377,7 +1532,7 @@ export default function CompanyDealsKanban({
           <Skeleton width={88} height={44} shape="rounded" className="!rounded-full flex-shrink-0" />
           <Skeleton width={44} height={44} shape="circle" className="flex-shrink-0" />
         </div>
-) : showBulkStrip ? (
+      ) : showBulkStrip ? (
         <BulkActionBar
           isClosing={bulkStripClosing}
           selectedCount={selectedDeals.length}
@@ -1405,9 +1560,17 @@ export default function CompanyDealsKanban({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search deals by name, contact, or status..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-10 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowFilterPanel(true)}
@@ -1519,11 +1682,13 @@ export default function CompanyDealsKanban({
                   status={status}
                   deals={dealsByStatus[status] || []}
                   amountDeals={stableDealsByStatus[status] || []}
+                  totalDealsCount={totalCount}
                   colorTheme={status === "Won" ? "green" : status === "Lost" ? "red" : "blue"}
-                  onAddClick={() => setManualDealFormOpen(true)}
+                  onAddClick={handleAddDealClick}
                   selectedDeals={selectedDeals}
                   onToggleSelect={handleSelectDeal}
                   onToggleColumnSelect={handleToggleColumnSelect}
+                  setDealToDelete={setDealToDelete}
                 />
               ))}
             </div>
@@ -1554,16 +1719,16 @@ export default function CompanyDealsKanban({
             )}
           </DndContext>
         )
-      ) : totalCount === 0 ? (
+      ) : !isLoading && deals.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Handshake size={28} className="mb-3 text-blue-500" />
+          <Handshake size={28} className="mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualDealFormOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Add new
+            Add new deal
           </button>
         </div>
       ) : (
@@ -1587,7 +1752,7 @@ export default function CompanyDealsKanban({
                         <input
                           type="checkbox"
                           checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
-                          onChange={(e) => setSelectedDeals(e.target.checked ? paginatedDeals.map((d) => d._id) : [])}
+                          onChange={handleSelectAllDeals}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </div>
@@ -1620,7 +1785,7 @@ export default function CompanyDealsKanban({
                                     <Pin
                                       size={12}
                                       className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1"
-                                    style={{ transform: "rotate(45deg)" }}
+                                      style={{ transform: "rotate(45deg)" }}
                                     />
                                   )}
                                 </div>
@@ -2020,7 +2185,7 @@ export default function CompanyDealsKanban({
 
           </div>
 
-          {totalCount > 0 && (
+          {totalCount > 0 && viewMode === "list" && (
             <div
               ref={fillFooterRef}
               className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
@@ -2061,21 +2226,21 @@ export default function CompanyDealsKanban({
                   </select>
                 </div>
 
-                  <EditablePaginationButtons
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    hasPrevPage={hasPrevPage}
-                    hasNextPage={hasNextPage}
-                    onPageChange={handlePageChange}
-                    getPageNumbers={() => {
-                      const items = [1];
-                      if (currentPage > 2) items.push("left-dots");
-                      if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
-                      if (currentPage < totalPages - 1) items.push("right-dots");
-                      if (totalPages > 1) items.push(totalPages);
-                      return items;
-                    }}
-                  />
+                <EditablePaginationButtons
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  hasPrevPage={hasPrevPage}
+                  hasNextPage={hasNextPage}
+                  onPageChange={handlePageChange}
+                  getPageNumbers={() => {
+                    const items = [1];
+                    if (currentPage > 2) items.push("left-dots");
+                    if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+                    if (currentPage < totalPages - 1) items.push("right-dots");
+                    if (totalPages > 1) items.push(totalPages);
+                    return items;
+                  }}
+                />
               </div>
             </div>
           )}
@@ -2249,6 +2414,13 @@ export default function CompanyDealsKanban({
           </div>
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

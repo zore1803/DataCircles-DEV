@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
 import VendorTaskForm from "./VendorTaskForm";
+import MeetingDetailsModal from "../company/MeetingDetailsModal";
+import TaskDetailsModal from "../Task/TaskDetailsModal";
 import toast from "react-hot-toast";
 import {
   ChevronLeft,
@@ -11,36 +13,48 @@ import {
   CheckSquare,
   X,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
-const CompactEventCard = ({ item, type, onClick }) => (
-  <div
-    className={`
-      text-[10px] px-1 py-0.5 rounded cursor-pointer truncate mb-0.5 transition-all
-      ${
-        type === "meeting"
-          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-      }
-    `}
-    onClick={(e) => {
-      e.stopPropagation();
-      onClick(item);
-    }}
-    title={`${type}: ${item.title}`}
-  >
-    <div className="flex items-center gap-0.5">
-      {type === "meeting" ? (
-        <Users className="w-2 h-2 flex-shrink-0" />
-      ) : (
-        <CheckSquare className="w-2 h-2 flex-shrink-0" />
+import HighlightText from "../common/HighlightText";
+
+// Same markup/behavior as CompanyCalendar.jsx's CompactEventCard — a chip
+// per event with its time on the right, instead of the old truncated-title
+// pill with no time shown. Title is run through HighlightText so search
+// matches still get highlighted.
+const CompactEventCard = ({ item, type, onClick, searchTerm }) => {
+  const time = item.scheduledAt || item.dueDate;
+  return (
+    <div
+      className={`
+        flex items-center justify-between gap-1 text-[10px] px-1.5 py-0.5 rounded cursor-pointer mb-0.5 transition-all
+        ${type === "meeting"
+          ? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+        }
+      `}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(item);
+      }}
+      title={`${type}: ${item.title}`}
+    >
+      <span className="truncate">
+        <HighlightText text={item.title} query={searchTerm} />
+      </span>
+      {time && (
+        <span className="flex-shrink-0 opacity-70">
+          {new Date(time).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
       )}
-      <span className="truncate">{item.title}</span>
     </div>
-  </div>
-);
+  );
+};
 
 const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
   if (!isOpen) return null;
@@ -49,10 +63,10 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
   const displayDate = date ? new Date(date + "T00:00:00") : null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-xs border border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900">Quick Add</h3>
+          <h3 className="text-xl font-semibold text-gray-900">Quick Add</h3>
           <button
             onClick={onClose}
             className="p-1 text-gray-400 hover:text-gray-600"
@@ -63,10 +77,10 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
         <p className="text-xs text-gray-600 mb-4">
           {displayDate
             ? displayDate.toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
             : ""}
         </p>
         <div className="space-y-2">
@@ -103,12 +117,15 @@ const ActivityListPopup = ({
   tasks,
   onMeetingClick,
   onTaskClick,
+  onAddMeeting,
+  onAddTask,
   onClose,
+  searchTerm,
 }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">
@@ -126,46 +143,62 @@ const ActivityListPopup = ({
           </button>
         </div>
         <div className="max-h-[60vh] overflow-y-auto space-y-2">
-          {meetings.length === 0 && tasks.length === 0 ? (
-            <p className="text-sm text-gray-600">No activities for this day.</p>
-          ) : (
-            <>
-              {meetings.length > 0 && (
-                <div className="mb-3">
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Meetings
-                  </h4>
-                  {meetings.map((meeting) => (
-                    <div
-                      key={meeting._id}
-                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
-                      onClick={() => onMeetingClick(meeting)}
-                    >
-                      <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{meeting.title}</span>
-                    </div>
-                  ))}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-700">Meetings</h4>
+              <button
+                onClick={() => onAddMeeting(date)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
+            {meetings.length === 0 ? (
+              <p className="text-xs text-gray-500">No meetings scheduled.</p>
+            ) : (
+              meetings.map((meeting) => (
+                <div
+                  key={meeting._id}
+                  className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  onClick={() => onMeetingClick(meeting)}
+                >
+                  <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <span className="truncate">
+                    <HighlightText text={meeting.title} query={searchTerm} />
+                  </span>
                 </div>
-              )}
-              {tasks.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">
-                    Tasks
-                  </h4>
-                  {tasks.map((task) => (
-                    <div
-                      key={task._id}
-                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
-                      onClick={() => onTaskClick(task)}
-                    >
-                      <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                      <span className="truncate">{task.title}</span>
-                    </div>
-                  ))}
+              ))
+            )}
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-700">Tasks</h4>
+              <button
+                onClick={() => onAddTask(date)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-xs text-gray-500">No tasks scheduled.</p>
+            ) : (
+              tasks.map((task) => (
+                <div
+                  key={task._id}
+                  className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  onClick={() => onTaskClick(task)}
+                >
+                  <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <span className="truncate">
+                    <HighlightText text={task.title} query={searchTerm} />
+                  </span>
                 </div>
-              )}
-            </>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -174,18 +207,30 @@ const ActivityListPopup = ({
 
 const VendorCalendar = ({ vendorId }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState("month");
+  // Sliding pill indicator for the month/week/day switcher
+  const viewRefs = useRef({});
+  const [viewIndicator, setViewIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const el = viewRefs.current[viewMode];
+    if (el) setViewIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+  }, [viewMode]);
   const [meetings, setMeetings] = useState({});
   const [tasks, setTasks] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create");
   const [modalType, setModalType] = useState("meeting");
   const [calendarDate, setCalendarDate] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [isMeetingDetailsOpen, setIsMeetingDetailsOpen] = useState(false);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddDate, setQuickAddDate] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const searchInputRef = useRef(null);
   const [activityPopup, setActivityPopup] = useState({
     isOpen: false,
     date: null,
@@ -218,6 +263,7 @@ const VendorCalendar = ({ vendorId }) => {
   };
 
   const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
       const meetingsRes = await API.get("/meetings", { params: { vendorId } });
       const meetingsByDate = {};
@@ -239,7 +285,9 @@ const VendorCalendar = ({ vendorId }) => {
       });
       setTasks(tasksByDate);
     } catch (error) {
-      toast.error(err.response?.data?.error || "Failed to fetch calendar data");
+      toast.error(error.response?.data?.error || "Failed to fetch calendar data");
+    } finally {
+      setIsLoading(false);
     }
   }, [vendorId]);
 
@@ -275,7 +323,13 @@ const VendorCalendar = ({ vendorId }) => {
   for (let d = 1; d <= daysInMonth; d++) {
     calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
   }
-  const extraDays = 35 - calendarDays.length;
+  // Rounds up to the next full week (35 or 42 cells) instead of a hardcoded
+  // 35 — a month that needs 6 rows (e.g. a 31-day month starting on a
+  // Saturday) was 1 cell short of a full grid, leaving the last row's
+  // remaining columns with no cell rendered at all: no border, no fill,
+  // just the single populated cell's own right border standing alone.
+  const totalCells = Math.ceil(calendarDays.length / 7) * 7;
+  const extraDays = totalCells - calendarDays.length;
   for (let d = 1; d <= extraDays; d++) {
     calendarDays.push({
       date: new Date(year, month + 1, d),
@@ -285,7 +339,53 @@ const VendorCalendar = ({ vendorId }) => {
 
   const goToMonth = (offset) =>
     setCurrentDate(new Date(year, month + offset, 1));
-  const goToToday = () => setCurrentDate(new Date());
+  const goToPeriod = (offset) => {
+    if (viewMode === "month") {
+      goToMonth(offset);
+    } else if (viewMode === "week") {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() + offset * 7);
+      setCurrentDate(next);
+    } else {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() + offset);
+      setCurrentDate(next);
+    }
+  };
+
+  // Monday-start week containing currentDate
+  const weekStart = (() => {
+    const d = new Date(currentDate);
+    const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    d.setDate(d.getDate() - dow);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  })();
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const periodLabel = (() => {
+    if (viewMode === "month") return `${months[month]} ${year}`;
+    if (viewMode === "week") {
+      const end = weekDays[6];
+      const startLabel = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const endLabel = end.toLocaleDateString("en-US", {
+        month: weekStart.getMonth() === end.getMonth() ? undefined : "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      return `${startLabel} - ${endLabel}`;
+    }
+    return currentDate.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  })();
 
   // ✅ Updated to convert Date to string
   const handleDayClick = (date) => {
@@ -316,20 +416,74 @@ const VendorCalendar = ({ vendorId }) => {
     setQuickAddOpen(false);
   };
 
-  const handleMeetingClick = (meeting) => {
+  // "+ Add" inside the day's activity list popup — same create flow as
+  // Quick Add, just seeded with that day's date instead of quickAddDate.
+  const handleAddMeetingForDate = (date) => {
     setModalType("meeting");
-    setModalMode("view");
-    setSelectedMeeting(meeting);
+    setModalMode("create");
+    setCalendarDate(formatDateToString(date));
+    setSelectedMeeting(null);
     setModalOpen(true);
     setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
   };
 
+  const handleAddTaskForDate = (date) => {
+    setModalType("task");
+    setModalMode("create");
+    setCalendarDate(formatDateToString(date));
+    setSelectedTask(null);
+    setModalOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleMeetingClick = (meeting) => {
+    setSelectedMeeting(meeting);
+    setIsMeetingDetailsOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
   const handleTaskClick = (task) => {
+    setSelectedTask(task);
+    setIsTaskDetailsOpen(true);
+    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleEditMeetingFromDetails = (meeting) => {
+    setIsMeetingDetailsOpen(false);
+    setModalType("meeting");
+    setModalMode("view");
+    setSelectedMeeting(meeting);
+    setModalOpen(true);
+  };
+
+  const handleEditTaskFromDetails = (task) => {
+    setIsTaskDetailsOpen(false);
     setModalType("task");
     setModalMode("view");
     setSelectedTask(task);
     setModalOpen(true);
-    setActivityPopup({ isOpen: false, date: null, meetings: [], tasks: [] });
+  };
+
+  const handleMeetingComplete = async (meeting) => {
+    try {
+      await API.put(`/meetings/${meeting._id}`, { status: "completed" });
+      await fetchData();
+      setSelectedMeeting((prev) => (prev && prev._id === meeting._id ? { ...prev, status: "completed" } : prev));
+      toast.success("Meeting marked as complete!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update meeting.");
+    }
+  };
+
+  const handleTaskComplete = async (task) => {
+    try {
+      await API.put(`/tasks/${task._id}`, { status: "Completed" });
+      await fetchData();
+      setSelectedTask((prev) => (prev && prev._id === task._id ? { ...prev, status: "Completed" } : prev));
+      toast.success("Task marked as complete!");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to update task.");
+    }
   };
 
   const handleSave = async (form, type) => {
@@ -349,12 +503,18 @@ const VendorCalendar = ({ vendorId }) => {
     }
   };
 
+  const onUpdate = async () => {
+    fetchData();
+  };
+
   const handleDelete = async (id, type) => {
     const loadingToast = toast.loading(`Deleting ${type}...`);
     try {
       await API.delete(`/${type}s/${id}`);
       toast.success(`${type} deleted`, { id: loadingToast });
       setModalOpen(false);
+      setIsMeetingDetailsOpen(false);
+      setIsTaskDetailsOpen(false);
       fetchData();
     } catch (error) {
       toast.error(`Failed to delete ${type}`, { id: loadingToast });
@@ -368,70 +528,114 @@ const VendorCalendar = ({ vendorId }) => {
   };
 
   const closeModal = () => {
+    const wasEditing = modalMode === "view";
     setModalOpen(false);
     resetForm();
+    // The edit form (mode="view") does its own PUT internally and just
+    // calls onClose when done — refetch here so the calendar reflects the
+    // change, same as create does via handleSave.
+    if (wasEditing) fetchData();
   };
 
   const filteredEvents = (dayMeetings, dayTasks) => {
-    if (!searchTerm) return { meetings: dayMeetings, tasks: dayTasks };
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return { meetings: dayMeetings, tasks: dayTasks };
 
+    // A missing title used to throw here (undefined.toLowerCase()) and
+    // silently crash the whole month grid the moment a search term was
+    // typed — every day cell would just stop rendering, which is
+    // indistinguishable from "the search box doesn't work".
     const meetings = dayMeetings.filter((m) =>
-      m.title.toLowerCase().includes(searchTerm.toLowerCase())
+      (m.title || "").toLowerCase().includes(term)
     );
     const tasks = dayTasks.filter((t) =>
-      t.title.toLowerCase().includes(searchTerm.toLowerCase())
+      (t.title || "").toLowerCase().includes(term)
     );
 
     return { meetings, tasks };
   };
 
   return (
-    <div className="h-full">
+    <div className="min-h-[868px]">
       <AppToaster />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            {months[month]} {year}
-          </h3>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-1.5 lg:gap-3 mb-4">
+        <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
           <button
-            onClick={() => goToMonth(-1)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            onClick={() => goToPeriod(-1)}
+            className="p-1 lg:p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <ChevronLeft className="w-4 h-4 text-gray-600" />
+            <ChevronLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" />
           </button>
+          <span className="text-xs lg:text-sm font-semibold text-gray-900 max-w-[76px] lg:max-w-none lg:min-w-[90px] text-center truncate lg:whitespace-nowrap">
+            {periodLabel}
+          </span>
           <button
-            onClick={goToToday}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            onClick={() => goToPeriod(1)}
+            className="p-1 lg:p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <Calendar className="w-4 h-4 text-gray-600" />
-          </button>
-          <button
-            onClick={() => goToMonth(1)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
-          >
-            <ChevronRight className="w-4 h-4 text-gray-600" />
+            <ChevronRight className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" />
           </button>
         </div>
+
+        <div className="relative flex items-center bg-gray-100 rounded-full p-0.5 lg:p-1 flex-shrink-0 overflow-hidden">
+          <span
+            className="absolute top-0.5 lg:top-1 bottom-0.5 lg:bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+            style={{ left: viewIndicator.left, width: viewIndicator.width }}
+          />
+          {["month", "week", "day"].map((mode) => (
+            <button
+              key={mode}
+              ref={(el) => (viewRefs.current[mode] = el)}
+              onClick={() => setViewMode(mode)}
+              className={`relative z-10 px-2 lg:px-3 py-1 lg:py-1.5 rounded-full text-[11px] lg:text-sm font-medium capitalize transition-colors ${viewMode === mode
+                ? "text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => setCurrentDate(new Date())}
+          className="px-2.5 lg:px-3 py-1 lg:py-1.5 border border-gray-200 rounded-full text-[11px] lg:text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
+        >
+          Today
+        </button>
+
+        <div className="relative flex items-center flex-1 min-w-0 rounded-full bg-white">
+          <SearchIcon className="absolute left-2.5 lg:left-3 -translate-y-1/2 lg: top-1/2 w-4 h-4 text-[#525866]" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search Events"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+          />
+        </div>
+
+        <button
+          onClick={() => handleDayClick(today)}
+          className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
+          title="Add Event"
+        >
+          <Plus className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+        </button>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-4">
-        <SearchIcon className="absolute left-2 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
-        <input
-          type="text"
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-11 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:border-gray-400"
-        />
-      </div>
+      {isLoading && (
+        <div className="bg-white border border-gray-200 rounded-lg flex flex-col items-center justify-center gap-2 min-h-[740px] text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <p className="text-sm">Loading meetings and tasks…</p>
+        </div>
+      )}
 
       {/* Calendar Grid */}
+      {!isLoading && viewMode === "month" && (
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
           {weekdays.map((day, index) => (
@@ -451,24 +655,34 @@ const VendorCalendar = ({ vendorId }) => {
             const { meetings: filteredMeetings, tasks: filteredTasks } =
               filteredEvents(dayMeetings, dayTasks);
 
-            const totalItems = filteredMeetings.length + filteredTasks.length;
-            const maxDisplay = 1;
+            // Combine into one ordered list (meetings first) and cap at
+            // however many chips actually fit inside the cell's fixed
+            // height, rather than the old hardcoded 1 — the rest collapse
+            // into a "+N" chip instead of overflowing the box.
+            const allDayItems = [
+              ...filteredMeetings.map((m) => ({ item: m, type: "meeting" })),
+              ...filteredTasks.map((t) => ({ item: t, type: "task" })),
+            ];
+            const totalItems = allDayItems.length;
+            const maxDisplay = 4;
+            const visibleItems = allDayItems.slice(0, maxDisplay);
             const hasMore = totalItems > maxDisplay;
+            const hasHighPriority = filteredMeetings.some(
+              (m) => m.priority === "high",
+            );
 
             return (
               <div
                 key={key + idx}
                 className={`
-                  min-h-[60px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
-                  ${
-                    !isCurrentMonth
-                      ? "bg-gray-50 text-gray-400"
-                      : "bg-white text-gray-900"
+                  min-h-[148px] p-1 border-b border-r border-gray-200 last:border-r-0 relative transition-all
+                  ${!isCurrentMonth
+                    ? "bg-gray-50 text-gray-400"
+                    : "bg-white text-gray-900"
                   }
-                  ${
-                    isCurrentMonth && isFuture
-                      ? "hover:bg-gray-50 cursor-pointer"
-                      : ""
+                  ${isCurrentMonth && isFuture
+                    ? "hover:bg-gray-50 cursor-pointer"
+                    : ""
                   }
                   ${isToday ? "bg-gray-100 border-gray-300" : ""}
                 `}
@@ -480,10 +694,9 @@ const VendorCalendar = ({ vendorId }) => {
                   <span
                     className={`
                       text-xs
-                      ${
-                        isToday
-                          ? "bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center"
-                          : !isCurrentMonth
+                      ${isToday
+                        ? "bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center"
+                        : !isCurrentMonth
                           ? "text-gray-400"
                           : "text-gray-900"
                       }
@@ -491,27 +704,23 @@ const VendorCalendar = ({ vendorId }) => {
                   >
                     {date.getDate()}
                   </span>
+                  {hasHighPriority && (
+                    <span className="text-[9px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
+                      High
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-0.5">
-                  {filteredMeetings.slice(0, 1).map((meeting) => (
+                  {visibleItems.map(({ item, type }) => (
                     <CompactEventCard
-                      key={meeting._id}
-                      item={meeting}
-                      type="meeting"
-                      onClick={handleMeetingClick}
+                      key={item._id}
+                      item={item}
+                      type={type}
+                      onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
-                  {filteredTasks
-                    .slice(0, maxDisplay - filteredMeetings.slice(0, 1).length)
-                    .map((task) => (
-                      <CompactEventCard
-                        key={task._id}
-                        item={task}
-                        type="task"
-                        onClick={handleTaskClick}
-                      />
-                    ))}
                   {hasMore && (
                     <div
                       className="text-[9px] text-gray-500 px-1 py-0.5 bg-gray-100 rounded cursor-pointer hover:bg-gray-200"
@@ -534,18 +743,140 @@ const VendorCalendar = ({ vendorId }) => {
           })}
         </div>
       </div>
+      )}
 
-      {/* Stats */}
-      <div className="flex items-center justify-center gap-4 py-3 text-xs text-gray-600">
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-          <span>{Object.values(meetings).flat().length} meetings</span>
+      {/* Week View */}
+      {!isLoading && viewMode === "week" && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+            {weekDays.map((date, idx) => {
+              const isToday = date.toDateString() === today.toDateString();
+              return (
+                <div key={idx} className="p-2 text-center border-r border-gray-200 last:border-r-0">
+                  <div className="text-xs font-medium text-gray-500">{weekdays[idx]}</div>
+                  <div
+                    className={`text-sm mt-0.5 ${isToday
+                      ? "inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white"
+                      : "text-gray-900"
+                      }`}
+                  >
+                    {date.getDate()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-7 min-h-[740px]">
+            {weekDays.map((date, idx) => {
+              const key = date.toDateString();
+              const isFuture = date >= today;
+              const dayMeetings = meetings[key] || [];
+              const dayTasks = tasks[key] || [];
+              const { meetings: filteredMeetings, tasks: filteredTasks } =
+                filteredEvents(dayMeetings, dayTasks);
+
+              return (
+                <div
+                  key={idx}
+                  className={`p-1.5 border-r border-gray-200 last:border-r-0 space-y-1 ${isFuture ? "hover:bg-gray-50 cursor-pointer" : "bg-gray-50/50"
+                    }`}
+                  onClick={() => isFuture && handleDayClick(date)}
+                >
+                  {filteredMeetings.map((meeting) => (
+                    <CompactEventCard
+                      key={meeting._id}
+                      item={meeting}
+                      type="meeting"
+                      onClick={handleMeetingClick}
+                    />
+                  ))}
+                  {filteredTasks.map((task) => (
+                    <CompactEventCard
+                      key={task._id}
+                      item={task}
+                      type="task"
+                      onClick={handleTaskClick}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-          <span>{Object.values(tasks).flat().length} tasks</span>
-        </div>
-      </div>
+      )}
+
+      {/* Day View */}
+      {!isLoading && viewMode === "day" && (() => {
+        const key = currentDate.toDateString();
+        const isFuture = currentDate >= today;
+        const dayMeetings = meetings[key] || [];
+        const dayTasks = tasks[key] || [];
+        const { meetings: filteredMeetings, tasks: filteredTasks } =
+          filteredEvents(dayMeetings, dayTasks);
+        const hasEvents = filteredMeetings.length > 0 || filteredTasks.length > 0;
+
+        return (
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden min-h-[740px] p-4">
+            {!hasEvents ? (
+              <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400">
+                <Calendar className="w-8 h-8 mb-2" />
+                <p className="text-sm">No events on this day</p>
+                {isFuture && (
+                  <button
+                    onClick={() => handleDayClick(currentDate)}
+                    className="mt-3 text-sm text-blue-600 hover:underline"
+                  >
+                    + Add event
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredMeetings.map((meeting) => (
+                  <div
+                    key={meeting._id}
+                    onClick={() => handleMeetingClick(meeting)}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Users className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{meeting.title}</span>
+                    </div>
+                    {meeting.scheduledAt && (
+                      <span className="text-xs flex-shrink-0">
+                        {new Date(meeting.scheduledAt).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {filteredTasks.map((task) => (
+                  <div
+                    key={task._id}
+                    onClick={() => handleTaskClick(task)}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckSquare className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{task.title}</span>
+                    </div>
+                    {task.dueDate && (
+                      <span className="text-xs flex-shrink-0">
+                        {new Date(task.dueDate).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <QuickAddModal
         isOpen={quickAddOpen}
@@ -562,6 +893,8 @@ const VendorCalendar = ({ vendorId }) => {
         tasks={activityPopup.tasks}
         onMeetingClick={handleMeetingClick}
         onTaskClick={handleTaskClick}
+        onAddMeeting={handleAddMeetingForDate}
+        onAddTask={handleAddTaskForDate}
         onClose={() =>
           setActivityPopup({
             isOpen: false,
@@ -576,6 +909,7 @@ const VendorCalendar = ({ vendorId }) => {
         <VendorMeetingForm
           open={modalOpen}
           mode={modalMode}
+          startInEditMode={modalMode === "view"}
           meetingData={modalMode === "view" ? selectedMeeting : undefined}
           calendarDate={calendarDate}
           vendorId={vendorId}
@@ -594,6 +928,7 @@ const VendorCalendar = ({ vendorId }) => {
         <VendorTaskForm
           open={modalOpen}
           mode={modalMode}
+          startInEditMode={modalMode === "view"}
           taskData={modalMode === "view" ? selectedTask : undefined}
           vendorId={vendorId}
           calendarDate={calendarDate}
@@ -603,9 +938,29 @@ const VendorCalendar = ({ vendorId }) => {
             modalMode === "view" ? (id) => handleDelete(id, "task") : undefined
           }
           onClose={closeModal}
-          onUpdate={fetchData}
+          onUpdate={onUpdate}
         />
       )}
+
+      <MeetingDetailsModal
+        open={isMeetingDetailsOpen}
+        meetingData={selectedMeeting}
+        users={users}
+        onDelete={(id) => handleDelete(id, "meeting")}
+        onEdit={handleEditMeetingFromDetails}
+        onComplete={handleMeetingComplete}
+        onClose={() => setIsMeetingDetailsOpen(false)}
+      />
+
+      <TaskDetailsModal
+        open={isTaskDetailsOpen}
+        taskData={selectedTask}
+        users={users}
+        onDelete={(id) => handleDelete(id, "task")}
+        onEdit={handleEditTaskFromDetails}
+        onComplete={handleTaskComplete}
+        onClose={() => setIsTaskDetailsOpen(false)}
+      />
     </div>
   );
 };

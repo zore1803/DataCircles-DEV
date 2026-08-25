@@ -21,7 +21,9 @@ import {
   Plus,
   ArrowUpCircle,
   ArrowDownCircle,
+  Building,
 } from "lucide-react";
+import { formatNumberFixed } from "../utils/numberFormatter";
 import toast from "react-hot-toast";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import logo from "/DataCircles.png";
@@ -483,10 +485,7 @@ const PaymentPage = () => {
             </div>
           </div>
           <div className="flex gap-2 mt-4 md:mt-0">
-            <VideoTutorialButton
-              onClick={() => setShowVideoTutorial(true)}
-              variant="minimal"
-            />
+            
             <button
               onClick={handleAddNew}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition shadow-sm"
@@ -691,7 +690,7 @@ const PaymentPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <h6 className="text-sm text-gray-700 font-mono">
-                            ₹{p.amount?.toFixed(2) || "0.00"}
+                            ₹{formatNumberFixed(p.amount)}
                           </h6>
                         </div>
                       </td>

@@ -18,7 +18,8 @@ import {
 import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
-const CompactEventCard = ({ item, type, onClick }) => {
+import HighlightText from "../common/HighlightText";
+const CompactEventCard = ({ item, type, onClick, searchTerm }) => {
   const time = item.scheduledAt || item.dueDate;
   return (
     <div
@@ -35,7 +36,9 @@ const CompactEventCard = ({ item, type, onClick }) => {
       }}
       title={`${type}: ${item.title}`}
     >
-      <span className="truncate">{item.title}</span>
+      <span className="truncate">
+        <HighlightText text={item.title} query={searchTerm} />
+      </span>
       {time && (
         <span className="flex-shrink-0 opacity-70">
           {new Date(time).toLocaleTimeString("en-US", {
@@ -114,6 +117,7 @@ const ActivityListPopup = ({
   onAddMeeting,
   onAddTask,
   onClose,
+  searchTerm,
 }) => {
   if (!isOpen) return null;
 
@@ -157,7 +161,9 @@ const ActivityListPopup = ({
                   onClick={() => onMeetingClick(meeting)}
                 >
                   <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                  <span className="truncate">{meeting.title}</span>
+                  <span className="truncate">
+                    <HighlightText text={meeting.title} query={searchTerm} />
+                  </span>
                 </div>
               ))
             )}
@@ -183,7 +189,9 @@ const ActivityListPopup = ({
                   onClick={() => onTaskClick(task)}
                 >
                   <CheckSquare className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                  <span className="truncate">{task.title}</span>
+                  <span className="truncate">
+                    <HighlightText text={task.title} query={searchTerm} />
+                  </span>
                 </div>
               ))
             )}
@@ -333,7 +341,13 @@ const CompanyCalendar = ({ companyId }) => {
   for (let d = 1; d <= daysInMonth; d++) {
     calendarDays.push({ date: new Date(year, month, d), isCurrentMonth: true });
   }
-  const extraDays = 35 - calendarDays.length;
+  // Rounds up to the next full week (35 or 42 cells) instead of a hardcoded
+  // 35 — a month that needs 6 rows (e.g. a 31-day month starting on a
+  // Saturday) was 1 cell short of a full grid, leaving the last row's
+  // remaining columns with no cell rendered at all: no border, no fill,
+  // just the single populated cell's own right border standing alone.
+  const totalCells = Math.ceil(calendarDays.length / 7) * 7;
+  const extraDays = totalCells - calendarDays.length;
   for (let d = 1; d <= extraDays; d++) {
     calendarDays.push({
       date: new Date(year, month + 1, d),
@@ -622,8 +636,17 @@ const CompanyCalendar = ({ companyId }) => {
             placeholder="Search Events"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-2 lg:pr-3 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-blue-300"
+            className="w-full h-8 lg:h-9 pl-11 lg:pl-9 pr-8 border border-gray-200 rounded-full text-xs lg:text-sm focus:outline-none focus:border-[#0085FF]"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2.5 lg:right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         <button
@@ -726,6 +749,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={item}
                       type={type}
                       onClick={type === "meeting" ? handleMeetingClick : handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {hasMore && (
@@ -795,6 +819,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={meeting}
                       type="meeting"
                       onClick={handleMeetingClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                   {filteredTasks.map((task) => (
@@ -803,6 +828,7 @@ const CompanyCalendar = ({ companyId }) => {
                       item={task}
                       type="task"
                       onClick={handleTaskClick}
+                      searchTerm={searchTerm}
                     />
                   ))}
                 </div>
@@ -847,7 +873,9 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Users className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{meeting.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={meeting.title} query={searchTerm} />
+                      </span>
                     </div>
                     {meeting.scheduledAt && (
                       <span className="text-xs flex-shrink-0">
@@ -867,7 +895,9 @@ const CompanyCalendar = ({ companyId }) => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{task.title}</span>
+                      <span className="text-sm font-medium truncate">
+                        <HighlightText text={task.title} query={searchTerm} />
+                      </span>
                     </div>
                     {task.dueDate && (
                       <span className="text-xs flex-shrink-0">

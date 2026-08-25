@@ -301,7 +301,7 @@ const NotesTermsDrawer = ({
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="h-9 px-5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-9 px-5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {saving ? "Saving..." : "Save"}
               </button>
@@ -347,7 +347,7 @@ const NotesTermsDrawer = ({
                 onClick={() =>
                   setEditing({ title: "", body: "", isDefault: false, isActive: true })
                 }
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors flex-shrink-0"
+                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors flex-shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 Create New {tab.noun}

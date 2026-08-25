@@ -1,6 +1,7 @@
 // components/vendor/EditPaymentModal.jsx
 import React, { useState } from "react";
 import { X } from "lucide-react";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 
 const EditPaymentModal = ({
   isOpen,
@@ -120,7 +121,7 @@ const EditPaymentModal = ({
             Payment Amount (Cannot be changed)
           </div>
           <h6 className="text-2xl font-bold text-gray-900">
-            ₹{payment.amount?.toFixed(2)}
+            ₹{formatNumberFixed(payment.amount)}
           </h6>
           <div className="text-sm text-gray-500">
             {payment.direction === "IN"

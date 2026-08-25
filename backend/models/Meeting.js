@@ -197,6 +197,10 @@ const meetingSchema = new mongoose.Schema(
       enum: ["in-person", "video-call", "phone-call"],
       default: "in-person",
     },
+    meetingCategory: {
+      type: String,
+      default: "",
+    },
     location: {
       type: String,
       trim: true,
@@ -253,6 +257,22 @@ const meetingSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+
+    // Optional cross-links to other records, independent of linkedTo/contact/
+    // company/vendor above — e.g. a company meeting can still reference the
+    // specific contact who'll attend, or the deal/invoice it's about.
+    linkedContactId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Contact",
+    },
+    linkedDealId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Deal",
+    },
+    linkedInvoiceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Invoice",
+    },
 
     // Meeting outcome and notes
     notes: {

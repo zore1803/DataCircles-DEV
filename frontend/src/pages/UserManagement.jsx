@@ -24,6 +24,7 @@ import {
   EyeOff,
   Crown,
   Loader2,
+  User,
 } from "lucide-react";
 import AppToaster from "../components/AppToaster";
 
@@ -118,7 +119,7 @@ function UserManagement() {
     type: "default",
   });
 
-  const permissionOptions = ["no", "readonly", "read-write"];
+  const permissionOptions = ["no", "readonly", "read-write", "own-only"];
   const resources = [
     "Companies",
     "Deals",
@@ -437,6 +438,8 @@ function UserManagement() {
       resources.forEach((res) => (newPerms[res] = "readonly"));
     } else if (value === "full-access") {
       resources.forEach((res) => (newPerms[res] = "read-write"));
+    } else if (value === "own-only") {
+      resources.forEach((res) => (newPerms[res] = "own-only"));
     }
     setForm({ ...form, permissions: newPerms });
   };
@@ -448,6 +451,8 @@ function UserManagement() {
       resources.forEach((res) => (newPerms[res] = "readonly"));
     } else if (value === "full-access") {
       resources.forEach((res) => (newPerms[res] = "read-write"));
+    } else if (value === "own-only") {
+      resources.forEach((res) => (newPerms[res] = "own-only"));
     }
     setPermissions(newPerms);
   };
@@ -466,6 +471,13 @@ function UserManagement() {
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-semibold">
             <Eye className="w-3 h-3" />
             View
+          </span>
+        );
+      case "own-only":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-md text-xs font-semibold">
+            <User className="w-3 h-3" />
+            Own Only
           </span>
         );
       default:
@@ -579,6 +591,9 @@ function UserManagement() {
                   <option value="view-only">
                     👁️ View Only - Read-only access
                   </option>
+                  <option value="own-only">
+                    👤 Own Only - Only access what they own
+                  </option>
                   <option value="full-access">
                     🔓 Full Access - Edit everything
                   </option>
@@ -614,6 +629,8 @@ function UserManagement() {
                               ? "None"
                               : opt === "readonly"
                               ? "View"
+                              : opt === "own-only"
+                              ? "Own Only"
                               : "Edit"}
                           </option>
                         ))}
@@ -916,6 +933,9 @@ function UserManagement() {
                   <option value="">Custom (Manual Selection)</option>
                   <option value="view-only">
                     👁️ View Only - Read-only access
+                  </option>
+                  <option value="own-only">
+                    👤 Own Only - Only access what they own
                   </option>
                   <option value="full-access">
                     🔓 Full Access - Edit everything

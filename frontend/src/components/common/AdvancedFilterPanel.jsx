@@ -8,6 +8,8 @@ const OPERATORS = [
   { value: "not_contains", label: "Does not contain" },
   { value: "is", label: "Is exact" },
   { value: "is_not", label: "Is not" },
+  { value: "greater_than", label: "Greater than (>)" },
+  { value: "less_than", label: "Less than (<)" },
   { value: "in", label: "In (comma separated)" },
   { value: "not_in", label: "Not in (comma separated)" },
   { value: "is_empty", label: "Is empty" },
@@ -108,8 +110,32 @@ export default function AdvancedFilterPanel({
   title = "Advanced Filters",
   subtitle = "Build dynamic queries for your CRM",
   emptyStateText = "Add a rule to narrow down your list.",
+  data = [],
+  getFieldValue = null,
 }) {
   const [localFilters, setLocalFilters] = useState([]);
+
+  // Compute available dropdown options for each column
+  const getColumnOptions = (colKey) => {
+    if (!colKey) return null;
+    const colDef = columns.find((c) => c.key === colKey);
+    if (colDef?.options && colDef.options.length > 0) {
+      return colDef.options;
+    }
+    if (!data || data.length === 0) return null;
+    const set = new Set();
+    data.forEach((item) => {
+      let val = getFieldValue ? getFieldValue(item, colKey) : item[colKey];
+      if (typeof val === "object" && val !== null) {
+        val = val.name || val.title || val.label || "";
+      }
+      if (val !== undefined && val !== null && String(val).trim() !== "") {
+        set.add(String(val).trim());
+      }
+    });
+    const values = Array.from(set).sort();
+    return values.length > 0 ? values : null;
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -138,10 +164,12 @@ export default function AdvancedFilterPanel({
       prev.map((filter) => {
         if (filter.id === id) {
           const updated = { ...filter, [field]: value };
-          if (
-            field === "operator" &&
-            (value === "is_empty" || value === "is_not_empty")
-          ) {
+          if (field === "operator" && (value === "is_empty" || value === "is_not_empty")) {
+            updated.value = "";
+          }
+          // Reset value when column changes so a stale free-text value
+          // doesn't persist when switching to a column with a dropdown.
+          if (field === "column") {
             updated.value = "";
           }
           return updated;
@@ -288,21 +316,40 @@ export default function AdvancedFilterPanel({
                         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">
                           Value
                         </label>
-                        {!isValueDisabled ? (
-                          <input
-                            type="text"
-                            value={filter.value}
-                            onChange={(e) =>
-                              updateFilter(filter.id, "value", e.target.value)
-                            }
-                            placeholder="Enter value..."
-                            className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                          />
-                        ) : (
+                        {isValueDisabled ? (
                           <div className="w-full bg-gray-50 border border-gray-200 rounded-lg flex items-center px-3 py-2 text-sm text-gray-400 italic">
                             N/A
                           </div>
-                        )}
+                        ) : (() => {
+                          const opts = getColumnOptions(filter.column);
+                          if (opts && opts.length > 0) {
+                            return (
+                              <select
+                                value={filter.value}
+                                onChange={(e) =>
+                                  updateFilter(filter.id, "value", e.target.value)
+                                }
+                                className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                              >
+                                <option value="">Select...</option>
+                                {opts.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            );
+                          }
+                          return (
+                            <input
+                              type="text"
+                              value={filter.value}
+                              onChange={(e) =>
+                                updateFilter(filter.id, "value", e.target.value)
+                              }
+                              placeholder="Enter value..."
+                              className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -323,12 +370,14 @@ export default function AdvancedFilterPanel({
 
         <div className="p-5 border-t border-gray-200 flex gap-3 bg-white">
           <button
+            type="button"
             onClick={handleClear}
             className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
           >
             Clear All
           </button>
           <button
+            type="button"
             onClick={handleApply}
             className="flex-[2] py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >

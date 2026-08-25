@@ -1,7 +1,18 @@
 const mongoose = require('mongoose');
 
+const postalAddressSchema = new mongoose.Schema({
+  addressLine1: { type: String, default: '' },
+  addressLine2: { type: String, default: '' },
+  pincode: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  country: { type: String, default: '' },
+}, { _id: false });
+
 const itemSchema = new mongoose.Schema({
   itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+  // Set only for variant lines — itemId above is the parent Item's id.
+  variantId: { type: mongoose.Schema.Types.ObjectId, default: null },
   name: { type: String, required: true },
   description: { type: String, default: '' },
   rate: { type: Number, required: true },
@@ -20,11 +31,13 @@ const deliveryChallanSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
-  status: { 
-    type: String, 
-    enum: ['Draft', 'Sent', 'Delivered', 'Cancelled'], 
-    required: true 
+  status: {
+    type: String,
+    enum: ['Draft', 'Sent', 'Delivered', 'Cancelled'],
+    required: true
   },
+  billingAddress: { type: postalAddressSchema, default: () => ({}) },
+  shippingAddress: { type: postalAddressSchema, default: () => ({}) },
   discount: {
     type: { type: String, enum: ['fixed', 'percentage'], required: true },
     value: { type: Number, required: true, min: 0 },
@@ -32,10 +45,20 @@ const deliveryChallanSchema = new mongoose.Schema({
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },
   items: [itemSchema],
+  digitalSignature: {
+    status: { type: String, enum: ['pending', 'signed', 'cancelled', 'failed', 'none'], default: 'none' },
+    provider: { type: String, enum: ['docusign', 'zoho', 'internal', 'other'] },
+    documentId: { type: String },
+    signedAt: { type: Date },
+    signedUrl: { type: String }
+  },
+  // Set when this delivery challan was created via the "Duplicate" action,
+  // pointing at the source challan it was cloned from.
+  duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryChallan' },
+  stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('DeliveryChallan', deliveryChallanSchema);

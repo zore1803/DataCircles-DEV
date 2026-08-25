@@ -23,12 +23,16 @@ import {
   Mail,
   IndianRupee,
   MoreVertical,
+  Video,
 } from "lucide-react";
 import API from "../services/api";
 import InvoiceForm from "../components/invoice/InvoiceForm";
+import InvoiceFormFull from "../components/invoice/InvoiceFormFull";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
+import PerformaInvoiceFormFull from "../components/PerformaInvoice/PerformaInvoiceFormFull";
 import QuotationForm from "../components/quotation/QuotationForm";
 import DeliveryChallanForm from "../components/deliveryChallan/DeliveryChallanForm";
+import DeliveryChallanFormFull from "../components/deliveryChallan/DeliveryChallanFormFull";
 import InvoiceStylePreview from "../components/invoice/InvoiceStylePreview";
 import PerformaInvoiceStylePreview from "../components/PerformaInvoice/PerformaInvoiceStylePreview";
 // import QuotationStylePreview from "../components/quotation/QuotationStylePreview";
@@ -41,6 +45,8 @@ import VideoTutorialButton from "../components/VideoTutorialButton";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
 import { useLocation, useNavigate } from "react-router-dom";
 import AppToaster from "../components/AppToaster";
+import { getDocumentSettings } from "../services/documentSettingsCache";
+import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
 
 const statusOptions = [
   "Draft",
@@ -232,8 +238,12 @@ const InvoiceViewer = ({
       const response = await API.get(`/${path}/download/${id}`, {
         responseType: "blob",
       });
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      setPdfUrl(URL.createObjectURL(blob));
+      // Named as a File (not a plain Blob) so the browser's built-in PDF
+      // viewer shows this document's actual name instead of "about:blank" —
+      // a bare Blob has no name, and Chrome's PDF viewer falls back to the
+      // blob URL's (nonexistent) location for its title/tab label.
+      const file = new File([response.data], `${path}-${id}.pdf`, { type: "application/pdf" });
+      setPdfUrl(URL.createObjectURL(file));
     } catch (error) {
       toast.error("Failed to load PDF");
       console.error("PDF fetch error:", error);
@@ -274,7 +284,12 @@ const InvoiceViewer = ({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100002] p-4">
-      <div className="bg-white rounded-xl w-full h-[90vh] max-w-5xl flex flex-col shadow-2xl">
+      {/* Chrome ignores the #view=FitH / #zoom=... PDF-viewer open params for
+          blob: URLs specifically (they only take effect for a real network
+          request), so the page's native width can't be forced to fit a
+          narrow panel — widened from max-w-5xl (1024px) so the full page
+          width fits without the right edge getting cropped. */}
+      <div className="bg-white rounded-xl w-full h-[90vh] max-w-[1400px] flex flex-col shadow-2xl">
         <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl">
           <div className="flex items-center gap-3">
             <div className="bg-blue-100 p-2 rounded-lg">
@@ -361,10 +376,19 @@ const InvoiceViewer = ({
             </button>
           </div>
         </div>
-        <div className="flex-1 p-4 overflow-hidden">
+        <div className="flex-1 p-4 overflow-auto">
           {pdfUrl ? (
             <iframe
-              src={pdfUrl}
+              // toolbar=0/navpanes=0 drop the browser's own PDF chrome (the
+              // bar that was showing "about:blank" plus the redundant
+              // thumbnail rail) since this modal already has its own
+              // download/print/share controls above. view=FitH/zoom=
+              // fragment params are included for browsers that honor them,
+              // but Chrome specifically ignores PDF open params for blob:
+              // URLs, so the real fix for the cropped-right-edge issue is
+              // the widened modal above plus overflow-auto here as a
+              // fallback on narrower screens.
+              src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH&zoom=page-width`}
               width="100%"
               height="100%"
               title="Document PDF"
@@ -426,10 +450,15 @@ const MergedInvoiceManager = () => {
   const [previewStyle, setPreviewStyle] = useState(null);
   const [previewType, setPreviewType] = useState(null);
   const [showViewer, setShowViewer] = useState(false);
+  const [conversionData, setConversionData] = useState(null);
+  const [invoiceFullWidth, setInvoiceFullWidth] = useState(false);
+  const [performaFullWidth, setPerformaFullWidth] = useState(false);
+  const [challanFullWidth, setChallanFullWidth] = useState(false);
   const [viewerId, setViewerId] = useState(null);
   const [viewerType, setViewerType] = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null);
+  const [convertSubmenuOpen, setConvertSubmenuOpen] = useState(false);
   const [dropdownDirection, setDropdownDirection] = useState({});
   const [showBrandingModal, setShowBrandingModal] = useState(false);
   const [pendingInvoiceCreation, setPendingInvoiceCreation] = useState(false);
@@ -578,6 +607,7 @@ const MergedInvoiceManager = () => {
     const handleClickOutside = (event) => {
       if (openConvertMenu) {
         setOpenConvertMenu(null);
+        setConvertSubmenuOpen(false);
       }
     };
 
@@ -1084,6 +1114,32 @@ const MergedInvoiceManager = () => {
         : convertTargetType === "quotation"
         ? "quotation"
         : "delivery-challan";
+
+    // NEW PREVIEW & EDIT FLOW:
+    // If converting Quotation to Tax Invoice or Proforma Invoice,
+    // open the form in creation mode pre-filled with quotation data.
+    if (
+      convertDocType === "quotation" &&
+      (convertTargetType === "tax" || convertTargetType === "performa")
+    ) {
+      const sourceDoc = deals.find((d) => d._id === convertDocId);
+      if (!sourceDoc) {
+        toast.error("Source document not found. Please refresh.");
+        return;
+      }
+      setShowConvertModal(false);
+      setOpenConvertMenu(null);
+
+      setConversionData(sourceDoc);
+      setEditingType(convertTargetType);
+      setShowForm(true);
+
+      setConvertDocId(null);
+      setConvertDocType(null);
+      setConvertTargetType(null);
+      return;
+    }
+
     try {
       setLoading((prev) => ({ ...prev, [convertDocType]: true }));
       await API.post(`/${sourcePath}-${targetPath}/${convertDocId}`);
@@ -1127,6 +1183,32 @@ const MergedInvoiceManager = () => {
         : type === "quotation"
         ? "quotations"
         : "delivery-challans";
+
+    const docTypeLabel =
+      type === "tax"
+        ? "Invoice"
+        : type === "performa"
+        ? "Pro Forma Invoice"
+        : type === "quotation"
+        ? "Quotation"
+        : "Delivery Challan";
+
+    // Resolve filename from saved org settings
+    const tabDocs = documents[type] ?? [];
+    const doc = tabDocs.find((d) => d._id === id);
+    let filename = `${docTypeLabel}-${id}`;
+    try {
+      const settings = await getDocumentSettings();
+      const formats = settings?.pdfFilenameFormats || DEFAULT_FORMATS;
+      const tokens = formats[type] || DEFAULT_FORMATS[type];
+      // companyName comes from branding; fall back to empty string
+      const orgName = settings?.companyName || "";
+      const docData = extractDocData(doc || {}, type, orgName);
+      filename = buildFilename(tokens, docData);
+    } catch (_) {
+      // silently fall back to default name
+    }
+
     try {
       setLoading((prev) => ({ ...prev, [type]: true }));
       const response = await API.get(`/${apiPath}/download/${id}`, {
@@ -1136,22 +1218,12 @@ const MergedInvoiceManager = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${apiPath.split("-").join("")}-${id}.pdf`);
+      link.setAttribute("download", `${filename}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(
-        `${
-          type === "tax"
-            ? "Invoice"
-            : type === "performa"
-            ? "Pro Forma Invoice"
-            : type === "quotation"
-            ? "Quotation"
-            : "Delivery Challan"
-        } downloaded successfully`
-      );
+      toast.success(`${docTypeLabel} downloaded successfully`);
     } catch (error) {
       toast.error(`Failed to download ${type} document`);
       console.error(`Download ${type} document error:`, error);
@@ -1341,11 +1413,7 @@ const MergedInvoiceManager = () => {
             </div>
             {/* Right: Action buttons */}
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <VideoTutorialButton
-                onClick={() => setShowVideoTutorial(true)}
-                variant="minimal"
-                className="w-full sm:w-auto"
-              />
+              
               <button
                 onClick={async () => {
                   const canProceed = await checkBrandingBeforeInvoice();
@@ -1423,62 +1491,127 @@ const MergedInvoiceManager = () => {
           <div className="flex items-center text-sm font-medium text-gray-500 bg-white px-4 py-3 rounded-t-xl border-b border-gray-200">
             <span>Sales</span>
             <ChevronRight className="w-4 h-4 mx-2 text-gray-400 flex-shrink-0" />
-            <span className="text-blue-600 font-semibold">
-              {activeTab === "tax"
-                ? "Invoices"
-                : activeTab === "performa"
-                ? "Pro Forma Invoices"
-                : activeTab === "quotation"
-                ? "Quotations"
-                : "Delivery Challans"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600 font-semibold">
+                {activeTab === "tax"
+                  ? "Invoices"
+                  : activeTab === "performa"
+                  ? "Pro Forma Invoices"
+                  : activeTab === "quotation"
+                  ? "Quotations"
+                  : "Delivery Challans"}
+              </span>
+              
+            </div>
           </div>
         </div>
         {showForm && editingType === "tax" && (
-          <InvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("tax")}
-            editingInvoice={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error("Please select an invoice style to preview.");
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("tax");
-              setShowPreview(true);
-            }}
-          />
+          invoiceFullWidth ? (
+            <InvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+                setInvoiceFullWidth(false);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              conversionData={conversionData}
+              onExitFullWidth={() => setInvoiceFullWidth(false)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <InvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("tax")}
+              editingInvoice={editing}
+              conversionData={conversionData}
+              onRequestFullWidth={() => setInvoiceFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error("Please select an invoice style to preview.");
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("tax");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "performa" && (
-          <PerformaInvoiceForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("performa")}
-            editingPerformaInvoice={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error(
-                  "Please select a Pro Forma invoice style to preview."
-                );
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("performa");
-              setShowPreview(true);
-            }}
-          />
+          performaFullWidth ? (
+            <PerformaInvoiceFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+                setPerformaFullWidth(false);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              conversionData={conversionData}
+              onExitFullWidth={() => setPerformaFullWidth(false)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error(
+                    "Please select a Pro Forma invoice style to preview."
+                  );
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          ) : (
+            <PerformaInvoiceForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setConversionData(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("performa")}
+              editingPerformaInvoice={editing}
+              conversionData={conversionData}
+              onRequestFullWidth={() => setPerformaFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error(
+                    "Please select a Pro Forma invoice style to preview."
+                  );
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("performa");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         {showForm && editingType === "quotation" && (
           <QuotationForm
@@ -1503,28 +1636,45 @@ const MergedInvoiceManager = () => {
           />
         )}
         {showForm && editingType === "deliveryChallan" && (
-          <DeliveryChallanForm
-            deals={deals}
-            isOpen={showForm}
-            onClose={() => {
-              setShowForm(false);
-              setEditing(null);
-              setEditingType(null);
-            }}
-            fetchData={() => fetchData("deliveryChallan")}
-            editingDeliveryChallan={editing}
-            onPreview={(formData) => {
-              if (!formData.style) {
-                toast.error(
-                  "Please select a Delivery Challan style to preview."
-                );
-                return;
-              }
-              setPreviewStyle(formData.style);
-              setPreviewType("deliveryChallan");
-              setShowPreview(true);
-            }}
-          />
+          challanFullWidth ? (
+            <DeliveryChallanFormFull
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+                setChallanFullWidth(false);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onExitFullWidth={() => setChallanFullWidth(false)}
+            />
+          ) : (
+            <DeliveryChallanForm
+              deals={deals}
+              isOpen={showForm}
+              onClose={() => {
+                setShowForm(false);
+                setEditing(null);
+                setEditingType(null);
+              }}
+              fetchData={() => fetchData("deliveryChallan")}
+              editingDeliveryChallan={editing}
+              onRequestFullWidth={() => setChallanFullWidth(true)}
+              onPreview={(formData) => {
+                if (!formData.style) {
+                  toast.error(
+                    "Please select a Delivery Challan style to preview."
+                  );
+                  return;
+                }
+                setPreviewStyle(formData.style);
+                setPreviewType("deliveryChallan");
+                setShowPreview(true);
+              }}
+            />
+          )
         )}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-200">
@@ -1613,7 +1763,7 @@ const MergedInvoiceManager = () => {
                     <CheckCircle2 className="w-4 h-4 inline mr-1" />
                     Status
                   </SortableHeader>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap min-w-[110px]">
                     <MoreVertical className="w-4 h-4 inline mr-1" />
                     Actions
                   </th>
@@ -1759,63 +1909,95 @@ const MergedInvoiceManager = () => {
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1">
+                      <div className="relative inline-block">
                         <button
-                          title="View"
-                          onClick={() => handleView(doc, activeTab)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          ref={(el) => {
+                            buttonRefs.current[doc._id] = el;
+                          }}
+                          title="Actions"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConvertSubmenuOpen(false);
+                            setOpenConvertMenu(
+                              openConvertMenu === doc._id ? null : doc._id
+                            );
+                          }}
+                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                         >
-                          <Eye className="w-4 h-4" />
+                          <MoreVertical className="w-4 h-4" />
                         </button>
-                        <button
-                          title="Edit"
-                          onClick={() => handleEdit(doc, activeTab)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          title="Download"
-                          onClick={() => handleDownload(doc._id, activeTab)}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          title="Send"
-                          onClick={() => handleSend(doc._id, activeTab)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                        <div className="relative">
-                          <button
-                            ref={(el) => {
-                              buttonRefs.current[doc._id] = el; // Just store ref, don't call setState
-                            }}
-                            title="Convert"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenConvertMenu(
-                                openConvertMenu === doc._id ? null : doc._id
-                              );
-                            }}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                          >
-                            <Repeat className="w-4 h-4" />
-                          </button>
 
-                          {openConvertMenu === doc._id && (
-                            <div
-                              className={`absolute ${
-                                currentDocuments.length === 1
-                                  ? "top-[-10px] -translate-y-1/2"
-                                  : index === 0
-                                  ? "top-1/2 -translate-y-1/2"
-                                  : "bottom-full mb-2"
-                              } right-0 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50`}
+                        {openConvertMenu === doc._id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute ${
+                              currentDocuments.length === 1
+                                ? "top-[-10px] -translate-y-1/2"
+                                : index === 0
+                                ? "top-1/2 -translate-y-1/2"
+                                : "bottom-full mb-2"
+                            } right-0 w-52 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1`}
+                          >
+                            <button
+                              onClick={() => {
+                                handleView(doc, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                             >
-                              <div className="py-1">
+                              <Eye className="w-4 h-4 text-blue-600" />
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleEdit(doc, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Pencil className="w-4 h-4 text-blue-600" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDownload(doc._id, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Download className="w-4 h-4 text-green-600" />
+                              Download
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleSend(doc._id, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Send className="w-4 h-4 text-purple-600" />
+                              Send
+                            </button>
+
+                            <div className="border-t border-gray-100 my-1" />
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConvertSubmenuOpen((prev) => !prev);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center justify-between gap-2"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Repeat className="w-4 h-4 text-orange-600" />
+                                Convert to
+                              </span>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${convertSubmenuOpen ? "rotate-180" : ""}`}
+                              />
+                            </button>
+                            {convertSubmenuOpen && (
+                              <div className="bg-gray-50">
                                 {[
                                   "tax",
                                   "performa",
@@ -1833,11 +2015,10 @@ const MergedInvoiceManager = () => {
                                           targetType
                                         );
                                         setOpenConvertMenu(null);
+                                        setConvertSubmenuOpen(false);
                                       }}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                      className="w-full text-left pl-10 pr-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
                                     >
-                                      <Repeat className="w-4 h-4 text-orange-600" />
-                                      Convert to{" "}
                                       {targetType === "tax"
                                         ? "Tax Invoice"
                                         : targetType === "performa"
@@ -1848,16 +2029,22 @@ const MergedInvoiceManager = () => {
                                     </button>
                                   ))}
                               </div>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          title="Delete"
-                          onClick={() => handleDelete(doc._id, activeTab)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                            )}
+
+                            <div className="border-t border-gray-100 my-1" />
+
+                            <button
+                              onClick={() => {
+                                handleDelete(doc._id, activeTab);
+                                setOpenConvertMenu(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>

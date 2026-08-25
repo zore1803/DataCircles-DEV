@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import API from "../../services/api";
 import BulkActionBar from "../common/BulkActionBar";
 import { useBulkStrip } from "../../hooks/useBulkSelection";
+import { useSubscription } from "../../contexts/SubscriptionContext";
+import { hasMinPlan } from "../../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../subscription/UpgradeRequiredModal";
 import folderIconImg from "../../assets/Folder-icon.png";
 import pdfIconImg from "../../assets/pdf-icon.png";
 import { useParams } from "react-router-dom";
@@ -507,7 +510,7 @@ const formatRowDate = (date) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
-const FileCard = ({ file, onView, onDelete, isLast }) => {
+const FileCard = ({ file, fileIndex, onView, onDelete, onEditLink, onRenameFile, isLast }) => {
   const isLink = file.isLink;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
@@ -515,7 +518,23 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
 
   const openMenu = () => {
     const rect = menuButtonRef.current.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, left: rect.right - 150 });
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+    const menuWidth = 160;
+    const menuHeight = 3 * 34 + 12;
+    const margin = 8;
+    const viewportWidth = window.innerWidth / zoom;
+    const viewportHeight = window.innerHeight / zoom;
+    const belowTop = rect.bottom / zoom + 4;
+    const aboveTop = rect.top / zoom - menuHeight - 4;
+    const top = belowTop + menuHeight + margin <= viewportHeight
+      ? belowTop
+      : Math.max(margin, aboveTop);
+    const left = Math.max(
+      margin,
+      Math.min((rect.right / zoom) - menuWidth, viewportWidth - menuWidth - margin),
+    );
+
+    setMenuPos({ top, left });
     setMenuOpen(true);
   };
 
@@ -600,6 +619,30 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
                 <OpenFileIcon size={19} style={{ color: "#5C5D5C" }} />
                 Open File
               </button>
+              {file.isLink && onEditLink && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onEditLink(file, fileIndex);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Edit3 size={17} style={{ color: "#5C5D5C" }} />
+                  Edit Link
+                </button>
+              )}
+              {!file.isLink && onRenameFile && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onRenameFile(file, fileIndex);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Edit3 size={17} style={{ color: "#5C5D5C" }} />
+                  Rename File
+                </button>
+              )}
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -619,7 +662,7 @@ const FileCard = ({ file, onView, onDelete, isLast }) => {
   );
 };
 
-const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
+const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, onDeleteFile, onEditLink, onRenameFile, isFirst, isLast, isEditing, editingName, editingError, onEditingNameChange, onSaveEdit, onCancelEdit, searchTerm }) => (
   <div className="transition-all">
     <div
       className="flex items-center justify-between gap-2"
@@ -737,6 +780,9 @@ const FolderCard = ({ folder, expanded, onToggle, onEdit, onDelete, onSelect, on
                   }
                 }}
                 onDelete={(file) => onDeleteFile(folder._id, file)}
+                fileIndex={idx}
+                onEditLink={(file, index) => onEditLink(folder._id, file, index)}
+                onRenameFile={(file, index) => onRenameFile(folder._id, file, index)}
               />
             ))}
           </div>
@@ -993,13 +1039,15 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   const [linkName, setLinkName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (linkName.trim() && linkUrl.trim()) {
-      onSubmit({ name: linkName.trim(), url: linkUrl.trim() });
-      setLinkName("");
-      setLinkUrl("");
-      onClose();
+      const saved = await onSubmit({ name: linkName.trim(), url: linkUrl.trim() });
+      if (saved !== false) {
+        setLinkName("");
+        setLinkUrl("");
+        onClose();
+      }
     }
   };
 
@@ -1064,6 +1112,111 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
+const EditLinkModal = ({ isOpen, onClose, onSubmit, initialName, initialUrl }) => {
+  const [linkName, setLinkName] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setLinkName(initialName || "");
+      setLinkUrl(initialUrl || "");
+    }
+  }, [isOpen, initialName, initialUrl]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (linkName.trim() && linkUrl.trim()) {
+      onSubmit({ name: linkName.trim(), url: linkUrl.trim() });
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-gray-900">Edit Link</h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
+            <input type="text" value={linkName} onChange={(e) => setLinkName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" autoFocus />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">URL</label>
+            <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md">Cancel</button>
+            <button type="submit" disabled={!linkName.trim() || !linkUrl.trim()} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-800 disabled:bg-gray-400 rounded-md transition-colors">Update Link</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const RenameFileModal = ({ isOpen, onClose, onSubmit, initialName }) => {
+  const [fileName, setFileName] = useState("");
+  const [extension, setExtension] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      const lastDot = (initialName || "").lastIndexOf(".");
+      const hasExtension = lastDot > 0;
+      setFileName(hasExtension ? initialName.slice(0, lastDot) : (initialName || ""));
+      setExtension(hasExtension ? initialName.slice(lastDot) : "");
+    }
+  }, [isOpen, initialName]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (fileName.trim()) {
+      onSubmit(`${fileName.trim()}${extension}`);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-gray-900">Rename File</h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Display Name</label>
+            <input
+              type="text"
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+              autoFocus
+            />
+            {extension && <span className="block mt-1 text-xs text-gray-500">File type: {extension}</span>}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md">
+              Cancel
+            </button>
+            <button type="submit" disabled={!fileName.trim()} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-800 disabled:bg-gray-400 rounded-md transition-colors">
+              Rename File
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // `showStats` is intentionally not accepted any more: it used to feed the
 // old calc()-based height offset. useFillToBottom measures the container's real
 // position instead, so a KPI-row toggle is handled automatically. CompanyFolderTab
@@ -1080,6 +1233,10 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [folderPickerSearch, setFolderPickerSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedFileNames, setSelectedFileNames] = useState([]);
   const { visible: fileBulkVisible, closing: fileBulkClosing } = useBulkStrip(selectedFileNames.length);
   const [fileSearchTerm, setFileSearchTerm] = useState("");
@@ -1103,6 +1260,9 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   const [inlineEditingName, setInlineEditingName] = useState("");
   const [inlineEditingError, setInlineEditingError] = useState("");
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkFolderId, setLinkFolderId] = useState("");
+  const [editLinkState, setEditLinkState] = useState({ isOpen: false, folderId: null, fileId: null, fileName: "", fileUrl: "" });
+  const [renameFileState, setRenameFileState] = useState({ isOpen: false, folderId: null, fileId: null, fileName: "" });
 
   useEffect(() => {
     fetchFolders();
@@ -1125,6 +1285,29 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
       onFoldersChange?.(res.data || []);
     } catch (err) {
       toast.error("Failed to fetch folders");
+    }
+  };
+
+  const handleToggleSelectOne = (id) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = (filteredFiles = [], filteredFolders = []) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    const allIds = [...filteredFiles.map((f) => f.id), ...filteredFolders.map((f) => f._id)];
+    if (selectedIds.length === allIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(allIds);
     }
   };
 
@@ -1421,24 +1604,61 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
   };
 
   const handleAddLink = async ({ name, url }) => {
-    if (!selectedFolderId) {
+    const folderId = linkFolderId || selectedFolderId;
+    if (!folderId) {
       toast.error("Select a folder");
       return;
     }
 
     try {
       await API.post("/folders/add-link", {
-        folderId: selectedFolderId,
+        folderId,
         fileName: name,
         fileUrl: url,
       });
       setRefresh(!refresh);
+      setLinkFolderId("");
       toast.success("Link added");
+      return true;
     } catch (err) {
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         toast.error(err.response?.data?.error || "Failed to add link");
+      }
+      return false;
+    }
+  };
+
+  const handleUpdateLink = async ({ name, url }) => {
+    try {
+      await API.put(`/folders/${editLinkState.folderId}/links/${editLinkState.fileId}`, {
+        fileName: name,
+        fileUrl: url,
+      });
+      toast.success("Link updated successfully");
+      setRefresh(!refresh);
+      setEditLinkState({ isOpen: false, folderId: null, fileId: null, fileName: "", fileUrl: "" });
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to update link");
+      }
+    }
+  };
+
+  const handleRenameFile = async (fileName) => {
+    try {
+      await API.patch(`/folders/${renameFileState.folderId}/files/${renameFileState.fileId}`, { fileName });
+      toast.success("File renamed successfully");
+      setRefresh(!refresh);
+      setRenameFileState({ isOpen: false, folderId: null, fileId: null, fileName: "" });
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Failed to rename file");
       }
     }
   };
@@ -1733,807 +1953,836 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
             )}
           </div>
         ) : (
-        <>
-        {/* Search + Controls */}
-        {isLoading ? (
-          <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
-            <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
-            <Skeleton height={44} width={96} shape="rect" className="rounded-full flex-shrink-0" />
-            <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
-          </div>
-        ) : (
-        <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
-          <div className="relative flex-1 h-full">
-            <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
-            <input
-              type="text"
-              placeholder="Search folder by name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-full pl-11 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
-            />
-          </div>
-          <button
-            onClick={() => setShowFilterPanel(true)}
-            className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
-            style={{
-              height: "44px",
-              borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
-            }}
-          >
-            <FilterIcon size={16} />
-            Filter
-            {Object.values(selectedFilters).flat().length > 0 && (
-              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
-                {Object.values(selectedFilters).flat().length}
-              </span>
-            )}
-          </button>
-
-          <div
-            className="relative flex flex-row items-center flex-shrink-0"
-            style={{ padding: 4, gap: 6, width: 86, height: 44, background: "#E9EAEB", borderRadius: 95 }}
-          >
-            <span
-              className="absolute transition-all duration-300 ease-out pointer-events-none"
-              style={{
-                top: 4,
-                left: folderViewMode === "grid" ? 46 : 4,
-                width: 36,
-                height: 36,
-                background: "#FFFFFF",
-                boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.05)",
-                borderRadius: 107,
-              }}
-            />
-            <button
-              onClick={() => setFolderViewMode("list")}
-              className="relative z-10 flex items-center justify-center flex-shrink-0"
-              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
-            >
-              <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
-            </button>
-            <button
-              onClick={() => setFolderViewMode("grid")}
-              className="relative z-10 flex items-center justify-center flex-shrink-0"
-              style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
-            >
-              <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} />
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-              setInlineEditingId("NEW");
-              setInlineEditingName("New Folder");
-            }}
-            className="flex items-center justify-center flex-shrink-0"
-            style={{
-              boxSizing: "border-box",
-              padding: 12,
-              gap: 8,
-              width: 44,
-              height: 44,
-              background: "#FFFFFF",
-              border: "1px solid rgba(31, 41, 55, 0.3)",
-              borderRadius: 95,
-            }}
-            title="New Folder"
-          >
-            <CreateNewFolderIcon size={20} style={{ color: "#404040" }} />
-          </button>
-        </div>
-        )}
-
-        {/* Folders List / Grid */}
-        {!isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
-            <button
-              type="button"
-              onClick={() => {
-                setInlineEditingId("NEW");
-                setInlineEditingName("New Folder");
-              }}
-              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
-            >
-              <Plus size={16} />
-              Add new
-            </button>
-          </div>
-        ) : folderViewMode === "grid" ? (
-          <div
-            ref={fillContainerRef}
-            className="w-full relative"
-            style={{
-              boxSizing: "border-box",
-              width: "100%",
-              borderRadius: 8,
-              padding: 0,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: "16px",
-              alignContent: "flex-start",
-              overflowY: "auto",
-              ...fillStyle,
-            }}
-          >
+          <>
+            {/* Search + Controls */}
             {isLoading ? (
-              [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((_, idx) => (
-                <div key={idx} className="flex flex-col justify-center items-center" style={{ boxSizing: "border-box", width: "100%", height: 150, borderRadius: 8, gap: 12 }}>
-                  <Skeleton width={100} height={100} className="rounded-xl" />
-                  <Skeleton width={100} height={18} />
-                </div>
-              ))
-            ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder) => (
-              <div key={folder._id} className="flex justify-center items-center w-full">
-                <div
-                  onClick={() => setOpenFolderId(folder._id)}
-                  className="relative group flex flex-col justify-center items-center cursor-pointer hover:bg-[#E5F3FF] active:bg-[#CCE8FF] transition-none"
-                  style={{ boxSizing: "border-box", width: "100%", maxWidth: 180, height: 160, borderRadius: 8, padding: "12px 8px", gap: 2 }}
-                >
-                  <div className="absolute top-1 right-1 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-white/60 backdrop-blur-md shadow-sm border border-white/50 rounded-lg overflow-hidden">
-                    <button
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        setInlineEditingId(folder._id);
-                        setInlineEditingName(folder.name);
-                      }}
-                      className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
-                      title="Edit"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </button>
-                    <div className="w-px h-3 bg-gray-200" />
-                    <button
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        if (folder._id === "NEW") {
-                          setInlineEditingId(null);
-                        } else {
-                          deleteFolder(folder._id);
-                        }
-                      }}
-                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <GridFolderIcon size={100} />
-                <div
-                  className="flex flex-col justify-center items-center"
-                  style={{ boxSizing: "border-box", padding: 8, gap: 4, width: "100%", height: 40 }}
-                >
-                  <div
-                    className="flex flex-col justify-center items-center self-stretch w-full"
-                    style={{ boxSizing: "border-box", padding: 0, height: 41 }}
-                  >
-                    {inlineEditingId === folder._id ? (
-                      <>
-                        <input
-                          autoFocus
-                          type="text"
-                          value={inlineEditingName}
-                          onChange={(e) => { setInlineEditingName(e.target.value); if (inlineEditingError) setInlineEditingError(""); }}
-                          onKeyDown={(e) => {
-                            // Escape now attempts a save too (instead of a
-                            // blind discard) so a duplicate name still shows
-                            // its error right below, same as Enter/blur.
-                            if (e.key === "Enter" || e.key === "Escape") handleInlineSave(folder._id);
-                          }}
-                          onBlur={() => handleInlineSave(folder._id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full text-center border-b-2 focus:outline-none bg-transparent px-1"
-                          style={{
-                            fontFamily: "Inter",
-                            fontWeight: 500,
-                            fontSize: 18,
-                            lineHeight: "22px",
-                            color: "#111216",
-                            borderColor: inlineEditingError ? "#EF4444" : "#3B82F6",
-                          }}
-                        />
-                        {inlineEditingError && (
-                          <span
-                            className="w-full text-center"
-                            style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 11, lineHeight: "14px", color: "#EF4444" }}
-                          >
-                            {inlineEditingError}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          height: 22,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          textAlign: "center",
-                          fontFamily: "Inter",
-                          fontWeight: 500,
-                          fontSize: 18,
-                          lineHeight: "22px",
-                          letterSpacing: "-0.05em",
-                          color: "#111216",
-                        }}
-                        title={folder.name}
-                      >
-                        <HighlightText text={folder.name || "Untitled"} highlight={searchTerm} />
-                      </span>
-                    )}
-                    <span
-                      style={{
-                        width: "100%",
-                        height: 19,
-                        fontFamily: "Inter",
-                        fontWeight: 400,
-                        fontSize: 12,
-                        lineHeight: "19px",
-                        textAlign: "center",
-                        letterSpacing: "-0.05em",
-                        color: "#5B5A64",
-                      }}
-                    >
-                      {folder.files?.length || 0} {folder.files?.length === 1 ? "File" : "Files"}
-                    </span>
-                  </div>
-                </div>
-                </div>
+              <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+                <Skeleton height={44} shape="rect" className="flex-1 rounded-full" />
+                <Skeleton height={44} width={96} shape="rect" className="rounded-full flex-shrink-0" />
+                <Skeleton height={44} width={44} shape="circle" className="flex-shrink-0" />
               </div>
-            ))}
-          </div>
-        ) : !isLoading && filteredFolders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-            <FolderIcon className="w-7 h-7 mb-3 text-blue-500" />
-            <button
-              type="button"
-              onClick={() =>
-                setModalState({
-                  isOpen: true,
-                  editingId: null,
-                  initialName: "",
-                })
-              }
-              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
-            >
-              <Plus size={16} />
-              Add new
-            </button>
-          </div>
-        ) : (
-          <div
-            ref={fillContainerRef}
-            className="border border-gray-200 rounded-lg overflow-x-hidden overflow-y-auto"
-            style={fillStyle}
-          >
-            {isLoading ? (
-              [1, 2, 3, 4, 5, 6].map((_, idx) => (
-                <div key={idx} className="transition-all">
-                  <div
-                    className="flex items-center justify-between gap-2"
+            ) : (
+              <div className="flex items-center gap-4 mb-4" style={{ height: "44px" }}>
+                <div className="relative flex-1 h-full">
+                  <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
+                  <input
+                    type="text"
+                    placeholder="Search folder by name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full h-full pl-11 pr-10 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm("")}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowFilterPanel(true)}
+                  className="relative flex items-center justify-center gap-2 px-3 text-sm font-medium text-gray-800 bg-white border rounded-full hover:bg-gray-50 flex-shrink-0"
+                  style={{
+                    height: "44px",
+                    borderColor: Object.values(selectedFilters).flat().length > 0 ? "#0085FF" : "#E1E4EA",
+                  }}
+                >
+                  <FilterIcon size={16} />
+                  Filter
+                  {Object.values(selectedFilters).flat().length > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full ring-2 ring-white">
+                      {Object.values(selectedFilters).flat().length}
+                    </span>
+                  )}
+                </button>
+
+                <div
+                  className="relative flex flex-row items-center flex-shrink-0"
+                  style={{ padding: 4, gap: 6, width: 86, height: 44, background: "#E9EAEB", borderRadius: 95 }}
+                >
+                  <span
+                    className="absolute transition-all duration-300 ease-out pointer-events-none"
                     style={{
-                      boxSizing: "border-box",
-                      padding: "11px 12px 11px 24px",
+                      top: 4,
+                      left: folderViewMode === "grid" ? 46 : 4,
+                      width: 36,
+                      height: 36,
                       background: "#FFFFFF",
-                      borderTop: idx === 0 ? "none" : "1px solid #E1E4EA",
+                      boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.05)",
+                      borderRadius: 107,
                     }}
+                  />
+                  <button
+                    onClick={() => setFolderViewMode("list")}
+                    className="relative z-10 flex items-center justify-center flex-shrink-0"
+                    style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
                   >
-                    <div className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
-                      <Skeleton width={20} height={20} className="flex-shrink-0" />
-                      <div className="flex-1 min-w-0 flex flex-col gap-1">
-                        <Skeleton width={150} height={16} />
-                        <Skeleton width={80} height={12} />
+                    <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
+                  </button>
+                  <button
+                    onClick={() => setFolderViewMode("grid")}
+                    className="relative z-10 flex items-center justify-center flex-shrink-0"
+                    style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
+                  >
+                    <LayoutGrid size={20} style={{ color: folderViewMode === "grid" ? "#0085FF" : "#404040" }} />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setInlineEditingId("NEW");
+                    setInlineEditingName("New Folder");
+                  }}
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    boxSizing: "border-box",
+                    padding: 12,
+                    gap: 8,
+                    width: 44,
+                    height: 44,
+                    background: "#FFFFFF",
+                    border: "1px solid rgba(31, 41, 55, 0.3)",
+                    borderRadius: 95,
+                  }}
+                  title="New Folder"
+                >
+                  <CreateNewFolderIcon size={20} style={{ color: "#404040" }} />
+                </button>
+              </div>
+            )}
+
+            {/* Folders List / Grid */}
+            {!isLoading && folderViewMode === "grid" && folders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+                <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineEditingId("NEW");
+                    setInlineEditingName("New Folder");
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add new folder
+                </button>
+              </div>
+            ) : !isLoading && folderViewMode === "grid" && filteredFolders.length === 0 ? (
+              <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+                No folders found.
+              </div>
+            ) : folderViewMode === "grid" ? (
+              <div
+                ref={fillContainerRef}
+                className="w-full relative"
+                style={{
+                  boxSizing: "border-box",
+                  width: "100%",
+                  borderRadius: 8,
+                  padding: 0,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                  gap: "16px",
+                  alignContent: "flex-start",
+                  overflowY: "auto",
+                  ...fillStyle,
+                }}
+              >
+                {isLoading ? (
+                  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((_, idx) => (
+                    <div key={idx} className="flex flex-col justify-center items-center" style={{ boxSizing: "border-box", width: "100%", height: 150, borderRadius: 8, gap: 12 }}>
+                      <Skeleton width={100} height={100} className="rounded-xl" />
+                      <Skeleton width={100} height={18} />
+                    </div>
+                  ))
+                ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder) => (
+                  <div key={folder._id} className="flex justify-center items-center w-full">
+                    <div
+                      onClick={() => setOpenFolderId(folder._id)}
+                      className="relative group flex flex-col justify-center items-center cursor-pointer hover:bg-[#E5F3FF] active:bg-[#CCE8FF] transition-none"
+                      style={{ boxSizing: "border-box", width: "100%", maxWidth: 180, height: 160, borderRadius: 8, padding: "12px 8px", gap: 2 }}
+                    >
+                      <div className="absolute top-1 right-1 flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-white/60 backdrop-blur-md shadow-sm border border-white/50 rounded-lg overflow-hidden">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInlineEditingId(folder._id);
+                            setInlineEditingName(folder.name);
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+                          title="Edit"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                        <div className="w-px h-3 bg-gray-200" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (folder._id === "NEW") {
+                              setInlineEditingId(null);
+                            } else {
+                              deleteFolder(folder._id);
+                            }
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <GridFolderIcon size={100} />
+                      <div
+                        className="flex flex-col justify-center items-center"
+                        style={{ boxSizing: "border-box", padding: 8, gap: 4, width: "100%", height: 40 }}
+                      >
+                        <div
+                          className="flex flex-col justify-center items-center self-stretch w-full"
+                          style={{ boxSizing: "border-box", padding: 0, height: 41 }}
+                        >
+                          {inlineEditingId === folder._id ? (
+                            <>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={inlineEditingName}
+                                onChange={(e) => { setInlineEditingName(e.target.value); if (inlineEditingError) setInlineEditingError(""); }}
+                                onKeyDown={(e) => {
+                                  // Escape now attempts a save too (instead of a
+                                  // blind discard) so a duplicate name still shows
+                                  // its error right below, same as Enter/blur.
+                                  if (e.key === "Enter" || e.key === "Escape") handleInlineSave(folder._id);
+                                }}
+                                onBlur={() => handleInlineSave(folder._id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full text-center border-b-2 focus:outline-none bg-transparent px-1"
+                                style={{
+                                  fontFamily: "Inter",
+                                  fontWeight: 500,
+                                  fontSize: 18,
+                                  lineHeight: "22px",
+                                  color: "#111216",
+                                  borderColor: inlineEditingError ? "#EF4444" : "#3B82F6",
+                                }}
+                              />
+                              {inlineEditingError && (
+                                <span
+                                  className="w-full text-center"
+                                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 11, lineHeight: "14px", color: "#EF4444" }}
+                                >
+                                  {inlineEditingError}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span
+                              style={{
+                                display: "block",
+                                width: "100%",
+                                height: 22,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                textAlign: "center",
+                                fontFamily: "Inter",
+                                fontWeight: 500,
+                                fontSize: 18,
+                                lineHeight: "22px",
+                                letterSpacing: "-0.05em",
+                                color: "#111216",
+                              }}
+                              title={folder.name}
+                            >
+                              <HighlightText text={folder.name || "Untitled"} highlight={searchTerm} />
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              width: "100%",
+                              height: 19,
+                              fontFamily: "Inter",
+                              fontWeight: 400,
+                              fontSize: 12,
+                              lineHeight: "19px",
+                              textAlign: "center",
+                              letterSpacing: "-0.05em",
+                              color: "#5B5A64",
+                            }}
+                          >
+                            {folder.files?.length || 0} {folder.files?.length === 1 ? "File" : "Files"}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Skeleton width={20} height={20} />
-                      <Skeleton width={20} height={20} />
-                      <Skeleton width={20} height={20} />
-                    </div>
                   </div>
-                </div>
-              ))
-            ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder, idx) => (
-              <FolderCard
-                key={folder._id}
-                folder={folder}
-                expanded={expandedFolders.includes(folder._id)}
-                isFirst={idx === 0}
-                isLast={idx === paginatedFolders.length - 1}
-                onToggle={toggleFolder}
-                onEdit={(folder) => {
-                  setInlineEditingId(folder._id);
-                  setInlineEditingName(folder.name);
-                }}
-                onDelete={deleteFolder}
-                onSelect={setSelectedFolderId}
-                onDeleteFile={deleteFile}
-                isEditing={inlineEditingId === folder._id}
-                editingName={inlineEditingName}
-                editingError={inlineEditingError}
-                onEditingNameChange={(v) => { setInlineEditingName(v); if (inlineEditingError) setInlineEditingError(""); }}
-                onSaveEdit={() => handleInlineSave(folder._id)}
-                searchTerm={searchTerm}
-                onCancelEdit={() => {
-                  setInlineEditingId(null);
-                  setInlineEditingName("");
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {folderViewMode === "list" && listTotalCount > 0 && (
-          <div
-            ref={fillFooterRef}
-            className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
-          >
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => handleListPageChange(listPage - 1)}
-                disabled={!hasListPrevPage}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => handleListPageChange(listPage + 1)}
-                disabled={!hasListNextPage}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm text-gray-700 font-inter">
-                  Showing <span className="font-semibold">{listStartItem}</span> to{" "}
-                  <span className="font-semibold">{listEndItem}</span> of{" "}
-                  <span className="font-semibold">{listTotalCount}</span> Folders
-                </p>
-                <select
-                  value={listLimit}
-                  onChange={(e) => handleListLimitChange(parseInt(e.target.value))}
-                  className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
-                >
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
-                </select>
+                ))}
               </div>
+            ) : !isLoading && folders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+                <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setModalState({
+                      isOpen: true,
+                      editingId: null,
+                      initialName: "",
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add new folder
+                </button>
+              </div>
+            ) : !isLoading && filteredFolders.length === 0 ? (
+              <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+                No folders found.
+              </div>
+            ) : (
+              <div
+                ref={fillContainerRef}
+                className="border border-gray-200 rounded-lg overflow-x-hidden overflow-y-auto"
+                style={fillStyle}
+              >
+                {isLoading ? (
+                  [1, 2, 3, 4, 5, 6].map((_, idx) => (
+                    <div key={idx} className="transition-all">
+                      <div
+                        className="flex items-center justify-between gap-2"
+                        style={{
+                          boxSizing: "border-box",
+                          padding: "11px 12px 11px 24px",
+                          background: "#FFFFFF",
+                          borderTop: idx === 0 ? "none" : "1px solid #E1E4EA",
+                        }}
+                      >
+                        <div className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                          <Skeleton width={20} height={20} className="flex-shrink-0" />
+                          <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            <Skeleton width={150} height={16} />
+                            <Skeleton width={80} height={12} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Skeleton width={20} height={20} />
+                          <Skeleton width={20} height={20} />
+                          <Skeleton width={20} height={20} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (inlineEditingId === "NEW" ? [{ _id: "NEW", name: inlineEditingName, files: [] }, ...paginatedFolders] : paginatedFolders).map((folder, idx) => (
+                  <FolderCard
+                    key={folder._id}
+                    folder={folder}
+                    expanded={expandedFolders.includes(folder._id)}
+                    isFirst={idx === 0}
+                    isLast={idx === paginatedFolders.length - 1}
+                    onToggle={toggleFolder}
+                    onEdit={(folder) => {
+                      setInlineEditingId(folder._id);
+                      setInlineEditingName(folder.name);
+                    }}
+                    onDelete={deleteFolder}
+                    onSelect={setSelectedFolderId}
+                    onDeleteFile={deleteFile}
+                    onEditLink={(folderId, file, fileIndex) => setEditLinkState({ isOpen: true, folderId, fileId: file._id ?? fileIndex, fileName: file.fileName, fileUrl: file.fileUrl })}
+                    onRenameFile={(folderId, file, fileIndex) => setRenameFileState({ isOpen: true, folderId, fileId: file._id ?? fileIndex, fileName: file.fileName })}
+                    isEditing={inlineEditingId === folder._id}
+                    editingName={inlineEditingName}
+                    editingError={inlineEditingError}
+                    onEditingNameChange={(v) => { setInlineEditingName(v); if (inlineEditingError) setInlineEditingError(""); }}
+                    onSaveEdit={() => handleInlineSave(folder._id)}
+                    searchTerm={searchTerm}
+                    onCancelEdit={() => {
+                      setInlineEditingId(null);
+                      setInlineEditingName("");
+                    }}
+                  />
+                ))}
+              </div>
+            )}
 
-              <EditablePaginationButtons
-                currentPage={listPage}
-                totalPages={listTotalPages}
-                hasPrevPage={hasListPrevPage}
-                hasNextPage={hasListNextPage}
-                onPageChange={handleListPageChange}
-                getPageNumbers={getListPageNumbers}
-              />
-            </div>
-          </div>
-        )}
-        </>
+            {folderViewMode === "list" && listTotalCount > 0 && (
+              <div
+                ref={fillFooterRef}
+                className="w-full bg-transparent px-4 py-3 mt-3 flex items-center justify-between sm:px-6"
+              >
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => handleListPageChange(listPage - 1)}
+                    disabled={!hasListPrevPage}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => handleListPageChange(listPage + 1)}
+                    disabled={!hasListNextPage}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div className="flex items-center space-x-2">
+                    <p className="text-sm text-gray-700 font-inter">
+                      Showing <span className="font-semibold">{listStartItem}</span> to{" "}
+                      <span className="font-semibold">{listEndItem}</span> of{" "}
+                      <span className="font-semibold">{listTotalCount}</span> Folders
+                    </p>
+                    <select
+                      value={listLimit}
+                      onChange={(e) => handleListLimitChange(parseInt(e.target.value))}
+                      className="ml-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                    >
+                      <option value={10}>10 per page</option>
+                      <option value={20}>20 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+                  </div>
+
+                  <EditablePaginationButtons
+                    currentPage={listPage}
+                    totalPages={listTotalPages}
+                    hasPrevPage={hasListPrevPage}
+                    hasNextPage={hasListNextPage}
+                    onPageChange={handleListPageChange}
+                    getPageNumbers={getListPageNumbers}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Upload Section */}
         {selectedFolderId && (
           <>
-          {uploadSuccess ? (
-            /* ── Upload Success Screen ── */
-            <div
-              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-              onClick={handleUploadDone}
-            >
+            {uploadSuccess ? (
+              /* ── Upload Success Screen ── */
               <div
-                className="flex flex-col items-center bg-white"
-                style={{
-                  boxSizing: "border-box",
-                  width: 400,
-                  border: "1px solid #EBEBEB",
-                  borderRadius: 8,
-                  padding: "40px 32px 32px",
-                  gap: 0,
-                }}
-                onClick={(e) => e.stopPropagation()}
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                onClick={handleUploadDone}
               >
-                {/* Green checkmark circle */}
                 <div
-                  className="flex items-center justify-center flex-shrink-0"
-                  style={{ width: 72, height: 72, borderRadius: "50%", background: "#E8F5E9", marginBottom: 20 }}
+                  className="flex flex-col items-center bg-white"
+                  style={{
+                    boxSizing: "border-box",
+                    width: 400,
+                    border: "1px solid #EBEBEB",
+                    borderRadius: 8,
+                    padding: "40px 32px 32px",
+                    gap: 0,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                    <path d="M8 18.5L14.5 25L28 11" stroke="#22C55E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-
-                {/* Title */}
-                <p style={{ fontFamily: "Inter Tight", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#171717", marginBottom: 8, textAlign: "center" }}>
-                  Upload Successful!
-                </p>
-
-                {/* Sub-text */}
-                <p style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, color: "#6B7280", marginBottom: 32, textAlign: "center", lineHeight: "1.5" }}>
-                  Your files have been uploaded successfully.<br />Would you like to upload more files?
-                </p>
-
-                {/* Action Buttons */}
-                <div className="flex items-center justify-center" style={{ gap: 12, width: "100%" }}>
-                  <button
-                    onClick={handleUploadDone}
-                    className="flex items-center justify-center hover:bg-gray-50 transition-colors"
-                    style={{
-                      flex: 1,
-                      height: 40,
-                      background: "#FFFFFF",
-                      border: "1px solid #EBEBEB",
-                      boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
-                      borderRadius: 116,
-                      fontFamily: "Inter Tight",
-                      fontWeight: 500,
-                      fontSize: 14,
-                      color: "#171717",
-                    }}
+                  {/* Green checkmark circle */}
+                  <div
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: 72, height: 72, borderRadius: "50%", background: "#E8F5E9", marginBottom: 20 }}
                   >
-                    Done
-                  </button>
-                  <button
-                    onClick={handleUploadMore}
-                    className="flex items-center justify-center hover:opacity-90 transition-opacity"
-                    style={{
-                      flex: 1,
-                      height: 40,
-                      background: "#0085FF",
-                      borderRadius: 116,
-                      fontFamily: "Inter Tight",
-                      fontWeight: 500,
-                      fontSize: 14,
-                      color: "#FFFFFF",
-                      border: "none",
-                    }}
-                  >
-                    Upload More
-                  </button>
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                      <path d="M8 18.5L14.5 25L28 11" stroke="#22C55E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+
+                  {/* Title */}
+                  <p style={{ fontFamily: "Inter Tight", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#171717", marginBottom: 8, textAlign: "center" }}>
+                    Upload Successful!
+                  </p>
+
+                  {/* Sub-text */}
+                  <p style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 14, color: "#6B7280", marginBottom: 32, textAlign: "center", lineHeight: "1.5" }}>
+                    Your files have been uploaded successfully.<br />Would you like to upload more files?
+                  </p>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-center" style={{ gap: 12, width: "100%" }}>
+                    <button
+                      onClick={handleUploadDone}
+                      className="flex items-center justify-center hover:bg-gray-50 transition-colors"
+                      style={{
+                        flex: 1,
+                        height: 40,
+                        background: "#FFFFFF",
+                        border: "1px solid #EBEBEB",
+                        boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                        borderRadius: 116,
+                        fontFamily: "Inter Tight",
+                        fontWeight: 500,
+                        fontSize: 14,
+                        color: "#171717",
+                      }}
+                    >
+                      Done
+                    </button>
+                    <button
+                      onClick={handleUploadMore}
+                      className="flex items-center justify-center hover:opacity-90 transition-opacity"
+                      style={{
+                        flex: 1,
+                        height: 40,
+                        background: "#0085FF",
+                        borderRadius: 116,
+                        fontFamily: "Inter Tight",
+                        fontWeight: 500,
+                        fontSize: 14,
+                        color: "#FFFFFF",
+                        border: "none",
+                      }}
+                    >
+                      Upload More
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-          /* ── Normal Upload Modal ── */
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-            onClick={() => {
-              setSelectedFolderId("");
-              setNewFiles([]);
-              setUploadMode("file");
-            }}
-          >
-            <div
-              className="flex flex-col items-start bg-white"
-              style={{
-                boxSizing: "border-box",
-                width: 400,
-                height: 444,
-                border: "1px solid #EBEBEB",
-                borderRadius: 8,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal Header */}
+            ) : (
+              /* ── Normal Upload Modal ── */
               <div
-                className="flex items-center flex-shrink-0"
-                style={{
-                  boxSizing: "border-box",
-                  width: 400,
-                  height: 52,
-                  padding: "16px 20px",
-                  gap: 12,
-                  borderBottom: "1px solid #EBEBEB",
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                onClick={() => {
+                  setSelectedFolderId("");
+                  setNewFiles([]);
+                  setUploadMode("file");
                 }}
               >
-                <p
-                  className="flex-1"
+                <div
+                  className="flex flex-col items-start bg-white"
                   style={{
-                    fontFamily: "Inter Tight",
-                    fontWeight: 500,
-                    fontSize: 16,
-                    lineHeight: "120%",
-                    color: "#171717",
+                    boxSizing: "border-box",
+                    width: 400,
+                    height: 444,
+                    border: "1px solid #EBEBEB",
+                    borderRadius: 8,
                   }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  Upload Files
-                </p>
-                <button
-                  onClick={() => {
-                    setSelectedFolderId("");
-                    setNewFiles([]);
-                    setUploadMode("file");
-                  }}
-                  className="hover:opacity-70 transition-opacity flex-shrink-0"
-                >
-                  <X size={20} style={{ color: "#5D5D5C" }} />
-                </button>
-              </div>
-
-              <div style={{ boxSizing: "border-box", width: 400, padding: "20px 20px 0" }}>
-                <div className="flex flex-col items-start self-stretch" style={{ width: 360, gap: 4 }}>
-                  <label
-                    style={{
-                      fontFamily: "Inter Tight",
-                      fontWeight: 500,
-                      fontSize: 14,
-                      lineHeight: "120%",
-                      color: "#171717",
-                    }}
-                  >
-                    Upload to
-                  </label>
+                  {/* Modal Header */}
                   <div
-                    className="relative flex items-center self-stretch cursor-pointer"
+                    className="flex items-center flex-shrink-0"
                     style={{
                       boxSizing: "border-box",
-                      padding: "10px 10px 10px 12px",
-                      gap: 8,
-                      height: 40,
-                      background: "#FFFFFF",
-                      border: "1px solid #EBEBEB",
-                      boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
-                      borderRadius: 8,
-                    }}
-                    onClick={() => {
-                      setFolderPickerOpen((prev) => !prev);
-                      setFolderPickerSearch("");
+                      width: 400,
+                      height: 52,
+                      padding: "16px 20px",
+                      gap: 12,
+                      borderBottom: "1px solid #EBEBEB",
                     }}
                   >
-                    <span
-                      className="flex-1 truncate"
+                    <p
+                      className="flex-1"
                       style={{
                         fontFamily: "Inter Tight",
-                        fontWeight: 400,
+                        fontWeight: 500,
+                        fontSize: 16,
+                        lineHeight: "120%",
+                        color: "#171717",
+                      }}
+                    >
+                      Upload Files
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkFolderId(selectedFolderId);
+                        setSelectedFolderId("");
+                        setLinkModalOpen(true);
+                      }}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                    >
+                      Add Link
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedFolderId("");
+                        setNewFiles([]);
+                        setUploadMode("file");
+                      }}
+                      className="hover:opacity-70 transition-opacity flex-shrink-0"
+                    >
+                      <X size={20} style={{ color: "#5D5D5C" }} />
+                    </button>
+                  </div>
+
+                  <div style={{ boxSizing: "border-box", width: 400, padding: "20px 20px 0" }}>
+                    <div className="flex flex-col items-start self-stretch" style={{ width: 360, gap: 4 }}>
+                      <label
+                        style={{
+                          fontFamily: "Inter Tight",
+                          fontWeight: 500,
+                          fontSize: 14,
+                          lineHeight: "120%",
+                          color: "#171717",
+                        }}
+                      >
+                        Upload to
+                      </label>
+                      <div
+                        className="relative flex items-center self-stretch cursor-pointer"
+                        style={{
+                          boxSizing: "border-box",
+                          padding: "10px 10px 10px 12px",
+                          gap: 8,
+                          height: 40,
+                          background: "#FFFFFF",
+                          border: "1px solid #EBEBEB",
+                          boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                          borderRadius: 8,
+                        }}
+                        onClick={() => {
+                          setFolderPickerOpen((prev) => !prev);
+                          setFolderPickerSearch("");
+                        }}
+                      >
+                        <span
+                          className="flex-1 truncate"
+                          style={{
+                            fontFamily: "Inter Tight",
+                            fontWeight: 400,
+                            fontSize: 14,
+                            lineHeight: "120%",
+                            color: "#171717",
+                          }}
+                        >
+                          {selectedFolder?.name || "Select folder"}
+                        </span>
+                        <ChevronDown size={20} style={{ color: "#5C5C5C" }} />
+
+                        {folderPickerOpen && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFolderPickerOpen(false);
+                              }}
+                            />
+                            <div
+                              className="absolute left-0 top-full mt-1 bg-white z-20 flex flex-col"
+                              style={{
+                                boxSizing: "border-box",
+                                width: "100%",
+                                border: "1px solid #EBEBEB",
+                                borderRadius: 8,
+                                boxShadow: "0px 4px 12px rgba(10, 13, 20, 0.08)",
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {folders.length > 0 && (
+                                <div style={{ padding: 6, borderBottom: "1px solid #EBEBEB" }}>
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={folderPickerSearch}
+                                    onChange={(e) => setFolderPickerSearch(e.target.value)}
+                                    placeholder="Search folders..."
+                                    className="w-full focus:outline-none"
+                                    style={{
+                                      boxSizing: "border-box",
+                                      padding: "6px 8px",
+                                      background: "#F7F7F7",
+                                      borderRadius: 6,
+                                      fontFamily: "Inter Tight",
+                                      fontWeight: 400,
+                                      fontSize: 13,
+                                      color: "#171717",
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <div className="overflow-y-auto" style={{ maxHeight: 4 * 40 }}>
+                                {folders
+                                  .filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase()))
+                                  .map((f) => (
+                                    <div
+                                      key={f._id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedFolderId(f._id);
+                                        setFolderPickerOpen(false);
+                                      }}
+                                      className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
+                                      style={{
+                                        boxSizing: "border-box",
+                                        height: 40,
+                                        padding: "10px 12px",
+                                        background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
+                                        fontFamily: "Inter Tight",
+                                        fontWeight: 400,
+                                        fontSize: 14,
+                                        color: "#171717",
+                                      }}
+                                    >
+                                      {f.name}
+                                    </div>
+                                  ))}
+                                {folders.length > 0 && folders.filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase())).length === 0 && (
+                                  <div
+                                    className="flex items-center justify-center"
+                                    style={{ height: 40, fontFamily: "Inter Tight", fontSize: 13, color: "#A3A3A3" }}
+                                  >
+                                    No folders found
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <label
+                      className="flex flex-col items-center justify-center self-stretch cursor-pointer"
+                      style={{
+                        boxSizing: "border-box",
+                        marginTop: 16,
+                        padding: "26px 16px",
+                        gap: 12,
+                        width: 360,
+                        height: 207,
+                        background: "#F7F7F7",
+                        border: "1px dashed #EBEBEB",
+                        boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                        borderRadius: 12,
+                      }}
+                    >
+                      <input type="file" multiple onChange={handleFileChange} className="hidden" />
+                      <div
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{ width: 42, height: 42, background: "#EBEBEB", borderRadius: 10 }}
+                      >
+                        <NoFilesUploadIcon size={20} style={{ color: "#5C5D5C" }} />
+                      </div>
+                      <div className="flex flex-col items-center" style={{ width: "auto", maxWidth: "100%", gap: 4 }}>
+                        <p
+                          style={{
+                            fontFamily: "Inter Tight",
+                            fontWeight: 400,
+                            fontSize: 14,
+                            lineHeight: "120%",
+                            color: "#161617",
+                          }}
+                        >
+                          {newFiles.length > 0 ? `${newFiles.length} file(s) selected` : "Drop files here"}
+                        </p>
+                        <p
+                          className="text-center whitespace-nowrap"
+                          style={{
+                            fontFamily: "Inter Tight",
+                            fontWeight: 400,
+                            fontSize: 14,
+                            lineHeight: "120%",
+                            color: "#A3A3A3",
+                          }}
+                        >
+                          or click to browse your computer
+                        </p>
+                      </div>
+                      <div className="flex items-start flex-wrap justify-center" style={{ gap: 6 }}>
+                        {["PDF", "AI", "SVG", "PNG", "FIGMA", "ZIP"].map((ext) => (
+                          <span
+                            key={ext}
+                            className="flex items-center justify-center flex-shrink-0"
+                            style={{
+                              padding: "0 10px",
+                              height: 22,
+                              background: "#EBEBEB",
+                              borderRadius: 9999,
+                              fontFamily: "Inter Tight",
+                              fontWeight: 400,
+                              fontSize: 12,
+                              lineHeight: "120%",
+                              color: "#5C5C5C",
+                            }}
+                          >
+                            {ext}
+                          </span>
+                        ))}
+                      </div>
+                      <p
+                        style={{
+                          fontFamily: "Inter Tight",
+                          fontWeight: 400,
+                          fontSize: 14,
+                          lineHeight: "120%",
+                          color: "#A3A3A3",
+                        }}
+                      >
+                        Max 100MB per file
+                      </p>
+                    </label>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div
+                    className="flex items-center justify-end flex-shrink-0"
+                    style={{
+                      boxSizing: "border-box",
+                      width: 400,
+                      height: 72,
+                      padding: "16px 20px",
+                      gap: 12,
+                      borderTop: "1px solid #EBEBEB",
+                      marginTop: "auto",
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedFolderId("");
+                        setNewFiles([]);
+                        setUploadMode("file");
+                      }}
+                      className="flex items-center justify-center hover:bg-gray-50 transition-colors whitespace-nowrap"
+                      style={{
+                        boxSizing: "border-box",
+                        padding: "10px 12px",
+                        gap: 6,
+                        minWidth: 67,
+                        height: 40,
+                        background: "#FFFFFF",
+                        border: "1px solid #EBEBEB",
+                        boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
+                        borderRadius: 116,
+                        fontFamily: "Inter Tight",
+                        fontWeight: 500,
                         fontSize: 14,
                         lineHeight: "120%",
                         color: "#171717",
                       }}
                     >
-                      {selectedFolder?.name || "Select folder"}
-                    </span>
-                    <ChevronDown size={20} style={{ color: "#5C5C5C" }} />
-
-                    {folderPickerOpen && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFolderPickerOpen(false);
-                          }}
-                        />
-                        <div
-                          className="absolute left-0 top-full mt-1 bg-white z-20 flex flex-col"
-                          style={{
-                            boxSizing: "border-box",
-                            width: "100%",
-                            border: "1px solid #EBEBEB",
-                            borderRadius: 8,
-                            boxShadow: "0px 4px 12px rgba(10, 13, 20, 0.08)",
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {folders.length > 0 && (
-                            <div style={{ padding: 6, borderBottom: "1px solid #EBEBEB" }}>
-                              <input
-                                type="text"
-                                autoFocus
-                                value={folderPickerSearch}
-                                onChange={(e) => setFolderPickerSearch(e.target.value)}
-                                placeholder="Search folders..."
-                                className="w-full focus:outline-none"
-                                style={{
-                                  boxSizing: "border-box",
-                                  padding: "6px 8px",
-                                  background: "#F7F7F7",
-                                  borderRadius: 6,
-                                  fontFamily: "Inter Tight",
-                                  fontWeight: 400,
-                                  fontSize: 13,
-                                  color: "#171717",
-                                }}
-                              />
-                            </div>
-                          )}
-                          <div className="overflow-y-auto" style={{ maxHeight: 4 * 40 }}>
-                            {folders
-                              .filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase()))
-                              .map((f) => (
-                                <div
-                                  key={f._id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedFolderId(f._id);
-                                    setFolderPickerOpen(false);
-                                  }}
-                                  className="flex items-center hover:bg-gray-50 cursor-pointer truncate"
-                                  style={{
-                                    boxSizing: "border-box",
-                                    height: 40,
-                                    padding: "10px 12px",
-                                    background: f._id === selectedFolderId ? "#F5F7FA" : "#FFFFFF",
-                                    fontFamily: "Inter Tight",
-                                    fontWeight: 400,
-                                    fontSize: 14,
-                                    color: "#171717",
-                                  }}
-                                >
-                                  {f.name}
-                                </div>
-                              ))}
-                            {folders.length > 0 && folders.filter((f) => f.name.toLowerCase().includes(folderPickerSearch.trim().toLowerCase())).length === 0 && (
-                              <div
-                                className="flex items-center justify-center"
-                                style={{ height: 40, fontFamily: "Inter Tight", fontSize: 13, color: "#A3A3A3" }}
-                              >
-                                No folders found
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    )}
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleUpload()}
+                      disabled={uploading || newFiles.length === 0}
+                      className="flex items-center justify-center hover:opacity-90 transition-opacity whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        boxSizing: "border-box",
+                        padding: "10px 12px",
+                        gap: 6,
+                        minWidth: 113,
+                        height: 40,
+                        background: "#0085FF",
+                        borderRadius: 116,
+                        fontFamily: "Inter Tight",
+                        fontWeight: 500,
+                        fontSize: 14,
+                        lineHeight: "120%",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      {uploading ? "Uploading..." : "Save & Upload"}
+                    </button>
                   </div>
                 </div>
-
-                <label
-                  className="flex flex-col items-center justify-center self-stretch cursor-pointer"
-                  style={{
-                    boxSizing: "border-box",
-                    marginTop: 16,
-                    padding: "26px 16px",
-                    gap: 12,
-                    width: 360,
-                    height: 207,
-                    background: "#F7F7F7",
-                    border: "1px dashed #EBEBEB",
-                    boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
-                    borderRadius: 12,
-                  }}
-                >
-                  <input type="file" multiple onChange={handleFileChange} className="hidden" />
-                  <div
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 42, height: 42, background: "#EBEBEB", borderRadius: 10 }}
-                  >
-                    <NoFilesUploadIcon size={20} style={{ color: "#5C5D5C" }} />
-                  </div>
-                  <div className="flex flex-col items-center" style={{ width: "auto", maxWidth: "100%", gap: 4 }}>
-                    <p
-                      style={{
-                        fontFamily: "Inter Tight",
-                        fontWeight: 400,
-                        fontSize: 14,
-                        lineHeight: "120%",
-                        color: "#161617",
-                      }}
-                    >
-                      {newFiles.length > 0 ? `${newFiles.length} file(s) selected` : "Drop files here"}
-                    </p>
-                    <p
-                      className="text-center whitespace-nowrap"
-                      style={{
-                        fontFamily: "Inter Tight",
-                        fontWeight: 400,
-                        fontSize: 14,
-                        lineHeight: "120%",
-                        color: "#A3A3A3",
-                      }}
-                    >
-                      or click to browse your computer
-                    </p>
-                  </div>
-                  <div className="flex items-start flex-wrap justify-center" style={{ gap: 6 }}>
-                    {["PDF", "AI", "SVG", "PNG", "FIGMA", "ZIP"].map((ext) => (
-                      <span
-                        key={ext}
-                        className="flex items-center justify-center flex-shrink-0"
-                        style={{
-                          padding: "0 10px",
-                          height: 22,
-                          background: "#EBEBEB",
-                          borderRadius: 9999,
-                          fontFamily: "Inter Tight",
-                          fontWeight: 400,
-                          fontSize: 12,
-                          lineHeight: "120%",
-                          color: "#5C5C5C",
-                        }}
-                      >
-                        {ext}
-                      </span>
-                    ))}
-                  </div>
-                  <p
-                    style={{
-                      fontFamily: "Inter Tight",
-                      fontWeight: 400,
-                      fontSize: 14,
-                      lineHeight: "120%",
-                      color: "#A3A3A3",
-                    }}
-                  >
-                    Max 100MB per file
-                  </p>
-                </label>
               </div>
-
-              {/* Modal Footer */}
-              <div
-                className="flex items-center justify-end flex-shrink-0"
-                style={{
-                  boxSizing: "border-box",
-                  width: 400,
-                  height: 72,
-                  padding: "16px 20px",
-                  gap: 12,
-                  borderTop: "1px solid #EBEBEB",
-                  marginTop: "auto",
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setSelectedFolderId("");
-                    setNewFiles([]);
-                    setUploadMode("file");
-                  }}
-                  className="flex items-center justify-center hover:bg-gray-50 transition-colors whitespace-nowrap"
-                  style={{
-                    boxSizing: "border-box",
-                    padding: "10px 12px",
-                    gap: 6,
-                    minWidth: 67,
-                    height: 40,
-                    background: "#FFFFFF",
-                    border: "1px solid #EBEBEB",
-                    boxShadow: "0px 1px 2px rgba(10, 13, 20, 0.03)",
-                    borderRadius: 116,
-                    fontFamily: "Inter Tight",
-                    fontWeight: 500,
-                    fontSize: 14,
-                    lineHeight: "120%",
-                    color: "#171717",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleUpload()}
-                  disabled={uploading || newFiles.length === 0}
-                  className="flex items-center justify-center hover:opacity-90 transition-opacity whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{
-                    boxSizing: "border-box",
-                    padding: "10px 12px",
-                    gap: 6,
-                    minWidth: 113,
-                    height: 40,
-                    background: "#0085FF",
-                    borderRadius: 116,
-                    fontFamily: "Inter Tight",
-                    fontWeight: 500,
-                    fontSize: 14,
-                    lineHeight: "120%",
-                    color: "#FFFFFF",
-                  }}
-                >
-                  {uploading ? "Uploading..." : "Save & Upload"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+            )}
           </>
         )}
 
@@ -2562,8 +2811,33 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
 
         <AddLinkModal
           isOpen={linkModalOpen}
-          onClose={() => setLinkModalOpen(false)}
+          onClose={() => {
+            setLinkModalOpen(false);
+            setLinkFolderId("");
+          }}
           onSubmit={handleAddLink}
+        />
+
+        <EditLinkModal
+          isOpen={editLinkState.isOpen}
+          onClose={() => setEditLinkState({ ...editLinkState, isOpen: false })}
+          onSubmit={handleUpdateLink}
+          initialName={editLinkState.fileName}
+          initialUrl={editLinkState.fileUrl}
+        />
+
+        <RenameFileModal
+          isOpen={renameFileState.isOpen}
+          onClose={() => setRenameFileState({ ...renameFileState, isOpen: false })}
+          onSubmit={handleRenameFile}
+          initialName={renameFileState.fileName}
+        />
+
+        <UpgradeRequiredModal
+          open={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          minPlan="growth"
+          feature="Selecting multiple files"
         />
       </div>
     </DragDropZone>

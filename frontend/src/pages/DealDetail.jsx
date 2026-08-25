@@ -42,6 +42,8 @@ import NoteSection from "../components/company/NoteSection";
 import BasicDetails from "../components/deal/BasicDetails";
 import logo from "/DataCircles.png";
 import AppToaster from "../components/AppToaster";
+import { getDocumentSettings } from "../services/documentSettingsCache";
+import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
 
 const tabsLeft = ["Details", "Invoices"];
 const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
@@ -291,13 +293,23 @@ function DealDetail() {
   };
 
   const downloadPDF = async (id) => {
+    const inv = invoices.find((i) => i._id === id);
+    let filename = `Invoice-${inv?.invoiceNumber || id}`;
+    try {
+      const settings = await getDocumentSettings();
+      const formats = settings?.pdfFilenameFormats || DEFAULT_FORMATS;
+      const tokens = formats.tax || DEFAULT_FORMATS.tax;
+      const orgName = settings?.companyName || "";
+      filename = buildFilename(tokens, extractDocData(inv || {}, 'tax', orgName));
+    } catch (_) { /* fall back to default */ }
+
     try {
       const response = await API.get(`invoices/download/${id}`, { responseType: "blob" });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `invoice-${id}.pdf`);
+      link.setAttribute("download", `${filename}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();

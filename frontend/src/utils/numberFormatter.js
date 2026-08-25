@@ -78,3 +78,16 @@ export const formatCurrencyFixed = (num, decimals = 2) => {
   const fixed = parseFloat(num).toFixed(decimals);
   return formatCurrencyWithDecimalToIndian(fixed);
 };
+
+/**
+ * Format number with custom precision WITHOUT currency symbol (2 decimals by default)
+ * Examples: 1000.567 -> 1,000.57 | 100000.1 -> 1,00,000.10
+ */
+export const formatNumberFixed = (num, decimals = 2) => {
+  if (num === null || num === undefined || isNaN(num)) {
+    return formatDecimalToIndian(parseFloat(0).toFixed(decimals));
+  }
+
+  const fixed = parseFloat(num).toFixed(decimals);
+  return formatDecimalToIndian(fixed);
+};

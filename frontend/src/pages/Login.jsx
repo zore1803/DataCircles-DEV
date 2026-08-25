@@ -33,6 +33,7 @@ function Login() {
   const [setupType, setSetupType] = useState("join");
   const [code, setCode] = useState("");
   const [orgName, setOrgName] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
   const [companyCode, setCompanyCode] = useState(null);
   const [tempToken, setTempToken] = useState(null);
   const [isPhoneLogin, setIsPhoneLogin] = useState(false);
@@ -415,6 +416,7 @@ function Login() {
           return;
         }
         body.orgName = orgName;
+        if (gstNumber.trim()) body.gstNumber = gstNumber.trim();
         // Referral code captured from a shared link's ?ref= param (see
         // App.jsx) — only meaningful for a brand-new organization, which is
         // the only branch the backend records intent on. A code typed
@@ -1120,6 +1122,25 @@ function Login() {
                 }
                 disabled={isSubmitting}
               />
+              {setupType === "create" && (
+                <div className="mt-4">
+                  <label
+                    htmlFor="gstInput"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    GST Number (Optional)
+                  </label>
+                  <input
+                    id="gstInput"
+                    type="text"
+                    value={gstNumber}
+                    onChange={(e) => setGstNumber(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter GST Number"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
               {emailError && (
                 <p className="mt-2 text-sm text-red-600">{emailError}</p>
               )}

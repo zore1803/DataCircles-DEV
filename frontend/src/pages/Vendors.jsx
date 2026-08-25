@@ -28,8 +28,12 @@ import {
   Pin,
   PinOff,
   EyeOff,
+  Video,
+  Settings,
 } from "lucide-react";
+import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
+import { formatNumberFixed } from "../utils/numberFormatter";
 import VendorForm from "../components/vendor/VendorForm";
 import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
@@ -46,9 +50,14 @@ import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import FilterIcon from "../components/common/FilterIcon";
 import ExportModal from "../components/common/ExportModal";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 
 import SearchIcon from "../components/common/SearchIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 function useOutsideClick(ref, callback) {
   useEffect(() => {
     function handleClickOutside(event) {
@@ -68,9 +77,9 @@ function useOutsideClick(ref, callback) {
 // menu rides along inside the last visible column's cell, same as Companies.
 const BASE_COLUMN_DEFS = [
   { id: "name", label: "Name", required: true, width: 200 },
+  { id: "company", label: "Company", width: 180 },
   { id: "email", label: "Email", width: 220 },
   { id: "phone", label: "Phone", width: 160 },
-  { id: "company", label: "Company", width: 180 },
   { id: "address", label: "Address", width: 260 },
   // Wider than the others so "CLOSING BALANCE" renders in full rather than
   // truncating to "CLOSING BAL...".
@@ -110,13 +119,17 @@ function Vendors() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [filterCompany, setFilterCompany] = useState("");
-  const [debouncedFilterCompany, setDebouncedFilterCompany] = useState("");
+  const [activeFilters, setActiveFilters] = useState([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [editVendor, setEditVendor] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  // Bulk row selection requires Growth+
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -200,8 +213,8 @@ function Vendors() {
   });
 
   // Toolbar UI state — same shape as Accounting.jsx's action row.
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   // Search expand/collapse animation — same mechanics as Companies.jsx: the
   // title/subtitle shrink away and the search pill grows via a width
@@ -576,7 +589,7 @@ function Vendors() {
         return vendor.email ? (
           <a
             href={`mailto:${vendor.email}`}
-            className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
+            className="text-sm font-medium text-blue-600 hover:underline transition-colors truncate block"
           >
             <HighlightText text={vendor.email} query={searchTerm} />
           </a>
@@ -587,7 +600,7 @@ function Vendors() {
         return vendor.phone ? (
           <a
             href={`tel:${vendor.phone}`}
-            className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate block"
+            className="text-sm font-medium text-blue-600 hover:underline transition-colors truncate block"
           >
             <HighlightText text={vendor.phone} query={searchTerm} />
           </a>
@@ -616,7 +629,7 @@ function Vendors() {
       case "balance":
         return (
           <span className="text-sm text-gray-700 font-mono">
-            ₹{vendor.balance?.toFixed(2) || "0.00"}
+            ₹{formatNumberFixed(vendor.balance)}
           </span>
         );
       default:
@@ -743,13 +756,6 @@ function Vendors() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedFilterCompany(filterCompany);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [filterCompany]);
-
   // Reset to page 1 when the search/filter changes. Skips the initial mount —
   // otherwise it races the first fetch below. Returning `prev` unchanged when
   // already on page 1 avoids handing back a new pagination object on every
@@ -763,7 +769,7 @@ function Vendors() {
     setPagination((prev) =>
       prev.currentPage === 1 ? prev : { ...prev, currentPage: 1 },
     );
-  }, [debouncedSearchTerm, debouncedFilterCompany]);
+  }, [debouncedSearchTerm, activeFilters]);
 
   // Skipped on the very first mount when a `?search=` deep link is pending —
   // that leaves the search-term effect above as the only initial fetch,
@@ -791,7 +797,7 @@ function Vendors() {
       fetchVendors();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchTerm, debouncedFilterCompany]);
+  }, [debouncedSearchTerm, activeFilters]);
 
   useEffect(() => {
     fetchVendorFields();
@@ -830,8 +836,8 @@ function Vendors() {
       if (debouncedSearchTerm.trim()) {
         params.append("search", debouncedSearchTerm.trim());
       }
-      if (debouncedFilterCompany) {
-        params.append("company", debouncedFilterCompany);
+      if (activeFilters && activeFilters.length > 0) {
+        params.append("advancedFilters", JSON.stringify(activeFilters));
       }
 
       const res = await API.get(`/vendors/pagination?${params.toString()}`);
@@ -877,6 +883,10 @@ function Vendors() {
   // handleSelectAllAcrossPages below — so a stray click on the header
   // checkbox can't silently select hundreds of off-screen rows.
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedVendors.length === vendors.length && vendors.length > 0) {
       setSelectedVendors([]);
     } else {
@@ -893,7 +903,7 @@ function Vendors() {
     try {
       const params = new URLSearchParams({ allIds: "true" });
       if (debouncedSearchTerm.trim()) params.append("search", debouncedSearchTerm.trim());
-      if (debouncedFilterCompany) params.append("company", debouncedFilterCompany);
+      if (activeFilters && activeFilters.length > 0) params.append("advancedFilters", JSON.stringify(activeFilters));
 
       const res = await API.get(`/vendors/pagination?${params.toString()}`);
       setSelectedVendors(res.data.ids || []);
@@ -911,6 +921,10 @@ function Vendors() {
   };
 
   const handleSelectVendor = (vendorId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedVendors((prev) =>
       prev.includes(vendorId)
         ? prev.filter((id) => id !== vendorId)
@@ -1017,11 +1031,6 @@ function Vendors() {
     setShowDropdown(null);
   };
 
-  const getUniqueCompanies = () => {
-    const companies = vendors.map((v) => v.company).filter(Boolean);
-    return [...new Set(companies)].sort();
-  };
-
   const handleEditVendor = async (vendor) => {
     try {
       const response = await API.get(`/vendors/${vendor._id}`);
@@ -1115,6 +1124,52 @@ function Vendors() {
     setSelectedVendors([]);
   };
 
+  // Converts the existing columnOrder/hiddenCols state into the shape
+  // ColumnSettingsPanel expects, and translates saves back to state.
+  const columnsForSettings = useMemo(
+    () =>
+      columnOrder
+        .map((id, idx) => {
+          const def = columnDefById[id];
+          if (!def) return null;
+          const isBase = BASE_COLUMN_DEFS.some((c) => c.id === id);
+          return {
+            key: id,
+            label: def.label,
+            visible: !hiddenCols.includes(id),
+            order: idx,
+            required: def.required || false,
+            isCustomField: !isBase,
+            defaultVisible: isBase,
+          };
+        })
+        .filter(Boolean),
+    [columnOrder, hiddenCols, columnDefById]
+  );
+
+  const handleSaveVendorColumns = (savedColumns) => {
+    const newOrder = savedColumns.map((c) => c.key);
+    const newHidden = savedColumns.filter((c) => !c.visible).map((c) => c.key);
+    setColumnOrder(newOrder);
+    setHiddenCols(newHidden);
+  };
+
+  // Columns exposed to the AdvancedFilterPanel — mirrors the base column set
+  // plus any custom vendor fields loaded from the server.
+  const filterColumns = useMemo(() => [
+    { key: "name", label: "Name" },
+    { key: "company", label: "Company" },
+    { key: "email", label: "Email" },
+    { key: "phone", label: "Phone" },
+    { key: "balance", label: "Closing Balance" },
+    ...vendorFields.map((f) => ({
+      key: f.name || f,
+      label: f.name || f,
+      isCustomField: true,
+      options: f.options,
+    })),
+  ], [vendorFields]);
+
   // One flag drives every skeleton on the page — header, table body, and
   // pagination all appear and resolve together, same as Companies.jsx.
   // useMinDelay holds it for 300ms so a fast fetch doesn't flash the
@@ -1123,11 +1178,16 @@ function Vendors() {
   // `loading` toggles around every fetchVendors() call, including page/limit
   // changes — same source Companies.jsx feeds its top-edge bar from, so
   // paging here now gets the identical progress flash Companies.jsx shows.
-  useTopLoadingSignal(loading);
+  const [showVideoTutorial, setShowVideoTutorial] = useState(false);
 
   return (
     <>
       <AppToaster />
+      <VideoTutorialModal
+        isOpen={showVideoTutorial}
+        onClose={() => setShowVideoTutorial(false)}
+        title="Vendors Module Guide"
+      />
 
       {/* Fixed toolbar — same positioning Companies.jsx uses (pinned right
           below the app header, not part of the scrolling page), and the
@@ -1220,7 +1280,10 @@ function Vendors() {
                 </>
               ) : (
                 <>
-                  <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
+                    
+                  </div>
                   <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your vendors.
                   </p>
@@ -1232,16 +1295,24 @@ function Vendors() {
 
         {showLoadingSkeleton ? (
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Skeleton width={44} height={44} shape="circle" />
-            <Skeleton width={44} height={44} shape="circle" />
-            <Skeleton width={44} height={44} shape="circle" />
-            <Skeleton width={130} height={44} shape="circle" />
+            <Skeleton width={40} height={40} shape="circle" />
+            <Skeleton width={40} height={40} shape="circle" />
+            <Skeleton width={40} height={40} shape="circle" />
+            <Skeleton width={130} height={40} shape="circle" />
           </div>
         ) : (
-        <div className="flex flex-row items-center gap-2 h-[44px] flex-shrink-0">
-          <div className="relative flex items-center h-11 w-[220px] sm:w-[300px] lg:w-[380px] rounded-full border border-[#E1E4EA] bg-white focus-within:border-[#0085FF] transition-colors">
+        <div className="flex flex-row items-center gap-2 h-10 flex-shrink-0">
+          <div
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
+              isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"
+            } max-w-full flex-shrink-0`}
+          >
             <SearchIcon
-              className="absolute left-3.5 text-[#1F2937] pointer-events-none top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+              className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+              onClick={() => {
+                setIsSearchExpanded(true);
+                searchInputRef.current?.focus();
+              }}
             />
             <input
               ref={searchInputRef}
@@ -1274,56 +1345,23 @@ function Vendors() {
 
           <div className="relative flex-shrink-0">
             <button
-              title="Filter by company"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowFilterMenu((v) => !v);
-              }}
-              className={`flex items-center justify-center w-11 h-11 rounded-full border transition-colors bg-white ${
-                filterCompany
+              title="Filters"
+              onClick={() => setShowAdvancedFilters(true)}
+              className={`relative flex items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                activeFilters.length > 0
                   ? "border-[#0085FF] text-[#0085FF]"
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
               <FilterIcon
-                size={16}
-                className={filterCompany ? "text-[#0085FF]" : "text-[#1F2937]"}
+                className={`w-4 h-4 ${activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"}`}
               />
+              {activeFilters.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                  {activeFilters.length}
+                </span>
+              )}
             </button>
-            {showFilterMenu && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 mt-2 w-56 max-h-72 overflow-auto bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
-              >
-                <button
-                  onClick={() => {
-                    setFilterCompany("");
-                    setShowFilterMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                    !filterCompany ? "text-[#0085FF] font-medium" : "text-gray-700"
-                  }`}
-                >
-                  All Companies
-                </button>
-                {getUniqueCompanies().map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => {
-                      setFilterCompany(c);
-                      setShowFilterMenu(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 truncate ${
-                      filterCompany === c
-                        ? "text-[#0085FF] font-medium"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="relative flex-shrink-0">
@@ -1333,9 +1371,9 @@ function Vendors() {
                 setShowMoreMenu((v) => !v);
               }}
               title="More"
-              className="flex items-center justify-center w-11 h-11 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors bg-white"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
             >
-              <MoreVertical size={18} strokeWidth={2} className="text-[#1F2937]" />
+              <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
             </button>
             {showMoreMenu && (
               <div
@@ -1350,7 +1388,17 @@ function Vendors() {
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Upload className="w-4 h-4 text-gray-400" />
-                  {showImport ? "Hide Import/Export" : "Import/Export"}
+                  {showImport ? "Hide Import" : "Import"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowColumnSettings(true);
+                    setShowMoreMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Settings className="w-4 h-4 text-gray-400" />
+                  Column Settings
                 </button>
                 <Link
                   to="/settings/forms?module=Vendor"
@@ -1369,7 +1417,7 @@ function Vendors() {
               setEditVendor(null);
               setShowQuickAdd((v) => !v);
             }}
-            className="h-11 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
+            className="h-10 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
           >
             <Plus size={18} className="text-white" />
             <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
@@ -1403,7 +1451,6 @@ function Vendors() {
           }}
         />
       )}
-
 
       {showImport && (
         <ImportVendors
@@ -1905,6 +1952,33 @@ function Vendors() {
         selectedIds={selectedVendors}
         exportUrl="/vendors/export-selected"
         fileName="Exported_Vendors.csv"
+      />
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
+
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={filterColumns}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(newFilters) => setActiveFilters(newFilters)}
+        title="Filter Vendors"
+        subtitle="Find specific vendors quickly"
+        emptyStateText="Add a rule to narrow down your vendor list."
+      />
+
+      <ColumnSettingsPanel
+        isOpen={showColumnSettings}
+        onClose={() => setShowColumnSettings(false)}
+        columns={columnsForSettings}
+        onSave={handleSaveVendorColumns}
+        moduleName="Vendors"
       />
     </>
   );

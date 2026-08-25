@@ -1,0 +1,21 @@
+# Keeps the repo-root Docker build context (used by both backend/Dockerfile
+# and frontend/Dockerfile so they can reach ../shared) from dragging in
+# local dependency installs, build output, and VCS metadata.
+node_modules/
+**/node_modules/
+dist/
+build/
+**/dist/
+**/build/
+.git/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+logs/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+coverage/
+**/coverage/

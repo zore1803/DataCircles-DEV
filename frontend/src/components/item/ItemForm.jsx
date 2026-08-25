@@ -1,36 +1,29 @@
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import {
-  Upload,
   X,
   Plus,
   Trash2,
-  Box,
-  Barcode as BarcodeIcon,
-  RefreshCw,
-  Check,
   Type,
-  Layers,
   FolderOpen,
   ChevronDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
 
+// Standard Indian GST slabs, matching the per-item select used on
+// document forms (e.g. InvoiceForm.jsx).
+const GST_RATES = [0, 5, 12, 18, 28];
+
 const ItemForm = ({
   form,
   setForm,
   loading,
   setLoading,
-  setError,
-  setSuccess,
   fetchItems,
   onRequestClose,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [shouldRender, setShouldRender] = useState(true);
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
   const [variants, setVariants] = useState(form.variants || []);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [currentVariant, setCurrentVariant] = useState({
@@ -41,13 +34,61 @@ const ItemForm = ({
     sellingPrice: 0,
     stock: 0,
     isActive: true,
+    gstRate: 0,
   });
   const [variantIndex, setVariantIndex] = useState(null);
+  // Once an item has variants, the variant is the actual sellable/stockable
+  // unit everywhere in the app (every item-picker in Purchase/PO/Quotation/
+  // Invoice/Delivery Challan already ignores parent pricing once
+  // item.variants.length > 0, resolving to the variant instead) — so the
+  // parent-level price/GST/stock fields below become inert and are disabled
+  // to stop the user from ever wondering "which price actually applies".
+  // Includes an in-progress uncommitted variant panel too, since that
+  // variant gets auto-committed on submit (see handleSubmit).
+  const hasVariants = variants.length > 0 || (showVariantForm && !!currentVariant.name?.trim());
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const fileInputRef = useRef(null);
   const [validationErrors, setValidationErrors] = useState({});
-  const [variantValidationErrors, setVariantValidationErrors] = useState({});
+
+  // Product images: `existingImages` holds already-uploaded URLs (kept ones,
+  // seeded from the item being edited); `newImageFiles` holds freshly picked
+  // File objects not uploaded yet. Both are merged into one `images` field
+  // on submit.
+  const [existingImages, setExistingImages] = useState(form.images || []);
+  const [newImageFiles, setNewImageFiles] = useState([]);
+  const [newImagePreviews, setNewImagePreviews] = useState([]);
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+  const imageInputRef = useRef(null);
+
+  useEffect(() => {
+    setExistingImages(form.images || []);
+    setNewImageFiles([]);
+  }, [form._id]);
+
+  useEffect(() => {
+    const urls = newImageFiles.map((f) => URL.createObjectURL(f));
+    setNewImagePreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [newImageFiles]);
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) {
+      setNewImageFiles((prev) => [...prev, ...files]);
+      setIsFormDirty(true);
+    }
+    e.target.value = "";
+  };
+
+  const handleRemoveExistingImage = (url) => {
+    setExistingImages((prev) => prev.filter((u) => u !== url));
+    setIsFormDirty(true);
+  };
+
+  const handleRemoveNewImage = (index) => {
+    setNewImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setIsFormDirty(true);
+  };
 
   // Org-defined custom fields (configured in Settings -> Item Fields).
   // Definitions come from /item-fields/latest; the entered values live in
@@ -62,7 +103,7 @@ const ItemForm = ({
       try {
         const res = await API.get("/item-fields/latest");
         setItemFields(res.data?.fields || []);
-      } catch (err) {
+      } catch {
         // A missing/forbidden field config just means no custom fields to
         // show — the rest of the form still works, so fail quietly.
         setItemFields([]);
@@ -249,22 +290,12 @@ const ItemForm = ({
   };
 
   useEffect(() => {
-    setShouldRender(true);
     setTimeout(() => setIsOpen(true), 10);
-    if (form._id && form.images && form.images.length > 0) {
-      setImagePreviews(
-        form.images.map((img) => `${import.meta.env.VITE_APP_API_URL}${img}`),
-      );
-    } else {
-      setImagePreviews([]);
-    }
     setVariants(form.variants || []);
     return () => {
       setIsOpen(false);
-      setImages([]);
-      setImagePreviews([]);
     };
-  }, [form._id, form.images, form.variants]);
+  }, [form._id, form.variants]);
 
   const handleClose = () => {
     if (isFormDirty) {
@@ -288,7 +319,7 @@ const ItemForm = ({
 
   const handleSaveAndExit = async () => {
     setShowConfirmDialog(false);
-    await handleSubmit({ preventDefault: () => {} }, true);
+    await handleSubmit({ preventDefault: () => {} });
   };
 
   const generateBarcode = () => {
@@ -300,9 +331,31 @@ const ItemForm = ({
   };
 
   const generateVariantSku = () => {
-    const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 10000);
-    const sku = `${timestamp}${randomNum}`.slice(-12);
+    let base = "";
+    if (form.name) {
+      base = form.name.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase();
+    }
+    
+    if (base.length === 0) {
+      base = "ITM";
+    }
+
+    let attrs = "";
+    if (currentVariant.attributes) {
+        const attributeValues = Object.values(currentVariant.attributes).filter(val => val.trim() !== "");
+        if (attributeValues.length > 0) {
+           attrs = "-" + attributeValues.map(val => val.replace(/[^a-zA-Z0-9]/g, "").substring(0, 3).toUpperCase()).join("-");
+        }
+    }
+
+    let sku = "";
+    if (attrs.length > 0) {
+        sku = `${base}${attrs}`;
+    } else {
+        const randomString = Math.random().toString(36).substring(2, 7).toUpperCase();
+        sku = `${base}-${randomString}`;
+    }
+    
     setCurrentVariant({ ...currentVariant, sku });
     setIsFormDirty(true);
   };
@@ -325,7 +378,7 @@ const ItemForm = ({
 
   const validateForm = () => {
     const errors = {};
-    if (!form.name.trim()) errors.name = "Item name is required";
+    if (!form.name.trim()) errors.name = form.type === "service" ? "Service name is required" : "Item name is required";
     if (form.purchasePrice < 0) errors.purchasePrice = "Invalid price";
     if (form.sellingPrice < 0) errors.sellingPrice = "Invalid price";
 
@@ -344,7 +397,7 @@ const ItemForm = ({
     return errors;
   };
 
-  const handleSubmit = async (e, isSaveAndExit = false) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
@@ -355,6 +408,27 @@ const ItemForm = ({
 
     try {
       setLoading(true);
+
+      // A variant typed into the open "Add Variant" panel only lives in
+      // currentVariant until its own "Add Variant" button commits it into
+      // `variants` — submitting the outer form directly (without clicking
+      // that button first) used to silently drop it. Auto-commit it here so
+      // whatever's on screen actually gets saved.
+      const variantsToSave =
+        showVariantForm && currentVariant.name?.trim()
+          ? variantIndex !== null
+            ? variants.map((v, i) => (i === variantIndex ? currentVariant : v))
+            : [...variants, currentVariant]
+          : variants;
+
+      // Parent opening stock is inert once the item has variants (each
+      // variant tracks its own) — force it to 0 regardless of whatever
+      // stale value the now-disabled field's state still holds, so the
+      // backend never records a spurious opening-stock ledger entry for
+      // the parent on top of each variant's own.
+      const inventoryToSave = variantsToSave.length > 0
+        ? { ...(form.inventory || {}), openingStock: 0 }
+        : (form.inventory || {});
 
       // Flatten the entered custom-field values into the array shape the
       // Item model stores. Multiselect arrays collapse to a comma-separated
@@ -372,13 +446,49 @@ const ItemForm = ({
         })
         .filter((field) => field.value !== "");
 
-      const payload = { ...form, variants, additionalFields: processedAdditionalFields };
-      if (form._id) {
-        await API.put(`/items/${form._id}`, payload);
-        toast.success("Item updated successfully!");
+      if (newImageFiles.length > 0) {
+        // Multipart request: scalar fields go in as strings, array/object
+        // fields get JSON-stringified, same approach QuickCompanyForm.jsx
+        // uses for its single profilePicture upload, extended to multiple
+        // files under one "images" field name.
+        const fd = new FormData();
+        Object.entries({ ...form, variants: undefined, additionalFields: undefined, images: undefined, discount: undefined, inventory: undefined }).forEach(
+          ([key, value]) => {
+            if (value === undefined || value === null) return;
+            fd.append(key, typeof value === "boolean" ? String(value) : value);
+          }
+        );
+        fd.append("variants", JSON.stringify(variantsToSave));
+        fd.append("additionalFields", JSON.stringify(processedAdditionalFields));
+        fd.append("discount", JSON.stringify(form.discount || { type: "percentage", value: 0 }));
+        // Nested object, so it must be JSON-stringified like variants/discount above —
+        // appending it raw would send the literal string "[object Object]".
+        fd.append("inventory", JSON.stringify(inventoryToSave));
+        fd.append("existingImages", JSON.stringify(existingImages));
+        newImageFiles.forEach((file) => fd.append("images", file));
+
+        if (form._id) {
+          await API.put(`/items/${form._id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+          toast.success("Item updated successfully!");
+        } else {
+          await API.post("/items", fd, { headers: { "Content-Type": "multipart/form-data" } });
+          toast.success("Item added successfully!");
+        }
       } else {
-        await API.post("/items", payload);
-        toast.success("Item added successfully!");
+        const payload = {
+          ...form,
+          variants: variantsToSave,
+          inventory: inventoryToSave,
+          additionalFields: processedAdditionalFields,
+          images: existingImages,
+        };
+        if (form._id) {
+          await API.put(`/items/${form._id}`, payload);
+          toast.success("Item updated successfully!");
+        } else {
+          await API.post("/items", payload);
+          toast.success("Item added successfully!");
+        }
       }
       await fetchItems();
       setIsFormDirty(false);
@@ -451,120 +561,408 @@ const ItemForm = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
-      style={{ opacity: isOpen ? 1 : 0 }}
-      onClick={handleClose}
-    >
+    <>
       <div
-        className="bg-white w-full max-w-4xl rounded-xl shadow-2xl max-h-[90vh] flex flex-col transition-transform duration-300 transform"
-        style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
+        style={{ opacity: isOpen ? 1 : 0 }}
+        onClick={handleClose}
+      />
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 font-sf">
-              {form._id ? "Edit Item" : "Create New Item"}
-            </h2>
-            <p className="text-xs text-gray-400 mt-1 font-inter">
-              Lorem ipsum dolor sit amet consectetur
-            </p>
-          </div>
+        {/* Header — matches the CompanyForm/CompanyTaskForm quick-drawer header spec */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+            {form._id ? "Edit Item" : "Create New Item"}
+          </h2>
           <button
+            type="button"
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
           >
-            <X className="w-6 h-6" />
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 font-inter custom-scrollbar">
-          {/* Title & Meta Controls */}
-          <div className="space-y-4">
-            <label className="block text-sm font-semibold text-gray-700">
-              Item Title
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 font-inter custom-scrollbar">
+          {/* Item/Service Name — label and placeholder follow the Type field below */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              {form.type === "service" ? "Service Name" : "Item Name"} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
-              placeholder="Item Name"
-              className={`w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
+              placeholder={form.type === "service" ? "Enter Service Name" : "Enter Item Name"}
+              className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${validationErrors.name ? "border-red-300" : "border-gray-200"}`}
             />
+            {validationErrors.name && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>
+            )}
+          </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Category Pill */}
-              <div className="relative group">
-                <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
-                  <Layers className="w-3.5 h-3.5" />
-                  {form.category || "Category"}
+          {/* Type */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.type}
+              onChange={(e) => {
+                const nextType = e.target.value;
+                handleFormChange("type", nextType);
+                // A service can't have variants — clear any in-progress or
+                // saved ones so switching away from Product doesn't leave
+                // stale variant state around (which would also keep
+                // hasVariants true and wrongly disable the parent price/GST/
+                // stock fields below).
+                if (nextType === "service") {
+                  setVariants([]);
+                  setForm((prev) => ({ ...prev, type: nextType, variants: [] }));
+                  setShowVariantForm(false);
+                  setCurrentVariant({
+                    name: "",
+                    sku: "",
+                    attributes: {},
+                    purchasePrice: 0,
+                    sellingPrice: 0,
+                    stock: 0,
+                    isActive: true,
+                    gstRate: 0,
+                  });
+                  setVariantIndex(null);
+                }
+              }}
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+            >
+              <option value="product">Product</option>
+              <option value="service">Service</option>
+            </select>
+          </div>
+
+          {/* Variants — a service has nothing to stock or vary in price by
+              SKU, so this whole section (and everything it drives: variant
+              pricing, variant stock, variant-aware pickers elsewhere) simply
+              doesn't apply once Type is Service. */}
+          {form.type === "product" && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-gray-700">
+                Variants
+              </label>
+              {!showVariantForm && (
+                <button
+                  type="button"
+                  onClick={() => setShowVariantForm(true)}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Variant
+                </button>
+              )}
+            </div>
+
+            {showVariantForm && (
+              <div className="border border-gray-200 rounded-xl bg-white mb-4 shadow-sm">
+                <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="font-semibold text-gray-900 text-sm">
+                    {variantIndex !== null ? "Edit Variant" : "Add Variant"}
+                  </h3>
+                  <button
+                    onClick={() => setShowVariantForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-lg hidden group-hover:block z-10 p-2">
-                  <input
-                    type="text"
-                    placeholder="Enter Category"
-                    value={form.category}
-                    onChange={(e) =>
-                      handleFormChange("category", e.target.value)
-                    }
-                    className="w-full text-xs border border-gray-200 rounded p-1.5"
-                  />
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Variant Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={currentVariant.name}
+                      onChange={handleVariantChange}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Enter Variant Name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      SKU
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        name="sku"
+                        value={currentVariant.sku}
+                        onChange={handleVariantChange}
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Enter or Generate SKU"
+                      />
+                      <button
+                        onClick={generateVariantSku}
+                        className="bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs px-4 py-2 rounded-full font-medium whitespace-nowrap"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Attributes Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-medium text-gray-700">
+                        Attributes
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentVariant((prev) => ({
+                            ...prev,
+                            attributes: { ...prev.attributes, "": "" },
+                          }));
+                        }}
+                        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Attribute
+                      </button>
+                    </div>
+                    
+                    {Object.keys(currentVariant.attributes || {}).length > 0 && (
+                      <div className="space-y-2">
+                        {Object.entries(currentVariant.attributes || {}).map(([key, val], idx) => (
+                          <div key={idx} className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={key}
+                              onChange={(e) => {
+                                const newKey = e.target.value;
+                                setCurrentVariant((prev) => {
+                                  const newAttrs = { ...prev.attributes };
+                                  const value = newAttrs[key];
+                                  delete newAttrs[key];
+                                  newAttrs[newKey] = value;
+                                  return { ...prev, attributes: newAttrs };
+                                });
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Attribute Name (e.g. color)"
+                            />
+                            <input
+                              type="text"
+                              value={val}
+                              onChange={(e) => {
+                                const newVal = e.target.value;
+                                setCurrentVariant((prev) => ({
+                                  ...prev,
+                                  attributes: { ...prev.attributes, [key]: newVal },
+                                }));
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Attribute Value (e.g. Red)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCurrentVariant((prev) => {
+                                  const newAttrs = { ...prev.attributes };
+                                  delete newAttrs[key];
+                                  return { ...prev, attributes: newAttrs };
+                                });
+                              }}
+                              className="text-red-500 hover:text-red-600 p-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Purchase Price <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="purchasePrice"
+                        value={currentVariant.purchasePrice}
+                        onChange={handleVariantChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Enter Purchase Price"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Selling Price <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="sellingPrice"
+                        value={currentVariant.sellingPrice}
+                        onChange={handleVariantChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Enter Selling Price"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {form._id && variantIndex !== null ? "Current Stock" : "Opening Stock"}
+                      </label>
+                      <input
+                        type="number"
+                        name="stock"
+                        // Same reasoning as the parent's Current Stock field above: once a
+                        // variant already exists, its stock is owned by the StockMovement
+                        // ledger and must only change through Inventory's Stock In / Stock Out
+                        // — editing it here would silently overwrite real stock and bypass the
+                        // audit trail. A brand-new variant has no ledger yet, so its opening
+                        // stock is still set here, same as a brand-new item.
+                        disabled={!!(form._id && variantIndex !== null)}
+                        value={currentVariant.stock}
+                        onChange={handleVariantChange}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                      />
+                      {form._id && variantIndex !== null && (
+                        <p className="mt-1 text-[11px] text-gray-400">
+                          Use Stock In / Stock Out on the Inventory page to change stock.
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        GST Rate
+                      </label>
+                      <select
+                        value={currentVariant.gstRate ?? 0}
+                        onChange={(e) =>
+                          setCurrentVariant((prev) => ({
+                            ...prev,
+                            gstRate: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                      >
+                        {GST_RATES.map((rate) => (
+                          <option key={rate} value={rate}>{rate}%</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="variantActive"
+                      name="isActive"
+                      checked={currentVariant.isActive !== false}
+                      onChange={(e) => setCurrentVariant(prev => ({ ...prev, isActive: e.target.checked }))}
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="variantActive" className="text-sm font-medium text-gray-900">
+                      Active
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowVariantForm(false)}
+                      className="flex-1 border border-red-200 text-red-500 font-medium rounded-full hover:bg-red-50 py-2 text-sm transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddVariant}
+                      className="flex-1 bg-[#0085FF] hover:bg-blue-600 text-white font-medium rounded-full py-2 text-sm transition-colors shadow-sm"
+                    >
+                      {variantIndex !== null ? "Update Variant" : "Add Variant"}
+                    </button>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Active Toggle Pill */}
-              <button
-                type="button"
-                onClick={() => handleFormChange("isActive", !form.isActive)}
-                className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-medium transition-colors ${
-                  form.isActive
-                    ? "bg-green-50 text-green-700 border-green-200"
-                    : "bg-gray-50 text-gray-600 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full ${form.isActive ? "bg-green-500" : "bg-gray-400"}`}
-                />
-                {form.isActive ? "Active" : "Inactive"}
-              </button>
-
-              {/* Add Variant Button */}
-              <button
-                type="button"
-                onClick={() => setShowVariantForm(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white border border-blue-600 rounded-full text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Variant
-              </button>
-
-              <span className="text-xs text-gray-400 italic ml-2">
-                A new variant will be added to the item
-              </span>
-            </div>
+            {!showVariantForm && variants.length === 0 ? (
+              <div className="w-full px-4 py-3 border border-dashed border-gray-200 rounded-xl text-xs text-gray-400 text-center">
+                No Variants Added
+              </div>
+            ) : !showVariantForm && variants.length > 0 ? (
+              <div className="space-y-2">
+                {variants.map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded-lg p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">
+                        {v.name}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate mt-0.5">
+                        SKU: {v.sku || "N/A"} | ₹{v.sellingPrice}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleEditVariant(i)}
+                        className="text-blue-600 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"
+                      >
+                        <Type className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVariant(i)}
+                        className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
+          )}
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-              Description of the item <span className="text-red-500">*</span>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Description
             </label>
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-lg">
               <ReactQuill
                 theme="snow"
                 value={form.description}
                 onChange={(val) => handleFormChange("description", val)}
-                className="h-32 mb-10"
+                className="h-48 mb-10"
               />
             </div>
           </div>
 
-          {/* Price Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Price Row — disabled once the item has variants: each variant
+              carries its own price, and every item-picker across the app
+              (Purchase/PO/Quotation/Invoice/Delivery Challan) already offers
+              only the variants — not this parent price — once they exist. */}
+          {!hasVariants && (
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Purchase Price <span className="text-red-500">*</span>
               </label>
               <input
@@ -574,12 +972,12 @@ const ItemForm = ({
                 onChange={(e) =>
                   handleFormChange("purchasePrice", e.target.value)
                 }
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Purchase Price"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Selling Price <span className="text-red-500">*</span>
               </label>
               <input
@@ -589,44 +987,110 @@ const ItemForm = ({
                 onChange={(e) =>
                   handleFormChange("sellingPrice", e.target.value)
                 }
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter Selling Price"
               />
             </div>
           </div>
+          )}
 
-          {/* Tax Inclusive */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.taxInclusive}
-              onChange={(e) =>
-                handleFormChange("taxInclusive", e.target.checked)
-              }
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label className="text-sm text-gray-700 font-medium">
-              Tax Inclusive
-            </label>
+          {/* Tax Inclusive + GST Rate */}
+          {!hasVariants && (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.taxInclusive}
+                onChange={(e) =>
+                  handleFormChange("taxInclusive", e.target.checked)
+                }
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label className="text-sm text-gray-700 font-medium">
+                Tax Inclusive
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-700">
+                GST Rate
+              </label>
+              <select
+                value={form.gstRate ?? 0}
+                onChange={(e) => handleFormChange("gstRate", parseFloat(e.target.value) || 0)}
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                {GST_RATES.map((rate) => (
+                  <option key={rate} value={rate}>{rate}%</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          )}
+
+          {/* Default Discount + Max Discount % */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Discount
+              </label>
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.discount?.value ?? 0}
+                  onChange={(e) =>
+                    handleFormChange("discount", { ...(form.discount || { type: "percentage" }), value: parseFloat(e.target.value) || 0 })
+                  }
+                  className="flex-1 min-w-0 px-3 py-2.5 text-sm focus:outline-none"
+                />
+                <select
+                  value={form.discount?.type ?? "percentage"}
+                  onChange={(e) =>
+                    handleFormChange("discount", { ...(form.discount || { value: 0 }), type: e.target.value })
+                  }
+                  className="px-2 py-2.5 bg-gray-50 border-l border-gray-200 text-xs text-gray-600 focus:outline-none"
+                >
+                  <option value="percentage">% Percentage</option>
+                  <option value="amount">₹ Amount</option>
+                </select>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">Default discount applied when added to a document.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Max Discount %
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                placeholder="e.g. 10"
+                value={form.maxDiscountPercent ?? ""}
+                onChange={(e) => handleFormChange("maxDiscountPercent", e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[11px] text-gray-400">Leave blank for no limit.</p>
+            </div>
           </div>
 
           {/* HSN/SAC */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               HSN/SAC Code
             </label>
             <input
               type="text"
               value={form.hsnSac}
               onChange={(e) => handleFormChange("hsnSac", e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter HSN/SAC Code"
             />
           </div>
 
           {/* Barcode */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Barcode
             </label>
             <div className="flex gap-2">
@@ -634,28 +1098,92 @@ const ItemForm = ({
                 type="text"
                 value={form.barcode}
                 onChange={(e) => handleFormChange("barcode", e.target.value)}
-                className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 min-w-0 px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter or Generate Barcode"
               />
               <button
                 type="button"
                 onClick={generateBarcode}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors"
+                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-medium transition-colors"
               >
-                Generate Barcode
+                Generate
               </button>
             </div>
           </div>
 
+          {/* Category */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Category
+            </label>
+            <input
+              type="text"
+              value={form.category}
+              onChange={(e) => handleFormChange("category", e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter Item Category"
+            />
+          </div>
+
+          {/* Images — heading follows the Product/Service type, matching QuickItemDrawer */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              {form.type === "service" ? "Service Images" : "Product Images"}
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {existingImages.map((url) => (
+                <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                  <img src={url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => setSelectedImageUrl(url)} />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveExistingImage(url)}
+                    className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              {newImagePreviews.map((url, i) => (
+                <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 group">
+                  <img src={url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => setSelectedImageUrl(url)} />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveNewImage(i)}
+                    className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+              >
+                <Plus className="w-5 h-5 mb-1" />
+                <span className="text-[11px] font-medium">Upload</span>
+              </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">Up to 10 images</p>
+          </div>
+
           {/* Primary Unit */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-              Primary Unit
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+              Primary Unit <span className="text-red-500">*</span>
             </label>
             <select
               value={form.primaryUnit}
               onChange={(e) => handleFormChange("primaryUnit", e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               <option value="OTH-OTHERS">OTH-OTHERS</option>
               <option value="PCS-PIECES">PCS-PIECES</option>
@@ -663,6 +1191,82 @@ const ItemForm = ({
               <option value="KGS-KILOGRAMS">KGS-KILOGRAMS</option>
               {/* Add more as needed */}
             </select>
+          </div>
+
+          {/* Inventory — every product appears on the Inventory page automatically, so there's no
+              opt-in toggle here. Leaving the quantity blank simply starts the item at 0.
+              After creation the stock level changes exclusively through Inventory's
+              Stock In / Stock Out, so it stays backed by the movement ledger instead of being
+              silently overwritten by a product save. Services carry no stock. */}
+          {form.type === "product" && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3.5">
+              <p className="text-xs font-semibold text-gray-700 mb-3">Inventory</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    {form._id ? "Current Stock" : "Opening Quantity"}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    // Opening quantity is the starting balance and is recorded as the first
+                    // ledger entry, so it can only be set while creating the item. Also
+                    // disabled once the item has variants — each variant carries its own
+                    // opening stock (see the variant panel below); the parent's own opening
+                    // quantity would otherwise double-count against the variant total.
+                    disabled={!!form._id || hasVariants}
+                    placeholder="0"
+                    value={hasVariants ? 0 : (form.inventory?.openingStock ?? 0)}
+                    onChange={(e) =>
+                      handleFormChange("inventory", {
+                        ...(form.inventory || {}),
+                        openingStock: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {hasVariants
+                      ? "Managed by variants — set each variant's own stock below."
+                      : form._id
+                        ? "Use Stock In / Stock Out on the Inventory page to change stock."
+                        : "Leave blank to start at 0."}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Low Stock Alert At
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0"
+                    value={form.inventory?.lowStockThreshold ?? 0}
+                    onChange={(e) =>
+                      handleFormChange("inventory", {
+                        ...(form.inventory || {}),
+                        lowStockThreshold: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Active */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => handleFormChange("isActive", e.target.checked)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label className="text-sm text-gray-700 font-medium">
+              Active
+            </label>
           </div>
 
           {/* Custom Fields (Categorized & Collapsible) — sits after the
@@ -750,12 +1354,12 @@ const ItemForm = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-8 py-5 border-t border-gray-100 flex justify-between gap-4 bg-white rounded-b-xl">
+        {/* Footer — matches the CompanyTaskForm quick-drawer footer spec */}
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm transition-colors"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -763,114 +1367,78 @@ const ItemForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 text-sm transition-colors shadow-sm disabled:opacity-70"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "Saving..." : form._id ? "Update Item" : "Create Item"}
           </button>
         </div>
       </div>
 
-      {/* Nested Variant Form */}
-      {showVariantForm && (
-        <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] z-[10001] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-semibold text-gray-900">
-                {variantIndex !== null ? "Edit Variant" : "Add New Variant"}
-              </h3>
+      {/* Nested Variant Form removed as it's now inline */}
+
+      {/* Unsaved-changes confirmation — closing (X/backdrop/Cancel) while the
+          form is dirty asks instead of silently discarding edits. */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-[10002] flex items-center justify-center p-4">
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              Discard unsaved changes?
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              You have unsaved changes to this item. Choose what to do before closing.
+            </p>
+            <div className="flex flex-col gap-2">
               <button
-                onClick={() => setShowVariantForm(false)}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                onClick={handleSaveAndExit}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-70"
               >
-                <X className="w-5 h-5" />
+                {loading ? "Saving..." : form._id ? "Save Changes" : "Save Item"}
               </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                  Variant Name
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={currentVariant.name}
-                  onChange={handleVariantChange}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  placeholder="e.g. Red, XL"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                  SKU
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    name="sku"
-                    value={currentVariant.sku}
-                    onChange={handleVariantChange}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
-                  <button
-                    onClick={generateVariantSku}
-                    className="bg-gray-800 text-white text-xs px-3 rounded-lg"
-                  >
-                    Generate SKU
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                    Purchase Price
-                  </label>
-                  <input
-                    type="number"
-                    name="purchasePrice"
-                    value={currentVariant.purchasePrice}
-                    onChange={handleVariantChange}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                    Selling Price
-                  </label>
-                  <input
-                    type="number"
-                    name="sellingPrice"
-                    value={currentVariant.sellingPrice}
-                    onChange={handleVariantChange}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">
-                  Stock
-                </label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={currentVariant.stock}
-                  onChange={handleVariantChange}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                />
-              </div>
-
               <button
-                onClick={handleAddVariant}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                type="button"
+                onClick={handleConfirmExit}
+                className="w-full border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
               >
-                {variantIndex !== null ? "Update Variant" : "Add Variant"}
+                Discard Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConfirmDialog(false)}
+                className="w-full text-gray-500 text-xs py-1.5 hover:text-gray-700 transition-colors"
+              >
+                Keep Editing
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      {selectedImageUrl && (
+        <div 
+          className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedImageUrl(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="absolute -top-10 right-0 text-white hover:text-gray-300"
+              onClick={() => setSelectedImageUrl(null)}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img 
+              src={selectedImageUrl} 
+              alt="Zoomed product preview" 
+              className="max-w-full max-h-[90vh] object-contain rounded shadow-2xl border border-white/10"
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

@@ -43,6 +43,14 @@ router.get(
   checkPermission("delivery-challans", "readonly"),
   deliveryChallanController.downloadDeliveryChallan
 );
+router.post(
+  "/:id/duplicate",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("delivery-challans", "write"),
+  checkPermission("delivery-challans", "read-write"),
+  deliveryChallanController.duplicateDeliveryChallan
+);
 router.delete(
   "/:id",
   requireAuth,
@@ -82,6 +90,24 @@ router.patch(
   restrictByPlan("delivery-challans", "write"),
   checkPermission("delivery-challans", "read-write"),
   deliveryChallanController.updateDeliveryChallanNumber
+);
+
+router.post(
+  "/bulk-status",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("delivery-challans", "write"),
+  checkPermission("delivery-challans", "read-write"),
+  deliveryChallanController.bulkUpdateStatus
+);
+
+router.post(
+  "/bulk-signature",
+  requireAuth,
+  subscriptionGate,
+  restrictByPlan("delivery-challans", "write"),
+  checkPermission("delivery-challans", "read-write"),
+  deliveryChallanController.bulkUpdateSignature
 );
 
 module.exports = router;

@@ -201,7 +201,7 @@ async function run() {
     purchaseDate: daysFromNow(-5 - i),
     items: [{ itemId: pick(items, i)._id, name: pick(items, i).name, quantity: 10 + i, unitPrice: pick(items, i).purchasePrice, total: (10 + i) * pick(items, i).purchasePrice }],
     grandTotal: (10 + i) * pick(items, i).purchasePrice,
-    status: pick(["Draft", "Received"], i), notes: `Purchase ${i + 1}`, user: uid, organization: org,
+    status: pick(["Draft", "Paid"], i), notes: `Purchase ${i + 1}`, user: uid, organization: org,
   }));
   add("Purchase", await Purchase.insertMany(purData));
 

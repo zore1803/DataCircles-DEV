@@ -13,10 +13,16 @@ import {
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import API from "../../services/api";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import toast from "react-hot-toast";
+import ReactQuill from "react-quill-new";
 
 import SearchIcon from "../common/SearchIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
+// The product's description is rich text ("<p>...</p>" etc, same as
+// PurchaseForm.jsx/InvoiceForm.jsx's own stripHtml) — strip the markup
+// before it lands in the plain <input> below, which was showing raw tags.
+const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
 const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,15 +50,15 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
           e.stopPropagation();
           setIsOpen(!isOpen);
         }}
-        className={`w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+        className={`w-full flex items-center justify-between px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
       >
-        <div className="flex items-center gap-2">
-          <div className={`p-1 rounded-md ${selectedOption.className} border-none`}>
-            {selectedOption.icon && <selectedOption.icon className="w-3.5 h-3.5" />}
+        <div className="flex items-center gap-1.5">
+          <div className={`p-1 rounded-full ${selectedOption.className} border-none`}>
+            {selectedOption.icon && <selectedOption.icon className="w-3 h-3" />}
           </div>
-          <span className="font-medium text-gray-700 capitalize">{selectedOption.label}</span>
+          <span className="font-medium text-[#1F2937] capitalize">{selectedOption.label}</span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -116,13 +122,16 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               _id: item._id,
               variantId: variant._id,
               name: `${item.name} – ${variant.name}`,
-              description: item.description || "",
+              description: stripHtml(item.description),
               unitPrice:
                 variant.purchasePrice ||
                 item.purchasePrice ||
                 item.sellingPrice,
               type: item.type,
               sku: variant.sku,
+              stock: variant.stock ?? item.inventory?.currentStock ?? 0,
+              gstRate: variant.gstRate ?? item.gstRate ?? 0,
+              taxInclusive: variant.taxInclusive ?? item.taxInclusive ?? false,
             }));
           }
           return [
@@ -130,10 +139,13 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
               _id: item._id,
               variantId: null,
               name: item.name,
-              description: item.description || "",
+              description: stripHtml(item.description),
               unitPrice: item.purchasePrice || item.sellingPrice,
               type: item.type,
               sku: null,
+              stock: item.inventory?.currentStock ?? 0,
+              gstRate: item.gstRate || 0,
+              taxInclusive: item.taxInclusive || false,
             },
           ];
         });
@@ -164,10 +176,12 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
       _id: item._id,
       variantId: item.variantId,
       name: item.name,
-      description: item.description || "",
+      description: stripHtml(item.description),
       unitPrice: item.unitPrice,
       quantity: 1,
       sku: item.sku,
+      gstRate: item.gstRate || 0,
+      taxInclusive: item.taxInclusive || false,
     });
     setIsOpen(false);
     setSearchTerm("");
@@ -175,7 +189,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
 
   const getBorderColor = () => {
     if (error) return "border-red-300 focus:ring-red-500";
-    return "border-gray-200 focus:ring-blue-500";
+    return "border-[#1F2937]/10 focus:ring-blue-500";
   };
 
   const displayValue = value?.name || searchTerm;
@@ -191,7 +205,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
           value={searchTerm} // Use searchTerm to allow typing
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className={`w-full pl-10 pr-4 py-2.5 bg-white border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all ${getBorderColor()}`}
+          className={`w-full pl-9 pr-4 h-8 bg-white border rounded-full text-[12px] focus:outline-none focus:ring-1 transition-all ${getBorderColor()}`}
         />
       </div>
       {isOpen && (
@@ -216,6 +230,11 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
                     {item.sku && (
                       <div className="text-xs text-gray-500">
                         SKU: {item.sku}
+                      </div>
+                    )}
+                    {item.type === "product" && (
+                      <div className="text-xs font-medium text-slate-600 mt-0.5">
+                        Stock: {item.stock ?? 0}
                       </div>
                     )}
                   </div>
@@ -269,6 +288,7 @@ const PurchaseOrderForm = ({
   const [paymentTerms, setPaymentTerms] = useState("Net 30");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("Approved");
+  const [transactionType, setTransactionType] = useState("intra");
 
   const [localVendors, setLocalVendors] = useState(vendors || []);
   const [showQuickVendorForm, setShowQuickVendorForm] = useState(false);
@@ -282,7 +302,7 @@ const PurchaseOrderForm = ({
           _id: item.itemId || null,
           variantId: item.variantId || null,
           name: item.name,
-          description: item.description || "",
+          description: stripHtml(item.description),
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           sku: item.sku || null,
@@ -325,12 +345,30 @@ const PurchaseOrderForm = ({
     setItems(newItems);
   };
 
-  const totalAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
-    0,
-  );
+  const subtotal = items.reduce((sum, item) => {
+    let itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    if (item.taxInclusive) {
+      itemTotal = itemTotal / (1 + (parseFloat(item.gstRate) || 0) / 100);
+    }
+    return sum + itemTotal;
+  }, 0);
+
+  // Calculate tax
+  const totalTax = items.reduce((sum, item) => {
+    const itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    const rate = parseFloat(item.gstRate) || 0;
+    
+    if (rate <= 0) return sum;
+    
+    if (item.taxInclusive) {
+      const base = itemTotal / (1 + rate / 100);
+      return sum + (itemTotal - base);
+    } else {
+      return sum + (itemTotal * (rate / 100));
+    }
+  }, 0);
+
+  const grandTotal = subtotal + totalTax;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -361,6 +399,8 @@ const PurchaseOrderForm = ({
         amount:
           (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0),
         sku: item.sku,
+        gstRate: parseFloat(item.gstRate) || 0,
+        taxInclusive: item.taxInclusive || false,
       })),
       paymentTerms,
       notes,
@@ -415,55 +455,78 @@ const PurchaseOrderForm = ({
   });
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 transition-opacity duration-300"
-      style={{ opacity: isOpen ? 1 : 0 }}
-      onClick={handleClose}
-    >
+    <>
+      {/* Backdrop */}
       <div
-        className="bg-white w-full max-w-4xl rounded-xl shadow-2xl max-h-[95vh] flex flex-col transition-transform duration-300 transform"
-        style={{ transform: isOpen ? "scale(100%)" : "scale(95%)" }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+        style={{ opacity: isOpen ? 1 : 0 }}
+        onClick={handleClose}
+      />
+
+      {/* Same dc-panel-card/dc-panel-w shell as CompanyForm/DealForm/ItemForm
+          etc. — width now matches the rest of the app's quick-drawers
+          instead of a wider one-off 600px. */}
+      <div
+        className={`
+          fixed dc-panel-card dc-panel-w z-[10001]
+          bg-white shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+        `}
       >
         {/* Header */}
-        <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {editingPO ? "Edit Purchase Order" : "Create New Purchase Order"}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {dateStr} at {timeStr}
-            </p>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+            {editingPO ? "EDIT PURCHASE ORDER" : "CREATE NEW PURCHASE ORDER"}
+          </h2>
+          <div className="flex items-center gap-4">
+            {editingPO && (
+              <>
+                <button type="button" className="text-[#0085FF] hover:text-blue-600 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                </button>
+                <button type="button" className="text-red-500 hover:text-red-600 transition-colors">
+                  <Trash2 className="w-[18px] h-[18px]" />
+                </button>
+                <div className="w-px h-4 bg-gray-300"></div>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-1 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
+        {/* Content — single column throughout, tightened spacing to suit
+            the narrower card. */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
           {/* Vendor Section */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Select Vendor <span className="text-red-500">*</span>
             </label>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <SearchableDropdown
                 options={localVendors}
                 value={vendorId}
                 onChange={setVendorId}
-                placeholder="Select Vendor"
+                placeholder="Choose Vendor"
                 displayKey="name"
                 valueKey="_id"
                 className="flex-1 w-full"
                 required={true}
               />
+              {/* Matched to the dropdown's own h-12 / rounded-[25px] pill
+                  shape — was a mismatched rounded-lg square before. */}
               <button
+                type="button"
                 onClick={() => setShowQuickVendorForm(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg transition-colors"
+                className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors flex-shrink-0"
+                aria-label="Add new vendor"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -472,62 +535,68 @@ const PurchaseOrderForm = ({
 
           {/* Items Section */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Add Items
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">Items</h3>
+              <button
+                type="button"
+                onClick={addItem}
+                className="flex items-center gap-1 text-[#0085FF] hover:text-blue-700 font-medium text-xs transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Another Item
+              </button>
+            </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="bg-gray-50/50 rounded-xl border border-gray-200 p-5 relative group"
+                  className="bg-white rounded-xl border border-gray-200 p-4 relative group space-y-3"
                 >
                   {/* Remove Button for Item */}
                   {items.length > 1 && (
                     <button
                       onClick={() => removeItem(index)}
-                      className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    {/* Item Search */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Select Item <span className="text-red-500">*</span>
-                      </label>
-                      <ItemSearchSelect
-                        value={item}
-                        onSelect={(data) => {
-                          const newItems = [...items];
-                          newItems[index] = { ...newItems[index], ...data };
-                          setItems(newItems);
-                        }}
-                      />
-                    </div>
-                    {/* Description */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Description <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Add Item Description"
-                        value={item.description}
-                        onChange={(e) =>
-                          updateItem(index, "description", e.target.value)
-                        }
-                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  {/* Item Search */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
+                      Item <span className="text-red-500">*</span>
+                    </label>
+                    <ItemSearchSelect
+                      value={item}
+                      onSelect={(data) => {
+                        const newItems = [...items];
+                        newItems[index] = { ...newItems[index], ...data };
+                        setItems(newItems);
+                      }}
+                    />
+                  </div>
+                  {/* Description */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Add Item Description"
+                      value={item.description}
+                      onChange={(e) =>
+                        updateItem(index, "description", e.target.value)
+                      }
+                      className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-3 gap-3">
                     {/* Quantity */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                         Quantity
                       </label>
                       <div className="relative">
@@ -537,17 +606,17 @@ const PurchaseOrderForm = ({
                           onChange={(e) =>
                             updateItem(index, "quantity", e.target.value)
                           }
-                          className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                           placeholder="01"
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                           <ListFilter className="w-4 h-4" />
                         </div>
                       </div>
                     </div>
                     {/* Unit Price */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
                         Unit Price <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
@@ -557,98 +626,135 @@ const PurchaseOrderForm = ({
                           onChange={(e) =>
                             updateItem(index, "unitPrice", e.target.value)
                           }
-                          className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full pl-7 pr-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                           placeholder="0"
                         />
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
                           ₹
                         </span>
                       </div>
                     </div>
-                    {/* Amount */}
+                    {/* GST % */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Amount
+                      <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
+                        GST %
                       </label>
-                      <div className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-800">
-                        ₹
-                        {(
-                          (parseFloat(item.quantity) || 0) *
-                          (parseFloat(item.unitPrice) || 0)
-                        ).toFixed(2)}
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={item.gstRate ?? ""}
+                          onChange={(e) =>
+                            updateItem(index, "gstRate", e.target.value)
+                          }
+                          className="w-full pl-3 pr-7 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-[12px]">
+                          %
+                        </span>
                       </div>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.taxInclusive || false}
+                          onChange={(e) =>
+                            updateItem(index, "taxInclusive", e.target.checked)
+                          }
+                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                          Tax Inc.
+                        </span>
+                      </label>
                     </div>
                   </div>
+
+                  {/* Amount — read-only. Always quantity × unitPrice; edit Unit Price to
+                      change it. */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#161618] tracking-[-0.05em] mb-1.5">
+                      Amount
+                    </label>
+                    <div className="w-full px-3 h-8 flex items-center bg-gray-100 border border-[#1F2937]/10 rounded-full text-[12px] font-semibold text-gray-800">
+                      ₹
+                      {formatNumberFixed(
+                        (parseFloat(item.quantity) || 0) *
+                        (parseFloat(item.unitPrice) || 0)
+                      )}
+                    </div>
+                  </div>
+
+
                 </div>
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={addItem}
-              className="mt-4 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Another Item
-            </button>
           </div>
 
           {/* Terms and Notes */}
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Payment Terms <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={paymentTerms}
                 onChange={(e) => setPaymentTerms(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 h-8 bg-white border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Additional Notes <span className="text-red-500">*</span>
+              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Notes
               </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add Additional Notes"
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] resize-none"
-              />
+              <div className="border border-[#1F2937]/10 rounded-xl bg-white">
+                <ReactQuill
+                  theme="snow"
+                  value={notes}
+                  onChange={setNotes}
+                  placeholder="Additional Notes"
+                  className="[&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                />
+              </div>
             </div>
           </div>
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Status
             </label>
             <SingleSelectDropdown
               options={statusOptions}
               value={status}
               onChange={setStatus}
+              disabled={editingPO?.status === "Delivered"}
             />
+            {editingPO?.status === "Delivered" && (
+              <p className="mt-1.5 text-[11px] text-gray-400">
+                A Delivered Purchase Order can't be changed to another status.
+              </p>
+            )}
           </div>
 
           {/* Total Amount Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-6 py-4 flex justify-between items-center">
-            <span className="text-blue-800 font-medium text-sm">
+          <div className="bg-blue-50 rounded-full px-5 py-2.5 flex justify-between items-center">
+            <span className="text-gray-900 font-medium text-sm">
               Total Amount
             </span>
-            <span className="text-blue-700 font-bold text-xl">
-              ₹{totalAmount.toFixed(2)}
+            <span className="text-[#0085FF] font-medium text-base">
+              ₹{formatNumberFixed(grandTotal)}
             </span>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-8 py-5 border-t border-gray-100 flex justify-between gap-4 bg-gray-50 rounded-b-xl">
+        {/* Footer — matches the CompanyForm/ItemForm quick-drawer footer spec */}
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2.5 border border-gray-200 bg-white text-gray-700 font-medium rounded-lg hover:bg-gray-50 text-sm transition-colors shadow-sm"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -656,7 +762,7 @@ const PurchaseOrderForm = ({
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 text-sm transition-colors shadow-sm disabled:opacity-70"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading
               ? "Creating..."
@@ -677,7 +783,7 @@ const PurchaseOrderForm = ({
           onRequestClose={() => setShowQuickVendorForm(false)}
         />
       )}
-    </div>
+    </>
   );
 };
 

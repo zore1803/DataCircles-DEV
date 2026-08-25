@@ -1,20 +1,74 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
+import { getAncestorZoom } from "../../utils/domUtils";
 
 const CustomDropdown = ({ options, value, onChange, placeholder, className = "", buttonClassName = "", renderValue, dropdownIcon, searchable = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
+    const [menuPos, setMenuPos] = useState(null);
     const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const menuRef = useRef(null);
     const searchRef = useRef(null);
 
+    // The option list is portaled to document.body (see below) instead of
+    // rendered as a plain absolutely-positioned child — this dropdown is used
+    // inside scrollable drawers/modals (QuickItemDrawer, QuickCompanyForm,
+    // etc.), and an in-place `absolute` menu was getting clipped by the
+    // container's `overflow-y-auto` instead of floating above everything.
+    const positionMenu = () => {
+        const btn = buttonRef.current;
+        if (!btn) return;
+        const zoom = getAncestorZoom(document.body);
+        const rect = btn.getBoundingClientRect();
+        const viewportH = window.innerHeight / zoom;
+        const viewportW = window.innerWidth / zoom;
+        const MAX_MENU_H = 240; // matches max-h-60
+        const MARGIN = 8;
+
+        const top = rect.bottom / zoom;
+        const spaceBelow = viewportH - top;
+        const openUp = spaceBelow < Math.min(MAX_MENU_H, 160) && rect.top / zoom > spaceBelow;
+
+        setMenuPos({
+            top: openUp ? undefined : top,
+            bottom: openUp ? viewportH - rect.top / zoom : undefined,
+            left: Math.min(rect.left / zoom, viewportW - rect.width / zoom - MARGIN),
+            width: rect.width / zoom,
+            maxHeight: Math.max(120, (openUp ? rect.top / zoom : spaceBelow) - MARGIN),
+        });
+    };
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        positionMenu();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
     useEffect(() => {
+        if (!isOpen) return;
         const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            if (
+                dropdownRef.current && !dropdownRef.current.contains(event.target) &&
+                menuRef.current && !menuRef.current.contains(event.target)
+            ) {
                 setIsOpen(false);
             }
         };
+        // Scroll on ANY ancestor (capture phase catches non-bubbling scroll
+        // events from nested scrollable containers, not just window) closes
+        // the menu rather than trying to keep a fixed-position portal glued
+        // to a moving trigger.
+        const handleScroll = () => setIsOpen(false);
         document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+        window.addEventListener("scroll", handleScroll, true);
+        window.addEventListener("resize", handleScroll);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            window.removeEventListener("scroll", handleScroll, true);
+            window.removeEventListener("resize", handleScroll);
+        };
+    }, [isOpen]);
 
     // Reset the filter when the menu closes; focus the search box when it opens.
     useEffect(() => {
@@ -38,6 +92,7 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
     return (
         <div className={`relative ${className}`} ref={dropdownRef}>
             <button
+                ref={buttonRef}
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className={buttonClassName || `w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-left flex items-center justify-between transition-all bg-white font-inter ${isOpen ? "ring-1 ring-blue-500 border-blue-500" : ""
@@ -56,8 +111,26 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
                 )}
             </button>
 
-            {isOpen && (
-                <div className="absolute z-[10010] mt-2 w-full bg-white border border-[#E0E0E1] rounded-xl shadow-xl max-h-60 overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            {isOpen && menuPos && createPortal(
+                <div
+                    ref={menuRef}
+                    style={{
+                        position: "fixed",
+                        top: menuPos.top,
+                        bottom: menuPos.bottom,
+                        left: menuPos.left,
+                        width: menuPos.width,
+                        maxHeight: menuPos.maxHeight,
+                        // Higher than every modal/drawer z-index in this app
+                        // (the highest observed is z-[100051] in Accounting.jsx)
+                        // since this is a shared component mounted inside
+                        // drawers like QuickItemDrawer (z-[100005]) — the
+                        // previous z-[10010] rendered the menu correctly but
+                        // behind the drawer panel, invisible.
+                        zIndex: 100060,
+                    }}
+                    className="bg-white border border-[#E0E0E1] rounded-xl shadow-xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200"
+                >
                     {searchable && (
                         <div className="p-2 border-b border-[#F0F0F0] flex-shrink-0">
                             <input
@@ -93,7 +166,8 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
                             })
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

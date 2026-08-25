@@ -102,6 +102,13 @@ export default function DealsTable({
   toggleStar,
   searchTerm = "",
   scrollContainerRef,
+  // Persisted column choices from the page's "Columns" panel
+  // (useColumnSettings("deals", ...) in Deals.jsx). Unioned with this
+  // table's own per-session "Hide Column" quick action below, so both
+  // routes to hiding a column work; order only falls back to this when the
+  // user hasn't dragged columns around in this session yet.
+  externalHiddenColumns = [],
+  externalColumnOrder = [],
 }) {
   const [columnSizing, setColumnSizing] = useState({});
 
@@ -644,15 +651,20 @@ export default function DealsTable({
 
     ];
 
-    const visibleCols = baseCols.filter((col) => !hiddenColumns.includes(col.id) || col.id === "selection");
+    const visibleCols = baseCols.filter(
+      (col) =>
+        col.id === "selection" ||
+        (!hiddenColumns.includes(col.id) && !externalHiddenColumns.includes(col.id))
+    );
 
     // Reorder: left-pinned first (after selection), then unpinned, then right-pinned.
     const selectionCol = visibleCols.find((c) => c.id === "selection");
     let middle = visibleCols.filter((c) => c.id !== "selection");
-    if (columnOrder.length) {
+    const effectiveOrder = columnOrder.length ? columnOrder : externalColumnOrder;
+    if (effectiveOrder.length) {
       const rank = (id) => {
-        const idx = columnOrder.indexOf(id);
-        return idx === -1 ? columnOrder.length + middle.findIndex((c) => c.id === id) : idx;
+        const idx = effectiveOrder.indexOf(id);
+        return idx === -1 ? effectiveOrder.length + middle.findIndex((c) => c.id === id) : idx;
       };
       middle = [...middle].sort((a, b) => rank(a.id) - rank(b.id));
     }
@@ -848,6 +860,8 @@ export default function DealsTable({
     pinnedColumns,
     hiddenColumns,
     columnOrder,
+    externalHiddenColumns,
+    externalColumnOrder,
     searchTerm,
     openColMenuKey,
     colMenuPos,

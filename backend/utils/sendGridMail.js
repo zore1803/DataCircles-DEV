@@ -7,7 +7,8 @@ async function sendGridMail({
   subject, 
   text, 
   html, 
-  from, 
+  from,
+  replyTo,
   cc, 
   bcc, 
   attachments,
@@ -18,19 +19,27 @@ async function sendGridMail({
     // Prepare base email message
     const msg = {
       to,
-      from: {
-        email: "yash.mishra@datacircles.in",
-        name: "DataCircles"
+      from: from || {
+        email: process.env.SENDGRID_FROM_EMAIL || "noreply@datacircles.in",
+        name: process.env.SENDGRID_FROM_NAME || "DataCircles",
       },
       subject,
       text,
       html,
     };
 
+    if (replyTo) msg.replyTo = replyTo;
     // Add optional fields if provided
     if (cc) msg.cc = cc;
     if (bcc) msg.bcc = bcc;
-    if (attachments) msg.attachments = attachments;
+    if (attachments) {
+      msg.attachments = attachments.map((attachment) => ({
+        ...attachment,
+        content: Buffer.isBuffer(attachment.content) || ArrayBuffer.isView(attachment.content)
+          ? Buffer.from(attachment.content).toString("base64")
+          : attachment.content,
+      }));
+    }
     
     // Handle dynamic templates
     if (templateId) {
@@ -44,7 +53,6 @@ async function sendGridMail({
     }
 
     // Send email via SendGrid
-    console.log("Sending email with:", msg);
     const response = await sgMail.send(msg);
     
     console.log('SendGrid email sent successfully:', response[0].statusCode);

@@ -10,6 +10,10 @@ const SearchableDropdown = ({
   required = false,
   error = null,
   className = "",
+  // Opt-in smaller variant (12px text, 32px pill) for forms that use the
+  // compact field system — off by default so every other caller of this
+  // shared component keeps its existing 14px/48px look.
+  compact = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,16 +54,16 @@ const SearchableDropdown = ({
   // Determine the border color based on validation state
   const getBorderColor = () => {
     if (error) return 'border-red-300 ring-1 ring-red-500';
-    return isOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-[#E0E0E1]';
+    return isOpen ? 'border-blue-500 ring-1 ring-blue-500' : (compact ? 'border-[#1F2937]/10' : 'border-[#E0E0E1]');
   };
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full border rounded-[25px] px-4 h-12 transition-all cursor-pointer bg-white flex items-center justify-between font-inter ${getBorderColor()}`}
+        className={`w-full border transition-all cursor-pointer bg-white flex items-center justify-between font-inter ${compact ? "rounded-full px-3 h-8" : "rounded-[25px] px-4 h-12"} ${getBorderColor()}`}
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className={`text-[14px] truncate ${selectedOption ? "text-gray-900 font-medium" : "text-[#A0A0A0]"}`}>
+        <span className={`truncate ${compact ? "text-[12px]" : "text-[14px]"} ${selectedOption ? (compact ? "text-[#1F2937]" : "text-gray-900 font-medium") : (compact ? "text-[#1F2937] opacity-50" : "text-[#A0A0A0]")}`}>
           {selectedOption ? selectedOption[displayKey] : placeholder}
         </span>
         <div className="flex items-center gap-2">

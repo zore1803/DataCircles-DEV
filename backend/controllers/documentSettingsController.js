@@ -1,10 +1,35 @@
 const DocumentSettings = require('../models/DocumentSettings');
-const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization } = require('../utils/documentNumbering');
+const Branding = require('../models/Branding');
+const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization, seedTemplateLibrariesFromLegacy, getNextNumberPreviews } = require('../utils/documentNumbering');
 
 exports.getDocumentSettings = async (req, res) => {
   try {
-    const settings = await DocumentSettings.findOne({ organization: req.user.organization }).lean();
-    res.json(normalizeInvoiceNumberSettings(settings || {}));
+    let settings = await DocumentSettings.findOne({ organization: req.user.organization }).lean();
+
+    // First read after the template-library feature shipped: carry the org's
+    // old single-slot templates forward as a named "Default" entry so nothing
+    // they'd already customized disappears.
+    if (settings) {
+      const { changed, fields } = seedTemplateLibrariesFromLegacy(settings);
+      if (changed) {
+        await DocumentSettings.updateOne({ _id: settings._id }, { $set: fields });
+        settings = { ...settings, ...fields };
+      }
+    }
+
+    const normalized = normalizeInvoiceNumberSettings(settings || {});
+    // Live, non-mutating peek at what the next number for each document type
+    // will actually be (backed by the same persistent counter used at create
+    // time) — the create screens use this to show the real upcoming number
+    // instead of a static placeholder, and it stays in sync between the
+    // split and full-width views since both read it from here.
+    normalized.nextNumbers = await getNextNumberPreviews(req.user.organization);
+
+    // Attach company branding name for PDF filename generation on the frontend
+    const branding = await Branding.findOne({ organization: req.user.organization }).lean();
+    normalized.companyName = branding?.companyName || '';
+
+    res.json(normalized);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -12,7 +37,7 @@ exports.getDocumentSettings = async (req, res) => {
 
 exports.updateDocumentSettings = async (req, res) => {
   try {
-    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType } = req.body || {};
+    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType, defaultDueDateDays, whatsappTemplate, whatsappLine1, whatsappLine2, smsTemplate, emailSubjectTemplate, emailBodyTemplate, whatsappTemplates, smsTemplates, emailTemplates, pdfFilenameFormats } = req.body || {};
     const saved = await saveDocumentSettingsForOrganization(req.user.organization, {
       invoicePrefix,
       invoiceSuffix,
@@ -24,6 +49,17 @@ exports.updateDocumentSettings = async (req, res) => {
       defaultTerms,
       defaultNotesByType,
       defaultTermsByType,
+      defaultDueDateDays,
+      whatsappTemplate,
+      whatsappLine1,
+      whatsappLine2,
+      smsTemplate,
+      emailSubjectTemplate,
+      emailBodyTemplate,
+      whatsappTemplates,
+      smsTemplates,
+      emailTemplates,
+      pdfFilenameFormats,
     });
 
     res.json({

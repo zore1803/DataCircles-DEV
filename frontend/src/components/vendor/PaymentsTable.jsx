@@ -13,7 +13,6 @@ import {
   Download,
   X,
   Filter,
-  EyeOff,
   RefreshCw,
   User,
   CreditCard,
@@ -22,10 +21,12 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import VendorForm from "../vendor/VendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
 import DataTable from "../common/DataTable";
+import RowActionsMenu from "../common/RowActionsMenu";
 import BulkActionBar from "../common/BulkActionBar";
 import TablePaginationFooter from "../common/TablePaginationFooter";
 import CompanyFilterPanel from "../company/CompanyFilterPanel";
@@ -48,7 +49,14 @@ const PAYMENT_FILTER_COLUMNS = [
 
 const getPaymentFieldValue = (payment, key) => payment[key];
 
-const PaymentsTable = ({ payments, vendor }) => {
+// showKPIs is now controlled by the parent page's own Financial Summary
+// strip toggle (VendorDetailsPageNew.jsx's ⋮ menu "Hide/Show Financial
+// Summary", wired to its showKPI state) instead of an independent button
+// here — one toggle for both the page-level strip and this section's own
+// KPI row, instead of two that could disagree. Defaults true for any
+// caller that doesn't pass it (e.g. the older VendorDetailsPage.jsx, which
+// has no such toggle to wire up and previously always showed this row).
+const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = false, onAutoOpenCreateConsumed }) => {
   const { id } = useParams();
   const [localPayments, setLocalPayments] = useState(payments || []);
   const [showForm, setShowForm] = useState(false);
@@ -63,10 +71,6 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [receiptPayment, setReceiptPayment] = useState(null);
   const [vendorFields, setVendorFields] = useState([]);
   const [additionalFieldValues, setAdditionalFieldValues] = useState({});
-  // Hidden by default: the page-level Financial Summary strip above the tab bar
-  // already shows this vendor's money position, so these in-tab tiles would be
-  // a duplicate on first paint. The eye toggle in the toolbar reveals them.
-  const [showKPIs, setShowKPIs] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -74,8 +78,19 @@ const PaymentsTable = ({ payments, vendor }) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [columnOrder, setColumnOrder] = useState(() => [
-    "selection", "reference_id", "paymentDate", "direction", "paymentType", "bank", "reference", "amount", "actions"
+    "selection", "reference_id", "paymentDate", "direction", "paymentType", "bank", "reference", "amount"
   ]);
+
+  // "New Entry" menu on the vendor header (VendorDetailsPageNew.jsx) sets
+  // autoOpenCreate + switches to this tab in the same click — same
+  // pendingCreate pattern CompanyProfilePage.jsx uses for its tabs.
+  useEffect(() => {
+    if (autoOpenCreate) {
+      handleOpenForm("IN");
+      onAutoOpenCreateConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenCreate, onAutoOpenCreateConsumed]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -232,14 +247,19 @@ const PaymentsTable = ({ payments, vendor }) => {
     exportToCSV([headers, ...rows], `payments_export_${new Date().toISOString().split("T")[0]}.csv`);
   };
 
+  // Confirmation is a styled modal (see showBulkDeleteModal below), matching
+  // CompanyContactsTab.jsx's bulk-delete flow, instead of the browser's
+  // window.confirm this used previously.
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
   const handleBulkDelete = async () => {
     if (!selectedItems.length) return;
-    if (!window.confirm(`Delete ${selectedItems.length} payment(s)? This cannot be undone.`)) return;
     setIsDeleting(true);
     try {
       await Promise.all(selectedItems.map((pid) => API.delete(`/vendors/${id}/payments/${pid}`)));
       setLocalPayments((prev) => prev.filter((p) => !selectedItems.includes(p._id)));
       clearSelection();
+      setShowBulkDeleteModal(false);
       toast.success("Payments deleted!");
     } catch (err) {
       console.error("Bulk delete failed:", err);
@@ -291,8 +311,8 @@ const PaymentsTable = ({ payments, vendor }) => {
       `${new Date(payment.paymentDate).toLocaleDateString()} ${new Date(payment.paymentDate).toLocaleTimeString()}`,
       payment.direction === "OUT" ? "Payment Out" : "Payment In",
       payment.paymentType || "UPI",
-      `₹${payment.amount.toFixed(2)}`,
-      `₹${payment.amount.toFixed(2)}`,
+      `₹${formatNumberFixed(payment.amount)}`,
+      `₹${formatNumberFixed(payment.amount)}`,
     ]);
 
     const tableHeaders = ["ID", "Date / Time", "Status", "Mode", "Amount", "Balance"];
@@ -389,6 +409,38 @@ const PaymentsTable = ({ payments, vendor }) => {
   };
 
   const netBalance = stats.totalAmountIn - stats.totalAmountOut;
+
+  // Period-over-period trend. Split the actual filtered payments in half by
+  // date (older half = "previous", newer half = "current") instead of a
+  // fixed last-30-vs-prior-30-calendar-days window — a fixed wall-clock
+  // window meant an edit to any payment dated outside it silently couldn't
+  // move the percentage at all, which looked hardcoded/stuck even though it
+  // wasn't. A data-relative split always includes every payment, in one
+  // half or the other, so any add/edit/delete visibly recomputes this.
+  const trendStats = useMemo(() => {
+    const sorted = [...filteredPayments].sort(
+      (a, b) => new Date(a.paymentDate) - new Date(b.paymentDate),
+    );
+    const mid = Math.ceil(sorted.length / 2);
+    const prevRows = sorted.slice(0, mid);
+    const currentRows = sorted.slice(mid);
+    const sumIn = (rows) => rows.filter((p) => p.direction === "IN").reduce((s, p) => s + p.amount, 0);
+    const sumOut = (rows) => rows.filter((p) => p.direction === "OUT").reduce((s, p) => s + p.amount, 0);
+    const pctChange = (curr, prev) => {
+      if (!prev) return curr > 0 ? { pct: 100, up: true } : null;
+      const pct = ((curr - prev) / prev) * 100;
+      return { pct: Math.abs(Math.round(pct)), up: pct >= 0 };
+    };
+    return {
+      given: pctChange(sumOut(currentRows), sumOut(prevRows)),
+      got: pctChange(sumIn(currentRows), sumIn(prevRows)),
+      balance: pctChange(
+        sumIn(currentRows) - sumOut(currentRows),
+        sumIn(prevRows) - sumOut(prevRows),
+      ),
+      total: pctChange(currentRows.length, prevRows.length),
+    };
+  }, [filteredPayments]);
 
   /* ── Columns ──
      `bank` and `reference` are surfaced here for the first time; they were
@@ -511,62 +563,36 @@ const PaymentsTable = ({ payments, vendor }) => {
         header: "Amount",
         cell: ({ row }) => (
           <span
-            className={`text-sm font-bold ${row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
+            className={`text-sm ${row.original.direction === "OUT" ? "text-red-600" : "text-green-600"
               }`}
           >
-            {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${row.original.amount.toFixed(2)}`} query={search} />
+            {row.original.direction === "OUT" ? "−" : "+"} <HighlightText text={`₹${formatNumberFixed(row.original.amount)}`} query={search} />
           </span>
-        ),
-      },
-      {
-        id: "actions",
-        size: 120,
-        enableResizing: false,
-        header: "Actions",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEditPayment(row.original);
-              }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="Edit"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleQuickDeletePayment(row.original);
-              }}
-              className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleViewReceipt(row.original);
-              }}
-              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-              title="View receipt"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-          </div>
         ),
       },
     ],
     [paginatedPayments, selectedItems, selectAll, clearSelection, toggleItem],
   );
 
+  // No dedicated "Actions" column — a single ⋮ button (RowActionsMenu) that
+  // pops Edit/Delete/View as a small action card renders inside whichever
+  // column currently ends up last (via the wrap below), the same way
+  // CompanyContactsTab.jsx puts its "open contact" icon on the last visible
+  // column instead of pinning a fixed Actions column.
+  const paymentActionButtons = (payment) => (
+    <RowActionsMenu
+      actions={[
+        { label: "Edit", icon: Edit, onClick: () => handleEditPayment(payment) },
+        { label: "View Receipt", icon: Eye, onClick: () => handleViewReceipt(payment) },
+        { label: "Delete", icon: Trash2, danger: true, onClick: () => handleQuickDeletePayment(payment) },
+      ]}
+    />
+  );
+
   const finalColumns = useMemo(() => {
     const visibleBase = baseColumns.filter(c => !hiddenColumns.has(c.id));
     const selectionCol = visibleBase.find(c => c.id === "selection");
-    const actionsCol = visibleBase.find(c => c.id === "actions");
-    const otherCols = visibleBase.filter(c => c.id !== "selection" && c.id !== "actions");
+    const otherCols = visibleBase.filter(c => c.id !== "selection");
 
     const leftPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'left').map(p => p.key));
     const rightPinnedKeys = new Set(pinnedColumns.filter(p => p.side === 'right').map(p => p.key));
@@ -577,20 +603,48 @@ const PaymentsTable = ({ payments, vendor }) => {
 
     midCols.sort((a, b) => columnOrder.indexOf(a.id) - columnOrder.indexOf(b.id));
 
-    return [
+    const ordered = [
       ...(selectionCol ? [selectionCol] : []),
       ...leftCols,
       ...midCols,
       ...rightCols,
-      ...(actionsCol ? [actionsCol] : [])
     ];
+
+    // Action icons live inside whichever column is currently last, instead
+    // of a fixed pinned "Actions" column — wrap a COPY of that column's cell
+    // renderer to append them after its own content. Copying (not mutating
+    // the shared baseColumns object) matters: the "last" column changes as
+    // columns get reordered/hidden, so mutating in place would leave a
+    // stale action-button wrapper on a column that's no longer last.
+    let lastIdx = -1;
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].id !== "selection") {
+        lastIdx = i;
+        break;
+      }
+    }
+    if (lastIdx !== -1) {
+      const original = ordered[lastIdx];
+      const originalCell = original.cell;
+      ordered[lastIdx] = {
+        ...original,
+        cell: (props) => (
+          <div className="flex items-center justify-between gap-2 w-full min-w-0">
+            <div className="min-w-0 flex-1">{originalCell(props)}</div>
+            {paymentActionButtons(props.row.original)}
+          </div>
+        ),
+      };
+    }
+
+    return ordered;
   }, [baseColumns, columnOrder, hiddenColumns, pinnedColumns]);
 
   const visibleColumnsForGhost = useMemo(() => finalColumns.map(c => ({ key: c.id, label: c.header })), [finalColumns]);
   const getGhostPreview = (colId) => {
     return paginatedPayments.slice(0, 10).map((p) => {
       if (colId === "paymentDate") return new Date(p.paymentDate).toLocaleDateString();
-      if (colId === "amount") return `₹${p.amount.toFixed(2)}`;
+      if (colId === "amount") return `₹${formatNumberFixed(p.amount)}`;
       if (colId === "reference_id") return p._id.slice(-4).toUpperCase();
       return String(getPaymentFieldValue(p, colId) ?? "").trim() || "—";
     });
@@ -603,57 +657,54 @@ const PaymentsTable = ({ payments, vendor }) => {
       {/* Action Buttons (Portaled to Tab Header) removed */}
 
 
-      {/* Stats Cards */}
+      {/* Stats Cards — tile markup matches CompanyTasksTab.jsx / CompanyMeetingsTab.jsx's
+          statTiles: h-[72px] card, w-10 h-10 bordered icon box on desktop with a
+          smaller un-boxed icon below lg, stacked label/value, plus a right-aligned
+          subtitle so the tile isn't left with dead space. */}
       {showKPIs && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-gray-600" />
-              <span className="text-xs font-medium text-gray-600">Total Given</span>
-            </div>
-            <p className="text-xl font-bold text-gray-900">
-              ₹{stats.totalAmountOut.toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">Paid to vendor</p>
-          </div>
-
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingDown className="w-4 h-4 text-gray-600" />
-              <span className="text-xs font-medium text-gray-600">Total Got</span>
-            </div>
-            <p className="text-xl font-bold text-gray-900">
-              ₹{stats.totalAmountIn.toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">Received from vendor</p>
-          </div>
-
-          <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="w-4 h-4 text-gray-600" />
-              <span className="text-xs font-medium text-gray-600">Balance</span>
-            </div>
-            <p
-              className={`text-xl font-bold ${netBalance >= 0 ? "text-green-600" : "text-red-600"
-                }`}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {[
+            { label: "Total Given", value: `₹${formatNumberFixed(stats.totalAmountOut)}`, icon: TrendingUp, trend: trendStats.given },
+            { label: "Total Got", value: `₹${formatNumberFixed(stats.totalAmountIn)}`, icon: TrendingDown, trend: trendStats.got },
+            {
+              label: "Net Balance",
+              value: `₹${formatNumberFixed(Math.abs(netBalance))}`,
+              icon: AlertCircle,
+              valueClass: netBalance >= 0 ? "text-green-600" : "text-red-600",
+              trend: trendStats.balance,
+            },
+            { label: "Total", value: filteredPayments.length, icon: Clock, trend: trendStats.total },
+          ].map((tile) => (
+            <div
+              key={tile.label}
+              className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
             >
-              ₹{Math.abs(netBalance).toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              {netBalance >= 0 ? "You'll receive" : "You owe"}
-            </p>
-          </div>
-
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-gray-600" />
-              <span className="text-xs font-medium text-gray-600">Total</span>
+              <div className="flex lg:hidden flex-shrink-0 text-blue-600">
+                <tile.icon size={18} />
+              </div>
+              <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
+                <tile.icon size={20} />
+              </div>
+              <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
+                    {tile.label}
+                  </p>
+                  <p className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClass || "text-gray-900"}`}>
+                    {tile.value}
+                  </p>
+                </div>
+                {tile.trend && (
+                  <span
+                    className={`hidden sm:inline-flex items-center gap-1 text-[11px] flex-shrink-0 whitespace-nowrap ${tile.trend.up ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {tile.trend.up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                    {tile.trend.up ? "Increased" : "Decreased"} by {tile.trend.pct}%
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-xl font-bold text-gray-900">
-              {filteredPayments.length}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">All transactions</p>
-          </div>
+          ))}
         </div>
       )}
 
@@ -668,11 +719,11 @@ const PaymentsTable = ({ payments, vendor }) => {
           onDeselectAll={clearSelection}
           onExport={handleExportSelected}
           onCancel={clearSelection}
-          onDelete={handleBulkDelete}
+          onDelete={() => setShowBulkDeleteModal(true)}
           isDeleting={isDeleting}
         />
       ) : (
-        <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
+        <div className="flex items-center gap-4 mb-3" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
             <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
             <input
@@ -702,6 +753,16 @@ const PaymentsTable = ({ payments, vendor }) => {
             )}
           </button>
           <button
+            onClick={handleViewPDF}
+            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
+            title="Download PDF"
+          >
+            <Download size={18} />
+          </button>
+          {/* Got/Gave moved to the far right of the row — the eye button
+              that used to sit here (toggling the below-fold showKPIs block,
+              which defaults to hidden anyway) has been removed outright. */}
+          <button
             onClick={() => handleOpenForm("IN")}
             className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-800 transition-colors flex-shrink-0 shadow-sm"
           >
@@ -714,27 +775,6 @@ const PaymentsTable = ({ payments, vendor }) => {
           >
             <ArrowUpCircle size={18} />
             <span>Gave</span>
-          </button>
-          <button
-            onClick={handleViewPDF}
-            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
-            title="Download PDF"
-          >
-            <Download size={18} />
-          </button>
-          <button
-            onClick={handleEditClick}
-            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
-            title="Edit Vendor"
-          >
-            <Edit size={18} />
-          </button>
-          <button
-            onClick={() => setShowKPIs(!showKPIs)}
-            className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
-            title={showKPIs ? "Hide KPIs" : "Show KPIs"}
-          >
-            {showKPIs ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
       )}
@@ -755,7 +795,7 @@ const PaymentsTable = ({ payments, vendor }) => {
           visibleColumns={visibleColumnsForGhost}
           getGhostPreview={getGhostPreview}
           variant="card"
-          maxHeight={290}
+          maxHeight={400}
           rowClassName={(p) => (selectedItems.includes(p._id) ? "!bg-blue-50" : "")}
           loadingContent={
             <div className="space-y-0">
@@ -863,6 +903,35 @@ const PaymentsTable = ({ payments, vendor }) => {
           payment={receiptPayment}
           vendor={vendor}
         />
+      )}
+
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10005] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete {selectedItems.length} selected payment{selectedItems.length !== 1 ? "s" : ""}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

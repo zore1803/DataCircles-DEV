@@ -4,6 +4,8 @@ const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const mongoose = require("mongoose");
 const Branding = require("../models/Branding");
 const Deal = require("../models/Deal");
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
+const sendGridMail = require("../utils/sendGridMail");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -30,10 +32,16 @@ const createPerformaInvoice = async (req, res) => {
       notes,
       terms,
       isTaxInvoice,
+      transactionType,
       signature,
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
+      performaInvoicePrefix,
+      performaInvoiceSuffix,
+      performaInvoiceNumber: clientPerformaInvoiceNumber,
     } = req.body;
 
     // Validate required fields
@@ -64,31 +72,48 @@ const createPerformaInvoice = async (req, res) => {
       }
     }
 
-    // ✅ Extract numeric part from PI-XXX format
-    const extractPINumber = (piNumber) => {
-      const match = piNumber?.match(/^PI-(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    // Same client-first, Document-Settings-fallback precedence the other three
+    // document types use: a prefix/number typed into the form wins, otherwise
+    // documentTypeSettings.proformaInvoice supplies it. Previously the client's
+    // prefix and number were ignored entirely, so the form's numbering boxes
+    // were editable but had no effect on the saved document.
+    const finalPIPrefix = (performaInvoicePrefix && performaInvoicePrefix.trim()) || documentSettings.documentTypeSettings?.proformaInvoice?.prefix || "PI-";
+    const finalPISuffix = (performaInvoiceSuffix ?? documentSettings.documentTypeSettings?.proformaInvoice?.suffix ?? "").toString().trim();
+    let performaInvoiceNumber;
+    try {
+      performaInvoiceNumber = await resolveDocumentNumber({
+        Model: PerformaInvoice,
+        numberField: "performaInvoiceNumber",
+        organization: req.user.organization,
+        documentTypeKey: "proformaInvoice",
+        prefix: finalPIPrefix,
+        suffix: finalPISuffix,
+        providedNumber: clientPerformaInvoiceNumber && String(clientPerformaInvoiceNumber).trim() ? clientPerformaInvoiceNumber : null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
 
-    // ✅ Get all proforma invoices and extract the highest PI number
-    const proformaInvoices = await PerformaInvoice.find({
-      organization: req.user.organization,
-      performaInvoiceNumber: { $regex: /^PI-\d+$/ },
-    })
-      .select("performaInvoiceNumber")
-      .session(session);
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
 
-    // ✅ Find the maximum PI number
-    let maxPINumber = 0;
-    proformaInvoices.forEach((pi) => {
-      const piNumber = extractPINumber(pi.performaInvoiceNumber);
-      if (piNumber > maxPINumber) {
-        maxPINumber = piNumber;
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
       }
-    });
-
-    // ✅ Generate new unique proforma invoice number
-    const performaInvoiceNumber = `PI-${maxPINumber + 1}`;
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
 
     const performaInvoice = new PerformaInvoice({
       deal,
@@ -101,10 +126,13 @@ const createPerformaInvoice = async (req, res) => {
       notes: notes || "",
       terms: terms || "",
       isTaxInvoice: isTaxInvoice || false,
+      transactionType: transactionType || 'intra',
       signature,
       signatureType: signatureType || "text",
       discount: discount || { type: "fixed", value: 0 },
-      receiverGSTIN,
+      receiverGSTIN: finalReceiverGSTIN,
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       performaInvoiceNumber,
       user: req.user.id,
       organization: req.user.organization,
@@ -122,6 +150,92 @@ const createPerformaInvoice = async (req, res) => {
     res
       .status(500)
       .json({ error: `Failed to create proformainvoice: ${err.message}` });
+  }
+};
+
+// Duplicate: clones an existing pro forma invoice into a brand-new Draft
+// document with a freshly generated number. Does not touch the source.
+const duplicatePerformaInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await PerformaInvoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Proforma invoice not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalPIPrefix = documentSettings.documentTypeSettings?.proformaInvoice?.prefix || "PI-";
+    const finalPISuffix = (documentSettings.documentTypeSettings?.proformaInvoice?.suffix ?? "").toString().trim();
+
+    let newPerformaInvoiceNumber;
+    try {
+      newPerformaInvoiceNumber = await resolveDocumentNumber({
+        Model: PerformaInvoice,
+        numberField: "performaInvoiceNumber",
+        organization: req.user.organization,
+        documentTypeKey: "proformaInvoice",
+        prefix: finalPIPrefix,
+        suffix: finalPISuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older documents can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new PerformaInvoice({
+      deal: source.deal,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      style: source.style,
+      notes: source.notes,
+      terms: source.terms,
+      isTaxInvoice: source.isTaxInvoice,
+      transactionType: source.transactionType,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      receiverGSTIN: source.receiverGSTIN,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      performaInvoiceNumber: newPerformaInvoiceNumber,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate proformainvoice: ${err.message}` });
   }
 };
 
@@ -277,7 +391,10 @@ const downloadPerformaInvoice = async (req, res) => {
         // The template comes from the document's own `style` when it has one,
     // otherwise from the organization's document settings — resolved inside
     // htmlDocumentPdf, which renders the same markup as the live preview.
-    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa");
+    const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
+      ? req.query.copyType
+      : "original";
+    const pdfBuffer = await htmlDocumentPdf(performaInvoice, bankDetails, OrgDetails, "performa", copyType);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -327,10 +444,13 @@ const updatePerformaInvoice = async (req, res) => {
       notes,
       terms,
       isTaxInvoice,
+      transactionType,
       signature,
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
     } = req.body;
 
     // Validate required fields
@@ -355,6 +475,23 @@ const updatePerformaInvoice = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const performaInvoice = await PerformaInvoice.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -371,10 +508,13 @@ const updatePerformaInvoice = async (req, res) => {
         notes,
         terms,
         isTaxInvoice,
+        transactionType,
         signature,
         signatureType,
         discount,
-        receiverGSTIN, // Added receiverGSTIN
+        receiverGSTIN: finalReceiverGSTIN,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
       },
       { new: true }
     );
@@ -479,8 +619,93 @@ const updatePerformaInvoiceNumber = async (req, res) => {
   }
 };
 
+const sendPerformaInvoiceEmail = async (req, res) => {
+  try {
+    const pi = await PerformaInvoice.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    })
+      .populate({ path: "deal", populate: ["contact", "company"] })
+      .populate("items.itemId");
+
+    if (!pi) {
+      return res.status(404).json({ error: "Proforma invoice not found" });
+    }
+
+    const bankDetails = await getDefaultBankDetails(req.user.organization);
+    const orgDetails = await Branding.findOne({ organization: req.user.organization }).sort({ updatedAt: -1 });
+    const pdfBuffer = await htmlDocumentPdf(pi, bankDetails, orgDetails, "performa");
+
+    const recipient = req.body.email || pi.deal?.email;
+    if (!recipient) {
+      return res.status(400).json({ error: "No recipient email address available" });
+    }
+
+    const subject = req.body.subject || `Proforma Invoice ${pi.performaInvoiceNumber}`;
+    const body = req.body.body || `Dear ${pi.deal?.contactPerson || "Customer"},\n\nPlease find attached your proforma invoice.\n\nBest regards`;
+
+    await sendGridMail({
+      to: recipient,
+      subject,
+      text: body,
+      attachments: [
+        {
+          filename: `ProformaInvoice-${pi.performaInvoiceNumber}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+
+    pi.status = "Sent";
+    await pi.save();
+
+    res.json({ message: "Proforma invoice emailed successfully" });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to send proforma invoice email: ${error.message}` });
+  }
+};
+
+const bulkUpdateStatus = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !ids.length || !status) {
+      return res.status(400).json({ error: "ids and status are required" });
+    }
+    await PerformaInvoice.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { status }
+    );
+    res.json({ message: `Updated ${ids.length} proforma invoices to status: ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const bulkUpdateSignature = async (req, res) => {
+  try {
+    const { ids, signature, signatureType } = req.body;
+    if (!ids || !ids.length) {
+      return res.status(400).json({ error: "ids are required" });
+    }
+    const docs = await PerformaInvoice.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = docs.map(d => d._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    if (validIds.length > 0) {
+      await PerformaInvoice.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    res.json({ message: `Updated signature for ${validIds.length} proforma invoices`, successfulIds: validIds, failedIds });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createPerformaInvoice,
+  duplicatePerformaInvoice,
   getAllPerformaInvoices,
   getAllPerformaInvoicesPaginated,
   getMyPerformaInvoices,
@@ -489,4 +714,7 @@ module.exports = {
   updatePerformaInvoice,
   updateStatus,
   updatePerformaInvoiceNumber,
+  bulkUpdateStatus,
+  bulkUpdateSignature,
+  sendPerformaInvoiceEmail,
 };

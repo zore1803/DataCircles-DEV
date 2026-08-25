@@ -13,16 +13,20 @@ const subscriptionGate = require('../middlewares/subscriptionGate');
 router.post('/invoices/convert-to-proforma/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToProformaInvoice);
 router.post('/invoices/convert-to-quotation/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToQuotation);
 router.post('/invoices/convert-to-delivery-challan/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToDeliveryChallan);
+router.post('/invoices/bulk-convert-to-delivery-challan', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.bulkConvertInvoiceToDeliveryChallan);
 
 // Proforma Invoice conversions
 router.post('/performa-invoices/convert-to-tax/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertToTaxInvoice);
 router.post('/performa-invoices/convert-to-quotation/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertProformaToQuotation);
 router.post('/performa-invoices/convert-to-delivery-challan/:id', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.convertProformaToDeliveryChallan);
+router.post('/performa-invoices/bulk-convert-to-tax', requireAuth, subscriptionGate, restrictByPlan('invoices', 'write'), checkPermission('invoices', 'read-write'), converterController.bulkConvertProformaToTaxInvoice);
 
 // Quotation conversions
 router.post('/quotations/convert-to-tax/:id', requireAuth, subscriptionGate, restrictByPlan('quotations', 'write'), checkPermission('quotations', 'read-write'), converterController.convertQuotationToTaxInvoice);
 router.post('/quotations/convert-to-proforma/:id', requireAuth, subscriptionGate, restrictByPlan('quotations', 'write'), checkPermission('quotations', 'read-write'), converterController.convertQuotationToProforma);
 router.post('/quotations/convert-to-delivery-challan/:id', requireAuth, subscriptionGate, restrictByPlan('quotations', 'write'), checkPermission('quotations', 'read-write'), converterController.convertQuotationToDeliveryChallan);
+router.post('/quotations/bulk-convert-to-tax', requireAuth, subscriptionGate, restrictByPlan('quotations', 'write'), checkPermission('quotations', 'read-write'), converterController.bulkConvertQuotationToTaxInvoice);
+router.post('/quotations/bulk-convert-to-proforma', requireAuth, subscriptionGate, restrictByPlan('quotations', 'write'), checkPermission('quotations', 'read-write'), converterController.bulkConvertQuotationToProforma);
 
 // Delivery Challan conversions
 router.post('/delivery-challans/convert-to-tax/:id', requireAuth, subscriptionGate, restrictByPlan('delivery-challans', 'write'), checkPermission('delivery-challans', 'read-write'), converterController.convertDeliveryChallanToTaxInvoice);

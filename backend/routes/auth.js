@@ -22,6 +22,7 @@ router.get("/google/connect", requireAuth, authController.googleConnect);
 // the signed `state` param set by googleConnect above.
 router.get("/google/callback", authController.googleCallback);
 router.get("/google/status", requireAuth, authController.googleStatus);
+router.delete("/google/disconnect", requireAuth, authController.googleDisconnect);
 
 // Email/password login
 router.post("/login", authController.login);

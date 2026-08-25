@@ -1,5 +1,6 @@
 // components/vendor/PaymentReceiptModal.jsx
 import React from 'react';
+import { formatNumberFixed } from "../../utils/numberFormatter";
 import { X, Download, Printer } from 'lucide-react';
 
 const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
@@ -21,6 +22,11 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
   };
 
   const getPaymentId = () => {
+    // Invoice/Subscription rows carry their real document number/transaction
+    // reference (set by paymentTimelineController.getPaymentReceipt) — show
+    // that instead of a generated id so it matches the number on the actual
+    // document, same as Payment/Purchase receipts already do implicitly.
+    if (payment.reference) return payment.reference;
     return `${payment.direction === "OUT" ? "PAYOUT" : "PAYIN"}-${payment._id.slice(-6).toUpperCase()}`;
   };
 
@@ -111,7 +117,7 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
               </div>
               <div>
                 <span className="text-sm font-medium text-gray-600 block">Amount:</span>
-                <h6 className="text-2xl font-bold text-gray-900">₹{payment.amount?.toFixed(2)}</h6>
+                <h6 className="text-2xl font-bold text-gray-900">₹{formatNumberFixed(payment.amount)}</h6>
               </div>
               {payment.bank && (
                 <div>
@@ -126,15 +132,24 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
           {payment.notes && (
             <div className="mb-8">
               <span className="text-sm font-medium text-gray-600 block mb-2">Notes:</span>
-              <div className="bg-gray-50 p-4 rounded-lg border">
-                <span className="text-gray-900">{payment.notes}</span>
-              </div>
+              {/* Notes are saved as rich-text HTML by PaymentFormModal's
+                  editor, so they're rendered here rather than shown as raw
+                  text (which would print the markup tags literally). */}
+              <div
+                className="bg-gray-50 p-4 rounded-lg border text-gray-900 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                dangerouslySetInnerHTML={{ __html: payment.notes }}
+              />
             </div>
           )}
 
-          {/* Vendor Details */}
+          {/* Party Details — "vendor" here is whichever counterparty the
+              source document has: an actual Vendor for Payment/Purchase
+              rows, but a Company/Contact for Invoice rows and DataCircles
+              itself for Subscription rows. */}
           <div className="border-t border-gray-200 pt-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Vendor Details:</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {payment.paymentType === "Invoice" ? "Customer Details:" : "Party Details:"}
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="text-sm font-medium text-gray-600 block">Name:</span>

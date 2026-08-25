@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 
 const permissionSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  permission: { type: String, enum: ['readonly', 'read-write'], required: true },
+  permission: { type: String, enum: ['readonly', 'read-write', 'own-only'], required: true },
 }, { _id: false });
 
 const invitedSchema = new mongoose.Schema({

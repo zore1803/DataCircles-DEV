@@ -2,9 +2,10 @@ const Quotation = require("../models/quotation");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
-const nodemailer = require("nodemailer");
+const sendGridMail = require("../utils/sendGridMail");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
+const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -28,14 +29,20 @@ exports.createQuotation = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       isTaxQuotation,
+      transactionType,
       signature,
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
+      quotationPrefix,
+      quotationSuffix,
+      quotationNumber: clientQuotationNumber,
+      reference,
     } = req.body;
 
     // Validate required fields
@@ -66,40 +73,71 @@ exports.createQuotation = async (req, res) => {
       }
     }
 
-    // Generate unique quotation number
-    const extractNumber = (number) => {
-      const match = number?.match(/^QUO-(\d+)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    };
-    const quotations = await Quotation.find({
-      organization: req.user.organization,
-      quotationNumber: { $regex: /^QUO-\d+$/ },
-    })
-      .select("quotationNumber")
-      .session(session);
-    let maxNumber = 0;
-    quotations.forEach((q) => {
-      const num = extractNumber(q.quotationNumber);
-      if (num > maxNumber) maxNumber = num;
-    });
-    const quotationNumber = `QUO-${maxNumber + 1}`;
+    // Quotation number: Document Settings' configured prefix
+    // (documentTypeSettings.quote.prefix) is the source of truth when the
+    // client doesn't send one — previously this fell back to a hardcoded
+    // "QUO-" that never matched what Settings actually said. Numbering is
+    // scoped to the resolved prefix specifically, so switching prefixes
+    // restarts (or resumes) cleanly instead of continuing another prefix's
+    // sequence.
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalPrefix = (quotationPrefix && quotationPrefix.trim()) || documentSettings.documentTypeSettings?.quote?.prefix || "QT-";
+    const finalSuffix = (quotationSuffix ?? documentSettings.documentTypeSettings?.quote?.suffix ?? "").toString().trim();
+    let quotationNumber;
+    try {
+      quotationNumber = await resolveDocumentNumber({
+        Model: Quotation,
+        numberField: "quotationNumber",
+        organization: req.user.organization,
+        documentTypeKey: "quote",
+        prefix: finalPrefix,
+        suffix: finalSuffix,
+        providedNumber: clientQuotationNumber && String(clientQuotationNumber).trim() ? clientQuotationNumber : null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
 
     const quotation = new Quotation({
       deal,
+      quotationPrefix: finalPrefix,
       quotationNumber,
+      reference: reference || "",
       date,
       dueDate,
       amount,
       status,
       items,
-      style: style || "",
       notes: notes || "",
       terms: terms || "",
       isTaxQuotation: isTaxQuotation || false,
+      transactionType: transactionType || "intra",
       signature,
       signatureType: signatureType || "text",
-      discount,
-      receiverGSTIN,
+      discount: discount || { type: "fixed", value: 0 },
+      receiverGSTIN: finalReceiverGSTIN,
+      billingAddress: finalBillingAddress,
+      shippingAddress: finalShippingAddress,
       user: req.user.id,
       organization: req.user.organization,
     });
@@ -118,11 +156,103 @@ exports.createQuotation = async (req, res) => {
   }
 };
 
+// Duplicate: clones an existing quotation into a brand-new Draft quotation
+// with a freshly generated number. Does not touch the source quotation.
+exports.duplicateQuotation = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const source = await Quotation.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!source) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Quotation not found" });
+    }
+
+    const documentSettings = await getDocumentSettingsForOrganization(req.user.organization);
+    const finalPrefix = documentSettings.documentTypeSettings?.quote?.prefix || "QT-";
+    const finalSuffix = (documentSettings.documentTypeSettings?.quote?.suffix ?? "").toString().trim();
+
+    let newQuotationNumber;
+    try {
+      newQuotationNumber = await resolveDocumentNumber({
+        Model: Quotation,
+        numberField: "quotationNumber",
+        organization: req.user.organization,
+        documentTypeKey: "quote",
+        prefix: finalPrefix,
+        suffix: finalSuffix,
+        providedNumber: null,
+        session,
+      });
+    } catch (numErr) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: numErr.message });
+    }
+
+    // Bulk signature updates write via updateMany (no schema validation), so
+    // older quotations can carry a signatureType like "image" that the
+    // ['text','upload'] enum never actually allowed. A new document's .save()
+    // does validate, so that stale value must be normalized here rather than
+    // copied straight through.
+    const validSignatureTypes = ["text", "upload"];
+    const normalizedSignatureType = validSignatureTypes.includes(source.signatureType)
+      ? source.signatureType
+      : (source.signature ? "upload" : "text");
+
+    const duplicate = new Quotation({
+      deal: source.deal,
+      quotationPrefix: finalPrefix,
+      quotationNumber: newQuotationNumber,
+      reference: source.reference,
+      date: new Date(),
+      amount: source.amount,
+      status: "Draft",
+      items: source.items,
+      notes: source.notes,
+      terms: source.terms,
+      isTaxQuotation: source.isTaxQuotation,
+      isRoundOff: source.isRoundOff,
+      transactionType: source.transactionType,
+      signature: source.signature,
+      signatureType: normalizedSignatureType,
+      discount: source.discount,
+      receiverGSTIN: source.receiverGSTIN,
+      billingAddress: source.billingAddress,
+      shippingAddress: source.shippingAddress,
+      user: req.user.id,
+      organization: req.user.organization,
+      duplicatedFrom: source._id,
+    });
+
+    await duplicate.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json(duplicate);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: `Failed to duplicate quotation: ${err.message}` });
+  }
+};
+
 // Get All Quotations
 exports.getAllQuotations = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       const matchingDeals = await Deal.find(
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
@@ -159,6 +289,11 @@ exports.getAllQuotationsPaginated = async (req, res) => {
     } = req.query;
 
     const query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       const matchingDeals = await Deal.find(
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
@@ -241,10 +376,12 @@ exports.downloadQuotation = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
-    const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
+    const copyType = ["original", "duplicate", "triplicate"].includes(req.query.copyType)
+      ? req.query.copyType
+      : "original";
+    const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation", copyType);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -289,14 +426,17 @@ exports.updateQuotation = async (req, res) => {
       amount,
       status,
       items,
-      style,
       notes,
       terms,
       isTaxQuotation,
+      transactionType,
       signature,
       signatureType,
       discount,
       receiverGSTIN,
+      billingAddress,
+      shippingAddress,
+      reference,
     } = req.body;
 
     const requiredFields = ["deal", "date", "amount", "status", "discount"];
@@ -319,8 +459,28 @@ exports.updateQuotation = async (req, res) => {
       }
     }
 
+    const dealDoc = await Deal.findById(deal).populate('company');
+    let finalBillingAddress = billingAddress;
+    let finalShippingAddress = shippingAddress;
+    let finalReceiverGSTIN = receiverGSTIN;
+
+    if (dealDoc && dealDoc.company) {
+      if (!finalBillingAddress || Object.keys(finalBillingAddress).length === 0) {
+        finalBillingAddress = dealDoc.company.billingAddress || {};
+      }
+      if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
+        finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+      if (!finalReceiverGSTIN) {
+        finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
     const quotation = await Quotation.findOneAndUpdate(
-      { _id: req.params.id, organization: req.user.organization },
+      {
+        _id: req.params.id,
+        organization: req.user.organization,
+      },
       {
         deal,
         date,
@@ -328,14 +488,17 @@ exports.updateQuotation = async (req, res) => {
         amount,
         status,
         items,
-        style,
         notes,
         terms,
         isTaxQuotation,
+        transactionType,
         signature,
         signatureType,
         discount,
-        receiverGSTIN,
+        receiverGSTIN: finalReceiverGSTIN,
+        billingAddress: finalBillingAddress,
+        shippingAddress: finalShippingAddress,
+        reference: reference || "",
       },
       { new: true }
     );
@@ -400,21 +563,11 @@ exports.sendQuotationEmail = async (req, res) => {
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
 
-    // The template comes from the document's own `style` when it has one,
-    // otherwise from the organization's document settings — resolved inside
-    // htmlDocumentPdf, which renders the same markup as the live preview.
+    // The template is resolved from the organization's document settings
+    // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
     const mailOptions = {
-      from: process.env.EMAIL_USER,
       to: quotation.deal.email || req.body.email,
       subject: `Quotation ${quotation.quotationNumber}`,
       text: `Dear ${
@@ -429,7 +582,7 @@ exports.sendQuotationEmail = async (req, res) => {
       ],
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendGridMail(mailOptions);
     quotation.status = "Sent";
     await quotation.save();
 
@@ -441,48 +594,6 @@ exports.sendQuotationEmail = async (req, res) => {
   }
 };
 
-// Update Quotation Number
-exports.updateQuotationNumber = async (req, res) => {
-  try {
-    const { quotationNumber } = req.body;
-    const quotationId = req.params.id;
-
-    if (
-      !quotationNumber ||
-      typeof quotationNumber !== "string" ||
-      quotationNumber.trim() === ""
-    ) {
-      return res.status(400).json({ error: "quotationNumber is required" });
-    }
-
-    const normalized = quotationNumber.trim();
-
-    const existing = await Quotation.findOne({
-      quotationNumber: normalized,
-      organization: req.user.organization,
-      _id: { $ne: quotationId },
-    });
-
-    if (existing) {
-      return res.status(409).json({ error: "Quotation number already exists" });
-    }
-
-    const updated = await Quotation.findOneAndUpdate(
-      { _id: quotationId, organization: req.user.organization },
-      { quotationNumber: normalized },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ error: "Quotation not found" });
-    }
-
-    res.json({ message: "Quotation number updated", quotation: updated });
-  } catch (err) {
-    console.error("updateQuotationNumber error:", err);
-    res.status(500).json({ error: err.message });
-  }
-};
 // Update Quotation Number (Rename QUO-XXX)
 exports.updateQuotationNumber = async (req, res) => {
   try {
@@ -532,5 +643,48 @@ exports.updateQuotationNumber = async (req, res) => {
   } catch (err) {
     console.error("updateQuotationNumber error:", err);
     return res.status(500).json({ error: err.message });
+  }
+};
+
+exports.bulkUpdateStatus = async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !ids.length || !status) {
+      return res.status(400).json({ error: "ids and status are required" });
+    }
+    await Quotation.updateMany(
+      { _id: { $in: ids }, organization: req.user.organization },
+      { status }
+    );
+    res.json({ message: `Updated ${ids.length} quotations to status: ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.bulkUpdateSignature = async (req, res) => {
+  try {
+    const { ids, signature, signatureType } = req.body;
+    if (!ids || !ids.length) {
+      return res.status(400).json({ error: "ids are required" });
+    }
+    const quotations = await Quotation.find({ _id: { $in: ids }, organization: req.user.organization }, '_id');
+    const validIds = quotations.map(q => q._id.toString());
+    const failedIds = ids.filter(id => !validIds.includes(id));
+    
+    if (validIds.length > 0) {
+      await Quotation.updateMany(
+        { _id: { $in: validIds } },
+        { signature: signature || "", signatureType: signatureType || "text" }
+      );
+    }
+    
+    res.json({
+      message: `Updated signature for ${validIds.length} quotations`,
+      successfulIds: validIds,
+      failedIds
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

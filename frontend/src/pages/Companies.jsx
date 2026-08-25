@@ -37,6 +37,7 @@ import {
   Pin,
   PinOff,
   Star,
+  Video,
 } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -89,6 +90,9 @@ const CompanyDocumentSignedIcon = (props) => (
 const CompanyLeadSourceIcon = CompanyDocumentSignedIcon;
 import { getVideoTutorial } from "../utils/videoTutorials";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import { useSubscription } from "../contexts/SubscriptionContext";
+import { hasMinPlan } from "../utils/subscriptionHelpers";
+import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useCompanyStore from "../store/useCompanyStore";
 import AddToCompanyHotlistModal from "../components/company/AddToCompanyHotlistModal";
@@ -249,6 +253,10 @@ function Companies() {
   const [selectedCompanies, setSelectedCompanies] = useState([]);
   // O(1) membership checks instead of .includes() array scans repeated per row.
   const selectedCompaniesSet = useMemo(() => new Set(selectedCompanies), [selectedCompanies]);
+  // Bulk row selection requires Growth+
+  const { subscription } = useSubscription();
+  const hasBulkAccess = hasMinPlan(subscription?.subscription?.planName, "growth");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -1277,6 +1285,10 @@ function Companies() {
 
   // Bulk selection and actions
   const handleSelectAll = () => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (selectedCompanies.length === companies.length) {
       setSelectedCompanies([]);
       setSelectionMode(true);
@@ -1287,6 +1299,10 @@ function Companies() {
   };
 
   const handleSelectCompany = (companyId) => {
+    if (!hasBulkAccess) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setSelectedCompanies((prev) =>
       prev.includes(companyId)
         ? prev.filter((id) => id !== companyId)
@@ -1867,9 +1883,12 @@ function Companies() {
                   </>
                 ) : (
                   <>
-                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
+                    <div className="flex items-center gap-2">
+                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
+                      
+                    </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
-                      Manage your organisation contracts
+                      Manage your accounts & company directory
                     </p>
                   </>
                 )}
@@ -2024,16 +2043,7 @@ function Companies() {
                               <Upload className="w-4 h-4 text-gray-400" />
                               Import
                             </button>
-                            <button
-                              onClick={() => {
-                                setShowVideoTutorial(true);
-                                setIsMoreMenuOpen(false);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <FileText className="w-4 h-4 text-gray-400" />
-                              Video Tutorial
-                            </button>
+                            
                           </div>
                         </div>
                       )}
@@ -2429,6 +2439,13 @@ function Companies() {
           }}
         />
       )}
+
+      <UpgradeRequiredModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        minPlan="growth"
+        feature="Selecting multiple rows"
+      />
     </div>
   );
 }

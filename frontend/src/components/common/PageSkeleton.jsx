@@ -34,7 +34,7 @@ const TableSkeleton = ({ rows = 10, cols = 6 }) => (
 // filter / view-toggle controls inline), KPI strip, then either the kanban
 // board (column header + total bar + cards) or the deals table, whichever
 // view is currently active — so the skeleton never flashes the wrong shape.
-const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", tableRows = 10 }) => (
+const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", tableRows = 10, tableCols = 7 }) => (
   <div className="space-y-0 -m-6">
     {/* Title strip: "Deals" + subtitle, then one right-aligned group —
         search icon, filter, list/kanban switcher, more-menu, New Deal —
@@ -85,7 +85,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
             <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
               <Skeleton shape="rect" width={16} height={16} className="rounded" />
             </div>
-            {Array.from({ length: 7 }).map((_, i) => (
+            {Array.from({ length: tableCols }).map((_, i) => (
               <div key={i} className="flex items-center flex-1 px-3 border-r border-[#E1E4EA] last:border-r-0">
                 <Skeleton width={80 + (i % 3) * 20} height={10} />
               </div>
@@ -96,7 +96,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
               <div className="flex items-center justify-center flex-shrink-0 border-r border-[#E1E4EA]" style={{ width: 60 }}>
                 <Skeleton shape="rect" width={16} height={16} className="rounded" />
               </div>
-              {Array.from({ length: 7 }).map((_, c) => (
+              {Array.from({ length: tableCols }).map((_, c) => (
                 <div key={c} className="flex items-center flex-1 px-3 border-r border-[#E1E4EA] last:border-r-0">
                   <Skeleton width={`${50 + ((r + c) % 4) * 10}%`} height={12} />
                 </div>
@@ -162,6 +162,85 @@ const ProfileSkeleton = () => (
   </div>
 );
 
+// Matches the Insights page's Overview tab: fixed pill-tabs strip (with the
+// filter button), then 8 StatCards in the same 4-col grid, then the
+// Revenue-vs-Spends chart (3/4 width) beside the Business Activity feed
+// (1/4 width) — the two things visible without scrolling on a typical
+// viewport. Deeper report tables further down aren't mocked; the page's own
+// tab content already replaces this skeleton by the time they'd matter.
+const InsightsStatCard = () => (
+  <div className="relative min-h-[72px] flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl min-w-0">
+    <Skeleton shape="rect" width={40} height={40} className="rounded-lg flex-shrink-0" />
+    <div className="min-w-0 flex-1 space-y-1.5">
+      <Skeleton width="60%" height={10} />
+      <Skeleton width="40%" height={16} />
+    </div>
+  </div>
+);
+
+const InsightsSkeleton = () => (
+  <div>
+    {/* Fixed tabs strip */}
+    <div
+      className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
+      style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
+    >
+      {/* One pill per real tab (Overview, Contacts, Companies, Deals, Vendors,
+          Purchase Orders, Purchases, Invoices) so the strip doesn't visibly
+          grow once the real pills replace it. */}
+      <div className="inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto max-w-full">
+        {[76, 84, 96, 68, 82, 128, 92, 84].map((w, i) => (
+          <Skeleton key={i} width={w} height={36} className="rounded-full flex-shrink-0" />
+        ))}
+      </div>
+      <Skeleton shape="circle" width={40} height={40} className="flex-shrink-0" />
+    </div>
+
+    <div className="pt-[80px] lg:pt-[90px] space-y-6">
+      {/* 8 KPI cards, same 1/2/4-col grid as the real StatCard grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <InsightsStatCard key={i} />
+        ))}
+      </div>
+
+      {/* Chart row: big trend chart (3/4) + activity feed (1/4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <Skeleton width={200} height={18} />
+            <div className="flex items-center gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} width={70} height={10} />
+              ))}
+            </div>
+          </div>
+          <Skeleton width="100%" height={380} shape="rect" className="rounded-lg" />
+        </div>
+        <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <Skeleton width="55%" height={16} className="mb-4" />
+          <div className="flex items-center gap-2 mb-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} width={60} height={28} className="rounded-full" />
+            ))}
+          </div>
+          <div className="space-y-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <Skeleton shape="circle" width={32} height={32} className="flex-shrink-0" />
+                <div className="flex-1 space-y-1.5 pt-0.5">
+                  <Skeleton width="80%" height={12} />
+                  <Skeleton width="50%" height={10} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 const GenericSkeleton = () => (
   <div className="space-y-4">
     <Skeleton width="25%" height={22} />
@@ -176,6 +255,7 @@ const VARIANTS = {
   cards: CardsSkeleton,
   profile: ProfileSkeleton,
   generic: GenericSkeleton,
+  insights: InsightsSkeleton,
 };
 
 /**

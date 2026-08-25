@@ -79,6 +79,10 @@ const getAllDeals = async (req, res) => {
     const { search, contact, company } = req.query;
     let query = { organization: req.user.organization };
 
+    if (req.ownOnly) {
+      query.$or = [{ user: req.user._id }, { createdBy: req.user._id }];
+    }
+
     if (contact) query.contact = contact;
     if (company) query.company = company;
 

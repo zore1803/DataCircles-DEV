@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const DocumentSettings = require('../models/DocumentSettings');
+const Counter = require('../models/Counter');
 
 const DEFAULT_PREFIX = 'INV-';
 
@@ -85,7 +87,71 @@ function normalizeInvoiceNumberSettings(settings = {}) {
     defaultNotesByType: normalizeFooterMap(settings.defaultNotesByType),
     defaultTermsByType: normalizeFooterMap(settings.defaultTermsByType),
     documentTypes: Object.entries(DEFAULT_DOCUMENT_TYPES).map(([key, value]) => ({ key, label: value.label })),
+    defaultDueDateDays: settings.defaultDueDateDays != null ? Number(settings.defaultDueDateDays) : null,
+    whatsappTemplate: settings.whatsappTemplate != null ? String(settings.whatsappTemplate) : null,
+    whatsappLine1: settings.whatsappLine1 != null ? String(settings.whatsappLine1) : 'Thanks for your business!',
+    whatsappLine2: settings.whatsappLine2 != null ? String(settings.whatsappLine2) : '',
+    smsTemplate: settings.smsTemplate != null ? String(settings.smsTemplate) : null,
+    emailSubjectTemplate: settings.emailSubjectTemplate != null ? String(settings.emailSubjectTemplate) : null,
+    emailBodyTemplate: settings.emailBodyTemplate != null ? String(settings.emailBodyTemplate) : null,
+    whatsappTemplates: normalizeTemplateArray(settings.whatsappTemplates),
+    smsTemplates: normalizeTemplateArray(settings.smsTemplates),
+    emailTemplates: normalizeTemplateArray(settings.emailTemplates),
+    pdfFilenameFormats: settings.pdfFilenameFormats,
   };
+}
+
+function normalizeTemplateArray(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((t) => ({ ...t }));
+}
+
+// One-time migration: an organization that customized the old single-slot
+// whatsappLine1/2, smsTemplate, or email templates before the template
+// library existed would otherwise lose that customization the first time the
+// new UI runs (empty array = "nothing saved"). Seeds one named entry per
+// channel from the legacy fields so it carries forward, then returns whether
+// anything changed so the caller knows to persist it.
+function seedTemplateLibrariesFromLegacy(settings) {
+  let changed = false;
+  const out = {};
+
+  if (!Array.isArray(settings.whatsappTemplates) || settings.whatsappTemplates.length === 0) {
+    out.whatsappTemplates = [{
+      id: crypto.randomUUID(),
+      name: 'Default',
+      line1: settings.whatsappLine1 || 'Thanks for your business!',
+      line2: settings.whatsappLine2 || '',
+      isDefault: true,
+      createdAt: new Date(),
+    }];
+    changed = true;
+  }
+
+  if (!Array.isArray(settings.smsTemplates) || settings.smsTemplates.length === 0) {
+    out.smsTemplates = [{
+      id: crypto.randomUUID(),
+      name: 'Default',
+      body: settings.smsTemplate || 'Your {docType} #{number} from {company} is ready. View & Download: {link}',
+      isDefault: true,
+      createdAt: new Date(),
+    }];
+    changed = true;
+  }
+
+  if (!Array.isArray(settings.emailTemplates) || settings.emailTemplates.length === 0) {
+    out.emailTemplates = [{
+      id: crypto.randomUUID(),
+      name: 'Default',
+      subject: settings.emailSubjectTemplate || '{docType} {number} from {company}',
+      body: settings.emailBodyTemplate || 'Hi {customerName},\n\nPlease find attached your {docType} #{number}.\n\nYou can also view and download it online:\n{link}\n\nThank you for your business!\n\nBest regards,\n{company}',
+      isDefault: true,
+      createdAt: new Date(),
+    }];
+    changed = true;
+  }
+
+  return { changed, fields: out };
 }
 
 function buildInvoiceNumber({ prefix, number, suffix }) {
@@ -183,6 +249,115 @@ function resolveInvoiceNumber({ settings, providedNumber = null, lastInvoiceNumb
   };
 }
 
+// Shared, prefix-scoped "what's the next number" resolver — one implementation
+// for all 4 document types instead of each controller reimplementing its own
+// (and, in Invoice's case, getting it wrong: the old logic looked at
+// whichever document was created most recently *regardless of prefix*, so
+// changing the configured prefix from INV- to SALES- after INV-47 existed
+// would produce SALES-48 instead of restarting at SALES-1).
+//
+// A document only counts toward "the last number for this prefix" if its
+// number actually starts with the CURRENT prefix — so switching prefixes
+// always restarts (or resumes, if documents already exist under the new
+// prefix) cleanly, matching the configured prefix rather than the org's
+// numbering history as a whole.
+async function resolveNextNumberForPrefix({ Model, numberField, organization, prefix, session }) {
+  const normalizedPrefix = (prefix || '').toString().trim() || DEFAULT_PREFIX;
+  const escapedPrefix = normalizedPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Optional dash covers both "INV-" (already ends in -) and "QT"/"PI"/"DC"
+  // (no trailing dash in their own default) style prefixes uniformly.
+  // The trailing (?:-.+)? allows a suffix like "-26-27" so existing numbered
+  // docs are still found when a suffix is configured.
+  const pattern = new RegExp(`^${escapedPrefix}-?(\\d+)(?:-.+)?$`);
+
+  let query = Model.find({ organization, [numberField]: { $regex: pattern } }).select(numberField);
+  if (session) query = query.session(session);
+  const docs = await query.lean();
+
+  let maxNumber = 0;
+  docs.forEach((doc) => {
+    const match = String(doc[numberField] || '').match(pattern);
+    const num = match ? parseInt(match[1], 10) : 0;
+    if (num > maxNumber) maxNumber = num;
+  });
+
+  return maxNumber + 1;
+}
+
+// Persistent, monotonically-increasing counter per organization + document
+// type (invoice | quote | proformaInvoice | deliveryChallan). Unlike the
+// max-of-existing-documents scan above, this never reuses a number: deleting
+// a document — even the most recently created one — does not roll the
+// counter back, so the next document created always gets a genuinely new
+// number and gaps left by deletions are never refilled. The counter is keyed
+// by document type only (not by prefix), so changing the configured prefix
+// in Settings does not restart or affect the sequence; it only changes how
+// the number is displayed. This is a distinct key namespace from any counters
+// used elsewhere, so every organization's sequence starts fresh at 1.
+async function getNextCounterNumber({ organization, documentTypeKey, session }) {
+  const counterId = `${organization}_doc_${documentTypeKey || 'invoice'}`;
+  const counter = await Counter.findOneAndUpdate(
+    { _id: counterId },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true, session, setDefaultsOnInsert: true }
+  );
+  return counter.seq;
+}
+
+// Read-only peek at what the *next* number for each document type will be,
+// without incrementing anything — used by the create-document screens to
+// show the upcoming number (e.g. "2") before the document is actually saved,
+// instead of a static/misleading placeholder. Safe to call as often as
+// needed since it never mutates the counter.
+async function getNextNumberPreviews(organizationId) {
+  const keys = Object.keys(DEFAULT_DOCUMENT_TYPES);
+  const idToKey = {};
+  keys.forEach((key) => {
+    idToKey[`${organizationId}_doc_${key}`] = key;
+  });
+
+  const counters = await Counter.find({ _id: { $in: Object.keys(idToKey) } }).lean();
+
+  const previews = {};
+  keys.forEach((key) => {
+    previews[key] = 1;
+  });
+  counters.forEach((c) => {
+    const key = idToKey[c._id];
+    if (key) previews[key] = (c.seq || 0) + 1;
+  });
+  return previews;
+}
+
+// Builds the final number for a document create (or convert) call, handling
+// both cases: the client supplied an explicit number (validated for
+// prefix-scoped uniqueness), or none was supplied (auto-generated from the
+// persistent per-document-type counter). Always returns a fully-formed
+// "PREFIX-N" string via buildInvoiceNumber so every document type gets
+// identical separator handling. Pass the create call's transaction `session`
+// through so the uniqueness check and counter increment see a consistent
+// snapshot with the rest of that request.
+async function resolveDocumentNumber({ Model, numberField, organization, documentTypeKey, prefix, suffix = '', providedNumber, session }) {
+  const normalizedPrefix = (prefix || '').toString().trim() || DEFAULT_PREFIX;
+  const normalizedSuffix = (suffix || '').toString().trim();
+
+  if (providedNumber !== null && providedNumber !== undefined && providedNumber !== '') {
+    const number = buildInvoiceNumber({ prefix: normalizedPrefix, number: providedNumber, suffix: normalizedSuffix });
+    let query = Model.findOne({ organization, [numberField]: number });
+    if (session) query = query.session(session);
+    const existing = await query.lean();
+    if (existing) {
+      const err = new Error(`${number} is already in use.`);
+      err.code = 'DUPLICATE_NUMBER';
+      throw err;
+    }
+    return number;
+  }
+
+  const nextNumber = await getNextCounterNumber({ organization, documentTypeKey, session });
+  return buildInvoiceNumber({ prefix: normalizedPrefix, number: nextNumber, suffix: normalizedSuffix });
+}
+
 async function getDocumentSettingsForOrganization(organizationId) {
   if (!organizationId) {
     return normalizeInvoiceNumberSettings({});
@@ -256,12 +431,51 @@ async function saveDocumentSettingsForOrganization(organizationId, payload = {})
       ...normalizeFooterMap(payload.defaultTermsByType),
     };
   }
+  if (payload.defaultDueDateDays !== undefined) {
+    settingsPayload.defaultDueDateDays = payload.defaultDueDateDays != null ? Number(payload.defaultDueDateDays) : null;
+  }
+  if (payload.whatsappTemplate !== undefined) {
+    settingsPayload.whatsappTemplate = (payload.whatsappTemplate || '').toString();
+  }
+  if (payload.whatsappLine1 !== undefined) {
+    settingsPayload.whatsappLine1 = (payload.whatsappLine1 || '').toString();
+  }
+  if (payload.whatsappLine2 !== undefined) {
+    settingsPayload.whatsappLine2 = (payload.whatsappLine2 || '').toString();
+  }
+  if (payload.smsTemplate !== undefined) {
+    settingsPayload.smsTemplate = (payload.smsTemplate || '').toString();
+  }
+  if (payload.emailSubjectTemplate !== undefined) {
+    settingsPayload.emailSubjectTemplate = (payload.emailSubjectTemplate || '').toString();
+  }
+  if (payload.emailBodyTemplate !== undefined) {
+    settingsPayload.emailBodyTemplate = (payload.emailBodyTemplate || '').toString();
+  }
+  // Each array is sent whole by the Settings UI (it edits its local copy,
+  // then saves the full list), so a plain replace is correct here — no merge.
+  if (payload.whatsappTemplates !== undefined) {
+    settingsPayload.whatsappTemplates = Array.isArray(payload.whatsappTemplates) ? payload.whatsappTemplates : [];
+  }
+  if (payload.smsTemplates !== undefined) {
+    settingsPayload.smsTemplates = Array.isArray(payload.smsTemplates) ? payload.smsTemplates : [];
+  }
+  if (payload.emailTemplates !== undefined) {
+    settingsPayload.emailTemplates = Array.isArray(payload.emailTemplates) ? payload.emailTemplates : [];
+  }
+  // Merge over existing so saving one doc type doesn't wipe the others.
+  if (payload.pdfFilenameFormats !== undefined && typeof payload.pdfFilenameFormats === 'object') {
+    settingsPayload.pdfFilenameFormats = {
+      ...(existing?.pdfFilenameFormats || {}),
+      ...payload.pdfFilenameFormats,
+    };
+  }
 
   if (existing) {
     Object.assign(existing, settingsPayload);
     // Schema type Object: mongoose won't diff the nested keys on its own, so
     // say explicitly that these paths changed or the save is a no-op.
-    for (const p of ['documentTypeSettings', 'defaultNotesByType', 'defaultTermsByType']) {
+    for (const p of ['documentTypeSettings', 'defaultNotesByType', 'defaultTermsByType', 'pdfFilenameFormats']) {
       if (settingsPayload[p] !== undefined) existing.markModified(p);
     }
     await existing.save();
@@ -278,6 +492,11 @@ module.exports = {
   buildInvoiceNumber,
   normalizeInvoiceNumberSettings,
   resolveInvoiceNumber,
+  resolveNextNumberForPrefix,
+  resolveDocumentNumber,
+  getNextCounterNumber,
+  getNextNumberPreviews,
   getDocumentSettingsForOrganization,
   saveDocumentSettingsForOrganization,
+  seedTemplateLibrariesFromLegacy,
 };

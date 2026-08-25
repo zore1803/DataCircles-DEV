@@ -8,12 +8,14 @@ const checkPermission = require("../middlewares/checkPermission");
 
 const requireAuth = [authMiddleware, userSync];
 const subscriptionGate = require('../middlewares/subscriptionGate');
+const uploadMiddlewareS3 = require('../middlewares/uploadMiddlewareS3');
 
 // CREATE Item
 router.post("/",
   requireAuth,
   subscriptionGate,
   checkPermission("items", "read-write"),
+  uploadMiddlewareS3().array("images", 10),
   itemController.createItem
 );
 
@@ -54,6 +56,7 @@ router.put("/:id",
   requireAuth,
   subscriptionGate,
   checkPermission("items", "read-write"),
+  uploadMiddlewareS3().array("images", 10),
   itemController.updateItem
 );
 
@@ -71,6 +74,14 @@ router.delete("/:id",
   subscriptionGate,
   checkPermission("items", "read-write"),
   itemController.deleteItem
+);
+
+// Export Selected Items
+router.post("/export-selected",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("items", "readonly"),
+  itemController.exportSelectedItems
 );
 
 // Bulk Import Items

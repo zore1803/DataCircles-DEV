@@ -9,6 +9,7 @@ import QuickVendorForm from "../vendor/QuickVendorForm";
 import { Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import ReactQuill from 'react-quill-new';
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 const TaskForm = ({
   form,
@@ -37,6 +38,7 @@ const TaskForm = ({
   const [localDeals, setLocalDeals] = useState(deals);
   const [localVendors, setLocalVendors] = useState(vendors);
   const [validationErrors, setValidationErrors] = useState({});
+  const { taskStatuses } = useSystemSettings();
 
   // Initialize relatedEntities if it doesn't exist or if form has old structure
   useEffect(() => {
@@ -513,8 +515,9 @@ const TaskForm = ({
                   handleFormChange({ ...form, status: e.target.value })
                 }
               >
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
+                {taskStatuses.map(status => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
               </select>
             </div>
 

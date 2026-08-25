@@ -207,7 +207,7 @@ const createdDeals = await Deal.insertMany(dealData);
         }
       ],
       grandTotal: (10 + index) * createdItems[index % createdItems.length].purchasePrice,
-      status: index % 2 === 0 ? 'Draft' : 'Received',
+      status: index % 2 === 0 ? 'Draft' : 'Paid',
       notes: `Purchase for ${createdVendors[index].name}`,
       user: userId,
       organization: organizationId
