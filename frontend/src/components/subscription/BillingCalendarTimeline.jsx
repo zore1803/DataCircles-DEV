@@ -133,78 +133,30 @@ const Segment = ({ seg, range, isBase }) => {
   );
 };
 
-// Third pass. Pass one painted hatching + red onto the bar (read as
-// improvised). Pass two went the opposite direction — a bare dashed tick
-// with no shading at all, which lost the actual signal ("does nothing").
-// This version keeps the tick's restraint (no hatch, no red, no pattern)
-// but puts the change back where a user's eye already is: the bar itself.
+// Fourth pass — and this time the fix is subtraction, not another color
+// scheme. Every previous version (hatching+red, then a solid extension
+// box + a ghost box) assumed there'd be roughly ONE adjustment to show.
+// A real org with multiple admin actions (extend, extend again, end
+// early — three separate events, confirmed live) painted THREE overlay
+// boxes on the SAME bar, each independently spanning its OWN
+// previousEnd/newEnd — including boxes for dates that no longer mean
+// anything once a LATER adjustment superseded them. The boxes overlapped
+// each other and bled past the real bar's actual end, which is exactly
+// what covered up the "No active subscription" label at 1Y/2Y (found
+// live — text rendering cut off mid-word behind a stray dashed pill).
 //
-// Extension — an admin added days. The bar's real end already reflects
-// this (Segment renders it), so the only distinct thing to draw is the
-// newly-added sub-range in a visibly DARKER shade of the same bar color,
-// directly on top of the existing bar — one solid rounded rect, no
-// texture. It reads as "this part is new" purely through being a shade
-// darker than the rest of the same bar.
-//
-// Reduction — an admin cut days. Those days are no longer part of the
-// real segment, so nothing paints on the bar itself past its new (shorter)
-// end. Instead a low-opacity "ghost" rect continues past the real bar's
-// end, same shape/height, ~20% opacity with a dashed outline — deliberately
-// close to invisible, so it reads as "there used to be something here, not
-// anymore" rather than as a second real segment.
-const AdjustmentOverlay = ({ event, range, onSelect }) => {
-  const { previousEnd, newEnd } = event.metadata || {};
-  if (!previousEnd || !newEnd) return null;
+// There is no box-based design that scales to an arbitrary number of
+// historical adjustments without this — so adjustments no longer paint
+// anything on the bar at all. They're just markers now, same pipeline as
+// every other billing event (clusterMarkers/MarkerCluster below), deduped
+// by day like everything else. The bar itself only ever reflects the
+// CURRENT, final state (Segment, unchanged) — the full before/after story
+// for each historical adjustment lives in the Trial Adjustment History
+// panel (BillingCalendarModal.jsx), which already renders it correctly as
+// plain text with no positional math to get wrong.
 
-  const prev = new Date(previousEnd);
-  const next = new Date(newEnd);
-  const isExtension = next > prev;
-  const spanStart = isExtension ? prev : next;
-  const spanEnd = isExtension ? next : prev;
-
-  let left = pct(spanStart, range);
-  let right = pct(spanEnd, range);
-  if (left == null || right == null) return null;
-  if (right < left) right = left;
-  // Floor raised from 0.3% to 1%: a short reduction/extension (a day or
-  // two out of a multi-week trial) rendered at true scale was only a
-  // couple of pixels wide on a zoomed-out chart — visually indistinguishable
-  // from not being there at all, which is what "I reduced it but still
-  // can't see it" was actually describing.
-  const width = Math.max(1, right - left);
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(event)}
-      className="absolute top-1/2 -translate-y-1/2 h-3.5 group cursor-pointer z-10"
-      style={{ left: `${left}%`, width: `${width}%` }}
-    >
-      {isExtension ? (
-        // One shade darker than the trial bar's own blue-500, not two —
-        // blue-800 read as near-navy against a blue-500 bar; blue-700 is
-        // still clearly darker without looking like a different color.
-        <div className="absolute inset-0 rounded-full bg-blue-700" />
-      ) : (
-        // A real, visible ghost outline (not a near-zero opacity fill,
-        // which made a thin reduction span effectively invisible) — flat
-        // pale fill + dashed border reads as "there used to be something
-        // here" at a glance, while staying lighter than the trial bar and
-        // lighter than the projection branches' own faintest point.
-        <div className="absolute inset-0 rounded-full bg-blue-50 border-[1.5px] border-dashed border-blue-300" />
-      )}
-      <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-30">
-        <div className="bg-gray-900 text-white text-[11px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
-          <p className="font-bold">{event.title}</p>
-          <p className="text-gray-300 mt-0.5">
-            {isExtension ? 'Extended from' : 'Previously ended'} {prev.toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
-            {isExtension && <> to {next.toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}</>}
-          </p>
-        </div>
-      </div>
-    </button>
-  );
-};
+const isAdminTrialAdjustment = (m) =>
+  m.eventType === 'TRIAL_ADJUSTED' || (m.eventType === 'TRIAL_ENDED' && m.metadata?.endedBy === 'admin');
 
 const MarkerCluster = ({ cluster, range, onSelect }) => {
   const left = pct(cluster.date, range);
@@ -213,6 +165,12 @@ const MarkerCluster = ({ cluster, range, onSelect }) => {
   let markerClass = "bg-white border-gray-400";
   if (cluster.tone === "critical") markerClass = "bg-white border-amber-500";
   else if (cluster.tone === "scheduled") markerClass = "bg-white border-amber-400";
+
+  // A single admin adjustment gets its actual before/after dates in the
+  // hover detail (same info the old on-bar boxes tried to show, minus the
+  // overlap bug) — everything else keeps the plain title/count.
+  const singleEvent = cluster.events.length === 1 ? cluster.events[0] : null;
+  const adjustment = singleEvent && isAdminTrialAdjustment(singleEvent) ? singleEvent.metadata : null;
 
   return (
     <button
@@ -233,7 +191,11 @@ const MarkerCluster = ({ cluster, range, onSelect }) => {
           <p className="font-bold">
             {new Date(cluster.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}
           </p>
-          {cluster.events.length === 1 ? (
+          {adjustment?.previousEnd && adjustment?.newEnd ? (
+            <p className="text-gray-300 mt-0.5">
+              {singleEvent.title || 'Trial adjusted'} — was ending {new Date(adjustment.previousEnd).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}, now {new Date(adjustment.newEnd).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+            </p>
+          ) : cluster.events.length === 1 ? (
             <p className="text-gray-300 mt-0.5">{cluster.events[0].title || 'Transition'}</p>
           ) : (
             <p className="text-gray-300 mt-0.5">{cluster.events.length} changes</p>
@@ -244,8 +206,41 @@ const MarkerCluster = ({ cluster, range, onSelect }) => {
   );
 };
 
-const isAdminTrialAdjustment = (m) =>
-  m.eventType === 'TRIAL_ADJUSTED' || (m.eventType === 'TRIAL_ENDED' && m.metadata?.endedBy === 'admin');
+// Brings the shading back ("why does it not anymore") — but as ONE net
+// region, not one box per historical event. Per-event boxes were exactly
+// what caused the overlap bug removed above; comparing only the FIRST
+// adjustment's previousEnd (the trial's original, never-touched end) to
+// the LAST adjustment's newEnd (today's actual final end) collapses any
+// number of intermediate extends/reduces into a single, always-correct,
+// never-overlapping shaded span — same darker-extension / pale-ghost-
+// reduction visual language as before, just computed net instead of
+// per-step. No hover detail here (the marker dots already carry that);
+// this is purely the "this part of the bar changed" cue.
+const NetTrialAdjustment = ({ originalEnd, currentEnd, range }) => {
+  const orig = new Date(originalEnd);
+  const curr = new Date(currentEnd);
+  if (orig.getTime() === curr.getTime()) return null; // net zero — nothing to show
+
+  const isExtension = curr > orig;
+  const spanStart = isExtension ? orig : curr;
+  const spanEnd = isExtension ? curr : orig;
+
+  let left = pct(spanStart, range);
+  let right = pct(spanEnd, range);
+  if (left == null || right == null) return null;
+  if (right < left) right = left;
+  const width = Math.max(1, right - left);
+
+  return (
+    <div className="absolute top-1/2 -translate-y-1/2 h-3.5 pointer-events-none" style={{ left: `${left}%`, width: `${width}%` }}>
+      {isExtension ? (
+        <div className="absolute inset-0 rounded-full bg-blue-700" />
+      ) : (
+        <div className="absolute inset-0 rounded-full bg-blue-50 border-[1.5px] border-dashed border-blue-300" />
+      )}
+    </div>
+  );
+};
 
 // Draggable, on-chart conversion projection — lives directly on the trial
 // bar, not as a separate slider widget below the chart (found live: a
@@ -302,7 +297,6 @@ const LANE_Y = { monthly: 66, annual: 110 };
 const LEGEND_Y = LANE_Y.annual + 40;
 const FORK_HEIGHT = LEGEND_Y + 20;
 const KINK_PX = 26; // fixed real-pixel diagonal, same at every zoom level
-const MS_DAY = 24 * 60 * 60 * 1000;
 
 // Mirrors backend/utils/renewalEngine.js's own addBillingCycle exactly —
 // monthly is a CALENDAR month via setMonth(+1), not a flat 30 days, and
@@ -316,7 +310,7 @@ function addBillingCycle(date, cycle) {
   return next;
 }
 
-const TrialConversionFork = ({ range, now, trialEnd, onPreview }) => {
+const TrialConversionFork = ({ range, now, onPreview }) => {
   // Hooks must run unconditionally — called before the validity check below,
   // not after (an early return before useState would violate the Rules of
   // Hooks the instant range/now/trialEnd ever produced a null on one render
@@ -340,21 +334,25 @@ const TrialConversionFork = ({ range, now, trialEnd, onPreview }) => {
   useEffect(() => {
     if (!onPreview) return;
     if (!touched || !now) { onPreview(null); return; }
-    const maxDragMs = Math.min(range.end.getTime(), (trialEnd ? new Date(trialEnd).getTime() : now.getTime()) + 30 * MS_DAY);
+    const maxDragMs = range.end.getTime();
     onPreview(now.getTime() + (sliderValue / 100) * (maxDragMs - now.getTime()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [touched, sliderValue, now, trialEnd, range.end]);
+  }, [touched, sliderValue, now, range.end]);
 
   const trackLeft = pct(now, range);
   if (trackLeft == null) return null;
 
   const nowMs = now.getTime();
   const rangeEndMs = range.end.getTime();
-  const trialEndMs = trialEnd ? new Date(trialEnd).getTime() : null;
-  // Drag is clamped to trial-end + 30 days, not the whole visible chart —
-  // "can still buy after the trial" needs showing, but an unbounded drag
-  // let the handle reach absurd, meaningless dates.
-  const maxDragMs = Math.min(rangeEndMs, (trialEndMs ?? nowMs) + 30 * MS_DAY);
+  // Drag now spans the FULL visible chart (today → range.end), not an
+  // arbitrary trial-end+30-days cap — that cap was its own confusing thing:
+  // the dotted rail/handle would stop dead in the middle of a 3M/6M/1Y
+  // view for no reason visible on the chart itself (found live: "why does
+  // it only extend a month, this makes no sense"). The zoom buttons (1M/
+  // 3M/6M/1Y/2Y) are already the control for "how far into the future,"
+  // so the drag range should just match whatever the user picked there —
+  // one control for that, not two disagreeing ones.
+  const maxDragMs = rangeEndMs;
   if (maxDragMs <= nowMs) return null;
 
   const handleDateMs = nowMs + (sliderValue / 100) * (maxDragMs - nowMs);
@@ -515,11 +513,41 @@ const TrialConversionFork = ({ range, now, trialEnd, onPreview }) => {
 // A single continuous track — one lane per billing object.
 const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialConversion }) => {
   const allMarkers = useMemo(() => markers || [], [markers]);
-  // Admin trial adjustments render as a changed SEGMENT (AdjustmentOverlay),
-  // not as an additional dot — routing them through clusterMarkers too
-  // would draw both on top of each other for the same event.
-  const adjustmentEvents = useMemo(() => allMarkers.filter(isAdminTrialAdjustment), [allMarkers]);
-  const clusters = useMemo(() => clusterMarkers(allMarkers.filter((m) => !isAdminTrialAdjustment(m))), [allMarkers]);
+  // Admin trial adjustments now flow through the SAME clusterMarkers
+  // pipeline as every other event (see the note above AdjustmentOverlay's
+  // old spot) — no more separate box-rendering path.
+  const clusters = useMemo(() => clusterMarkers(allMarkers), [allMarkers]);
+  // Net shading: first adjustment's previousEnd vs last adjustment's
+  // newEnd — see NetTrialAdjustment's own comment for why this is one
+  // computed span instead of one box per event.
+  const netAdjustment = useMemo(() => {
+    const events = allMarkers
+      .filter(isAdminTrialAdjustment)
+      .filter((m) => m.metadata?.previousEnd && m.metadata?.newEnd)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (events.length === 0) return null;
+    return { originalEnd: events[0].metadata.previousEnd, currentEnd: events[events.length - 1].metadata.newEnd };
+  }, [allMarkers]);
+
+  // A faint dotted rail spanning the projection handle's full draggable
+  // range — today → the full visible chart edge, matching whatever zoom
+  // the user picked (not a separate, shorter cap of its own — see the
+  // note on maxDragMs inside TrialConversionFork for why that used to
+  // stop the rail dead in the middle of the chart for no visible reason).
+  // A plain visual affordance that this is something to slide, not just a
+  // marker sitting on the bar. Rendered BEFORE Segment below (same
+  // stacking context, default DOM-order painting) so it sits visibly
+  // BEHIND the real trial bar and only shows in the empty space beyond it.
+  let dragRailLeft = null;
+  let dragRailWidth = null;
+  if (trialConversion) {
+    const dragTrackLeft = pct(trialConversion.now, range);
+    const dragMaxPct = 100;
+    if (dragTrackLeft != null && dragMaxPct > dragTrackLeft) {
+      dragRailLeft = dragTrackLeft;
+      dragRailWidth = dragMaxPct - dragTrackLeft;
+    }
+  }
 
   return (
     <div className={`relative ${trialConversion ? 'mb-40' : 'mb-16'}`}>
@@ -528,12 +556,18 @@ const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialCo
       </div>
 
       <div className="relative h-16" style={{ marginLeft: LABEL_COL }}>
+        {dragRailLeft != null && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 h-0 border-t-2 border-dotted border-gray-300 pointer-events-none"
+            style={{ left: `${dragRailLeft}%`, width: `${dragRailWidth}%` }}
+          />
+        )}
         {segments.map((seg, i) => (
           <Segment key={i} seg={seg} range={range} isBase={isBase} />
         ))}
-        {adjustmentEvents.map((event, i) => (
-          <AdjustmentOverlay key={`adj-${i}`} event={event} range={range} onSelect={onSelectEvent} />
-        ))}
+        {netAdjustment && (
+          <NetTrialAdjustment originalEnd={netAdjustment.originalEnd} currentEnd={netAdjustment.currentEnd} range={range} />
+        )}
         {clusters.map((cluster, i) => (
           <MarkerCluster key={i} cluster={cluster} range={range} onSelect={onSelectEvent} />
         ))}
@@ -544,7 +578,7 @@ const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialCo
             near it. It overflows below via negative margin + overflow
             visible; nothing here changes the bar's own markup or colors. */}
         {trialConversion && (
-          <TrialConversionFork range={range} now={trialConversion.now} trialEnd={trialConversion.trialEnd} onPreview={trialConversion.onPreview} />
+          <TrialConversionFork range={range} now={trialConversion.now} onPreview={trialConversion.onPreview} />
         )}
       </div>
     </div>

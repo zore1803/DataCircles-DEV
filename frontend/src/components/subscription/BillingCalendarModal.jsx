@@ -49,6 +49,21 @@ function trialCountdown(now, endsAt) {
   return { label: `${fullDaysLeft} days left`, urgent: fullDaysLeft <= 2 };
 }
 
+// Trace finding: the header used to branch ONLY on isCommittedPaid, so once
+// a trial ended (isTrialActive: false, appStatus: 'expired') it fell into
+// the "else" of BOTH conditions below and rendered a green "Active" badge
+// plus "Free trial ends {stale trialEnd date}" — a subscription that had
+// definitively ended looked, at a glance, like a live countdown. This isn't
+// a Calendar-specific bug; it's a missing third state (terminated-without-
+// payment) that the header simply never accounted for. Reuses
+// p.subscription.status (== the canonical appStatus, already on the
+// projection payload) rather than re-deriving anything new.
+const TERMINATED_COPY = {
+  expired: { badge: 'Trial ended', headline: 'Your free trial has ended', cta: 'Choose a plan to continue' },
+  cancelled: { badge: 'Cancelled', headline: 'Your subscription was cancelled', cta: 'Choose a plan to continue' },
+  suspended: { badge: 'Suspended', headline: 'Your subscription is suspended', cta: 'Subscribe to restore access' },
+};
+
 const ZOOM_OPTIONS = [
   { months: 1, label: "1M" },
   { months: 3, label: "3M" },
@@ -198,6 +213,15 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
 
   const p = projection?.hasSubscription || projection?.trial?.active ? projection : null;
   const isCommittedPaid = !!(p?.basePlan?.entitlementWindow || (p?.basePlan?.nextRenewal && !p?.trial?.active));
+  // Third header state, alongside "paid" and "trialing" — a subscription
+  // that has definitively ended (trial expired, or cancelled/suspended)
+  // with nothing currently committed. TERMINATED_COPY above supplies the
+  // reason-specific wording; the read-only access CONSEQUENCE is the same
+  // for all three (subscriptionGate already treats them identically) but
+  // the header should still say why, per the "access consequence shared,
+  // reason specific" rule.
+  const terminatedStatus = TERMINATED_COPY[p?.subscription?.status];
+  const isTerminated = !isCommittedPaid && !p?.trial?.active && !!terminatedStatus;
 
   const calendarData = useMemo(() => {
     if (!p) return null;
@@ -264,7 +288,11 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
                       {prettyPlan(p.basePlan.current.planName)}
                       <span className="text-gray-400 font-medium"> · {isCommittedPaid ? (p.basePlan.current.billingCycle === 'yearly' ? 'Annual' : 'Monthly') : 'Trial'}</span>
                     </h1>
-                    {!isCommittedPaid && p.trial.active ? (
+                    {isTerminated ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+                        {terminatedStatus.badge}
+                      </span>
+                    ) : !isCommittedPaid && p.trial.active ? (
                       (() => {
                         const countdown = trialCountdown(p.now, p.trial.endsAt);
                         return (
@@ -282,7 +310,12 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
                     )}
                   </div>
 
-                  {isCommittedPaid ? (
+                  {isTerminated ? (
+                    <>
+                      <p className="text-base font-semibold text-gray-800 mt-1.5">{terminatedStatus.headline}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">You can view existing data, but editing is disabled. {terminatedStatus.cta}.</p>
+                    </>
+                  ) : isCommittedPaid ? (
                     <>
                       <p className="text-base font-semibold text-gray-800 mt-1.5">{formatPrice(p.basePlan.current.pricePerUser)} <span className="text-xs font-normal text-gray-400">/ {p.basePlan.current.billingCycle === 'yearly' ? 'year' : 'month'}</span></p>
                       <p className="text-xs text-gray-500 mt-0.5">

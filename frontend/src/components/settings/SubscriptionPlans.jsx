@@ -1204,17 +1204,47 @@ const SubscriptionPlans = () => {
   // handleConfirmCheckout's fresh-checkout branch and handleResumePayment
   // (B2 fix, below) drive the exact same journey-state transitions and
   // polling, rather than a second hand-rolled copy drifting out of sync.
-  const openRegistrationLinkJourney = (registrationLink) => {
+  // Popup-blocker fix (found via live QA — "Subscribe" never opened the
+  // Razorpay page; "Complete Payment" later worked "by luck"): window.open()
+  // is only exempt from popup blocking when it runs SYNCHRONOUSLY inside a
+  // real user-gesture handler. This used to call window.open() here, several
+  // awaited API calls plus a setTimeout removed from the original click —
+  // browsers silently drop that popup with no error, leaving the mandate
+  // dangling in 'pending' while checkoutJourneyState moved on to
+  // 'confirming_mandate' and polled for a confirmation that could never
+  // arrive. Fix: the caller now opens a blank tab SYNCHRONOUSLY at the very
+  // top of its click handler (before any await) and hands us the reference;
+  // we only ever navigate it, never open a new one.
+  const openRegistrationLinkJourney = (registrationLink, popupWindow) => {
     setCheckoutJourneyState('setting_up_recurring');
     setTimeout(() => {
       // Found via live QA: Razorpay's Registration Link/Invoice product has
       // no callback_url field, so Razorpay can never redirect the customer
       // back automatically — opening in a new tab keeps this tab alive to
       // actively poll instead.
-      window.open(registrationLink.shortUrl, '_blank', 'noopener,noreferrer');
+      if (popupWindow && !popupWindow.closed) {
+        popupWindow.location.href = registrationLink.shortUrl;
+      } else {
+        // Fallback for a caller that couldn't pre-open one (or it got closed
+        // by the user) — still attempted, even though it may now be blocked.
+        window.open(registrationLink.shortUrl, '_blank', 'noopener,noreferrer');
+      }
       setCheckoutJourneyState('confirming_mandate');
       startMandatePolling();
     }, 2500);
+  };
+
+  // Opens a blank tab synchronously, before any await breaks the user-gesture
+  // chain — must be called at the very start of a click handler, never after
+  // an `await`. Callers close it themselves if the flow turns out not to need
+  // a registration link after all (e.g. an upgrade that uses Razorpay
+  // Checkout instead), so no stray blank tab is left behind.
+  const openBlankRegistrationTab = () => {
+    try {
+      return window.open('', '_blank', 'noopener,noreferrer');
+    } catch {
+      return null;
+    }
   };
 
   // Called by the checkout modal's Confirm & Pay button. Accepts an optional
@@ -1231,6 +1261,19 @@ const SubscriptionPlans = () => {
   const handleConfirmCheckout = async (userOverride) => {
     if (!checkoutData) return;
     const effectiveUser = userOverride || currentUser;
+
+    // Popup-blocker fix (see openRegistrationLinkJourney's own comment):
+    // every checkoutData.type branch below either returns early via
+    // Razorpay Checkout (openCheckout, an SDK-driven iframe, not window.open)
+    // or is a no-payment schedule/downgrade — only the UNTYPED, fall-through
+    // branch at the bottom (fresh subscribe / plan-change-while-pending)
+    // ever calls openRegistrationLinkJourney. Pre-open the tab HERE,
+    // synchronously, before this function's first `await` breaks the
+    // trusted user-gesture chain a real click gives us. Closed below on any
+    // path that doesn't end up needing it, so no stray blank tab survives.
+    const willNeedRegistrationLink = !checkoutData.type;
+    const preopenedPopup = willNeedRegistrationLink ? openBlankRegistrationTab() : null;
+
     setProcessing(true);
     setMessage("");
 
@@ -1511,6 +1554,7 @@ const SubscriptionPlans = () => {
       // re-invokes this same function.
       if (!subscription?.subscription?.isPaymentConfirmed && (!effectiveUser?.email || !effectiveUser?.phone)) {
         setProcessing(false);
+        if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
         setShowBillingProfileModal(true);
         return;
       }
@@ -1553,18 +1597,22 @@ const SubscriptionPlans = () => {
       setCheckoutData(null);
 
       if (response.paymentDetails && razorpayLoaded) {
+        if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
         setCheckoutJourneyState('preparing_payment');
         setTimeout(() => {
           openRazorpay(response.paymentDetails);
         }, 500);
       } else if (response.registrationLink?.shortUrl) {
-        openRegistrationLinkJourney(response.registrationLink);
+        openRegistrationLinkJourney(response.registrationLink, preopenedPopup);
       } else if (response.scheduled) {
+        if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
         setMessage({ type: "success", text: response.message || "Change scheduled successfully!" });
       } else {
+        if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
         setMessage({ type: "success", text: response.message || "Subscription updated successfully!" });
       }
     } catch (error) {
+      if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
       const data = error.response?.data;
       let text = "Failed to update subscription";
       if (error.response?.status === 403) {
@@ -1594,6 +1642,12 @@ const SubscriptionPlans = () => {
   const handleResumePayment = async () => {
     const sub = subscription?.subscription;
     if (!sub) return;
+
+    // Same popup-blocker fix as handleConfirmCheckout — open the tab
+    // synchronously here, before the first await, not inside
+    // openRegistrationLinkJourney's setTimeout.
+    const preopenedPopup = openBlankRegistrationTab();
+
     setProcessing(true);
     setMessage("");
     try {
@@ -1605,11 +1659,13 @@ const SubscriptionPlans = () => {
       };
       const response = await updateSubscription(planData);
       if (response.registrationLink?.shortUrl) {
-        openRegistrationLinkJourney(response.registrationLink);
+        openRegistrationLinkJourney(response.registrationLink, preopenedPopup);
       } else {
+        if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
         setMessage({ type: "error", text: "Could not resume payment. Please try again." });
       }
     } catch (error) {
+      if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
       setMessage({ type: "error", text: error.response?.data?.error || "Could not resume payment. Please try again." });
     } finally {
       setProcessing(false);

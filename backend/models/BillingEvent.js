@@ -48,6 +48,13 @@ const billingEventSchema = new mongoose.Schema({
       'SUBSCRIPTION_ACTIVATED',
       'TRIAL_STARTED',
       'TRIAL_ENDED',
+      // A super admin extending/shortening a trial's end date
+      // (superAdminController.js's adminAdjustTrial) — distinct from
+      // TRIAL_ENDED (the trial actually concluding) and from the generic
+      // ADMIN_ADJUSTMENT catch-all, so the Timeline/Calendar can show an
+      // explicit, attributed "extended by our team" event rather than the
+      // trial's end date silently moving with no record of why.
+      'TRIAL_ADJUSTED',
       'PLAN_UPGRADE',
       'PLAN_DOWNGRADE',
       'DOWNGRADE_SCHEDULED',
@@ -85,6 +92,13 @@ const billingEventSchema = new mongoose.Schema({
       // referee's own timeline entry for their one-time immediate discount,
       // per the one-benefit-per-participant design (§3).
       'REFERRAL_DISCOUNT_APPLIED',
+      // Persisted, queryable manual-review signal (Aug 2026) — added so a
+      // rare-race reconciliation gap (e.g. handleCAWPaymentCaptured's
+      // orphaned-payment path finding a discount it can't safely re-apply)
+      // leaves a durable, admin-visible trail instead of only a server log
+      // line nobody is watching. Never drives billing behavior itself, same
+      // as every other event type here.
+      'BILLING_RECONCILIATION_NEEDED',
     ],
     index: true,
   },

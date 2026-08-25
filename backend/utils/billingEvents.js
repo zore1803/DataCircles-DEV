@@ -168,7 +168,22 @@ function buildEventSummary(event) {
     case 'TRIAL_STARTED':
       return { title: 'Free Trial Started', subtitle: prettyPlan(after?.planName), amountChange: undefined, detail: event.effectiveAt ? `Ends ${new Date(event.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : undefined };
     case 'TRIAL_ENDED':
-      return { title: 'Trial Ended', subtitle: undefined, amountChange: undefined, detail: undefined };
+      return {
+        title: event.metadata?.endedBy === 'admin' ? 'Trial Ended Early' : 'Trial Ended',
+        subtitle: undefined,
+        amountChange: undefined,
+        detail: event.metadata?.endedBy === 'admin' ? 'Ended by support ahead of the original end date' : undefined,
+      };
+    case 'TRIAL_ADJUSTED': {
+      const days = event.metadata?.adjustmentDays;
+      const direction = days > 0 ? 'Extended' : 'Shortened';
+      return {
+        title: `Trial ${direction}`,
+        subtitle: days != null ? `${direction === 'Extended' ? '+' : ''}${days} day${Math.abs(days) === 1 ? '' : 's'}` : undefined,
+        amountChange: undefined,
+        detail: event.effectiveAt ? `New end date: ${new Date(event.effectiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : undefined,
+      };
+    }
     case 'SUBSCRIPTION_CANCELLED':
       return {
         title: event.status === 'scheduled' ? 'Cancellation Scheduled' : 'Subscription Cancelled',
@@ -243,6 +258,13 @@ function buildEventSummary(event) {
         subtitle: undefined,
         amountChange: amounts.recurringBefore != null ? `Recurring: ${perCycle(amounts.recurringBefore, cycle)} → ${perCycle(amounts.recurringAfter, cycle)}` : undefined,
         detail: 'Historical redemption is preserved — only future billing is affected',
+      };
+    case 'BILLING_RECONCILIATION_NEEDED':
+      return {
+        title: 'Needs Manual Review',
+        subtitle: event.metadata?.reason || undefined,
+        amountChange: undefined,
+        detail: event.metadata?.note || 'Automated billing reconciliation could not fully resolve this — check backend logs for the originating handler and payment/registration link IDs in metadata.',
       };
     default:
       return { title: event.eventType, subtitle: undefined, amountChange: undefined, detail: undefined };
