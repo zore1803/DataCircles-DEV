@@ -19,6 +19,67 @@ const MESSAGE_PLACEHOLDER_TOKENS = [
   { key: "company", label: "Company Name" },
 ];
 
+// Two forms of the same thing:
+//   - Stored form ({customerName}) — how the backend and ShareFlyoutMenu's
+//     substitution logic have always keyed these.
+//   - Friendly form ([Customer Name]) — what the user sees in the editor
+//     instead of the technical curly-brace token.
+// Templates are held in editor state in friendly form (so text areas, char
+// counts, and previews all read naturally) and translated back on save.
+const FRIENDLY_LABEL_BY_KEY = MESSAGE_PLACEHOLDER_TOKENS.reduce((acc, t) => {
+  acc[t.key] = t.label;
+  return acc;
+}, {});
+const KEY_BY_FRIENDLY_LABEL = MESSAGE_PLACEHOLDER_TOKENS.reduce((acc, t) => {
+  acc[t.label] = t.key;
+  return acc;
+}, {});
+const FRIENDLY_LABEL_REGEX = new RegExp(
+  `\\[(${MESSAGE_PLACEHOLDER_TOKENS.map((t) => t.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\]`,
+  "g"
+);
+const STORED_KEY_REGEX = new RegExp(
+  `\\{(${MESSAGE_PLACEHOLDER_TOKENS.map((t) => t.key).join("|")})\\}`,
+  "g"
+);
+const toFriendly = (str) =>
+  (str || "").replace(STORED_KEY_REGEX, (_, k) => `[${FRIENDLY_LABEL_BY_KEY[k]}]`);
+const toStored = (str) =>
+  (str || "").replace(FRIENDLY_LABEL_REGEX, (_, l) => `{${KEY_BY_FRIENDLY_LABEL[l]}}`);
+
+// Applies toFriendly/toStored to whichever fields on a template row hold
+// placeholder-bearing text — differs per channel (email: subject+body,
+// sms: body, whatsapp: line1+line2). Non-string fields (isDefault, id, etc.)
+// pass through untouched.
+const templateFieldsToFriendly = (tpl) => ({
+  ...tpl,
+  ...(tpl.subject !== undefined ? { subject: toFriendly(tpl.subject) } : {}),
+  ...(tpl.body !== undefined ? { body: toFriendly(tpl.body) } : {}),
+  ...(tpl.line1 !== undefined ? { line1: toFriendly(tpl.line1) } : {}),
+  ...(tpl.line2 !== undefined ? { line2: toFriendly(tpl.line2) } : {}),
+});
+const templateFieldsToStored = (tpl) => ({
+  ...tpl,
+  ...(tpl.subject !== undefined ? { subject: toStored(tpl.subject) } : {}),
+  ...(tpl.body !== undefined ? { body: toStored(tpl.body) } : {}),
+  ...(tpl.line1 !== undefined ? { line1: toStored(tpl.line1) } : {}),
+  ...(tpl.line2 !== undefined ? { line2: toStored(tpl.line2) } : {}),
+});
+
+// Preview substitution: shows the user what the message will look like when
+// the chips are filled in for a real customer. Runs against the friendly
+// [Customer Name] form the editor holds in state.
+const SAMPLE_VALUES = {
+  "Customer Name": "Customer Name",
+  "Document Type": "Invoice",
+  "Document Number": "INV-001",
+  "Amount": "₹1,234.00",
+  "View Link": "datacircles.in/view/…",
+  "Company Name": "Company Name",
+};
+const resolveSampleValues = (str) =>
+  (str || "").replace(FRIENDLY_LABEL_REGEX, (_, l) => SAMPLE_VALUES[l] ?? `[${l}]`);
+
 const documentTypeMeta = [
   { key: "invoice", label: "Invoice" },
   { key: "quote", label: "Quote" },
@@ -84,9 +145,13 @@ function DocumentSettings() {
   const emailSubjectRef = useRef(null);
   const emailBodyRef = useRef(null);
   const smsBodyRef = useRef(null);
+  const whatsappLine1Ref = useRef(null);
+  const whatsappLine2Ref = useRef(null);
 
   const insertPlaceholderToken = (ref, currentValue, onChange, tokenKey) => {
-    const placeholder = `{${tokenKey}}`;
+    // Friendly chip form: what the user sees and edits. On save, the
+    // outbound serializer converts these back to {tokenKey} for the backend.
+    const placeholder = `[${FRIENDLY_LABEL_BY_KEY[tokenKey]}]`;
     const el = ref.current;
     const value = currentValue || "";
     if (!el) {
@@ -132,9 +197,15 @@ function DocumentSettings() {
           suffixes: incoming?.[key]?.suffixes || fallback.suffixes || [],
         });
 
-        setWhatsappTemplates(Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : []);
-        setSmsTemplates(Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : []);
-        setEmailTemplates(Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : []);
+        // Backend stores placeholders as {customerName}/{docType}/…; the
+        // editor shows them as friendly [Customer Name]/[Document Type]/…
+        // chips instead, so translate every incoming template row.
+        const rawWa = Array.isArray(res.data?.whatsappTemplates) ? res.data.whatsappTemplates : [];
+        const rawSms = Array.isArray(res.data?.smsTemplates) ? res.data.smsTemplates : [];
+        const rawEmail = Array.isArray(res.data?.emailTemplates) ? res.data.emailTemplates : [];
+        setWhatsappTemplates(rawWa.map(templateFieldsToFriendly));
+        setSmsTemplates(rawSms.map(templateFieldsToFriendly));
+        setEmailTemplates(rawEmail.map(templateFieldsToFriendly));
 
         // Seed sensible copy for any document type that has neither a
         // per-type value nor the legacy flat default — so a fresh org sees
@@ -322,7 +393,9 @@ function DocumentSettings() {
 
     setSaving(true);
     try {
-      await API.put("/document-settings", { [field]: nextList });
+      // Local state holds friendly [Customer Name] chips; backend expects
+      // {customerName} tokens — translate every row on the way out.
+      await API.put("/document-settings", { [field]: nextList.map(templateFieldsToStored) });
       setList(nextList);
       setEditingTemplate(null);
       toast.success("Template saved");
@@ -342,7 +415,7 @@ function DocumentSettings() {
     }
     setSaving(true);
     try {
-      await API.put("/document-settings", { [field]: nextList });
+      await API.put("/document-settings", { [field]: nextList.map(templateFieldsToStored) });
       setList(nextList);
       toast.success("Template deleted");
     } catch {
@@ -357,7 +430,7 @@ function DocumentSettings() {
     const nextList = list.map((t) => ({ ...t, isDefault: t.id === id }));
     setSaving(true);
     try {
-      await API.put("/document-settings", { [field]: nextList });
+      await API.put("/document-settings", { [field]: nextList.map(templateFieldsToStored) });
       setList(nextList);
     } catch {
       toast.error("Failed to update default");
@@ -963,13 +1036,7 @@ function DocumentSettings() {
                 <div>
                   <p className="text-xs text-gray-400 mb-2 font-medium">Preview</p>
                   <div className="max-w-xs bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-gray-800 leading-relaxed">
-                    {editingTemplate.body
-                      .replace(/{customerName}/g, "Customer Name")
-                      .replace(/{docType}/g, "Invoice")
-                      .replace(/{number}/g, "INV-001")
-                      .replace(/{amount}/g, "₹1,234.00")
-                      .replace(/{link}/g, "datacircles.in/view/…")
-                      .replace(/{company}/g, "Company Name")}
+                    {resolveSampleValues(editingTemplate.body)}
                   </div>
                 </div>
               </>
@@ -987,12 +1054,32 @@ function DocumentSettings() {
                   <div className="bg-white px-4 py-3">
                     <p className="text-[10px] text-green-700 mb-1.5 uppercase tracking-wider font-semibold">✏ Message Line 1</p>
                     <input
+                      ref={whatsappLine1Ref}
                       type="text"
                       value={editingTemplate.line1}
                       onChange={(e) => setEditingTemplate((p) => ({ ...p, line1: e.target.value }))}
                       placeholder="Thanks for your business!"
                       className="w-full text-sm text-gray-800 outline-none placeholder-gray-300 bg-transparent"
                     />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {MESSAGE_PLACEHOLDER_TOKENS.map((token) => (
+                        <button
+                          key={token.key}
+                          type="button"
+                          onClick={() =>
+                            insertPlaceholderToken(
+                              whatsappLine1Ref,
+                              editingTemplate.line1,
+                              (val) => setEditingTemplate((p) => ({ ...p, line1: val })),
+                              token.key
+                            )
+                          }
+                          className="text-[11px] font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-full px-2.5 py-1 transition-colors"
+                        >
+                          + {token.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="bg-gray-50 px-4 py-3 space-y-1">
                     <p className="text-xs text-gray-400 mb-0.5 uppercase tracking-wider font-medium">Document Details (fixed)</p>
@@ -1003,12 +1090,32 @@ function DocumentSettings() {
                   <div className="bg-white px-4 py-3">
                     <p className="text-[10px] text-green-700 mb-1.5 uppercase tracking-wider font-semibold">✏ Message Line 2 <span className="normal-case text-gray-400 font-normal">(optional)</span></p>
                     <input
+                      ref={whatsappLine2Ref}
                       type="text"
                       value={editingTemplate.line2}
                       onChange={(e) => setEditingTemplate((p) => ({ ...p, line2: e.target.value }))}
                       placeholder="Please review and confirm."
                       className="w-full text-sm text-gray-800 outline-none placeholder-gray-300 bg-transparent"
                     />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {MESSAGE_PLACEHOLDER_TOKENS.map((token) => (
+                        <button
+                          key={token.key}
+                          type="button"
+                          onClick={() =>
+                            insertPlaceholderToken(
+                              whatsappLine2Ref,
+                              editingTemplate.line2,
+                              (val) => setEditingTemplate((p) => ({ ...p, line2: val })),
+                              token.key
+                            )
+                          }
+                          className="text-[11px] font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-full px-2.5 py-1 transition-colors"
+                        >
+                          + {token.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="bg-gray-50 px-4 py-3">
                     <p className="text-xs text-gray-400 mb-0.5 uppercase tracking-wider font-medium">Footer (fixed)</p>
@@ -1019,7 +1126,7 @@ function DocumentSettings() {
                 <div>
                   <p className="text-xs text-gray-400 mb-2 font-medium">Preview</p>
                   <div className="max-w-xs bg-[#dcf8c6] rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap shadow-sm">
-                    {`Hello! *Customer Name*\n\n${editingTemplate.line1 || "…"}\n\nDocument No: ●●●●●●\nTotal: ₹ ●●●●●●\nLink: https://datacircles.in/view/…${editingTemplate.line2 ? `\n\n${editingTemplate.line2}` : ""}\n\nThanks\n*Company Name*`}
+                    {`Hello! *Customer Name*\n\n${resolveSampleValues(editingTemplate.line1) || "…"}\n\nDocument No: ●●●●●●\nTotal: ₹ ●●●●●●\nLink: https://datacircles.in/view/…${editingTemplate.line2 ? `\n\n${resolveSampleValues(editingTemplate.line2)}` : ""}\n\nThanks\n*Company Name*`}
                   </div>
                 </div>
               </>

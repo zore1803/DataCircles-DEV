@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Plus,
@@ -291,7 +292,16 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
   const lbl = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2 font-inter";
   const hasVariants = variants.length > 0 || showVariantForm;
 
-  return (
+  // Portaled to <body> — this drawer is opened from inside CreateInvoicePanel
+  // (InvoiceForm.jsx), which is itself a `fixed` element with its own
+  // z-index (z-[60]) and therefore its own stacking context. Rendered as a
+  // plain JSX child there, this drawer's backdrop/panel would be trapped
+  // inside that z-60 context — any z-index set on them, however high,
+  // only ranks them among CreateInvoicePanel's own siblings, so the whole
+  // subtree still paints below the app header/sidebar (z-9992/z-9995)
+  // instead of covering and blurring them. Portaling escapes that context
+  // entirely, matching how ShareFlyoutMenu.jsx already does this.
+  return createPortal(
     <>
       <div
         className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100005] transition-opacity duration-300"
@@ -827,6 +837,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 }

@@ -40,8 +40,15 @@ export default function ShareFlyoutMenu({
       .replace(/{link}/g, link)
       .replace(/{company}/g, companyName || "");
 
-  const buildWaMsg = (tpl) =>
-    `Hello! *${recipientName || ""}*\n\n${tpl?.line1 || "Your " + docTypeLabel + " is ready to view."}\n\nDocument No: ${docNumber || "—"}\nTotal: ${amountLabel || ""}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${companyName || "our team"}*`;
+  const buildWaMsg = (tpl) => {
+    // line1/line2 can carry the same {customerName}/{docType}/… placeholders
+    // as the email/SMS templates — Settings' template editor now lets the
+    // user drop chips into these lines, so we resolve them here on the way
+    // out, same as fillTpl does for SMS/email above.
+    const l1 = tpl?.line1 ? fillTpl(tpl.line1) : ("Your " + docTypeLabel + " is ready to view.");
+    const l2 = tpl?.line2 ? fillTpl(tpl.line2) : "";
+    return `Hello! *${recipientName || ""}*\n\n${l1}\n\nDocument No: ${docNumber || "—"}\nTotal: ${amountLabel || ""}\nLink: ${link}${l2 ? `\n\n${l2}` : ""}\n\nThanks\n*${companyName || "our team"}*`;
+  };
   const buildSmsMsg = (tpl) =>
     tpl?.body
       ? fillTpl(tpl.body)

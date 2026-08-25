@@ -48,6 +48,7 @@ import Wallet from "../components/settings/Wallet";
 import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
 import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
+import CustomDomain from "../components/settings/CustomDomain";
 import PageSkeleton from "../components/common/PageSkeleton";
 
 // Array of cool loading messages relevant for dashboard
@@ -193,6 +194,18 @@ const Settings = () => {
       borderColor: "border-blue-200",
       hoverBg: "hover:bg-blue-50",
       component: <BrandSettings />,
+      category: "General",
+    },
+    {
+      id: "custom-domain",
+      icon: <Globe className="w-5 h-5" />,
+      label: "Custom Domain",
+      description: "Use your own domain for public document links",
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-50",
+      borderColor: "border-indigo-200",
+      hoverBg: "hover:bg-indigo-50",
+      component: <CustomDomain />,
       category: "General",
     },
     {
