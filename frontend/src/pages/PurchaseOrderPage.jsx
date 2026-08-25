@@ -869,10 +869,15 @@ const PurchaseOrderPage = () => {
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 160;
+            const MENU_W = 200;
             const MARGIN = 8;
-            // View, Edit, Download, Share, Delete + two dividers + container padding.
-            const MENU_H = 232;
+            // Conservative estimate for the tallest state (every optional row
+            // shown: View/Edit/Download/Share/Delete/Change Status/Convert) —
+            // same approach as Accounting.jsx's row menu. The panel itself
+            // also carries max-h-[70vh] + overflow-y-auto as a safety net, so
+            // an inaccurate estimate here can never cause the menu to render
+            // taller than its calculated position accounts for.
+            const MENU_H = 340;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -906,7 +911,7 @@ const PurchaseOrderPage = () => {
             />
             <div
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               {activeRowMenuState === "status" ? (
                 <>
@@ -972,7 +977,7 @@ const PurchaseOrderPage = () => {
                     onClick={(e) => {
                       e.stopPropagation();
                       const DROPDOWN_W = 208;
-                      const anchorRight = rowActionsPos.left + 160;
+                      const anchorRight = rowActionsPos.left + 200;
                       setOpenRowActionsId(null);
                       setRowActionsPos(null);
                       setShareMenu({
@@ -981,10 +986,10 @@ const PurchaseOrderPage = () => {
                         y: rowActionsPos.top,
                       });
                     }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    className="w-full flex items-start gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 text-left"
                   >
-                    <Share2 className="w-3.5 h-3.5 text-blue-600" />
-                    Share
+                    <Share2 className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    Share via WhatsApp/Email/SMS
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button

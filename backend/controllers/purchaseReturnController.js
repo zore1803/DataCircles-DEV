@@ -1,6 +1,7 @@
 const PurchaseReturn = require("../models/PurchaseReturn");
 const Vendor = require("../models/Vendor");
 const Purchase = require("../models/Purchase");
+const { syncDocumentStock } = require("../utils/inventorySync");
 
 // Same math as purchaseController.js — kept in lockstep on purpose so the
 // two document types never silently disagree on how a total is computed.
@@ -32,6 +33,38 @@ const POPULATE = [
   { path: "purchase", select: "purchaseNumber vendor" },
   { path: "items.itemId", select: "name description purchasePrice hsnSac gstRate" },
 ];
+
+// Applies the inventory stock-out for a PurchaseReturn transitioning into
+// "Paid" — the single inventory-triggering event for this module, mirroring
+// purchaseOrderController.js's syncPurchaseOrderDeliveryStock (Delivered)
+// exactly. "Paid" is terminal here (enforced by the callers below refusing to
+// change status away from it), so there's no "moving out of Paid" branch to
+// reverse — the only way to undo the stock-out is deleting the return, which
+// deletePurchaseReturn reverses via isReversal: true.
+//
+// Goods physically leaving toward the vendor is a reduction in our own
+// stock, same directional sense as a sale — hence baseDirection: "out".
+async function syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, userId) {
+  const isNowPaid = purchaseReturn.status === "Paid";
+  const wasPaid = oldStatus === "Paid";
+
+  if (isNowPaid && !wasPaid && oldStockMovementStatus !== "applied") {
+    await syncDocumentStock({
+      organization: purchaseReturn.organization,
+      documentId: purchaseReturn._id,
+      documentModel: "PurchaseReturn",
+      documentNumber: purchaseReturn.returnNumber,
+      items: purchaseReturn.items,
+      previousItems: [],
+      baseDirection: "out",
+      userId,
+      reason: "return",
+      isReversal: false,
+    });
+    purchaseReturn.stockMovementStatus = "applied";
+    await purchaseReturn.save({ validateModifiedOnly: true });
+  }
+}
 
 exports.createPurchaseReturn = async (req, res) => {
   try {
@@ -83,6 +116,12 @@ exports.createPurchaseReturn = async (req, res) => {
     });
 
     await purchaseReturn.save();
+
+    // Covers creating a return directly with status "Paid" (e.g. recording
+    // an already-settled historical return) — oldStatus is null (never was
+    // Paid) so this applies exactly once, same guard as the update paths.
+    await syncPurchaseReturnStock(purchaseReturn, null, purchaseReturn.stockMovementStatus, req.user.id);
+
     await purchaseReturn.populate(POPULATE);
 
     res.status(201).json(purchaseReturn);
@@ -212,6 +251,17 @@ exports.updatePurchaseReturn = async (req, res) => {
 
     const { vendor, purchase, items, notes, status, transactionType, gstRate, mode, reason, returnDate } = req.body;
 
+    // Captured before any field changes below, so the Paid stock sync (after
+    // save) can tell what actually transitioned.
+    const oldStatus = purchaseReturn.status;
+    const oldStockMovementStatus = purchaseReturn.stockMovementStatus;
+
+    // Paid is terminal — same rule as updatePurchaseReturnStatus, applied
+    // here too since this endpoint is also how the edit form changes status.
+    if (oldStatus === "Paid" && status !== undefined && status !== "Paid") {
+      return res.status(400).json({ message: "A Paid Purchase Return can't be changed to another status." });
+    }
+
     if (vendor !== undefined) purchaseReturn.vendor = vendor;
     if (purchase !== undefined) purchaseReturn.purchase = purchase || null;
     if (returnDate !== undefined) purchaseReturn.returnDate = returnDate;
@@ -241,6 +291,12 @@ exports.updatePurchaseReturn = async (req, res) => {
     }
 
     await purchaseReturn.save();
+
+    // Applies the Paid stock-out. Covers both the edit form (which sends
+    // items+status together) and any bulk status update that PUTs here
+    // rather than the /status endpoint below.
+    await syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, req.user.id);
+
     await purchaseReturn.populate(POPULATE);
 
     res.json(purchaseReturn);
@@ -258,13 +314,29 @@ exports.updatePurchaseReturnStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const purchaseReturn = await PurchaseReturn.findOneAndUpdate(
-      { _id: req.params.id, organization: req.user.organization },
-      { status },
-      { new: true }
-    ).populate(POPULATE);
-
+    const purchaseReturn = await PurchaseReturn.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
     if (!purchaseReturn) return res.status(404).json({ message: "Purchase return not found" });
+
+    const oldStatus = purchaseReturn.status;
+    const oldStockMovementStatus = purchaseReturn.stockMovementStatus;
+
+    // Paid is terminal — goods have already left toward the vendor and stock
+    // moved accordingly, so it can't be walked back through the status
+    // dropdown. (Not enforced via the enum itself since Paid is still a
+    // perfectly valid status to reach.)
+    if (oldStatus === "Paid" && status !== "Paid") {
+      return res.status(400).json({ message: "A Paid Purchase Return can't be changed to another status." });
+    }
+
+    purchaseReturn.status = status;
+    await purchaseReturn.save();
+
+    await syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, req.user.id);
+
+    await purchaseReturn.populate(POPULATE);
     res.json(purchaseReturn);
   } catch (err) {
     console.error("Update purchase return status error:", err);
@@ -274,11 +346,30 @@ exports.updatePurchaseReturnStatus = async (req, res) => {
 
 exports.deletePurchaseReturn = async (req, res) => {
   try {
-    const purchaseReturn = await PurchaseReturn.findOneAndDelete({
+    const purchaseReturn = await PurchaseReturn.findOne({
       _id: req.params.id,
       organization: req.user.organization,
     });
     if (!purchaseReturn) return res.status(404).json({ message: "Purchase return not found" });
+
+    // Deleting a Paid return must reverse its stock-out — otherwise stock
+    // stays understated with no surviving document to explain why.
+    if (purchaseReturn.stockMovementStatus === "applied") {
+      await syncDocumentStock({
+        organization: purchaseReturn.organization,
+        documentId: purchaseReturn._id,
+        documentModel: "PurchaseReturn",
+        documentNumber: purchaseReturn.returnNumber,
+        items: purchaseReturn.items,
+        previousItems: [],
+        baseDirection: "out",
+        userId: req.user.id,
+        reason: "adjustment",
+        isReversal: true,
+      });
+    }
+
+    await purchaseReturn.deleteOne();
     res.json({ message: "Purchase return deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });

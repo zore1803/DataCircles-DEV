@@ -53,6 +53,16 @@ const purchaseReturnSchema = new mongoose.Schema(
     reason: { type: String, default: "" },
     notes: { type: String, default: "" },
 
+    // Guards the inventory stock-out from double/under-applying — see
+    // purchaseReturnController.js's syncPurchaseReturnStock. Mirrors
+    // PurchaseOrder.stockMovementStatus exactly: "Paid" is the terminal,
+    // stock-moving status; reversal only happens via delete.
+    stockMovementStatus: {
+      type: String,
+      enum: ["pending", "applied", "reversed"],
+      default: "pending",
+    },
+
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     organization: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
   },
