@@ -902,7 +902,8 @@ const InvoiceForm = ({
           return form.isRoundOff ? Math.round(t) : t;
         })(),
         items: form.items.map((item) => ({
-          itemId: item._id,
+          itemId: item.isVariant ? item.parentItemId : item._id,
+          variantId: item.isVariant ? item._id : null,
           name: item.name,
           description: item.description,
           rate: parseFloat(item.rate),
@@ -1018,7 +1019,7 @@ const InvoiceForm = ({
         transactionType: sourceData.transactionType || "intra",
         gstRate: sourceData.gstRate || 18,
         items: (sourceData.items || []).map((item) => ({
-          _id: item.itemId || item._id || null,
+          _id: (item.isVariant ? item.variantId : item.itemId) || item.itemId || item._id || null,
           name: item.name || "",
           description: item.description || "",
           rate: item.rate || "",
@@ -2163,7 +2164,7 @@ const CreateInvoicePanel = ({
           items:
             sourceDoc.items && sourceDoc.items.length
               ? sourceDoc.items.map((item) => ({
-                  _id: item.itemId || item._id || null,
+                  _id: (item.isVariant ? item.variantId : item.itemId) || item.itemId || item._id || null,
                   name: item.name || "",
                   description: item.description || "",
                   rate: item.rate ?? 0,
@@ -2700,7 +2701,8 @@ const CreateInvoicePanel = ({
         signature: form.signature,
         amount: finalTotal,
         items: form.items.map((it) => ({
-          itemId: it._id,
+          itemId: it.isVariant ? it.parentItemId : it._id,
+          variantId: it.isVariant ? it._id : null,
           name: it.name,
           description: it.description,
           rate: parseFloat(it.rate) || 0,

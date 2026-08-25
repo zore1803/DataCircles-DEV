@@ -428,6 +428,10 @@ const PurchasePage = () => {
   // button hits for its own tabs (/${apiPath}/download/${id}) — reused
   // as-is rather than a Purchase-specific PDF pipeline.
   const handleDownload = async (purchase) => {
+    // Purchase downloads aren't wired to the customizable PDF filename
+    // settings (only Invoice/Pro Forma/Quotation/Delivery Challan are, for
+    // now) — fixed filename shape.
+    const filename = `Purchase-${purchase.purchaseNumber || purchase._id}`;
     try {
       const response = await API.get(`/purchases/download/${purchase._id}`, {
         responseType: "blob",
@@ -436,7 +440,7 @@ const PurchasePage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `Purchase-${purchase.purchaseNumber || purchase._id}.pdf`);
+      link.setAttribute("download", `${filename}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();

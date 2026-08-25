@@ -97,6 +97,7 @@ function normalizeInvoiceNumberSettings(settings = {}) {
     whatsappTemplates: normalizeTemplateArray(settings.whatsappTemplates),
     smsTemplates: normalizeTemplateArray(settings.smsTemplates),
     emailTemplates: normalizeTemplateArray(settings.emailTemplates),
+    pdfFilenameFormats: settings.pdfFilenameFormats,
   };
 }
 
@@ -462,12 +463,19 @@ async function saveDocumentSettingsForOrganization(organizationId, payload = {})
   if (payload.emailTemplates !== undefined) {
     settingsPayload.emailTemplates = Array.isArray(payload.emailTemplates) ? payload.emailTemplates : [];
   }
+  // Merge over existing so saving one doc type doesn't wipe the others.
+  if (payload.pdfFilenameFormats !== undefined && typeof payload.pdfFilenameFormats === 'object') {
+    settingsPayload.pdfFilenameFormats = {
+      ...(existing?.pdfFilenameFormats || {}),
+      ...payload.pdfFilenameFormats,
+    };
+  }
 
   if (existing) {
     Object.assign(existing, settingsPayload);
     // Schema type Object: mongoose won't diff the nested keys on its own, so
     // say explicitly that these paths changed or the save is a no-op.
-    for (const p of ['documentTypeSettings', 'defaultNotesByType', 'defaultTermsByType']) {
+    for (const p of ['documentTypeSettings', 'defaultNotesByType', 'defaultTermsByType', 'pdfFilenameFormats']) {
       if (settingsPayload[p] !== undefined) existing.markModified(p);
     }
     await existing.save();

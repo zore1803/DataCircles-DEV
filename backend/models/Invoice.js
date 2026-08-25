@@ -43,6 +43,10 @@ const invoiceSchema = new mongoose.Schema({
   gstRate: { type: Number, min: 0, max: 100, default: 18 },
   items: [{
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+    // Set only for variant lines — itemId above is the parent Item's id
+    // (parentItemId duplicates it for display purposes), this is the specific
+    // variant subdocument id, needed to move stock against the right variant.
+    variantId: { type: mongoose.Schema.Types.ObjectId, default: null },
     name: { type: String, required: true },
     description: { type: String },
     rate: { type: Number, required: true },

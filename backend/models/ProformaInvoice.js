@@ -43,6 +43,8 @@ const proformaInvoiceSchema = new mongoose.Schema({
   receiverGSTIN: { type: String }, // Added receiverGSTIN field
   items: [{
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+    // Set only for variant lines — itemId above is the parent Item's id.
+    variantId: { type: mongoose.Schema.Types.ObjectId, default: null },
     name: { type: String, required: true },
     description: { type: String },
     rate: { type: Number, required: true },

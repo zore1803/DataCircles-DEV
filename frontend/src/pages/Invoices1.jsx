@@ -45,6 +45,8 @@ import VideoTutorialButton from "../components/VideoTutorialButton";
 import QuickBrandingModal from "../components/invoice/QuickBrandingModal";
 import { useLocation, useNavigate } from "react-router-dom";
 import AppToaster from "../components/AppToaster";
+import { getDocumentSettings } from "../services/documentSettingsCache";
+import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
 
 const statusOptions = [
   "Draft",
@@ -1181,6 +1183,32 @@ const MergedInvoiceManager = () => {
         : type === "quotation"
         ? "quotations"
         : "delivery-challans";
+
+    const docTypeLabel =
+      type === "tax"
+        ? "Invoice"
+        : type === "performa"
+        ? "Pro Forma Invoice"
+        : type === "quotation"
+        ? "Quotation"
+        : "Delivery Challan";
+
+    // Resolve filename from saved org settings
+    const tabDocs = documents[type] ?? [];
+    const doc = tabDocs.find((d) => d._id === id);
+    let filename = `${docTypeLabel}-${id}`;
+    try {
+      const settings = await getDocumentSettings();
+      const formats = settings?.pdfFilenameFormats || DEFAULT_FORMATS;
+      const tokens = formats[type] || DEFAULT_FORMATS[type];
+      // companyName comes from branding; fall back to empty string
+      const orgName = settings?.companyName || "";
+      const docData = extractDocData(doc || {}, type, orgName);
+      filename = buildFilename(tokens, docData);
+    } catch (_) {
+      // silently fall back to default name
+    }
+
     try {
       setLoading((prev) => ({ ...prev, [type]: true }));
       const response = await API.get(`/${apiPath}/download/${id}`, {
@@ -1190,22 +1218,12 @@ const MergedInvoiceManager = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${apiPath.split("-").join("")}-${id}.pdf`);
+      link.setAttribute("download", `${filename}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(
-        `${
-          type === "tax"
-            ? "Invoice"
-            : type === "performa"
-            ? "Pro Forma Invoice"
-            : type === "quotation"
-            ? "Quotation"
-            : "Delivery Challan"
-        } downloaded successfully`
-      );
+      toast.success(`${docTypeLabel} downloaded successfully`);
     } catch (error) {
       toast.error(`Failed to download ${type} document`);
       console.error(`Download ${type} document error:`, error);

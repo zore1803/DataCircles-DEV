@@ -56,11 +56,13 @@ import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
  * pattern (itself mirroring Companies.jsx/Deals.jsx/Contacts.jsx). Backed by
  * a new backend module (models/PurchaseReturn.js,
  * controllers/purchaseReturnController.js, routes/purchaseReturn.js) that
- * mirrors Purchase's own shape and numbering scheme. Not cloned: Purchase's
- * PO-conversion flow (no analogous "convert X to return" source document
- * exists) and its payments sub-resource (a return settles once via `mode`,
- * not an installment history) — see PurchaseReturnForm.jsx/
- * PurchaseReturnPreview.jsx for how those were simplified instead.
+ * mirrors Purchase's own shape and numbering scheme. Every return is created
+ * against an existing Purchase (PurchaseReturnForm.jsx: select Purchase ->
+ * vendor auto-fills -> its items load with Purchased/Already Returned/
+ * Remaining -> enter Return Qty + Reason per line) — there's no standalone
+ * path. Not cloned from Purchase: its payments sub-resource (a return
+ * settles once via `mode`, not an installment history) — see
+ * PurchaseReturnPreview.jsx for how that was simplified instead.
  */
 
 const getAncestorZoom = (el) => {
@@ -184,7 +186,7 @@ const PurchaseReturn = () => {
 
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
 
-  const statusOptions = ["Draft", "Pending", "Paid", "Cancelled"];
+  const statusOptions = ["Draft", "Pending", "Confirmed", "Paid", "Cancelled"];
 
   const returnFilterColumns = [
     { key: "returnNumber", label: "Return Number" },

@@ -37,6 +37,15 @@ const ItemForm = ({
     gstRate: 0,
   });
   const [variantIndex, setVariantIndex] = useState(null);
+  // Once an item has variants, the variant is the actual sellable/stockable
+  // unit everywhere in the app (every item-picker in Purchase/PO/Quotation/
+  // Invoice/Delivery Challan already ignores parent pricing once
+  // item.variants.length > 0, resolving to the variant instead) — so the
+  // parent-level price/GST/stock fields below become inert and are disabled
+  // to stop the user from ever wondering "which price actually applies".
+  // Includes an in-progress uncommitted variant panel too, since that
+  // variant gets auto-committed on submit (see handleSubmit).
+  const hasVariants = variants.length > 0 || (showVariantForm && !!currentVariant.name?.trim());
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
@@ -411,6 +420,15 @@ const ItemForm = ({
             : [...variants, currentVariant]
           : variants;
 
+      // Parent opening stock is inert once the item has variants (each
+      // variant tracks its own) — force it to 0 regardless of whatever
+      // stale value the now-disabled field's state still holds, so the
+      // backend never records a spurious opening-stock ledger entry for
+      // the parent on top of each variant's own.
+      const inventoryToSave = variantsToSave.length > 0
+        ? { ...(form.inventory || {}), openingStock: 0 }
+        : (form.inventory || {});
+
       // Flatten the entered custom-field values into the array shape the
       // Item model stores. Multiselect arrays collapse to a comma-separated
       // string, matching how the other modules persist them.
@@ -444,7 +462,7 @@ const ItemForm = ({
         fd.append("discount", JSON.stringify(form.discount || { type: "percentage", value: 0 }));
         // Nested object, so it must be JSON-stringified like variants/discount above —
         // appending it raw would send the literal string "[object Object]".
-        fd.append("inventory", JSON.stringify(form.inventory || {}));
+        fd.append("inventory", JSON.stringify(inventoryToSave));
         fd.append("existingImages", JSON.stringify(existingImages));
         newImageFiles.forEach((file) => fd.append("images", file));
 
@@ -459,6 +477,7 @@ const ItemForm = ({
         const payload = {
           ...form,
           variants: variantsToSave,
+          inventory: inventoryToSave,
           additionalFields: processedAdditionalFields,
           images: existingImages,
         };
@@ -906,50 +925,58 @@ const ItemForm = ({
             </div>
           </div>
 
-          {/* Price Row */}
+          {/* Price Row — disabled once the item has variants: each variant
+              carries its own price, and every item-picker across the app
+              (Purchase/PO/Quotation/Invoice/Delivery Challan) already offers
+              only the variants — not this parent price — once they exist. */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Purchase Price <span className="text-red-500">*</span>
+                Purchase Price {!hasVariants && <span className="text-red-500">*</span>}
               </label>
               <input
                 type="number"
                 min="0"
                 value={form.purchasePrice}
+                disabled={hasVariants}
                 onChange={(e) =>
                   handleFormChange("purchasePrice", e.target.value)
                 }
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                 placeholder="Enter Purchase Price"
               />
+              {hasVariants && <p className="mt-1 text-[11px] text-gray-400">Managed by variants — set per-variant below.</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Selling Price <span className="text-red-500">*</span>
+                Selling Price {!hasVariants && <span className="text-red-500">*</span>}
               </label>
               <input
                 type="number"
                 min="0"
                 value={form.sellingPrice}
+                disabled={hasVariants}
                 onChange={(e) =>
                   handleFormChange("sellingPrice", e.target.value)
                 }
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                 placeholder="Enter Selling Price"
               />
+              {hasVariants && <p className="mt-1 text-[11px] text-gray-400">Managed by variants — set per-variant below.</p>}
             </div>
           </div>
 
-          {/* Tax Inclusive + GST Rate */}
+          {/* Tax Inclusive + GST Rate — same "managed by variants" rule. */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={form.taxInclusive}
+                disabled={hasVariants}
                 onChange={(e) =>
                   handleFormChange("taxInclusive", e.target.checked)
                 }
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
               />
               <label className="text-sm text-gray-700 font-medium">
                 Tax Inclusive
@@ -961,8 +988,9 @@ const ItemForm = ({
               </label>
               <select
                 value={form.gstRate ?? 0}
+                disabled={hasVariants}
                 onChange={(e) => handleFormChange("gstRate", parseFloat(e.target.value) || 0)}
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 {GST_RATES.map((rate) => (
                   <option key={rate} value={rate}>{rate}%</option>
@@ -1154,10 +1182,13 @@ const ItemForm = ({
                     type="number"
                     step="any"
                     // Opening quantity is the starting balance and is recorded as the first
-                    // ledger entry, so it can only be set while creating the item.
-                    disabled={!!form._id}
+                    // ledger entry, so it can only be set while creating the item. Also
+                    // disabled once the item has variants — each variant carries its own
+                    // opening stock (see the variant panel below); the parent's own opening
+                    // quantity would otherwise double-count against the variant total.
+                    disabled={!!form._id || hasVariants}
                     placeholder="0"
-                    value={form.inventory?.openingStock ?? 0}
+                    value={hasVariants ? 0 : (form.inventory?.openingStock ?? 0)}
                     onChange={(e) =>
                       handleFormChange("inventory", {
                         ...(form.inventory || {}),
@@ -1167,9 +1198,11 @@ const ItemForm = ({
                     className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                   />
                   <p className="mt-1 text-[11px] text-gray-400">
-                    {form._id
-                      ? "Use Stock In / Stock Out on the Inventory page to change stock."
-                      : "Leave blank to start at 0."}
+                    {hasVariants
+                      ? "Managed by variants — set each variant's own stock below."
+                      : form._id
+                        ? "Use Stock In / Stock Out on the Inventory page to change stock."
+                        : "Leave blank to start at 0."}
                   </p>
                 </div>
                 <div>

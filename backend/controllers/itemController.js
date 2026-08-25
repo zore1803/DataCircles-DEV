@@ -147,6 +147,19 @@ const createItem = async (req, res) => {
         // Ensure attributes is a Map-like object
         variant.attributes = variant.attributes || {};
       }
+
+      // Once an item has variants, the parent's own opening-stock field is
+      // disabled/zeroed on the frontend (each variant tracks its own stock
+      // instead) — so seed the parent's currentStock aggregate from the sum
+      // of variant stock instead of the (now-zero) parent opening value.
+      // Without this, Item.inventory.currentStock — what list/Inventory
+      // views read — would show 0 for a brand-new variant-bearing item even
+      // though its variants hold real stock.
+      if (itemData.variants.length > 0) {
+        const variantStockSum = itemData.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+        itemData.inventory.currentStock = variantStockSum;
+        if (variantStockSum !== 0) itemData.inventory.lastMovementAt = new Date();
+      }
     }
     const item = new Item(itemData);
     await item.save();

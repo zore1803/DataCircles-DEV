@@ -103,6 +103,20 @@ const documentSettingsSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    // Visual PDF filename builder — stores an ordered list of token keys
+    // per document type. Front-end resolves keys to real values at download
+    // time. Stored as plain arrays, never as {placeholder} strings.
+    pdfFilenameFormats: {
+      type: Object,
+      default: {
+        tax:             ['documentType', 'documentNumber', 'companyName'],
+        performa:        ['documentType', 'documentNumber', 'companyName'],
+        quotation:       ['documentType', 'documentNumber', 'companyName'],
+        deliveryChallan: ['documentType', 'documentNumber', 'companyName'],
+        purchase:        ['documentType', 'documentNumber', 'companyName'],
+        purchaseOrder:   ['documentType', 'documentNumber', 'companyName'],
+      },
+    },
     whatsappTemplate: {
       type: String,
       default: 'Hello! *{customerName}*\n\nYour {docType} is ready to view.\n\nDocument No: {number}\nTotal: ₹{amount}\nLink: {link}\n\nThank you for your business!',

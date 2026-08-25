@@ -572,7 +572,10 @@ const InvoiceFormFull = ({
           JSON.stringify({ ...emptyAddress(), ...(sourceData.billingAddress || {}) }) ===
             JSON.stringify({ ...emptyAddress(), ...(sourceData.shippingAddress || {}) }),
         items: (sourceData.items || []).map((item) => ({
-          _id: item.itemId || null,
+          // For a variant line, the local row identity is the variant's own
+          // id (variantId) — itemId is the parent Item's id. Falls back to
+          // itemId for invoices saved before variantId existed on the schema.
+          _id: (item.isVariant ? item.variantId : item.itemId) || item.itemId || null,
           name: item.name || "",
           description: item.description || "",
           rate: item.rate || "",
@@ -1061,7 +1064,12 @@ const InvoiceFormFull = ({
         discount: form.discount,
         status: statusValue,
         items: form.items.map((item) => ({
-          itemId: item._id,
+          // For a variant line, item._id is the variant's own subdocument id
+          // (see fetchItems above) and parentItemId is the real catalog Item —
+          // itemId here must stay the parent so stock sync can find the
+          // product; variantId carries the specific variant to deduct against.
+          itemId: item.isVariant ? item.parentItemId : item._id,
+          variantId: item.isVariant ? item._id : null,
           name: item.name,
           description: item.description,
           rate: parseFloat(item.rate),

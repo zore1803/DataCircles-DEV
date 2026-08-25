@@ -564,7 +564,7 @@ const DeliveryChallanFormFull = ({
           JSON.stringify({ ...emptyAddress(), ...(sourceData.billingAddress || {}) }) ===
             JSON.stringify({ ...emptyAddress(), ...(sourceData.shippingAddress || {}) }),
         items: (sourceData.items || []).map((item) => ({
-          _id: item.itemId || null,
+          _id: (item.isVariant ? item.variantId : item.itemId) || item.itemId || null,
           name: item.name || "",
           description: item.description || "",
           rate: item.rate || "",
@@ -1039,7 +1039,8 @@ const DeliveryChallanFormFull = ({
         discount: form.discount,
         status: statusValue,
         items: form.items.map((item) => ({
-          itemId: item._id,
+          itemId: item.isVariant ? item.parentItemId : item._id,
+          variantId: item.isVariant ? item._id : null,
           name: item.name,
           description: item.description,
           rate: parseFloat(item.rate),

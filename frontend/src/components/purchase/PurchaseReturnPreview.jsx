@@ -13,7 +13,8 @@ const formatDate = (d) => {
 
 const getStatusBadgeColor = (status) => {
   switch (status?.toLowerCase()) {
-    case "paid": return "bg-green-100 text-green-800";
+    case "confirmed": return "bg-green-100 text-green-800";
+    case "paid": return "bg-emerald-100 text-emerald-800";
     case "pending": return "bg-yellow-100 text-yellow-800";
     case "cancelled": return "bg-red-100 text-red-800";
     case "draft": return "bg-blue-100 text-blue-800";
@@ -102,6 +103,7 @@ const PurchaseReturnPreview = ({ purchaseReturn, isOpen, onClose, onEdit, onDele
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase">Item</th>
+                    <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase">Reason</th>
                     <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase text-right">Qty</th>
                     <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase text-right">Rate</th>
                     <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase text-right">Amount</th>
@@ -111,6 +113,7 @@ const PurchaseReturnPreview = ({ purchaseReturn, isOpen, onClose, onEdit, onDele
                   {(p.items || []).map((it, i) => (
                     <tr key={i}>
                       <td className="px-3 py-2 text-sm text-gray-900">{it.name}</td>
+                      <td className="px-3 py-2 text-sm text-gray-500">{it.reason || "—"}</td>
                       <td className="px-3 py-2 text-sm text-gray-600 text-right">{it.quantity}</td>
                       <td className="px-3 py-2 text-sm text-gray-600 text-right">{money(it.unitPrice)}</td>
                       <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right">{money(it.total ?? it.quantity * it.unitPrice)}</td>

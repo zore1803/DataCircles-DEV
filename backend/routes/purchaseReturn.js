@@ -18,6 +18,8 @@ router.get("/", requireAuth, subscriptionGate, purchaseReturnController.getAllPu
 router.get("/pagination", requireAuth, subscriptionGate, purchaseReturnController.getAllPurchaseReturnsWithPagination);
 router.post("/bulk-import", requireAuth, subscriptionGate, purchaseReturnController.bulkImportPurchaseReturns);
 router.get("/vendor/:vendorId", requireAuth, subscriptionGate, purchaseReturnController.getPurchaseReturnsByVendor);
+// Must come before /:id so "purchase" isn't swallowed as a return id.
+router.get("/purchase/:purchaseId/available", requireAuth, subscriptionGate, purchaseReturnController.getPurchaseItemsForReturn);
 router.get("/:id", requireAuth, subscriptionGate, purchaseReturnController.getPurchaseReturnById);
 router.put("/:id", requireAuth, subscriptionGate, purchaseReturnController.updatePurchaseReturn);
 router.put("/:id/status", requireAuth, subscriptionGate, purchaseReturnController.updatePurchaseReturnStatus);

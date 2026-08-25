@@ -58,6 +58,8 @@ import { PDFDocument } from "pdf-lib";
 import API from "../services/api";
 import SearchIcon from "../components/common/SearchIcon";
 import AppToaster from "../components/AppToaster";
+import { getDocumentSettings } from "../services/documentSettingsCache";
+import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
 import toast from "react-hot-toast";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
@@ -1857,6 +1859,19 @@ const Accounting = () => {
 
   const handleDownload = async (id, type) => {
     const path = apiPathFor(type);
+
+    // Resolve filename silently from saved org settings
+    const tabDocs = documents[type] ?? [];
+    const doc = tabDocs.find((d) => d._id === id);
+    let filename = `${path.split('-').join('')}-${id}`;
+    try {
+      const settings = await getDocumentSettings();
+      const formats = settings?.pdfFilenameFormats || DEFAULT_FORMATS;
+      const tokens = formats[type] || DEFAULT_FORMATS[type];
+      const orgName = settings?.companyName || "";
+      filename = buildFilename(tokens, extractDocData(doc || {}, type, orgName));
+    } catch (_) { /* fall back to default */ }
+
     try {
       setLoading((prev) => ({ ...prev, [type]: true }));
       const response = await API.get(`/${path}/download/${id}`, {
@@ -1866,7 +1881,7 @@ const Accounting = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${path.split("-").join("")}-${id}.pdf`);
+      link.setAttribute("download", `${filename}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -1,4 +1,5 @@
 const DocumentSettings = require('../models/DocumentSettings');
+const Branding = require('../models/Branding');
 const { normalizeInvoiceNumberSettings, saveDocumentSettingsForOrganization, seedTemplateLibrariesFromLegacy, getNextNumberPreviews } = require('../utils/documentNumbering');
 
 exports.getDocumentSettings = async (req, res) => {
@@ -24,6 +25,10 @@ exports.getDocumentSettings = async (req, res) => {
     // split and full-width views since both read it from here.
     normalized.nextNumbers = await getNextNumberPreviews(req.user.organization);
 
+    // Attach company branding name for PDF filename generation on the frontend
+    const branding = await Branding.findOne({ organization: req.user.organization }).lean();
+    normalized.companyName = branding?.companyName || '';
+
     res.json(normalized);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -32,7 +37,7 @@ exports.getDocumentSettings = async (req, res) => {
 
 exports.updateDocumentSettings = async (req, res) => {
   try {
-    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType, defaultDueDateDays, whatsappTemplate, whatsappLine1, whatsappLine2, smsTemplate, emailSubjectTemplate, emailBodyTemplate, whatsappTemplates, smsTemplates, emailTemplates } = req.body || {};
+    const { invoicePrefix, invoiceSuffix, nextInvoiceNumber, documentTypeSettings, invoicePrefixes, invoiceSuffixes, defaultNotes, defaultTerms, defaultNotesByType, defaultTermsByType, defaultDueDateDays, whatsappTemplate, whatsappLine1, whatsappLine2, smsTemplate, emailSubjectTemplate, emailBodyTemplate, whatsappTemplates, smsTemplates, emailTemplates, pdfFilenameFormats } = req.body || {};
     const saved = await saveDocumentSettingsForOrganization(req.user.organization, {
       invoicePrefix,
       invoiceSuffix,
@@ -54,6 +59,7 @@ exports.updateDocumentSettings = async (req, res) => {
       whatsappTemplates,
       smsTemplates,
       emailTemplates,
+      pdfFilenameFormats,
     });
 
     res.json({

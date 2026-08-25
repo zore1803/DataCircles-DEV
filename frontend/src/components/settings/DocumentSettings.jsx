@@ -3,7 +3,9 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import { Save, FileText, PenSquare, Eye, Plus, Trash2, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
 import SignatureModal from "./SignatureModal";
+import PdfFileNameSettings from "./PdfFileNameSettings";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
+import { DEFAULT_FORMATS } from "../../utils/pdfFilename";
 
 const documentTypeMeta = [
   { key: "invoice", label: "Invoice" },
@@ -38,6 +40,7 @@ function DocumentSettings() {
     defaultTermsByType: {},
     defaultDueDateDays: "",
     documentTypeSettings: createDefaultDocumentTypeSettings(),
+    pdfFilenameFormats: DEFAULT_FORMATS,
   });
   const [signatures, setSignatures] = useState([]);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
@@ -129,6 +132,7 @@ function DocumentSettings() {
             proformaInvoice: normalizeSection("proformaInvoice", { prefix: "PI", suffix: "", prefixes: ["PI", "PFI"], suffixes: [] }),
             deliveryChallan: normalizeSection("deliveryChallan", { prefix: "DC", suffix: "", prefixes: ["DC"], suffixes: [] }),
           },
+          pdfFilenameFormats: res.data?.pdfFilenameFormats || DEFAULT_FORMATS,
         });
         await fetchSignatures();
       } catch (error) {
@@ -159,6 +163,7 @@ function DocumentSettings() {
         defaultNotesByType: form.defaultNotesByType,
         defaultTermsByType: form.defaultTermsByType,
         defaultDueDateDays: form.defaultDueDateDays ? Number(form.defaultDueDateDays) : null,
+        pdfFilenameFormats: form.pdfFilenameFormats,
       });
       toast.success("Document settings updated");
     } catch (error) {
@@ -699,7 +704,13 @@ function DocumentSettings() {
         />
       </div>
 
-      {/* SECTION 3: Message Templates */}
+      {/* SECTION 3: PDF File Name */}
+      <PdfFileNameSettings
+        value={form.pdfFilenameFormats}
+        onChange={(val) => setForm((prev) => ({ ...prev, pdfFilenameFormats: val }))}
+      />
+
+      {/* SECTION 4: Message Templates */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm mt-6">
         <h2 className="text-base font-bold text-gray-900 mb-1">Message Templates</h2>
         <p className="text-xs text-gray-500 mb-4">Customize the message sent when sharing documents via Email, WhatsApp, or SMS.</p>

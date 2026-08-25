@@ -788,7 +788,7 @@ const updateInvoice = async (req, res) => {
 
     const previousItems = invoice.items.map(item => ({
       itemId: item.itemId,
-      variantId: item.isVariant ? item.parentItemId : undefined, // fallback, though variant mapping might need exact variantId if it existed
+      variantId: item.variantId || undefined,
       quantity: item.quantity
     }));
 

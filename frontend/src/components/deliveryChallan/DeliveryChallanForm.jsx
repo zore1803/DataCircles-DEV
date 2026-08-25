@@ -530,7 +530,7 @@ const DeliveryChallanForm = ({
         terms: editingDeliveryChallan.terms || "",
         signature: editingDeliveryChallan.signature || "",
         items: editingDeliveryChallan.items.map((item) => ({
-          _id: item.itemId || null,
+          _id: (item.isVariant ? item.variantId : item.itemId) || item.itemId || null,
           name: item.name || "",
           description: item.description || "",
           rate: item.rate || "",
@@ -895,7 +895,8 @@ const DeliveryChallanForm = ({
         discount: form.discount,
         status: statusValue,
         items: form.items.map((item) => ({
-          itemId: item._id,
+          itemId: item.isVariant ? item.parentItemId : item._id,
+          variantId: item.isVariant ? item._id : null,
           name: item.name,
           description: item.description,
           rate: parseFloat(item.rate),

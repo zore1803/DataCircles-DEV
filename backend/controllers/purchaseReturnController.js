@@ -35,20 +35,34 @@ const POPULATE = [
 ];
 
 // Applies the inventory stock-out for a PurchaseReturn transitioning into
-// "Paid" — the single inventory-triggering event for this module, mirroring
-// purchaseOrderController.js's syncPurchaseOrderDeliveryStock (Delivered)
-// exactly. "Paid" is terminal here (enforced by the callers below refusing to
-// change status away from it), so there's no "moving out of Paid" branch to
-// reverse — the only way to undo the stock-out is deleting the return, which
+// "Confirmed" — the single inventory-triggering event for this module,
+// mirroring purchaseOrderController.js's syncPurchaseOrderDeliveryStock
+// (Delivered) exactly. "Confirmed" is terminal for STATUS (enforced by the
+// callers below via isBlockedStatusChange, which still allows moving onward
+// to "Paid"), so there's no "moving out of Confirmed" branch to reverse —
+// the only way to fully undo the stock-out is deleting the return, which
 // deletePurchaseReturn reverses via isReversal: true.
+//
+// Items themselves stay editable after Confirmed though (e.g. correcting the
+// return qty on an already-confirmed return) — see the `previousItems`
+// branch below, which applies just the delta instead of re-deducting the new
+// quantity on top of the old one. Same technique invoiceController.js's own
+// update handler uses (previousItems + syncDocumentStock's built-in delta
+// math), so an edit from qty 4 -> 6 only moves 2 more units of stock, never
+// re-applies all 6.
+//
+// Deliberately NOT "Paid": Paid is a payment/refund-settled marker, orthogonal
+// to whether goods have physically left. Confirmed is the physical event.
 //
 // Goods physically leaving toward the vendor is a reduction in our own
 // stock, same directional sense as a sale — hence baseDirection: "out".
-async function syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, userId) {
-  const isNowPaid = purchaseReturn.status === "Paid";
-  const wasPaid = oldStatus === "Paid";
+async function syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, userId, previousItems = null) {
+  const isNowConfirmed = purchaseReturn.status === "Confirmed";
+  const wasConfirmed = oldStatus === "Confirmed" || oldStatus === "Paid";
 
-  if (isNowPaid && !wasPaid && oldStockMovementStatus !== "applied") {
+  if (isNowConfirmed && !wasConfirmed && oldStockMovementStatus !== "applied") {
+    // First time reaching Confirmed: apply the full quantity, nothing to
+    // reverse first.
     await syncDocumentStock({
       organization: purchaseReturn.organization,
       documentId: purchaseReturn._id,
@@ -63,27 +77,169 @@ async function syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMoveme
     });
     purchaseReturn.stockMovementStatus = "applied";
     await purchaseReturn.save({ validateModifiedOnly: true });
+    return;
+  }
+
+  if (oldStockMovementStatus === "applied" && previousItems) {
+    // Already Confirmed/Paid and its items just changed: apply only the
+    // delta between what was previously on the document and what's on it
+    // now.
+    await syncDocumentStock({
+      organization: purchaseReturn.organization,
+      documentId: purchaseReturn._id,
+      documentModel: "PurchaseReturn",
+      documentNumber: purchaseReturn.returnNumber,
+      items: purchaseReturn.items,
+      previousItems,
+      baseDirection: "out",
+      userId,
+      reason: "return",
+      isReversal: false,
+    });
+  }
+}
+
+// Once a return is Confirmed, goods have physically left — the status can
+// only move onward to "Paid" (payment/refund settling, no stock effect) or
+// stay Confirmed, never back to Draft/Pending/Cancelled. The only way to
+// undo a Confirmed return's stock effect is deleting it (see
+// deletePurchaseReturn). Mirrors PurchaseOrder's "Delivered can't be changed
+// to another status" rule.
+function isBlockedStatusChange(oldStatus, newStatus) {
+  if (oldStatus !== "Confirmed") return false;
+  if (newStatus === undefined) return false;
+  return newStatus !== "Confirmed" && newStatus !== "Paid";
+}
+
+// How much of each line item on a Purchase has already been returned, across
+// every OTHER non-Cancelled PurchaseReturn against it — the "Already
+// Returned" figures the create/edit form needs to cap Return Qty with.
+// `excludeReturnId` leaves the return being edited out of its own tally (its
+// current items get replaced wholesale by the save, not added on top).
+async function getReturnedQuantities(purchaseId, organization, excludeReturnId) {
+  const match = {
+    purchase: purchaseId,
+    organization,
+    status: { $ne: "Cancelled" },
+  };
+  if (excludeReturnId) match._id = { $ne: excludeReturnId };
+
+  const rows = await PurchaseReturn.aggregate([
+    { $match: match },
+    { $unwind: "$items" },
+    {
+      $group: {
+        _id: { itemId: "$items.itemId", variantId: "$items.variantId" },
+        returned: { $sum: "$items.quantity" },
+      },
+    },
+  ]);
+
+  // Keyed the same way syncDocumentStock keys its own delta map, so callers
+  // can look both up with one consistent key shape.
+  const map = new Map();
+  for (const row of rows) {
+    const key = `${row._id.itemId || ""}|${row._id.variantId || "none"}`;
+    map.set(key, row.returned);
+  }
+  return map;
+}
+
+// GET /purchase-returns/purchase/:purchaseId/available — the Purchase's own
+// line items enriched with how much of each has already been returned, so
+// the create/edit form can render Purchased / Already Returned / Remaining
+// and cap Return Qty client-side (server-side re-validated on save below).
+exports.getPurchaseItemsForReturn = async (req, res) => {
+  try {
+    const { purchaseId } = req.params;
+    const purchase = await Purchase.findOne({
+      _id: purchaseId,
+      organization: req.user.organization,
+    })
+      .populate("vendor", "name email phone")
+      .populate("items.itemId", "name description purchasePrice hsnSac gstRate variants");
+    if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
+    const returnedMap = await getReturnedQuantities(purchase._id, req.user.organization, req.query.excludeReturnId);
+
+    const items = purchase.items.map((item) => {
+      const key = `${item.itemId?._id || item.itemId || ""}|${item.variantId || "none"}`;
+      const alreadyReturned = returnedMap.get(key) || 0;
+      const variant = item.variantId
+        ? item.itemId?.variants?.find((v) => String(v._id) === String(item.variantId))
+        : null;
+      return {
+        itemId: item.itemId?._id || item.itemId,
+        variantId: item.variantId || null,
+        variantName: variant?.name || null,
+        name: item.name,
+        sku: item.sku,
+        unitPrice: item.unitPrice,
+        purchasedQuantity: item.quantity,
+        alreadyReturned,
+        remaining: Math.max(0, item.quantity - alreadyReturned),
+      };
+    });
+
+    res.json({
+      purchase: {
+        _id: purchase._id,
+        purchaseNumber: purchase.purchaseNumber,
+        vendor: purchase.vendor,
+      },
+      items,
+    });
+  } catch (err) {
+    console.error("Get purchase items for return error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Rejects any line whose quantity would push (already returned + this
+// return's own quantity) past what was actually purchased. Shared by create
+// (excludeReturnId undefined) and update (excludeReturnId = the return being
+// edited, so its own prior contribution isn't double-counted against itself).
+async function assertQuantitiesWithinPurchase(purchase, items, organization, excludeReturnId) {
+  const returnedMap = await getReturnedQuantities(purchase._id, organization, excludeReturnId);
+
+  for (const item of items) {
+    const purchasedLine = purchase.items.find(
+      (pi) =>
+        String(pi.itemId?._id || pi.itemId || "") === String(item.itemId || "") &&
+        String(pi.variantId || "none") === String(item.variantId || "none")
+    );
+    if (!purchasedLine) {
+      throw new Error(`"${item.name}" is not part of the selected Purchase`);
+    }
+    const key = `${item.itemId || ""}|${item.variantId || "none"}`;
+    const alreadyReturned = returnedMap.get(key) || 0;
+    const remaining = purchasedLine.quantity - alreadyReturned;
+    if ((parseFloat(item.quantity) || 0) > remaining) {
+      throw new Error(`Maximum returnable quantity for "${item.name}" is ${remaining}`);
+    }
   }
 }
 
 exports.createPurchaseReturn = async (req, res) => {
   try {
-    const { vendor, purchase, items, notes, status, transactionType, gstRate, mode, reason, returnDate } = req.body;
+    const { purchase, items, notes, status, transactionType, gstRate, mode, returnDate } = req.body;
 
-    const vendorExists = await Vendor.findOne({ _id: vendor, organization: req.user.organization });
-    if (!vendorExists) return res.status(404).json({ message: "Vendor not found" });
-
-    if (purchase) {
-      const purchaseExists = await Purchase.findOne({ _id: purchase, organization: req.user.organization });
-      if (!purchaseExists) return res.status(404).json({ message: "Purchase not found" });
-      if (String(purchaseExists.vendor) !== String(vendor)) {
-        return res.status(400).json({ message: "That Purchase does not belong to the selected vendor" });
-      }
+    if (!purchase) {
+      return res.status(400).json({ message: "A Purchase Return must reference an existing Purchase" });
     }
+    const purchaseDoc = await Purchase.findOne({ _id: purchase, organization: req.user.organization });
+    if (!purchaseDoc) return res.status(404).json({ message: "Purchase not found" });
+
+    // Vendor is always derived from the Purchase, never trusted from the
+    // client — a return can't be attributed to a different vendor than the
+    // bill it's actually against.
+    const vendor = purchaseDoc.vendor;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ message: "At least one item is required" });
     }
+
+    await assertQuantitiesWithinPurchase(purchaseDoc, items, req.user.organization);
 
     const subtotal = calculateSubtotal(items);
     const calculatedTransactionType = transactionType || "intra";
@@ -95,7 +251,7 @@ exports.createPurchaseReturn = async (req, res) => {
 
     const purchaseReturn = new PurchaseReturn({
       vendor,
-      purchase: purchase || null,
+      purchase,
       returnNumber,
       returnDate: returnDate || Date.now(),
       items: items.map((item) => ({
@@ -109,7 +265,6 @@ exports.createPurchaseReturn = async (req, res) => {
       grandTotal,
       status: status || "Draft",
       mode: mode || "",
-      reason: reason || "",
       notes: notes || "",
       user: req.user.id,
       organization: req.user.organization,
@@ -117,9 +272,10 @@ exports.createPurchaseReturn = async (req, res) => {
 
     await purchaseReturn.save();
 
-    // Covers creating a return directly with status "Paid" (e.g. recording
-    // an already-settled historical return) — oldStatus is null (never was
-    // Paid) so this applies exactly once, same guard as the update paths.
+    // Covers creating a return directly with status "Confirmed" (e.g.
+    // recording an already-completed historical return) — oldStatus is null
+    // (never was Confirmed) so this applies exactly once, same guard as the
+    // update paths.
     await syncPurchaseReturnStock(purchaseReturn, null, purchaseReturn.stockMovementStatus, req.user.id);
 
     await purchaseReturn.populate(POPULATE);
@@ -249,31 +405,56 @@ exports.updatePurchaseReturn = async (req, res) => {
     });
     if (!purchaseReturn) return res.status(404).json({ message: "Purchase return not found" });
 
-    const { vendor, purchase, items, notes, status, transactionType, gstRate, mode, reason, returnDate } = req.body;
+    const { items, notes, status, transactionType, gstRate, mode, reason, returnDate } = req.body;
 
-    // Captured before any field changes below, so the Paid stock sync (after
-    // save) can tell what actually transitioned.
+    // Captured before any field changes below, so the Confirmed stock sync
+    // (after save) can tell what actually transitioned.
     const oldStatus = purchaseReturn.status;
     const oldStockMovementStatus = purchaseReturn.stockMovementStatus;
 
-    // Paid is terminal — same rule as updatePurchaseReturnStatus, applied
-    // here too since this endpoint is also how the edit form changes status.
-    if (oldStatus === "Paid" && status !== undefined && status !== "Paid") {
-      return res.status(400).json({ message: "A Paid Purchase Return can't be changed to another status." });
+    // Confirmed is terminal (except onward to Paid) — same rule as
+    // updatePurchaseReturnStatus, applied here too since this endpoint is
+    // also how the edit form changes status.
+    if (isBlockedStatusChange(oldStatus, status)) {
+      return res.status(400).json({ message: "A Confirmed Purchase Return can't be changed to another status." });
     }
 
-    if (vendor !== undefined) purchaseReturn.vendor = vendor;
-    if (purchase !== undefined) purchaseReturn.purchase = purchase || null;
+    // Note: vendor and purchase are intentionally not editable here — a
+    // return is always against the Purchase it was created for, with vendor
+    // derived from that Purchase (see createPurchaseReturn). Changing either
+    // after the fact would silently invalidate the already-returned/
+    // remaining-quantity math.
     if (returnDate !== undefined) purchaseReturn.returnDate = returnDate;
     if (notes !== undefined) purchaseReturn.notes = notes;
     if (status !== undefined) purchaseReturn.status = status;
     if (mode !== undefined) purchaseReturn.mode = mode;
     if (reason !== undefined) purchaseReturn.reason = reason;
 
+    // Snapshotted before any item mutation below, so a delta-sync on an
+    // already-Confirmed/Paid return (see syncPurchaseReturnStock) has
+    // something to diff the new items against. Only itemId/variantId/
+    // quantity matter to syncDocumentStock's own delta math.
+    let previousItemsSnapshot = null;
+
     if (items !== undefined) {
       if (!items.length) {
         return res.status(400).json({ message: "At least one item is required" });
       }
+
+      const purchaseDoc = await Purchase.findOne({
+        _id: purchaseReturn.purchase,
+        organization: req.user.organization,
+      });
+      if (purchaseDoc) {
+        await assertQuantitiesWithinPurchase(purchaseDoc, items, req.user.organization, purchaseReturn._id);
+      }
+
+      previousItemsSnapshot = purchaseReturn.items.map((it) => ({
+        itemId: it.itemId,
+        variantId: it.variantId,
+        quantity: it.quantity,
+      }));
+
       const transactionTypeToUse = transactionType || purchaseReturn.transactionType;
       const gstRateToUse = gstRate !== undefined ? parseFloat(gstRate) || 0 : purchaseReturn.gstRate;
       const subtotal = calculateSubtotal(items);
@@ -292,10 +473,11 @@ exports.updatePurchaseReturn = async (req, res) => {
 
     await purchaseReturn.save();
 
-    // Applies the Paid stock-out. Covers both the edit form (which sends
-    // items+status together) and any bulk status update that PUTs here
-    // rather than the /status endpoint below.
-    await syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, req.user.id);
+    // Applies the Confirmed stock-out (first time) or the item-quantity
+    // delta (already Confirmed/Paid, items just changed). Covers both the
+    // edit form (which sends items+status together) and any bulk status
+    // update that PUTs here rather than the /status endpoint below.
+    await syncPurchaseReturnStock(purchaseReturn, oldStatus, oldStockMovementStatus, req.user.id, previousItemsSnapshot);
 
     await purchaseReturn.populate(POPULATE);
 
@@ -309,7 +491,7 @@ exports.updatePurchaseReturn = async (req, res) => {
 exports.updatePurchaseReturnStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const validStatuses = ["Draft", "Pending", "Paid", "Cancelled"];
+    const validStatuses = ["Draft", "Pending", "Confirmed", "Paid", "Cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
@@ -323,12 +505,12 @@ exports.updatePurchaseReturnStatus = async (req, res) => {
     const oldStatus = purchaseReturn.status;
     const oldStockMovementStatus = purchaseReturn.stockMovementStatus;
 
-    // Paid is terminal — goods have already left toward the vendor and stock
-    // moved accordingly, so it can't be walked back through the status
-    // dropdown. (Not enforced via the enum itself since Paid is still a
-    // perfectly valid status to reach.)
-    if (oldStatus === "Paid" && status !== "Paid") {
-      return res.status(400).json({ message: "A Paid Purchase Return can't be changed to another status." });
+    // Confirmed is terminal (except onward to Paid) — goods have already
+    // left toward the vendor and stock moved accordingly, so it can't be
+    // walked back through the status dropdown. (Not enforced via the enum
+    // itself since Confirmed is still a perfectly valid status to reach.)
+    if (isBlockedStatusChange(oldStatus, status)) {
+      return res.status(400).json({ message: "A Confirmed Purchase Return can't be changed to another status." });
     }
 
     purchaseReturn.status = status;
@@ -352,8 +534,8 @@ exports.deletePurchaseReturn = async (req, res) => {
     });
     if (!purchaseReturn) return res.status(404).json({ message: "Purchase return not found" });
 
-    // Deleting a Paid return must reverse its stock-out — otherwise stock
-    // stays understated with no surviving document to explain why.
+    // Deleting a Confirmed return must reverse its stock-out — otherwise
+    // stock stays understated with no surviving document to explain why.
     if (purchaseReturn.stockMovementStatus === "applied") {
       await syncDocumentStock({
         organization: purchaseReturn.organization,
