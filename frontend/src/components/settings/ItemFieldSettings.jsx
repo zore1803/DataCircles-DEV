@@ -20,7 +20,10 @@ import {
   FolderOpen,
   FolderPlus,
   GripVertical,
-  Database
+  Database,
+  Clock,
+  Award,
+  Phone,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
@@ -92,6 +95,26 @@ const ItemFieldSettings = () => {
       value: "multiselect",
       label: "Multi-Select Checkbox",
       icon: <CheckSquare className="w-4 h-4" />,
+    },
+    {
+      value: "file",
+      label: "File",
+      icon: <Upload className="w-4 h-4" />,
+    },
+    {
+      value: "socialProof",
+      label: "Social Proof",
+      icon: <Award className="w-4 h-4" />,
+    },
+    {
+      value: "datetime",
+      label: "Date-Time",
+      icon: <Clock className="w-4 h-4" />,
+    },
+    {
+      value: "phone",
+      label: "Phone Number",
+      icon: <Phone className="w-4 h-4" />,
     },
   ];
 
