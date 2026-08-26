@@ -155,7 +155,16 @@ const DealsFunnelChart = ({ stages }) => {
           `C ${x1 - cx} ${bot1}, ${x0 + cx} ${bot0}, ${x0} ${bot0}`,
           "Z",
         ].join(" ");
-        return <path key={stage.name} d={d} fill="#0085FF" fillOpacity={opacityFor(i)} />;
+        // A separate stroke-only path tracing just the top curve — a thin
+        // brighter rim-light along the crest of the silhouette, matching a
+        // glossy/embossed funnel look rather than a flat fill.
+        const topEdge = `M ${x0} ${top0} C ${x0 + cx} ${top0}, ${x1 - cx} ${top1}, ${x1} ${top1}`;
+        return (
+          <g key={stage.name}>
+            <path d={d} fill="#0085FF" fillOpacity={opacityFor(i)} />
+            <path d={topEdge} fill="none" stroke="#FFFFFF" strokeOpacity={0.6} strokeWidth={2} strokeLinecap="round" />
+          </g>
+        );
       })}
 
       {/* White divider lines between segments. */}
