@@ -2936,13 +2936,13 @@ const CreateInvoicePanel = ({
           two segments stay visually separate and the resizer gap between them
           casts nothing. `relative z-10` matters: without it the panels below
           paint their white background over the shadows and they vanish. */}
-      <div className="relative z-10 flex-shrink-0 h-16 flex items-stretch bg-white px-2">
+      <div className="relative z-10 flex-shrink-0 h-16 flex items-stretch bg-white px-2 border-b border-[#E1E4EA] lg:border-b-0">
         {/* Left: form header */}
         <div
           style={{ width: formWidth }}
           className="flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch max-lg:!w-full"
         >
-          <div className="w-full flex items-center justify-between gap-2 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
+          <div className="w-full flex items-center justify-between gap-2 lg:border-b lg:border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
             <div className="min-w-0">
               {isEditing && docNumber ? (
                 <>
@@ -3099,7 +3099,8 @@ const CreateInvoicePanel = ({
                 className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
-                Save as Draft
+                <span className="lg:hidden">Draft</span>
+                <span className="hidden lg:inline">Save as Draft</span>
               </button>
             </div>
           </div>
