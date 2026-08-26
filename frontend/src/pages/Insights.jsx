@@ -3778,7 +3778,7 @@ const Insights = () => {
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={280} className="mt-2">
+            <ResponsiveContainer width="100%" height="100%" className="mt-2 flex-1 min-h-0">
               <LineChart data={revenueTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
                 <XAxis
