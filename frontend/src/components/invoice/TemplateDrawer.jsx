@@ -376,7 +376,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
       <aside
         role="dialog"
         aria-label="Document setup"
-        className="fixed dc-panel-card w-full lg:w-[70vw] bg-white shadow-2xl flex flex-col overflow-hidden animate-slideInRight"
+        className="fixed dc-panel-card w-[calc(100%-3rem)] lg:w-[70vw] bg-white shadow-2xl flex flex-col overflow-hidden animate-slideInRight"
       >
         <header className="flex-shrink-0 flex items-center justify-between gap-3 px-5 pt-4 border-b border-[#E1E4EA]">
           <div className="flex items-center gap-2.5 min-w-0 pb-4">
