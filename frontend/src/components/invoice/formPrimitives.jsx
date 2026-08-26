@@ -54,15 +54,21 @@ export const emptyAddress = () => ({
 export const isAddressEmpty = (addr) =>
   !addr || Object.values(addr).every((v) => !v || !String(v).trim());
 
-export const AddressFieldsGroup = ({ label, value, onChange, disabled = false }) => {
+export const AddressFieldsGroup = ({ label, value, onChange, disabled = false, required = false, invalid = false }) => {
   const safeValue = value || emptyAddress();
+  const fieldBorder = invalid
+    ? "border-red-400 focus:ring-red-500/20 focus:border-red-500"
+    : "border-slate-200 focus:ring-blue-500/20 focus:border-[#0085FF]";
+  const inputCls = `w-full h-11 px-3.5 rounded-[12px] border ${fieldBorder} bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200`;
   return (
     <div className="flex flex-col gap-3 w-full @md:col-span-2">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[#0085FF]">
           <MapPin className="w-3.5 h-3.5" />
         </div>
-        <span className="text-[14px] font-semibold text-slate-800">{label}</span>
+        <span className="text-[14px] font-semibold text-slate-800">
+          {label} {required && <span className="text-red-500">*</span>}
+        </span>
       </div>
       <div className="flex flex-col gap-3">
         <div className="relative">
@@ -72,7 +78,7 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false })
             disabled={disabled}
             onChange={(e) => onChange({ ...safeValue, addressLine1: e.target.value })}
             placeholder="Address line 1"
-            className="w-full h-11 px-3.5 rounded-[12px] border border-slate-200 bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#0085FF] transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
+            className={inputCls}
           />
         </div>
         <div className="relative">
@@ -82,7 +88,7 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false })
             disabled={disabled}
             onChange={(e) => onChange({ ...safeValue, addressLine2: e.target.value })}
             placeholder="Address line 2"
-            className="w-full h-11 px-3.5 rounded-[12px] border border-slate-200 bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#0085FF] transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
+            className={inputCls}
           />
         </div>
         <div className="grid grid-cols-2 @md:grid-cols-3 gap-3">
@@ -92,7 +98,7 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false })
             disabled={disabled}
             onChange={(e) => onChange({ ...safeValue, city: e.target.value })}
             placeholder="City"
-            className="w-full h-11 px-3.5 rounded-[12px] border border-slate-200 bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#0085FF] transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
+            className={inputCls}
           />
           <input
             type="text"
@@ -100,7 +106,7 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false })
             disabled={disabled}
             onChange={(e) => onChange({ ...safeValue, state: e.target.value })}
             placeholder="State"
-            className="w-full h-11 px-3.5 rounded-[12px] border border-slate-200 bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#0085FF] transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
+            className={inputCls}
           />
           <input
             type="text"
@@ -108,7 +114,7 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false })
             disabled={disabled}
             onChange={(e) => onChange({ ...safeValue, pincode: e.target.value })}
             placeholder="Pincode"
-            className="w-full h-11 px-3.5 rounded-[12px] border border-slate-200 bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#0085FF] transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 @md:col-span-1 col-span-2"
+            className={`${inputCls} @md:col-span-1 col-span-2`}
           />
         </div>
         <div className="relative">
@@ -118,7 +124,7 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false })
             disabled={disabled}
             onChange={(e) => onChange({ ...safeValue, country: e.target.value })}
             placeholder="Country"
-            className="w-full h-11 px-3.5 rounded-[12px] border border-slate-200 bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#0085FF] transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
+            className={inputCls}
           />
         </div>
       </div>

@@ -2228,6 +2228,13 @@ const CreateInvoicePanel = ({
   // Required/invalid fields are marked red in place instead of popping a
   // toast — clears itself the moment the field is actually filled in/fixed.
   const [fieldErrors, setFieldErrors] = useState({});
+  // Refs so a failed submit can scroll the invalid field into view instead
+  // of just coloring it — on mobile especially, a red border off-screen is
+  // easy to miss entirely.
+  const dealFieldRef = useRef(null);
+  const dateFieldRef = useRef(null);
+  const billingFieldRef = useRef(null);
+  const gstinFieldRef = useRef(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
@@ -2686,6 +2693,7 @@ const CreateInvoicePanel = ({
     const nextErrors = {};
     if (!form.deal) nextErrors.deal = true;
     if (!form.date) nextErrors.date = true;
+    if (isAddressEmpty(form.billingAddress)) nextErrors.billingAddress = true;
     if (!isDraft && supportsGSTIN) {
       if (!form.receiverGSTIN.trim()) nextErrors.receiverGSTIN = true;
       else if (!GSTIN_REGEX.test(form.receiverGSTIN.trim().toUpperCase()))
@@ -2693,6 +2701,17 @@ const CreateInvoicePanel = ({
     }
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
+      // Scroll to whichever invalid field comes first on the form, not just
+      // color it — a red border off-screen (especially on mobile) is easy
+      // to miss entirely.
+      const firstInvalidRef = nextErrors.deal
+        ? dealFieldRef
+        : nextErrors.date
+          ? dateFieldRef
+          : nextErrors.billingAddress
+            ? billingFieldRef
+            : gstinFieldRef;
+      firstInvalidRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setFieldErrors({});
@@ -3206,7 +3225,7 @@ const CreateInvoicePanel = ({
           <>
           <SectionHeader number={sectionNo.details} title={`${docName} Details`} />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={dealFieldRef}>
               <FieldLabel required>Select Deal</FieldLabel>
               <div className="flex items-center gap-2">
                 <PickerSelect
@@ -3261,7 +3280,7 @@ const CreateInvoicePanel = ({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={dateFieldRef}>
               <FieldLabel required>{docName} Date</FieldLabel>
               {/* Reserve the same 40px + gap the Select Deal "+" button takes,
                   so this input lines up with the deal picker's width. */}
@@ -3354,10 +3373,14 @@ const CreateInvoicePanel = ({
 
           <SectionHeader number={sectionNo.address} title="Billing & Shipping Address" />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
+            <div ref={billingFieldRef} className="contents">
             <AddressFieldsGroup
               label="Billing address"
+              required
+              invalid={fieldErrors.billingAddress}
               value={form.billingAddress}
               onChange={(next) => {
+                setFieldErrors((prev) => ({ ...prev, billingAddress: false }));
                 // Same seller-state vs. customer-state re-check the deal
                 // picker above runs, so editing the billing state directly
                 // on this document also flips CGST/SGST vs IGST instead of
@@ -3373,6 +3396,7 @@ const CreateInvoicePanel = ({
                 }));
               }}
             />
+            </div>
             <div className="flex items-center gap-2 @md:col-span-2 -mb-1">
               <button
                 type="button"
@@ -3414,7 +3438,7 @@ const CreateInvoicePanel = ({
           <>
           <SectionHeader number={sectionNo.billing} title="Billing & Tax Information" />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={gstinFieldRef}>
               <FieldLabel required>Receiver GSTIN</FieldLabel>
               {/* Match the Select Deal picker width (reserve the "+" button space). */}
               <div className="flex items-center gap-2">
