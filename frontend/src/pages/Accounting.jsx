@@ -2519,6 +2519,12 @@ const Accounting = () => {
           className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
+          {/* Mobile-only page title — fills the same left slot the tab pill
+              occupies on desktop, so justify-between actually has two
+              children to space apart (with only the icon group visible, a
+              single flex child sits at flex-start instead of the far right). */}
+          <h1 className="lg:hidden text-base font-bold text-[#0E121B] flex-shrink-0">Accountings</h1>
+
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
               mounted and clickable while the table loads. */}
@@ -2599,8 +2605,9 @@ const Accounting = () => {
                 )}
               </div>
 
-              {/* Filter Button — status filter */}
-              <div className="relative flex-shrink-0">
+              {/* Filter Button — status filter. Hidden on mobile; folded into
+                  the More menu below instead. */}
+              <div className="relative flex-shrink-0 hidden lg:block">
                 <button
                   title="Filter by status"
                   onClick={(e) => {
@@ -2683,6 +2690,30 @@ const Accounting = () => {
                         </button>
                       ))}
                     </div>
+
+                    {/* Filter by status — folded in here on mobile since the
+                        standalone filter button is hidden below lg. */}
+                    <div className="lg:hidden py-1 border-b border-[#E1E4EA] max-h-48 overflow-y-auto">
+                      {["", ...statusOptions].map((status) => (
+                        <button
+                          key={status || "all"}
+                          onClick={() => {
+                            setFilterStatuses((prev) => ({
+                              ...prev,
+                              [activeTab]: status,
+                            }));
+                            setShowMoreMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm ${filterStatuses[activeTab] === status
+                            ? "text-[#0085FF] font-medium bg-blue-50"
+                            : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                        >
+                          {status || "All Statuses"}
+                        </button>
+                      ))}
+                    </div>
+
                     <button
                       onClick={() => {
                         setShowMoreMenu(false);
@@ -2714,20 +2745,24 @@ const Accounting = () => {
                 /* Figma "Frame 1351649616": 146x44, padding 12, gap 6,
                    #0085FF, radius 96. The fixed 146px width is the spec for the
                    "Add Invoice" label; the longer labels on the other three tabs
-                   use it as a minimum so the text isn't clipped. */
+                   use it as a minimum so the text isn't clipped. Below lg it
+                   collapses to a plain circular + button, same treatment as
+                   Companies.jsx's "New Company" button on mobile. */
                 style={{
-                  width: activeTab === "tax" ? 146 : undefined,
-                  minWidth: 146,
+                  width: 40,
                   height: 40,
                   padding: 12,
                   gap: 6,
                   background: "#0085FF",
                   borderRadius: 96,
                 }}
-                className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1"
+                className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 lg:!w-auto"
               >
                 <Plus size={18} className="text-white flex-shrink-0" />
-                <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
+                <span
+                  className="hidden lg:inline text-white text-[14px] font-medium leading-[20px] whitespace-nowrap"
+                  style={{ minWidth: activeTab === "tax" ? 106 : undefined }}
+                >
                   Add {docNameFor(activeTab)}
                 </span>
               </button>
