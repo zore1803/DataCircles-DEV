@@ -108,10 +108,10 @@ const DealsFunnelChart = ({ stages }) => {
   const SVG_H = 310;
   const n = stages.length;
   const midY = SVG_H / 2;
-  const topLabelY = 30;
-  const bottomLabelY = SVG_H - 14;
+  const nameLabelY = SVG_H - 30;
+  const valueLabelY = SVG_H - 12;
   const minH = SVG_H * 0.08;
-  const maxH = SVG_H - 60;
+  const maxH = SVG_H - 76;
 
   const values = stages.map((s) => Math.max(0, Number(s.value) || 0));
   const maxVal = Math.max(...values, 1);
@@ -163,16 +163,16 @@ const DealsFunnelChart = ({ stages }) => {
         <line key={`divider-${i}`} x1={x} y1={midY - boundaryH[i + 1] / 2} x2={x} y2={midY + boundaryH[i + 1] / 2} stroke="#FFFFFF" strokeWidth={2} />
       ))}
 
-      {/* Value (top) and stage name (bottom) labels, centered per segment. */}
+      {/* Stage name with its value stacked directly below it, centered per segment. */}
       {stages.map((stage, i) => {
         const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
         return (
           <g key={`label-${stage.name}`}>
-            <text x={cx} y={topLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
-              ₹{formatNumberToIndian(Math.round(values[i]))}
-            </text>
-            <text x={cx} y={bottomLabelY} textAnchor="middle" fontSize={12} fill="#525866">
+            <text x={cx} y={nameLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
               {stage.name}
+            </text>
+            <text x={cx} y={valueLabelY} textAnchor="middle" fontSize={12} fill="#525866">
+              ₹{formatNumberToIndian(Math.round(values[i]))}
             </text>
           </g>
         );
