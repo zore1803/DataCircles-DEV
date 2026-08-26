@@ -3085,6 +3085,27 @@ const Accounting = () => {
               filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
             }}
           >
+            {/* Mobile — same simple Previous/Next fallback as Companies.jsx,
+                instead of cramming the full desktop layout (Showing X of Y +
+                per-page dropdown + numbered pages) into a narrow viewport. */}
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => handlePageChange(activeTab, pagination.currentPage - 1)}
+                disabled={!pagination.hasPrevPage}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => handlePageChange(activeTab, pagination.currentPage + 1)}
+                disabled={!pagination.hasNextPage}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
             {showLoadingSkeleton ? (
               <div className="flex items-center gap-2">
                 <Skeleton width={190} height={14} />
@@ -3225,6 +3246,7 @@ const Accounting = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         )}
 
