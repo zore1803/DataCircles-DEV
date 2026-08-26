@@ -313,7 +313,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           same dc-panel-card inset/rounded-corner chrome and slide animation
           as the rest of the quick-drawer forms. */}
       <div
-        className={`fixed dc-panel-card z-[100006] w-full max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        className={`fixed dc-panel-card z-[100006] w-[calc(100%-3rem)] max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}

@@ -4105,7 +4105,7 @@ const Accounting = () => {
               {/* Same inset, rounded quick-drawer chrome as CompanyForm/ItemForm/CallLogForm
                   (dc-panel-card) — this panel just keeps its own wider, taller compose width
                   instead of the standard dc-panel-w. */}
-              <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+              <div className="fixed dc-panel-card w-[calc(100%-3rem)] max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
                   <div className="flex items-center gap-3">
                     <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">

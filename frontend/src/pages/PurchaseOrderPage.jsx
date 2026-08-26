@@ -2302,7 +2302,7 @@ const PurchaseOrderPage = () => {
         return (
           <>
             <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
-            <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed dc-panel-card w-[calc(100%-3rem)] max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
