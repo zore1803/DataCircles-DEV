@@ -20,10 +20,21 @@ import {
   MoreVertical,
   Settings,
   CheckSquare,
-  CheckCircle2,
   ClipboardList,
   DollarSign,
-  RotateCcw,
+  Share2,
+  MessageCircle,
+  Mail,
+  MessageSquare,
+  Copy,
+  Lock,
+  Bold as BoldIcon,
+  Italic as ItalicIcon,
+  Underline as UnderlineIcon,
+  Strikethrough as StrikethroughIcon,
+  ListOrdered,
+  List as ListIcon,
+  Link as LinkIcon,
 } from "lucide-react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -40,6 +51,8 @@ import BulkActions from "../components/BulkActions";
 import AppToaster from "../components/AppToaster";
 import { exportClientSide, formatINR } from "../utils/clientExport";
 import SalesReturnForm from "../components/salesReturn/SalesReturnForm";
+import SalesReturnPreview from "../components/salesReturn/SalesReturnPreview";
+import ImportSalesReturns from "../components/salesReturn/ImportSalesReturns";
 import {
   useReactTable,
   getCoreRowModel,
@@ -74,13 +87,6 @@ const STATUS_STYLES = {
   Refunded: "bg-blue-50 text-blue-700 border-blue-200",
   Cancelled: "bg-red-50 text-red-700 border-red-200",
 };
-const STATUS_ICONS = {
-  Draft: Edit2,
-  Pending: ClipboardList,
-  Confirmed: CheckCircle2,
-  Refunded: DollarSign,
-  Cancelled: X,
-};
 const STATUS_OPTIONS = ["Draft", "Pending", "Confirmed", "Refunded", "Cancelled"];
 
 const customerOf = (r) =>
@@ -113,10 +119,46 @@ const SalesReturn = () => {
 
   const [showForm, setShowForm] = useState(false);
   const [editingReturn, setEditingReturn] = useState(null);
+  const [previewReturn, setPreviewReturn] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [showImport, setShowImport] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportButtonRef = useRef(null);
+
+  // Share via WhatsApp/Email/SMS — same pattern as Purchase/PurchaseOrder/
+  // PurchaseReturn's row-actions menu, reusing the org's saved Message
+  // Templates + Branding (Settings -> Message Templates) so content stays
+  // consistent across modules.
+  const [shareMenu, setShareMenu] = useState(null);
+  const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  const [waTemplatesList, setWaTemplatesList] = useState([]);
+  const [smsTemplatesList, setSmsTemplatesList] = useState([]);
+  const [emailTemplatesList, setEmailTemplatesList] = useState([]);
+  const [shareCompanyName, setShareCompanyName] = useState("");
+
+  const [emailCompose, setEmailCompose] = useState(null);
+  const [emailComposeTo, setEmailComposeTo] = useState("");
+  const [emailComposeCc, setEmailComposeCc] = useState("");
+  const [emailComposeBcc, setEmailComposeBcc] = useState("");
+  const [showEmailCc, setShowEmailCc] = useState(false);
+  const [showEmailBcc, setShowEmailBcc] = useState(false);
+  const [emailComposeSubject, setEmailComposeSubject] = useState("");
+  const [emailComposeBody, setEmailComposeBody] = useState("");
+  const [emailComposeSending, setEmailComposeSending] = useState(false);
+  const [emailPreviewMode, setEmailPreviewMode] = useState(false);
+  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false);
+  const emailBodyEditorRef = useRef(null);
+  const EMAIL_FROM_ADDRESS = import.meta.env.VITE_SENDGRID_FROM_EMAIL || "";
+  const EMAIL_FROM_NAME = import.meta.env.VITE_SENDGRID_FROM_NAME || "";
+
+  const [smsCompose, setSmsCompose] = useState(null);
+  const [smsComposeTo, setSmsComposeTo] = useState("");
+  const [smsComposeBody, setSmsComposeBody] = useState("");
+  const [smsComposeSending, setSmsComposeSending] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [toDelete, setToDelete] = useState(null);
@@ -228,6 +270,9 @@ const SalesReturn = () => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
         setIsMoreMenuOpen(false);
       }
+      if (exportButtonRef.current && !exportButtonRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
       if (columnMenuRef.current && !columnMenuRef.current.contains(event.target)) {
         setOpenColumnMenuKey(null);
       }
@@ -301,6 +346,51 @@ const SalesReturn = () => {
   const openCreate = () => { setEditingReturn(null); setShowForm(true); };
   const openEdit = (row) => { setEditingReturn(row); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setEditingReturn(null); };
+  const openPreview = (row) => { setPreviewReturn(row); setShowPreview(true); };
+  const closePreview = () => { setShowPreview(false); setPreviewReturn(null); };
+
+  const handleDownload = async (row) => {
+    try {
+      const response = await API.get(`/sales-returns/download/${row._id}`, { responseType: "blob" });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Sales-Return-${row.returnNumber || row._id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Sales return downloaded");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to download sales return");
+    }
+  };
+
+  const textToEmailHtml = (text) => (text || "").replace(/\n/g, "<br>");
+
+  // Same org-wide message templates + branding Purchase/PurchaseOrder/
+  // PurchaseReturn's share flow pulls from (Settings -> Message Templates /
+  // Branding) — reused as-is so WhatsApp/Email/SMS content stays consistent
+  // across modules.
+  const fetchShareSettings = async () => {
+    try {
+      const [settingsRes, brandingRes] = await Promise.all([
+        API.get("/document-settings"),
+        API.get("/branding").catch(() => null),
+      ]);
+      setWaTemplatesList(Array.isArray(settingsRes.data?.whatsappTemplates) ? settingsRes.data.whatsappTemplates : []);
+      setSmsTemplatesList(Array.isArray(settingsRes.data?.smsTemplates) ? settingsRes.data.smsTemplates : []);
+      setEmailTemplatesList(Array.isArray(settingsRes.data?.emailTemplates) ? settingsRes.data.emailTemplates : []);
+      if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
+    } catch (err) {
+      console.error("Failed to load share settings in SalesReturn", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchShareSettings();
+  }, []);
 
   const exitSelectionMode = () => {
     setSelectionMode(true);
@@ -537,9 +627,9 @@ const SalesReturn = () => {
             e.stopPropagation();
             if (isOpen) return close();
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 180;
+            const MENU_W = 224;
             const MARGIN = 8;
-            const MENU_H = 260;
+            const MENU_H = 340;
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
             const viewportW = window.innerWidth / zMenu;
@@ -564,45 +654,77 @@ const SalesReturn = () => {
             <div className="fixed inset-0 z-[9998]" onClick={close} />
             <div
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-[180px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] py-1 max-h-[70vh] overflow-y-auto"
             >
               <button
-                onClick={() => { close(); openEdit(row); }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50"
+                onClick={() => { close(); openPreview(row); }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
               >
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                View / Edit
+                <Eye className="w-4 h-4 text-blue-600" />
+                View
+              </button>
+              <button
+                onClick={() => { close(); openEdit(row); }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4 text-blue-600" />
+                Edit
+              </button>
+              <button
+                onClick={() => { close(); handleDownload(row); }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Download className="w-4 h-4 text-green-600" />
+                Download PDF
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const DROPDOWN_W = 208;
+                  const anchorRight = rowActionsPos.left + 224;
+                  close();
+                  setShareMenu({
+                    doc: row,
+                    x: Math.max(4, anchorRight - DROPDOWN_W),
+                    y: rowActionsPos.top,
+                  });
+                  setShareMenuChannel(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Share2 className="w-4 h-4 text-blue-600" />
+                Share via WhatsApp/Email/SMS
               </button>
               {row.status === "Confirmed" && (
                 <button
                   onClick={() => { close(); handleStatusChange(row, "Refunded"); }}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-blue-600 hover:bg-blue-50"
+                  className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
                 >
-                  <DollarSign className="w-3.5 h-3.5" />
+                  <DollarSign className="w-4 h-4" />
                   Mark Refunded
                 </button>
               )}
               {row.status !== "Confirmed" && row.status !== "Refunded" && (
                 <>
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                  <div className="px-2 py-0.5 text-[10px] uppercase text-gray-400">Change status</div>
+                  <div className="border-t border-gray-100 my-1" />
+                  <div className="px-4 py-1 text-[10px] uppercase text-gray-400">Change status</div>
                   {STATUS_OPTIONS.filter((s) => s !== row.status).map((s) => (
                     <button
                       key={s}
                       onClick={() => { close(); handleStatusChange(row, s); }}
-                      className="w-full text-left px-2 py-1.5 text-xs text-[#161618] hover:bg-gray-50 rounded-md"
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       → {s}
                     </button>
                   ))}
                 </>
               )}
-              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <div className="border-t border-gray-100 my-1" />
               <button
                 onClick={() => { close(); handleDelete(row._id); }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50"
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
               >
-                <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
+                <Trash2 className="w-4 h-4" />
                 Delete
               </button>
             </div>
@@ -654,6 +776,7 @@ const SalesReturn = () => {
       (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key)
     );
     const orderedFields = [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields];
+    const lastColumnKey = orderedFields[orderedFields.length - 1]?.key;
 
     orderedFields.forEach((vc) => {
       cols.push(
@@ -781,57 +904,66 @@ const SalesReturn = () => {
           },
           cell: ({ row }) => {
             const r = row.original;
+            let baseContent;
+
             if (vc.key === "returnNumber") {
-              return (
-                <div className="flex items-center justify-between w-full group">
-                  <button
-                    onClick={() => openEdit(r)}
-                    className="text-[#0085FF] font-semibold hover:underline truncate"
-                    title={r.returnNumber}
-                  >
-                    <HighlightText text={r.returnNumber} query={searchTerm} />
-                  </button>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    {renderRowActionsMenu(r)}
-                  </div>
+              baseContent = (
+                <button
+                  onClick={() => openPreview(r)}
+                  className="text-[#0085FF] font-semibold hover:underline truncate text-left"
+                  title={r.returnNumber}
+                >
+                  <HighlightText text={r.returnNumber} query={searchTerm} />
+                </button>
+              );
+            } else if (vc.key === "invoice") {
+              baseContent = <span className="text-blue-600 truncate block" title={invoiceOf(r)}><HighlightText text={invoiceOf(r)} query={searchTerm} /></span>;
+            } else if (vc.key === "customer") {
+              baseContent = <span className="text-gray-700 truncate block" title={customerOf(r)}><HighlightText text={customerOf(r)} query={searchTerm} /></span>;
+            } else if (vc.key === "returnDate") {
+              baseContent = <span className="text-gray-600">{r.returnDate ? new Date(r.returnDate).toLocaleDateString("en-IN") : "—"}</span>;
+            } else if (vc.key === "grandTotal") {
+              baseContent = <span className="text-gray-900 font-medium">{money(r.grandTotal)}</span>;
+            } else if (vc.key === "status") {
+              // Plain colored pill, same shape as PurchaseOrderPage/PurchasePage's
+              // status column: `inline-block px-3 py-1 rounded-full text-xs
+              // font-semibold border`, label only — no icon.
+              baseContent = (
+                <div className="flex items-center justify-start">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${STATUS_STYLES[r.status] || STATUS_STYLES.Draft}`}>
+                    {r.status}
+                  </span>
                 </div>
               );
-            }
-            if (vc.key === "invoice") {
-              return <span className="text-blue-600 truncate block" title={invoiceOf(r)}><HighlightText text={invoiceOf(r)} query={searchTerm} /></span>;
-            }
-            if (vc.key === "customer") {
-              return <span className="text-gray-700 truncate block" title={customerOf(r)}><HighlightText text={customerOf(r)} query={searchTerm} /></span>;
-            }
-            if (vc.key === "returnDate") {
-              return <span className="text-gray-600">{r.returnDate ? new Date(r.returnDate).toLocaleDateString("en-IN") : "—"}</span>;
-            }
-            if (vc.key === "grandTotal") {
-              return <span className="text-gray-900 font-medium">{money(r.grandTotal)}</span>;
-            }
-            if (vc.key === "status") {
-              const Icon = STATUS_ICONS[r.status] || Edit2;
-              return (
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_STYLES[r.status] || STATUS_STYLES.Draft}`}>
-                  <Icon className="w-3 h-3" />
-                  {r.status}
-                </span>
-              );
-            }
-            if (vc.key === "refund") {
-              return (
+            } else if (vc.key === "refund") {
+              baseContent = (
                 <span className="text-xs text-gray-600">
                   {r.status === "Refunded"
                     ? `${r.refundMode || "Settled"}${r.refundReference ? ` · ${r.refundReference}` : ""}`
                     : r.refundMode || "—"}
                 </span>
               );
-            }
-            if (vc.key === "reason" || vc.key === "notes") {
+            } else if (vc.key === "reason" || vc.key === "notes") {
               const val = r[vc.key] || "";
-              return <span className="text-xs text-gray-600 truncate block" title={val}><HighlightText text={val || "—"} query={searchTerm} /></span>;
+              baseContent = <span className="text-xs text-gray-600 truncate block" title={val}><HighlightText text={val || "—"} query={searchTerm} /></span>;
+            } else {
+              baseContent = "—";
             }
-            return "—";
+
+            // The row's ⋮ menu is appended to whichever column currently sits
+            // last — pin/drag can move that around — same pattern as
+            // Companies.jsx/PurchaseOrderPage.jsx, instead of a hover-only
+            // affordance tucked into one specific column that's easy to miss
+            // (or that scrolls out of view once other columns are pinned).
+            if (vc.key === lastColumnKey) {
+              return (
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="min-w-0 flex-1">{baseContent}</div>
+                  {renderRowActionsMenu(r)}
+                </div>
+              );
+            }
+            return baseContent;
           },
         })
       );
@@ -874,6 +1006,409 @@ const SalesReturn = () => {
         subtitle="Narrow down by number, status, amount or reason"
         emptyStateText="Add a rule to filter the list."
       />
+
+      {shareMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+          <div
+            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            style={{ top: shareMenu.y, left: shareMenu.x }}
+          >
+            {(() => {
+              const link = `${window.location.origin}/view/salesReturn/${shareMenu.doc._id}`;
+              const num = shareMenu.doc.returnNumber;
+              const d = shareMenu.doc;
+              const customerName = customerOf(d);
+              const amt = d.grandTotal != null ? `₹${Number(d.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+              const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
+              const fillTpl = (tpl) => tpl
+                .replace(/{customerName}/g, customerName)
+                .replace(/{docType}/g, "Sales Return")
+                .replace(/{number}/g, num || "—")
+                .replace(/{amount}/g, amt)
+                .replace(/{link}/g, link)
+                .replace(/{company}/g, shareCompanyName || "");
+
+              const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your Sales Return is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
+              const buildSmsMsg = (tpl) => tpl?.body
+                ? fillTpl(tpl.body)
+                : `Your Sales Return${num ? ` #${num}` : ""} from ${shareCompanyName || "us"} is ready. View & Download: ${link}`;
+              const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `Sales Return ${num || ""}`;
+              const buildEmailBody = (tpl) => tpl?.body
+                ? fillTpl(tpl.body)
+                : `Hi ${customerName},\n\nPlease find attached your Sales Return${num ? ` #${num}` : ""}.\n\nYou can also view and download it online:\n${link}\n\nThank you for your business!`;
+
+              const channels = {
+                whatsapp: {
+                  list: waTemplatesList,
+                  send: (tpl) => { window.open(`https://wa.me/?text=${encodeURIComponent(buildWaMsg(tpl))}`, "_blank"); closeMenu(); },
+                },
+                email: {
+                  list: emailTemplatesList,
+                  send: (tpl) => {
+                    setEmailComposeTo(d.deal?.contact?.email || d.deal?.company?.email || "");
+                    setEmailComposeSubject(buildEmailSubject(tpl));
+                    setEmailComposeBody(textToEmailHtml(buildEmailBody(tpl)));
+                    setEmailCompose({ doc: d });
+                    closeMenu();
+                  },
+                },
+                sms: {
+                  list: smsTemplatesList,
+                  send: (tpl) => {
+                    setSmsComposeTo(d.deal?.contact?.phone || d.deal?.company?.phone || "");
+                    setSmsComposeBody(buildSmsMsg(tpl));
+                    setSmsCompose({ doc: d });
+                    closeMenu();
+                  },
+                },
+              };
+
+              const openChannel = (channel) => {
+                const { list, send } = channels[channel];
+                if (list.length <= 1) send(list[0] || null);
+                else setShareMenuChannel(channel);
+              };
+
+              if (shareMenuChannel) {
+                const { list, send } = channels[shareMenuChannel];
+                return (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                    >
+                      ← Back
+                    </button>
+                    {list.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        onClick={(e) => { e.stopPropagation(); send(tpl); }}
+                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="truncate">{tpl.name}</span>
+                        {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                      </button>
+                    ))}
+                  </>
+                );
+              }
+
+              const items = [
+                { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
+                { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
+                { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+              ];
+              return items.map(({ label, icon, onClick }) => (
+                <button
+                  key={label}
+                  onClick={(e) => { e.stopPropagation(); onClick(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  {icon}
+                  {label}
+                </button>
+              ));
+            })()}
+          </div>
+        </>,
+        document.body
+      )}
+      {emailCompose && (() => {
+        const dname = "Sales Return";
+        const dnum = emailCompose.doc.returnNumber;
+        const link = `${window.location.origin}/view/salesReturn/${emailCompose.doc._id}`;
+        const cname = customerOf(emailCompose.doc);
+        const eAmt = emailCompose.doc.grandTotal != null
+          ? `₹${Number(emailCompose.doc.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+          : "";
+        const fillEmailTpl = (tpl) => tpl
+          .replace(/{customerName}/g, cname)
+          .replace(/{docType}/g, dname)
+          .replace(/{number}/g, dnum || "—")
+          .replace(/{amount}/g, eAmt)
+          .replace(/{link}/g, link)
+          .replace(/{company}/g, shareCompanyName || "");
+        const applyTemplate = (key) => {
+          const saved = emailTemplatesList.find((tpl) => tpl.id === key);
+          let nextSubject;
+          let nextBody;
+          if (saved) {
+            nextSubject = fillEmailTpl(saved.subject || "");
+            nextBody = textToEmailHtml(fillEmailTpl(saved.body || ""));
+          } else if (key === "standard") {
+            nextSubject = `${dname} ${dnum || ""}`;
+            nextBody = textToEmailHtml(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
+          } else if (key === "reminder") {
+            nextSubject = `Reminder: ${dname} ${dnum || ""} pending`;
+            nextBody = textToEmailHtml(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+          } else if (key === "followup") {
+            nextSubject = `Following up on ${dname} ${dnum || ""}`;
+            nextBody = textToEmailHtml(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+          }
+          setEmailComposeSubject(nextSubject);
+          setEmailComposeBody(nextBody);
+          if (emailBodyEditorRef.current) {
+            emailBodyEditorRef.current.innerHTML = nextBody;
+          }
+          setEmailTemplateOpen(false);
+        };
+        const doSend = async () => {
+          if (!emailComposeTo || emailComposeSending) return;
+          setEmailComposeSending(true);
+          try {
+            await API.post(`/public/salesReturn/${emailCompose.doc._id}/email`, {
+              email: emailComposeTo,
+              cc: emailComposeCc,
+              bcc: emailComposeBcc,
+              subject: emailComposeSubject,
+              body: emailComposeBody,
+            });
+            toast.success("Email sent successfully");
+            setEmailCompose(null);
+            setEmailComposeTo("");
+            setEmailComposeCc("");
+            setEmailComposeBcc("");
+            setShowEmailCc(false);
+            setShowEmailBcc(false);
+            setEmailComposeSubject("");
+            setEmailComposeBody("");
+            setEmailPreviewMode(false);
+          } catch (err) {
+            toast.error(err.response?.data?.error || "Failed to send email");
+          } finally {
+            setEmailComposeSending(false);
+          }
+        };
+        const execCmd = (cmd, value = null) => {
+          emailBodyEditorRef.current?.focus();
+          document.execCommand(cmd, false, value);
+          setEmailComposeBody(emailBodyEditorRef.current?.innerHTML || "");
+        };
+        const insertLink = () => {
+          const url = window.prompt("Enter URL");
+          if (url) execCmd("createLink", url);
+        };
+        const toolbarButtons = [
+          { icon: <BoldIcon className="w-3.5 h-3.5" />, title: "Bold", onClick: () => execCmd("bold") },
+          { icon: <ItalicIcon className="w-3.5 h-3.5" />, title: "Italic", onClick: () => execCmd("italic") },
+          { icon: <UnderlineIcon className="w-3.5 h-3.5" />, title: "Underline", onClick: () => execCmd("underline") },
+          { icon: <StrikethroughIcon className="w-3.5 h-3.5" />, title: "Strikethrough", onClick: () => execCmd("strikeThrough") },
+          { icon: <ListOrdered className="w-3.5 h-3.5" />, title: "Numbered list", onClick: () => execCmd("insertOrderedList") },
+          { icon: <ListIcon className="w-3.5 h-3.5" />, title: "Bulleted list", onClick: () => execCmd("insertUnorderedList") },
+          { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertLink },
+        ];
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
+            <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                  <h2 className="text-base font-semibold text-gray-900">Send Email</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEmailPreviewMode((prev) => !prev)}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {emailPreviewMode ? "Edit" : "Preview"}
+                  </button>
+                  <button
+                    disabled={!emailComposeTo || emailComposeSending}
+                    onClick={doSend}
+                    className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                  >
+                    {emailComposeSending ? (
+                      <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                    ) : (
+                      <><Mail className="w-4 h-4" /> Send Email</>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                  <div className="flex items-center w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
+                    <span className="flex items-center gap-1.5 text-sm text-gray-600 flex-1 min-w-0">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0">DC</span>
+                      <span className="min-w-0 truncate">
+                        {EMAIL_FROM_NAME && <strong className="mr-1">{EMAIL_FROM_NAME}</strong>}
+                        {EMAIL_FROM_ADDRESS}
+                      </span>
+                      <Lock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                      {!showEmailCc && (
+                        <button type="button" onClick={() => setShowEmailCc(true)} className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">Cc</button>
+                      )}
+                      {!showEmailBcc && (
+                        <button type="button" onClick={() => setShowEmailBcc(true)} className="px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">Bcc</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                  <input type="email" value={emailComposeTo} onChange={(e) => setEmailComposeTo(e.target.value)} placeholder="recipient@example.com" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                {showEmailCc && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-500">Cc</label>
+                      <button type="button" onClick={() => { setShowEmailCc(false); setEmailComposeCc(""); }} className="text-xs font-medium text-gray-400 hover:text-gray-600">Remove</button>
+                    </div>
+                    <input type="text" value={emailComposeCc} onChange={(e) => setEmailComposeCc(e.target.value)} placeholder="comma-separated addresses" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                )}
+                {showEmailBcc && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-500">Bcc</label>
+                      <button type="button" onClick={() => { setShowEmailBcc(false); setEmailComposeBcc(""); }} className="text-xs font-medium text-gray-400 hover:text-gray-600">Remove</button>
+                    </div>
+                    <input type="text" value={emailComposeBcc} onChange={(e) => setEmailComposeBcc(e.target.value)} placeholder="comma-separated addresses" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>
+                  <input type="text" value={emailComposeSubject} onChange={(e) => setEmailComposeSubject(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-500">Body</label>
+                    <button type="button" onClick={() => setEmailTemplateOpen((prev) => !prev)} className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                      + Add template <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {emailTemplateOpen && (
+                    <div className="absolute right-0 top-6 bg-white border border-gray-200 rounded-lg shadow-lg w-64 z-10 py-1">
+                      {[
+                        ...emailTemplatesList.map((tpl) => ({
+                          key: tpl.id,
+                          label: tpl.name,
+                          desc: tpl.isDefault ? "Default · From Document Settings" : "From Document Settings",
+                        })),
+                        { key: "standard", label: "Standard", desc: "Thank you for your business" },
+                        { key: "reminder", label: "Reminder", desc: "Document pending review" },
+                        { key: "followup", label: "Follow-up", desc: "Check in on document" },
+                      ].map(({ key, label, desc }) => (
+                        <button key={key} onClick={() => applyTemplate(key)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                          <p className="text-sm font-medium text-gray-800">{label}</p>
+                          <p className="text-xs text-gray-400">{desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {emailPreviewMode ? (
+                    <div className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5" dangerouslySetInnerHTML={{ __html: emailComposeBody }} />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-0.5 border border-gray-200 border-b-0 rounded-t-lg bg-gray-50 px-1.5 py-1">
+                        {toolbarButtons.map(({ icon, title, onClick }) => (
+                          <button key={title} type="button" title={title} onMouseDown={(e) => { e.preventDefault(); onClick(); }} className="p-1.5 text-gray-600 hover:bg-gray-200 rounded transition-colors">{icon}</button>
+                        ))}
+                      </div>
+                      <div
+                        ref={(el) => {
+                          emailBodyEditorRef.current = el;
+                          if (el && el.dataset.init !== "true") {
+                            el.innerHTML = emailComposeBody;
+                            el.dataset.init = "true";
+                          }
+                        }}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={(e) => setEmailComposeBody(e.currentTarget.innerHTML)}
+                        className="w-full min-h-[220px] px-3 py-2 border border-gray-200 rounded-b-lg text-sm focus:outline-none focus:border-blue-500 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+                <button
+                  disabled={!emailComposeTo || emailComposeSending}
+                  onClick={doSend}
+                  className="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  {emailComposeSending ? (
+                    <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                  ) : (
+                    <><Mail className="w-4 h-4" /> Send Email</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+      {smsCompose && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100011]" onClick={() => setSmsCompose(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 p-2 rounded-lg">
+                  <MessageSquare className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Send SMS</h2>
+                  <p className="text-xs text-gray-400">Sales Return #{smsCompose.doc.returnNumber}</p>
+                </div>
+              </div>
+              <button onClick={() => setSmsCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">To (phone number)</label>
+                <input type="tel" value={smsComposeTo} onChange={(e) => setSmsComposeTo(e.target.value)} placeholder="+91 98765 43210" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Message</label>
+                <textarea rows={4} value={smsComposeBody} onChange={(e) => setSmsComposeBody(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-500 resize-none" />
+                <p className="text-xs text-gray-400 mt-1">{smsComposeBody.length} characters</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setSmsCompose(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
+              <button
+                disabled={!smsComposeTo || smsComposeSending}
+                onClick={async () => {
+                  if (!smsComposeTo || smsComposeSending) return;
+                  setSmsComposeSending(true);
+                  try {
+                    await API.post(`/public/salesReturn/${smsCompose.doc._id}/sms`, {
+                      phone: smsComposeTo,
+                      message: smsComposeBody,
+                    });
+                    toast.success("SMS sent successfully");
+                    setSmsCompose(null);
+                    setSmsComposeTo("");
+                    setSmsComposeBody("");
+                  } catch (err) {
+                    toast.error(err.response?.data?.error || "Failed to send SMS");
+                  } finally {
+                    setSmsComposeSending(false);
+                  }
+                }}
+                className="px-5 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {smsComposeSending ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
+                ) : (
+                  <><MessageSquare className="w-3.5 h-3.5" /> Send SMS</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Modal */}
       {showDeleteModal && (
@@ -954,6 +1489,20 @@ const SalesReturn = () => {
           onError={(msg) => toast.error(msg)}
         />
       )}
+
+      <SalesReturnPreview
+        salesReturn={previewReturn}
+        isOpen={showPreview}
+        onClose={closePreview}
+        onEdit={() => { closePreview(); openEdit(previewReturn); }}
+        onDelete={() => { closePreview(); handleDelete(previewReturn._id); }}
+      />
+
+      <ImportSalesReturns
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImportSuccess={() => fetchRows()}
+      />
 
       <BulkActions
         isOpen={showBulkActions}
@@ -1114,70 +1663,57 @@ const SalesReturn = () => {
                       </button>
                       {isMoreMenuOpen && (
                         <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                          <div className="pt-1">
+                          <button
+                            onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
+                            className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <FilterIcon size={16} className="text-gray-400" />
+                            Filters
+                            {activeFilters.length > 0 && (
+                              <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                                {activeFilters.length}
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Upload className="w-4 h-4 text-gray-400" />
+                            Import
+                          </button>
+                          <div className="relative" ref={exportButtonRef}>
                             <button
-                              onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
-                              className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <FilterIcon size={16} className="text-gray-400" />
-                              Filters
-                            </button>
-                            <button
-                              onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
+                              onClick={() => setShowExportMenu((prev) => !prev)}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Settings className="w-4 h-4 text-gray-400" />
-                              Columns
+                              <Download className="w-4 h-4 text-gray-400" />
+                              Export
                             </button>
-                            <div className="border-t border-gray-100 my-1" />
-                            <div className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wider">Status</div>
-                            <button
-                              onClick={() => { setStatusFilter(""); setIsMoreMenuOpen(false); }}
-                              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${!statusFilter ? "text-blue-600 font-medium" : "text-gray-600"}`}
-                            >
-                              All statuses
-                            </button>
-                            {STATUS_OPTIONS.map((s) => (
-                              <button
-                                key={s}
-                                onClick={() => { setStatusFilter(s); setIsMoreMenuOpen(false); }}
-                                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${statusFilter === s ? "text-blue-600 font-medium" : "text-gray-600"}`}
-                              >
-                                {s}
-                              </button>
-                            ))}
-                            <div className="border-t border-gray-100 my-1" />
-                            <button
-                              onClick={() => { setIsMoreMenuOpen(false); handleExport("Excel"); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <Download className="w-4 h-4 text-green-600" />
-                              Export to Excel
-                            </button>
-                            <button
-                              onClick={() => { setIsMoreMenuOpen(false); handleExport("PDF"); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <Download className="w-4 h-4 text-red-600" />
-                              Export to PDF
-                            </button>
-                            <button
-                              disabled
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 cursor-not-allowed"
-                              title="Import coming soon"
-                            >
-                              <Upload className="w-4 h-4" />
-                              Import (soon)
-                            </button>
-                            <div className="border-t border-gray-100 my-1" />
-                            <button
-                              onClick={() => { setIsMoreMenuOpen(false); fetchRows(); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <RotateCcw className="w-4 h-4 text-gray-400" />
-                              Refresh
-                            </button>
+                            {showExportMenu && (
+                              <div className="absolute left-full top-0 ml-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-xl">
+                                <button
+                                  onClick={() => { handleExport("Excel"); setShowExportMenu(false); setIsMoreMenuOpen(false); }}
+                                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-lg flex items-center gap-2"
+                                >
+                                  Export as Excel
+                                </button>
+                                <button
+                                  onClick={() => { handleExport("PDF"); setShowExportMenu(false); setIsMoreMenuOpen(false); }}
+                                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-lg flex items-center gap-2"
+                                >
+                                  Export as PDF
+                                </button>
+                              </div>
+                            )}
                           </div>
+                          <button
+                            onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Settings className="w-4 h-4 text-gray-400" />
+                            Columns
+                          </button>
                         </div>
                       )}
                     </div>
