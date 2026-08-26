@@ -6323,24 +6323,6 @@ const Insights = () => {
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
       .slice(0, 5);
 
-    const statusSectionColors = {
-      Paid: { bg: "#34C759", text: "#FFFFFF" },
-      Sent: { bg: "#0085FF", text: "#FFFFFF" },
-      Overdue: { bg: "#F60000", text: "#FFFFFF" },
-      Draft: { bg: "#2A2726", text: "#FFFFFF" },
-      Pending: { bg: "#FC9C32", text: "#000000" },
-      Cancelled: { bg: "#78788D", text: "#FFFFFF" },
-    };
-    const statusSections = Object.entries(statusDistribution)
-      .filter(([, data]) => data.count > 0)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([status, data]) => ({
-        status,
-        count: data.count,
-        pct: totalInvoices > 0 ? (data.count / totalInvoices) * 100 : 0,
-        color: statusSectionColors[status] || { bg: "#0085FF", text: "#FFFFFF" },
-      }));
-
     const recentInvoiceActivity = [...filteredData.filteredInvoices]
       .filter((i) => i.updatedAt || i.createdAt)
       .sort(
@@ -6424,8 +6406,8 @@ const Insights = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[4fr_1fr] gap-4 items-stretch">
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[500px]">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E7E4E3]">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-[#21201F]/60">
                   Total invoiced this period
@@ -6449,40 +6431,6 @@ const Insights = () => {
                   {Math.abs(totalInvoicedChange).toFixed(2)}%
                 </span>
               </div>
-            </div>
-
-            <div className="flex items-stretch gap-1.5 pt-4" style={{ height: 420 }}>
-              {statusSections.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-                  No invoice data
-                </div>
-              ) : (
-                statusSections.map((section) => (
-                  <div
-                    key={section.status}
-                    className="flex flex-col justify-between rounded-2xl p-4"
-                    style={{
-                      background: section.color.bg,
-                      color: section.color.text,
-                      flexGrow: Math.max(section.pct, 8),
-                      flexBasis: 0,
-                    }}
-                  >
-                    <span className="text-sm font-medium">{section.status}</span>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-lg font-medium">
-                        {section.pct.toFixed(0)}%
-                      </span>
-                      <span
-                        className="flex items-center justify-center px-1.5 py-0.5 rounded-md bg-white text-[10px] font-medium"
-                        style={{ color: "#21201F" }}
-                      >
-                        {section.count}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
             </div>
           </div>
           <div className="flex flex-col gap-4">
