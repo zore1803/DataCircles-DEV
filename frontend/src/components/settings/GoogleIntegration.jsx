@@ -112,9 +112,8 @@ function GoogleIntegration() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl overflow-hidden">
-        <div>
-          {/* Not configured on the server at all */}
+      <div>
+        {/* Not configured on the server at all */}
           {!configured && (
             <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
               <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center border-2 border-gray-100 mb-2">
@@ -194,7 +193,6 @@ function GoogleIntegration() {
               )}
             </div>
           )}
-        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
