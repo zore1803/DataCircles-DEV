@@ -106,20 +106,41 @@ const DealsFunnelChart = ({ stages }) => {
 
   const SVG_W = 770;
   const SVG_H = 310;
+  const n = stages.length;
+  const midY = SVG_H / 2;
+  const minH = SVG_H * 0.08;
+  const maxH = SVG_H - 16;
+
+  const values = stages.map((s) => Math.max(0, Number(s.value) || 0));
+  const maxVal = Math.max(...values, 1);
+  const heightFor = (v) => minH + (v / maxVal) * (maxH - minH);
+
+  // Equal-width columns; each segment's left/right edge height is driven by
+  // its stage's real value relative to the largest stage, so the shape
+  // actually reflects the data instead of a fixed decorative silhouette.
+  const boundaryX = Array.from({ length: n + 1 }, (_, i) => (i / n) * SVG_W);
+  const boundaryH = [heightFor(values[0]), ...values.map((v) => heightFor(v))];
+
+  // Last segment is a highlighted accent (full opacity); the rest taper
+  // from solid down to faint, matching the original design's gradient feel
+  // regardless of how many stages there are.
+  const opacityFor = (i) => {
+    if (i === n - 1) return 1;
+    if (n <= 2) return 0.9;
+    const t = i / (n - 2);
+    return 0.9 - t * 0.7;
+  };
 
   return (
-    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} width="100%" height="100%" style={{ overflow: "visible" }}>
-      {/* Base horn silhouette — exact path data from the Figma source, 5
-          overlapping bezier petals at decreasing opacity blending into one
-          smooth tapering shape. Purely decorative background; the divider
-          lines/labels/badges above it are what carries the real data. */}
-      <g>
-        <path opacity="0.2" d="M151.575 45.5732L105.747 35.1826C94.8692 32.7162 85.0961 26.7608 77.9175 18.2246C68.2014 6.67093 53.8768 0 38.7808 0H-0.000488281V309.184H38.7808C53.8768 309.184 68.2014 302.513 77.9175 290.959C85.0961 282.423 94.8692 276.468 105.747 274.002L151.575 263.61V45.5732Z" fill="#0085FF" />
-        <path opacity="0.2" d="M203.578 256.031C212.601 254.612 221.127 250.964 228.384 245.418C237.957 238.102 249.672 234.138 261.721 234.138H305.423V75.1211H261.721C249.672 75.1211 237.957 71.157 228.384 63.8408C221.127 58.295 212.601 54.6478 203.578 53.2285L154.606 45.5244V263.734L203.578 256.031Z" fill="#0085FF" fillOpacity="0.75" />
-        <path opacity="0.2" d="M460.03 110.828L413.481 104.314C402.434 102.769 391.971 98.4024 383.102 91.6367C373.144 84.0402 361.201 79.4863 348.713 78.5244L308.455 75.4229V233.195L349.161 230.256C361.38 229.373 373.119 225.136 383.083 218.009C391.978 211.648 402.302 207.577 413.144 206.154L460.03 200.004V110.828Z" fill="#0085FF" fillOpacity="0.5" />
-        <path opacity="0.2" d="M615.393 134.536L566.5 131.367C557.153 130.761 548.188 127.435 540.709 121.797C533.101 116.061 523.958 112.719 514.445 112.197L463.818 109.42V199.758L513.621 197.025C523.691 196.473 533.396 193.063 541.599 187.196C549.735 181.378 559.348 177.976 569.333 177.382L615.393 174.641V134.536Z" fill="#0085FF" fillOpacity="0.25" />
-        <path opacity="0.2" d="M770 174.945V133.594H618.424V174.945H770Z" fill="#0085FF" />
-      </g>
+    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} width="100%" height="100%" style={{ overflow: "visible" }} preserveAspectRatio="none">
+      {stages.map((stage, i) => {
+        const x0 = boundaryX[i];
+        const x1 = boundaryX[i + 1];
+        const h0 = boundaryH[i];
+        const h1 = boundaryH[i + 1];
+        const d = `M ${x0} ${midY - h0 / 2} L ${x1} ${midY - h1 / 2} L ${x1} ${midY + h1 / 2} L ${x0} ${midY + h0 / 2} Z`;
+        return <path key={stage.name} d={d} fill="#0085FF" fillOpacity={opacityFor(i)} />;
+      })}
     </svg>
   );
 };
