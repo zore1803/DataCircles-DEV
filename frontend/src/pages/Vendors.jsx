@@ -1291,7 +1291,7 @@ function Vendors() {
               )}
             </div>
 
-            <div className="flex-1" />
+            <div className="hidden lg:block lg:flex-1" />
 
         {showLoadingSkeleton ? (
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -1301,11 +1301,11 @@ function Vendors() {
             <Skeleton width={130} height={40} shape="circle" />
           </div>
         ) : (
-        <div className="flex flex-row items-center gap-2 h-10 flex-shrink-0">
+        <div className="flex flex-row items-center gap-2 h-10 justify-end min-w-0 flex-1 lg:flex-initial lg:flex-shrink-0">
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
-              isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"
-            } max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white min-w-0 max-w-full ${
+              isSearchExpanded ? "flex-1 lg:flex-initial lg:w-[380px]" : "w-10 flex-shrink-0"
+            }`}
           >
             <SearchIcon
               className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
