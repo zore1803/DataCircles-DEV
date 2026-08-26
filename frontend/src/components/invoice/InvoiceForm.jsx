@@ -3164,8 +3164,8 @@ const CreateInvoicePanel = ({
             keep their natural `min-height: auto` and the outer box scrolls
             for real instead of silently crushing them. */}
         <div
-          style={{ width: formWidth }}
-          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
+          style={{ width: formWidth, WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+          className="@container max-lg:!w-full flex-1 min-h-0 lg:flex-none bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
         >
           <div className="w-full flex flex-col items-start gap-1">
           {/* Sections 01-04 (Details/Address/GST/Items) swap to the
