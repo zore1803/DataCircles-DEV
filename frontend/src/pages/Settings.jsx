@@ -430,11 +430,10 @@ const Settings = () => {
     );
   }
 
-  if (activeSection && activeSection.id === "google-integration") {
+  if (activeSection) {
     // Matches the Companies page's fixed toolbar-strip pattern instead of the
-    // generic gray-gradient/breadcrumb-card layout other sections use — flat
-    // white background, no outer gutters, title strip aligned with the
-    // sidebar switcher.
+    // old gray-gradient/breadcrumb-card layout — flat white background, no
+    // outer gutters, title strip aligned with the sidebar switcher.
     return (
       <div
         className="min-h-screen bg-white"
@@ -480,85 +479,6 @@ const Settings = () => {
 
         <div className="pt-[118px] lg:pt-[128px] px-4 lg:px-6 pb-8">
           {activeSection.component}
-        </div>
-      </div>
-    );
-  }
-
-  if (activeSection) {
-    return (
-      <div
-        className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
-        style={{
-          marginTop: -24,
-          marginLeft: -32,
-          marginRight: -32,
-          paddingTop: 24,
-          paddingLeft: 24,
-          paddingRight: 24,
-          boxSizing: "border-box",
-        }}
-      >
-        <div>
-          {/* Enhanced Header with back button */}
-          <div className="mb-8">
-            <button
-              onClick={goBack}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-all"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="font-medium">Back to Settings</span>
-            </button>
-
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-              <SettingsIcon className="w-4 h-4" />
-              <a
-                href="/settings"
-                className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
-              >
-                Settings
-              </a>
-              <ChevronRight className="w-4 h-4" />
-              <span className="text-gray-900 font-semibold">
-                {activeSection.label}
-              </span>
-            </div>
-
-            {/* Active Section Header */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-start gap-4">
-                <div
-                  className={`p-4 rounded-xl ${activeSection.bgColor} ${activeSection.color} shadow-md`}
-                >
-                  {activeSection.icon}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-                      {activeSection.label}
-                    </h2>
-                    {activeSection.badge && (
-                      <span
-                        className={`px-3 py-1 ${activeSection.badgeColor ||
-                          "bg-yellow-100 text-yellow-800"
-                          } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        {activeSection.badge}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-600 text-sm md:text-base">
-                    {activeSection.description}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Component Content */}
-          <div className="mt-6">{activeSection.component}</div>
         </div>
       </div>
     );
