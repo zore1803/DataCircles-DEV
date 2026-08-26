@@ -6434,21 +6434,21 @@ const Insights = () => {
             </div>
 
             <div className="mt-4 rounded-2xl p-6 flex flex-col justify-between max-w-[220px]" style={{ background: "#0085FF", height: 420 }}>
-              <span className="text-sm font-medium text-white/80">Total Invoiced</span>
-              <div>
-                <div className="text-4xl font-semibold text-white">
-                  ₹{formatNumberToIndian(Math.round(totalAmount))}
-                </div>
-                <div className="flex items-center gap-1.5 mt-2 text-white/90">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm font-medium text-white/80">INVOICES</span>
+                <div className="flex items-center gap-1 text-white/90 flex-shrink-0">
                   {totalInvoicedChange >= 0 ? (
-                    <ArrowUp className="w-4 h-4" />
+                    <ArrowUp className="w-3.5 h-3.5" />
                   ) : (
-                    <ArrowDown className="w-4 h-4" />
+                    <ArrowDown className="w-3.5 h-3.5" />
                   )}
-                  <span className="text-sm font-medium">
-                    {Math.abs(totalInvoicedChange).toFixed(2)}% vs last month
+                  <span className="text-xs font-medium">
+                    {Math.abs(totalInvoicedChange).toFixed(2)}%
                   </span>
                 </div>
+              </div>
+              <div className="text-2xl font-semibold text-white">
+                ₹{formatNumberToIndian(Math.round(totalAmount))}
               </div>
             </div>
           </div>
