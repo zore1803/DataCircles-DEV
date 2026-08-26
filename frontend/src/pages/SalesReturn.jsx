@@ -317,8 +317,8 @@ const SalesReturn = () => {
       { key: "grandTotal", label: "Amount", visible: true, order: 4, sortable: true },
       { key: "status", label: "Status", visible: true, order: 5, sortable: true, options: STATUS_OPTIONS },
       { key: "refund", label: "Refund", visible: true, order: 6, sortable: false },
-      { key: "reason", label: "Reason", visible: false, order: 7, sortable: false },
-      { key: "notes", label: "Notes", visible: false, order: 8, sortable: false },
+      { key: "reason", label: "Reason", visible: false, order: 7, sortable: true },
+      { key: "notes", label: "Notes", visible: false, order: 8, sortable: true },
     ],
     []
   );

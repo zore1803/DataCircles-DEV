@@ -247,6 +247,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
                 value={invoiceId}
                 onChange={handleInvoiceChange}
                 placeholder="Select an invoice"
+                displayKey="label"
                 disabled={isEditing}
               />
               {isEditing && (

@@ -1795,23 +1795,22 @@ const Accounting = () => {
     }
   };
 
-  // Clones an existing document into a brand-new Draft document with its own
-  // number via the backend's duplicate endpoint. Distinct from "Convert":
-  // duplicate stays on the same document type and never touches the source.
-  const handleDuplicate = async (id, type) => {
-    try {
-      setLoading((prev) => ({ ...prev, [type]: true }));
-      await API.post(`/${apiPathFor(type)}/${id}/duplicate`);
-      await fetchData(type);
-      toast.success(`${docNameFor(type)} duplicated successfully`);
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error || `Failed to duplicate ${type} document`
-      );
-      console.error(`Duplicate ${type} document error:`, err);
-    } finally {
-      setLoading((prev) => ({ ...prev, [type]: false }));
+  // Opens the create form pre-filled with the source document's data (same
+  // split/full-width view it was last shown in) instead of creating the
+  // duplicate directly against the backend — lets the user review/edit
+  // before saving, same flow as handleConvert/confirmConvert below. Distinct
+  // from "Convert": duplicate stays on the same document type and never
+  // touches the source.
+  const handleDuplicate = (id, type) => {
+    const sourceDoc = documents[type]?.find((d) => d._id === id);
+    if (!sourceDoc) {
+      toast.error("Source document not found. Please refresh.");
+      return;
     }
+    setConversionData(sourceDoc);
+    setActiveTab(type);
+    setShowCreatePanel(true);
+    setShowViewer(false);
   };
 
   const handleConvert = (id, sourceType, targetType) => {

@@ -567,9 +567,13 @@ const QuotationForm = ({
           : "",
         receiverGSTIN: sourceData.receiverGSTIN || "",
         reference: sourceData.reference || "",
-        quotationPrefix: sourceData.quotationPrefix || documentTypeSettings.quote?.prefix || "QT-",
-        quotationSuffix: sourceData.quotationSuffix || documentTypeSettings.quote?.suffix || "",
-        quotationNumber: sourceData.quotationNumber || "",
+        // Only an actual edit (editingQuotation) keeps the source's own
+        // number — conversionData (Convert or Duplicate) always starts
+        // blank so a fresh number gets auto-generated, instead of Duplicate
+        // silently copying the source quotation's own number onto the new one.
+        quotationPrefix: (editingQuotation && sourceData.quotationPrefix) || documentTypeSettings.quote?.prefix || "QT-",
+        quotationSuffix: (editingQuotation && sourceData.quotationSuffix) || documentTypeSettings.quote?.suffix || "",
+        quotationNumber: editingQuotation ? (sourceData.quotationNumber || "") : "",
         billingAddress: { ...emptyAddress(), ...(sourceData.billingAddress || {}) },
         shippingAddress: { ...emptyAddress(), ...(sourceData.shippingAddress || {}) },
         sameAsBilling:

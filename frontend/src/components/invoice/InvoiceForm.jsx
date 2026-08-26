@@ -2157,20 +2157,17 @@ const CreateInvoicePanel = ({
             false,
           transactionType: sourceDoc.transactionType || "intra",
           gstRate: sourceDoc.gstRate || 18,
-          // Read the SOURCE document's own type-specific numbering fields
-          // (e.g. deliveryChallanNumber, quotationPrefix) — not the generic
-          // invoicePrefix/invoiceSuffix/invoiceNumber names. Those literal
-          // field names happen to exist on an actual Invoice document, so
-          // when converting an Invoice into another document type, falling
-          // back to `sourceDoc.invoiceNumber` was picking up the SOURCE
-          // invoice's own number (e.g. "INV-SEED-3") instead of leaving it
-          // blank for a fresh auto-generated number, while every other
-          // source type (Quotation/Proforma/Delivery Challan) has no such
-          // field to collide with and worked correctly by accident.
-          invoicePrefix: sourceDoc[PREFIX_FIELD_BY_TYPE[type]] || configuredPrefix,
-          invoiceSuffix: sourceDoc[SUFFIX_FIELD_BY_TYPE[type]] || "",
-          invoiceNumber: sourceDoc[NUMBER_FIELD_BY_TYPE[type]] || "",
-          nextInvoiceNumber: sourceDoc.nextInvoiceNumber || 1,
+          // Only an actual edit (initialDoc/editingInvoice) should keep the
+          // source's own number — conversionData covers both Convert (a
+          // different doc type, where the source's number field usually
+          // doesn't even apply) and Duplicate (the SAME doc type, where the
+          // source's number field always matches and would otherwise get
+          // copied verbatim onto the new document instead of leaving it
+          // blank for a fresh auto-generated number).
+          invoicePrefix: (initialDoc && sourceDoc[PREFIX_FIELD_BY_TYPE[type]]) || configuredPrefix,
+          invoiceSuffix: (initialDoc && sourceDoc[SUFFIX_FIELD_BY_TYPE[type]]) || configuredSuffix,
+          invoiceNumber: initialDoc ? (sourceDoc[NUMBER_FIELD_BY_TYPE[type]] || "") : "",
+          nextInvoiceNumber: (initialDoc && sourceDoc.nextInvoiceNumber) || 1,
           items:
             sourceDoc.items && sourceDoc.items.length
               ? sourceDoc.items.map((item) => ({

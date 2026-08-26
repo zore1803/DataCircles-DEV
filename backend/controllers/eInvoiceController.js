@@ -50,27 +50,52 @@ exports.getAllEInvoices = async (req, res) => {
 
 exports.getAllEInvoicesWithPagination = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const skip = (page - 1) * limit;
+    const { search, status, sortBy = "createdAt", sortOrder = "desc" } = req.query;
 
     const query = { organization: req.user.organization };
-    if (req.query.status) query.status = req.query.status;
-    if (req.query.search) {
-      const re = new RegExp(req.query.search, "i");
+    if (status) query.status = status;
+    if (search) {
+      const re = new RegExp(search, "i");
       query.$or = [{ invoiceNumber: re }, { "customer.name": re }, { irn: re }, { ackNo: re }];
     }
 
+    // Mirrors salesReturnController's allIds shortcut — lets the frontend's
+    // "Select All" bulk-strip button select every row matching the current
+    // search/status filters, not just the ids on the currently-loaded page.
+    if (req.query.allIds === "true") {
+      const all = await EInvoice.find(query).select("_id").lean();
+      return res.json({ ids: all.map((x) => x._id) });
+    }
+
+    // `customer`/`amount`/`date` are what the frontend's column keys are
+    // called, but on the schema those are `customer.name`, `amount`, `date`
+    // respectively (amount/date already match 1:1). Map the ones that don't.
+    const sortFieldMap = { customer: "customer.name" };
+    const sortField = sortFieldMap[sortBy] || sortBy;
+
     const [eInvoices, totalCount] = await Promise.all([
-      EInvoice.find(query).populate(POPULATE).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      EInvoice.find(query)
+        .populate(POPULATE)
+        .sort({ [sortField]: sortOrder === "asc" ? 1 : -1 })
+        .skip(skip)
+        .limit(limit),
       EInvoice.countDocuments(query),
     ]);
 
+    const totalPages = Math.ceil(totalCount / limit);
     res.json({
       eInvoices,
-      totalCount,
-      totalPages: Math.ceil(totalCount / limit),
-      currentPage: page,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
     });
   } catch (err) {
     console.error("Error fetching e-invoices:", err);

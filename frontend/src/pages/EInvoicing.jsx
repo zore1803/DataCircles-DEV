@@ -3,20 +3,25 @@ import { createPortal } from "react-dom";
 import {
   Ban,
   CheckCircle2,
+  CheckSquare,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   Clock,
+  Copy,
   Download,
-  Edit2,
   Eye,
   EyeOff,
+  Mail,
+  MessageCircle,
+  MessageSquare,
   MoreVertical,
   Pin,
   PinOff,
   Plug,
   Settings,
+  Share2,
   Trash2,
   Upload,
   X,
@@ -71,11 +76,14 @@ const statusBadge = (status) => {
 };
 
 const DEFAULT_COLUMNS = [
-  { key: "invoiceNumber", label: "Purchase Number", visible: true, order: 0, sortable: true },
-  { key: "customer", label: "Vendor", visible: true, order: 1, sortable: true },
+  { key: "invoiceNumber", label: "Invoice Number", visible: true, order: 0, sortable: true },
+  { key: "customer", label: "Customer", visible: true, order: 1, sortable: true },
   { key: "amount", label: "Amount", visible: true, order: 2, sortable: true },
   { key: "status", label: "Status", visible: true, order: 3, sortable: true },
-  { key: "date", label: "Date", visible: true, order: 4, sortable: true },
+  { key: "irn", label: "IRN", visible: true, order: 4, sortable: false },
+  { key: "ackNo", label: "Ack No.", visible: true, order: 5, sortable: false },
+  { key: "ackDate", label: "Ack Date", visible: true, order: 6, sortable: true },
+  { key: "date", label: "Invoice Date", visible: true, order: 7, sortable: true },
 ];
 
 const EMPTY_LIST = [];
@@ -106,14 +114,29 @@ export default function EInvoicing() {
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportButtonRef = useRef(null);
 
-  const [pagination, setPagination] = useState({ currentPage: 1, limit: 50 });
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 0,
+    totalCount: 0,
+    limit: 50,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
 
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
+
+  const [shareMenu, setShareMenu] = useState(null);
+  const [shareMenuChannel, setShareMenuChannel] = useState(null);
+
+  const [selectedIds, setSelectedIds] = useState([]);
+  const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const { columns, saveColumns, getVisibleColumns } = useColumnSettings("e-invoicing", DEFAULT_COLUMNS);
 
@@ -140,8 +163,13 @@ export default function EInvoicing() {
     setPinnedColumns((prev) => prev.filter((p) => p.key !== key));
 
   const visibleColumns = useMemo(() => {
-    return getVisibleColumns ? getVisibleColumns() : columns.filter((c) => c.visible);
-  }, [columns, getVisibleColumns]);
+    return columns.filter((c) => c.visible).sort((a, b) => a.order - b.order);
+    // getVisibleColumns is a pure function of `columns` re-created every
+    // render by the hook — depending on it here (instead of just `columns`)
+    // would make this memo (and everything derived from it, like
+    // orderedFields) unstable on every render again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns]);
 
   // Debounce search
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -150,28 +178,55 @@ export default function EInvoicing() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // Fetch e-invoices
+  // Server-side paginated fetch — mirrors SalesReturn.jsx's fetchRows exactly
+  // (page/limit/sortBy/sortOrder/search params against /e-invoices/pagination)
+  // so the top loading bar actually animates on page/sort/search changes
+  // instead of the whole dataset being fetched once and paginated in memory.
+  const fetchRows = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: pagination.currentPage,
+        limit: pagination.limit,
+        sortBy: sortConfig.key,
+        sortOrder: sortConfig.direction,
+      });
+      if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
+      const res = await API.get(`/e-invoices/pagination?${params.toString()}`);
+      setEInvoices(res.data.eInvoices || EMPTY_LIST);
+      setPagination((prev) => ({ ...prev, ...res.data.pagination }));
+    } catch (err) {
+      console.error("Error fetching e-invoices:", err);
+      toast.error(err.response?.data?.message || "Failed to load e-invoices");
+      setEInvoices(EMPTY_LIST);
+    } finally {
+      setLoading(false);
+      hasLoadedOnceRef.current = true;
+    }
+  };
+
   useEffect(() => {
-    const fetchEInvoices = async () => {
-      setLoading(true);
-      try {
-        const res = await API.get("/e-invoices");
-        setEInvoices(res.data || EMPTY_LIST);
-      } catch (err) {
-        console.error("Error fetching e-invoices:", err);
-        toast.error("Failed to load e-invoices");
-      } finally {
-        setLoading(false);
-        hasLoadedOnceRef.current = true;
-      }
-    };
-    fetchEInvoices();
-  }, []);
+    fetchRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.currentPage, pagination.limit, sortConfig, debouncedSearchTerm]);
+
+  // Reset to page 1 whenever the search term actually changes the result set
+  // (not on the initial mount, which already fetches page 1 above).
+  const skipInitialReset = useRef(true);
+  useEffect(() => {
+    if (skipInitialReset.current) {
+      skipInitialReset.current = false;
+      return;
+    }
+    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchTerm]);
 
   // Click-outside
   useEffect(() => {
     const handle = (e) => {
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setIsMoreMenuOpen(false);
+      if (exportButtonRef.current && !exportButtonRef.current.contains(e.target)) setShowExportMenu(false);
     };
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
@@ -197,59 +252,81 @@ export default function EInvoicing() {
     };
   }, [openRowActionsId, openColumnMenuKey]);
 
-  // Filtered + sorted data
-  const filteredEInvoices = useMemo(() => {
-    let rows = eInvoices;
-    if (debouncedSearchTerm) {
-      const q = debouncedSearchTerm.toLowerCase();
-      rows = rows.filter((r) =>
-        [r.invoiceNumber, r.customer?.name, r.ackNo, r.irn]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
-      );
+  // Delays the bulk-strip's unmount so it can play the slide-out-right exit
+  // animation on deselect (mirroring the slide-in entrance) — same pattern as
+  // Companies.jsx / SalesReturn.jsx's bulk selection strip.
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    if (selectedIds.length > 0) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
     }
-    if (activeFilters.length > 0) {
-      rows = rows.filter((r) =>
-        activeFilters.every((f) => {
-          const val = (r[f.field] ?? "").toString().toLowerCase();
-          const target = (f.value ?? "").toString().toLowerCase();
-          if (f.operator === "equals") return val === target;
-          if (f.operator === "not_equals") return val !== target;
-          if (f.operator === "contains") return val.includes(target);
-          if (f.operator === "not_contains") return !val.includes(target);
-          return true;
-        })
-      );
-    }
-    return rows;
-  }, [eInvoices, debouncedSearchTerm, activeFilters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds.length]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredEInvoices.length / pagination.limit));
-  const currentPage = Math.min(pagination.currentPage, totalPages);
-  const pageRows = filteredEInvoices.slice(
-    (currentPage - 1) * pagination.limit,
-    currentPage * pagination.limit
-  );
-
-  const sortedEInvoices = pageRows;
+  // Search and sort are now applied server-side (see fetchRows above) — the
+  // only client-side pass left is the advanced-filter panel's field/operator
+  // rules, which the backend doesn't support generically. Same documented
+  // trade-off as PurchasePage: applied on top of the server-fetched page, so
+  // a very restrictive filter can show fewer than `limit` rows on a page
+  // without the pagination count knowing — acceptable since it's a rare,
+  // power-user path, not the default view.
+  const sortedEInvoices = useMemo(() => {
+    if (activeFilters.length === 0) return eInvoices;
+    return eInvoices.filter((r) =>
+      activeFilters.every((f) => {
+        const val = (r[f.field] ?? "").toString().toLowerCase();
+        const target = (f.value ?? "").toString().toLowerCase();
+        if (f.operator === "equals") return val === target;
+        if (f.operator === "not_equals") return val !== target;
+        if (f.operator === "contains") return val.includes(target);
+        if (f.operator === "not_contains") return !val.includes(target);
+        return true;
+      })
+    );
+  }, [eInvoices, activeFilters]);
 
   // Helper to get field value from a row
   const getFieldValue = (row, key) => {
     if (key === "customer") return row.customer?.name || "—";
     if (key === "amount") return row.amount || 0;
     if (key === "date") return row.date ? new Date(row.date).toLocaleDateString("en-IN") : "—";
+    if (key === "ackDate") return row.ackDate ? new Date(row.ackDate).toLocaleDateString("en-IN") : "—";
+    if (key === "irn" || key === "ackNo") return row[key] || "—";
     return row[key] || "—";
   };
 
   // ── TanStack React Table setup (matches Purchases/Companies) ────────
-  const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
-  const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
-  const leftPinnedFields = visibleColumns.filter((vc) => leftPinnedKeys.includes(vc.key));
-  const rightPinnedFields = visibleColumns.filter((vc) => rightPinnedKeys.includes(vc.key));
-  const unpinnedFields = visibleColumns.filter(
-    (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key),
-  );
-  const orderedFields = [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields];
+  // Memoized so these stay referentially stable across unrelated re-renders
+  // (search typing, menu open/close, etc). Previously recomputed as plain
+  // array literals on every render, which made `orderedFields` a "new"
+  // dependency every time and forced tableColumns (below) to rebuild every
+  // render too — combined with controlled columnSizing state, that fed an
+  // infinite re-render loop (TanStack Table re-syncing default column sizes
+  // via onColumnSizingChange every time it saw "new" column defs), which is
+  // what froze the tab.
+  const { leftPinnedKeys, rightPinnedKeys, orderedFields } = useMemo(() => {
+    const lpKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rpKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+    const leftPinnedFields = visibleColumns.filter((vc) => lpKeys.includes(vc.key));
+    const rightPinnedFields = visibleColumns.filter((vc) => rpKeys.includes(vc.key));
+    const unpinnedFields = visibleColumns.filter(
+      (vc) => !lpKeys.includes(vc.key) && !rpKeys.includes(vc.key),
+    );
+    return {
+      leftPinnedKeys: lpKeys,
+      rightPinnedKeys: rpKeys,
+      orderedFields: [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields],
+    };
+  }, [pinnedColumns, visibleColumns]);
 
   const tableColumns = useMemo(() => {
     const cols = [];
@@ -259,16 +336,37 @@ export default function EInvoicing() {
       columnHelper.display({
         id: "selection",
         size: 50,
-        header: () => <div className="w-full flex justify-center"><input type="checkbox" disabled className="w-4 h-4 rounded border-gray-300" /></div>,
-        cell: () => <div className="w-full flex justify-center"><input type="checkbox" disabled className="w-4 h-4 rounded border-gray-300" /></div>,
+        enableResizing: false,
+        header: () => (
+          <div className="w-full flex justify-center">
+            <input
+              type="checkbox"
+              checked={sortedEInvoices.length > 0 && sortedEInvoices.every((r) => selectedIdsSet.has(r._id))}
+              onChange={handleSelectAllOnPage}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selectedIdsSet.has(row.original._id)}
+              onChange={() => handleSelectOne(row.original._id)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+        ),
       })
     );
+
+    const lastColumnKey = orderedFields[orderedFields.length - 1]?.key;
 
     orderedFields.forEach((vc) => {
       cols.push(
         columnHelper.accessor((row) => getFieldValue(row, vc.key), {
           id: vc.key,
-          size: vc.key === "invoiceNumber" ? 220 : vc.key === "customer" ? 220 : 150,
+          size: vc.key === "invoiceNumber" ? 220 : vc.key === "customer" ? 200 : vc.key === "irn" ? 220 : 150,
           header: () => {
             const isSortable = vc.sortable !== false;
             const pinSide = getPinSide(vc.key);
@@ -385,57 +483,71 @@ export default function EInvoicing() {
           cell: ({ row }) => {
             const r = row.original;
             const key = vc.key;
+            let baseContent;
             switch (key) {
               case "invoiceNumber":
-                return (
-                  <span className="text-[#0085FF] font-semibold">
+                baseContent = (
+                  <span className="text-[#0085FF] font-semibold truncate block">
                     <HighlightText text={r.invoiceNumber || "—"} query={debouncedSearchTerm} />
                   </span>
                 );
+                break;
               case "customer":
-                return <HighlightText text={r.customer?.name || "—"} query={debouncedSearchTerm} />;
+                baseContent = <span className="truncate block"><HighlightText text={r.customer?.name || "—"} query={debouncedSearchTerm} /></span>;
+                break;
               case "amount":
-                return <span className="font-medium">{formatINR(r.amount || 0)}</span>;
+                baseContent = <span className="font-medium">{formatINR(r.amount || 0)}</span>;
+                break;
               case "status":
-                return (
+                baseContent = (
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${statusBadge(r.status)}`}>
                     {r.status || "—"}
                   </span>
                 );
+                break;
+              case "irn":
+                baseContent = r.irn ? (
+                  <span className="font-mono text-xs text-gray-700 truncate block" title={r.irn}>
+                    <HighlightText text={r.irn} query={debouncedSearchTerm} />
+                  </span>
+                ) : <span className="text-gray-400">—</span>;
+                break;
+              case "ackNo":
+                baseContent = r.ackNo ? (
+                  <span className="font-mono text-xs text-gray-700 truncate block">
+                    <HighlightText text={r.ackNo} query={debouncedSearchTerm} />
+                  </span>
+                ) : <span className="text-gray-400">—</span>;
+                break;
+              case "ackDate":
+                baseContent = r.ackDate ? new Date(r.ackDate).toLocaleDateString("en-IN") : <span className="text-gray-400">—</span>;
+                break;
               case "date":
-                return r.date ? new Date(r.date).toLocaleDateString("en-IN") : "—";
+                baseContent = r.date ? new Date(r.date).toLocaleDateString("en-IN") : "—";
+                break;
               default:
-                return r[key] || "—";
+                baseContent = r[key] || "—";
             }
+
+            // The row's ⋮ menu is appended to whichever column currently sits
+            // last — pin/drag can move that around — instead of a separate
+            // fixed actions column (matches Purchases/Companies).
+            if (vc.key === lastColumnKey) {
+              return (
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="min-w-0 flex-1 truncate">{baseContent}</div>
+                  {renderRowActionsMenu(r)}
+                </div>
+              );
+            }
+            return baseContent;
           },
         })
       );
     });
 
-    // Row actions column
-    cols.push(
-      columnHelper.display({
-        id: "actions",
-        size: 50,
-        header: () => null,
-        cell: ({ row }) => {
-          const r = row.original;
-          const id = r._id || r.id;
-          return (
-            <button
-              onClick={(e) => openRowActions(e, id)}
-              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-              title="More actions"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-          );
-        },
-      })
-    );
-
     return cols;
-  }, [orderedFields, openColumnMenuKey, columnMenuPos, pinnedColumns, columns, debouncedSearchTerm, sortConfig]);
+  }, [orderedFields, openColumnMenuKey, columnMenuPos, pinnedColumns, columns, debouncedSearchTerm, sortConfig, openRowActionsId, rowActionsPos, sortedEInvoices, selectedIdsSet]);
 
   const table = useReactTable({
     data: sortedEInvoices,
@@ -535,6 +647,52 @@ export default function EInvoicing() {
     saveColumns(newColumns);
   };
 
+  // ── Selection ──────────────────────────────────────────────────────
+  const handleSelectOne = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleSelectAllOnPage = () => {
+    const pageIds = sortedEInvoices.map((r) => r._id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIdsSet.has(id));
+    setSelectedIds((prev) => {
+      if (allSelected) return prev.filter((id) => !pageIds.includes(id));
+      const merged = new Set(prev);
+      pageIds.forEach((id) => merged.add(id));
+      return Array.from(merged);
+    });
+  };
+
+  // Selects every id matching the current search across ALL pages (not just
+  // the currently-loaded one) — mirrors Companies.jsx/SalesReturn.jsx's
+  // handleSelectAllAcrossPages via the backend's allIds shortcut.
+  const handleSelectAllFiltered = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
+      params.append("allIds", "true");
+      const res = await API.get(`/e-invoices/pagination?${params.toString()}`);
+      setSelectedIds(res.data.ids || []);
+    } catch (err) {
+      toast.error("Failed to select all e-invoices");
+    }
+  };
+
+  const clearSelection = () => setSelectedIds([]);
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.length} e-invoice record${selectedIds.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => API.delete(`/e-invoices/${id}`)));
+      toast.success(`${selectedIds.length} e-invoice${selectedIds.length !== 1 ? "s" : ""} deleted`);
+      clearSelection();
+      fetchRows();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete selected e-invoices");
+    }
+  };
+
   // ── Handlers ───────────────────────────────────────────────────────
   const handleConnectPortal = () => {
     if (portalConnected) {
@@ -547,48 +705,155 @@ export default function EInvoicing() {
     }
   };
 
-  const openRowActions = (e, id) => {
-    e.stopPropagation();
-    const zMenu = getAncestorZoom(document.body);
-    const MENU_W = 160;
-    const MENU_H = 184;
-    const MARGIN = 8;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const viewportH = window.innerHeight / zMenu;
-    const viewportW = window.innerWidth / zMenu;
-    const top = rect.bottom / zMenu + 4;
-    const openUp = viewportH - top < MENU_H + MARGIN;
-    let calcTop = openUp ? rect.top / zMenu - 4 - MENU_H : top;
-    calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
-    let calcLeft = rect.right / zMenu - MENU_W;
-    calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
-    calcLeft = Math.max(calcLeft, MARGIN);
-    setRowActionsPos({ top: calcTop, left: calcLeft });
-    setOpenRowActionsId(id);
+  const closeRowActions = () => {
+    setOpenRowActionsId(null);
+    setRowActionsPos(null);
   };
 
-  const closeRowActions = () => { setOpenRowActionsId(null); setRowActionsPos(null); };
-
-  const soon = (label) => () => {
-    toast(`${label} — coming soon.`, { icon: "🚧" });
+  const handleView = (r) => {
+    toast(`Viewing ${r.invoiceNumber} — detail view coming soon.`, { icon: "👀" });
     closeRowActions();
   };
 
+  const handleDownload = (r) => {
+    toast(`Download for ${r.invoiceNumber} — coming soon.`, { icon: "🚧" });
+    closeRowActions();
+  };
+
+  const handleCancelIRN = async (r) => {
+    if (!window.confirm(`Cancel the IRN for ${r.invoiceNumber}? This cannot be undone.`)) return;
+    closeRowActions();
+    try {
+      await API.put(`/e-invoices/${r._id}/status`, { status: "Cancelled" });
+      toast.success("IRN cancelled");
+      fetchRows();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to cancel IRN");
+    }
+  };
+
+  const handleDelete = async (r) => {
+    if (!window.confirm(`Delete e-invoice record ${r.invoiceNumber}?`)) return;
+    closeRowActions();
+    try {
+      await API.delete(`/e-invoices/${r._id}`);
+      toast.success("E-invoice deleted");
+      fetchRows();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete e-invoice");
+    }
+  };
+
+  // Row actions menu — ⋮ button appended to the last visible column's cell
+  // (see tableColumns above), portaled to body, same positioning math as
+  // PurchasePage/Companies. Includes a Share submenu (WhatsApp/Email/SMS/Copy
+  // Link) built from a public view link, and a status-aware Cancel IRN action.
+  const renderRowActionsMenu = (r) => {
+    const isOpen = openRowActionsId === r._id;
+
+    const openMenu = (e) => {
+      e.stopPropagation();
+      if (isOpen) {
+        closeRowActions();
+        return;
+      }
+      const zMenu = getAncestorZoom(document.body);
+      const MENU_W = 200;
+      const MENU_H = 260;
+      const MARGIN = 8;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const viewportH = window.innerHeight / zMenu;
+      const viewportW = window.innerWidth / zMenu;
+      const top = rect.bottom / zMenu + 4;
+      const openUp = viewportH - top < MENU_H + MARGIN;
+      let calcTop = openUp ? rect.top / zMenu - 4 - MENU_H : top;
+      calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+      let calcLeft = rect.right / zMenu - MENU_W;
+      calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+      calcLeft = Math.max(calcLeft, MARGIN);
+      setShareMenu(null);
+      setShareMenuChannel(null);
+      setRowActionsPos({ top: calcTop, left: calcLeft });
+      setOpenRowActionsId(r._id);
+    };
+
+    return (
+      <div className="relative flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={openMenu}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={closeRowActions} />
+            <div
+              ref={rowActionsRef}
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
+              <button onClick={() => handleView(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
+                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
+              </button>
+              <button onClick={() => handleDownload(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
+                <Download className="w-3.5 h-3.5 text-[#1C1B1F]" /> Download
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const DROPDOWN_W = 208;
+                  const anchorRight = rowActionsPos.left + 200;
+                  closeRowActions();
+                  setShareMenu({ row: r, x: Math.max(4, anchorRight - DROPDOWN_W), y: rowActionsPos.top });
+                  setShareMenuChannel(null);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <Share2 className="w-3.5 h-3.5 text-[#1C1B1F]" /> Share
+              </button>
+
+              {r.status === "Success" && (
+                <>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button onClick={() => handleCancelIRN(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-orange-600 hover:bg-orange-50 whitespace-nowrap">
+                    <Ban className="w-3.5 h-3.5" /> Cancel IRN
+                  </button>
+                </>
+              )}
+
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <button onClick={() => handleDelete(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap">
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
+      </div>
+    );
+  };
+
   const EXPORT_COLUMNS = [
-    { label: "Invoice #", value: (r) => r.invoiceNumber || "" },
+    { label: "Invoice Number", value: (r) => r.invoiceNumber || "" },
     { label: "Customer", value: (r) => r.customer?.name || "" },
     { label: "Amount", value: (r) => formatINR(r.amount || 0) },
     { label: "Status", value: (r) => r.status || "" },
-    { label: "Date", value: (r) => (r.date ? new Date(r.date).toLocaleDateString("en-IN") : "") },
+    { label: "IRN", value: (r) => r.irn || "" },
+    { label: "Ack No.", value: (r) => r.ackNo || "" },
+    { label: "Ack Date", value: (r) => (r.ackDate ? new Date(r.ackDate).toLocaleDateString("en-IN") : "") },
+    { label: "Invoice Date", value: (r) => (r.date ? new Date(r.date).toLocaleDateString("en-IN") : "") },
   ];
 
   const handleExport = (format) => {
-    if (filteredEInvoices.length === 0) {
+    if (sortedEInvoices.length === 0) {
       toast.error("Nothing to export — the current view is empty.");
       return;
     }
     exportClientSide(format, {
-      rows: filteredEInvoices,
+      rows: sortedEInvoices,
       columns: EXPORT_COLUMNS,
       fileNamePrefix: "e_invoices_export",
       title: "E-Invoices Report",
@@ -597,21 +862,30 @@ export default function EInvoicing() {
   };
 
   const filterColumns = [
-    { key: "invoiceNumber", label: "Invoice #", type: "text" },
+    { key: "invoiceNumber", label: "Invoice Number", type: "text" },
     { key: "status", label: "Status", type: "select", options: STATUS_TABS.filter((t) => t.key !== "all").map((t) => t.key) },
     { key: "customer", label: "Customer", type: "text" },
+    { key: "irn", label: "IRN", type: "text" },
+    { key: "ackNo", label: "Ack No.", type: "text" },
   ];
 
-  // Pagination controls — same as PurchasePage
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= pagination.totalPages && page !== pagination.currentPage) {
+      setPagination((prev) => ({ ...prev, currentPage: page }));
+    }
+  };
+  const handleLimitChange = (n) => setPagination((prev) => ({ ...prev, limit: n, currentPage: 1 }));
+
+  // Pagination controls — server-driven, same shape as SalesReturn.jsx's.
   const PaginationControls = () => (
     <div className="flex items-center justify-between w-full px-4 lg:px-6">
       <div className="text-xs text-gray-500 font-inter">
         Showing{" "}
-        <span className="font-semibold text-gray-800">{filteredEInvoices.length > 0 ? (currentPage - 1) * pagination.limit + 1 : 0}</span>
+        <span className="font-semibold text-gray-800">{pagination.totalCount === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1}</span>
         {" "}to{" "}
-        <span className="font-semibold text-gray-800">{Math.min(currentPage * pagination.limit, filteredEInvoices.length)}</span>
+        <span className="font-semibold text-gray-800">{Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}</span>
         {" "}of{" "}
-        <span className="font-semibold text-gray-800">{filteredEInvoices.length}</span>
+        <span className="font-semibold text-gray-800">{pagination.totalCount}</span>
         {" "}results
       </div>
 
@@ -619,42 +893,89 @@ export default function EInvoicing() {
         <div className="relative">
           <select
             value={pagination.limit}
-            onChange={(e) => setPagination({ currentPage: 1, limit: Number(e.target.value) })}
-            className="appearance-none h-9 pl-3 pr-8 text-sm font-medium bg-white border border-[#E1E4EA] rounded-lg text-gray-700 focus:outline-none focus:border-[#0085FF] cursor-pointer"
+            onChange={(e) => handleLimitChange(Number(e.target.value))}
+            className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
           >
-            {[10, 25, 50, 100].map((n) => (
+            {[10, 20, 50, 100, 150].map((n) => (
               <option key={n} value={n}>{n} per page</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
         </div>
 
         <button
-          onClick={() => setPagination((p) => ({ ...p, currentPage: Math.max(1, currentPage - 1) }))}
-          disabled={currentPage <= 1}
-          className="w-9 h-9 flex items-center justify-center rounded-lg border border-[#E1E4EA] text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={() => handlePageChange(pagination.currentPage - 1)}
+          disabled={!pagination.hasPrevPage}
+          className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="h-4 w-4" />
         </button>
 
-        {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((p) => (
-          <button
-            key={p}
-            onClick={() => setPagination((prev) => ({ ...prev, currentPage: p }))}
-            className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-medium ${
-              p === currentPage
-                ? "bg-[#0085FF] text-white"
-                : "border border-[#E1E4EA] text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {p}
-          </button>
-        ))}
+        {(() => {
+          const commitPage = () => {
+            const n = parseInt(pageInput, 10);
+            if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), pagination.totalPages));
+            setEditingPage(false);
+          };
+          const items = [1];
+          if (pagination.currentPage > 2) items.push("left-dots");
+          if (pagination.currentPage !== 1 && pagination.currentPage !== pagination.totalPages) items.push(pagination.currentPage);
+          if (pagination.currentPage < pagination.totalPages - 1) items.push("right-dots");
+          if (pagination.totalPages > 1) items.push(pagination.totalPages);
+
+          return items.map((item, index) => {
+            if (item === "left-dots" || item === "right-dots") {
+              return (
+                <span key={`${item}-${index}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">
+                  …
+                </span>
+              );
+            }
+            const isCurrent = item === pagination.currentPage;
+            if (isCurrent && editingPage) {
+              return (
+                <input
+                  key="page-edit"
+                  autoFocus
+                  type="number"
+                  min={1}
+                  max={pagination.totalPages}
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onBlur={commitPage}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitPage();
+                    if (e.key === "Escape") setEditingPage(false);
+                  }}
+                  className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+              );
+            }
+            return (
+              <button
+                key={`page-${item}`}
+                onClick={() => handlePageChange(item)}
+                onDoubleClick={() => {
+                  if (isCurrent) {
+                    setPageInput(String(pagination.currentPage));
+                    setEditingPage(true);
+                  }
+                }}
+                title={isCurrent ? "Double-click to type a page number" : undefined}
+                className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                  isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          });
+        })()}
 
         <button
-          onClick={() => setPagination((p) => ({ ...p, currentPage: Math.min(totalPages, currentPage + 1) }))}
-          disabled={currentPage >= totalPages}
-          className="w-9 h-9 flex items-center justify-center rounded-lg border border-[#E1E4EA] text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={() => handlePageChange(pagination.currentPage + 1)}
+          disabled={!pagination.hasNextPage}
+          className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -675,9 +996,56 @@ export default function EInvoicing() {
 
       {/* ── Fixed header toolbar — edge-to-edge, matches PurchasePage ──*/}
       <div
-        className="fixed right-0 h-16 px-4 lg:px-6 border-b bg-white border-[#E1E4EA] flex items-center top-[54px] lg:top-16"
+        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
+        {showBulkStrip ? (
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+            <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+              <button
+                onClick={() => handleExport("excel")}
+                className="h-10 px-4 bg-white border border-gray-300 rounded-l-lg text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Download className="w-4 h-4 text-green-600" />
+                Export
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+                Delete
+              </button>
+              <button
+                onClick={clearSelection}
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 rounded-r-lg text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-blue-800 font-semibold text-sm whitespace-nowrap">
+                {selectedIds.length} e-invoice{selectedIds.length !== 1 ? "s" : ""} selected
+              </span>
+              <button
+                onClick={handleSelectAllFiltered}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={clearSelection}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
           <div className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}>
             {showLoadingSkeleton ? (
@@ -791,20 +1159,39 @@ export default function EInvoicing() {
                         <Upload className="w-4 h-4 text-gray-400" />
                         Import
                       </button>
-                      <button
-                        onClick={() => handleExport("excel")}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        <Download className="w-4 h-4 text-gray-400" />
-                        Export as Excel
-                      </button>
-                      <button
-                        onClick={() => handleExport("pdf")}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        <Download className="w-4 h-4 text-gray-400" />
-                        Export as PDF
-                      </button>
+                      <div className="relative" ref={exportButtonRef}>
+                        <button
+                          onClick={() => setShowExportMenu((prev) => !prev)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Download className="w-4 h-4 text-gray-400" />
+                          Export
+                        </button>
+                        {showExportMenu && (
+                          <div className="absolute left-full top-0 ml-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-xl">
+                            <button
+                              onClick={() => {
+                                handleExport("excel");
+                                setShowExportMenu(false);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-lg flex items-center gap-2"
+                            >
+                              Export as Excel
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleExport("pdf");
+                                setShowExportMenu(false);
+                                setIsMoreMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-lg flex items-center gap-2"
+                            >
+                              Export as PDF
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -842,6 +1229,7 @@ export default function EInvoicing() {
             </>
           )}
         </div>
+        )}
       </div>
 
       {/* ── Edge-to-edge scrollable table area ─────────────────────── */}
@@ -1014,28 +1402,64 @@ export default function EInvoicing() {
         document.body
       )}
 
-      {/* ── Row actions popover — portaled ─────────────────────────── */}
-      {openRowActionsId && rowActionsPos && createPortal(
+      {/* ── Share dropdown — portaled, WhatsApp/Email/SMS/Copy Link ──── */}
+      {shareMenu && createPortal(
         <>
-          <div className="fixed inset-0 z-[9998]" onClick={closeRowActions} />
+          <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            ref={rowActionsRef}
-            style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-            className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            style={{ top: shareMenu.y, left: shareMenu.x }}
           >
-            <button onClick={soon("View e-invoice")} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
-              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
-            </button>
-            <button onClick={soon("Edit e-invoice")} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
-              <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" /> Edit
-            </button>
-            <button onClick={soon("Download")} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
-              <Download className="w-3.5 h-3.5 text-[#1C1B1F]" /> Download
-            </button>
-            <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-            <button onClick={soon("Delete e-invoice")} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap">
-              <Trash2 className="w-3.5 h-3.5" /> Delete
-            </button>
+            {(() => {
+              const r = shareMenu.row;
+              const link = `${window.location.origin}/e-invoicing?invoice=${r._id}`;
+              const num = r.invoiceNumber;
+              const customerName = r.customer?.name || "Customer";
+              const amt = r.amount != null ? formatINR(r.amount) : "";
+              const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
+
+              const waMsg = `Hello! *${customerName}*\n\nYour e-invoice is ready.\n\nInvoice No: ${num || "—"}\nAmount: ${amt}\nIRN: ${r.irn || "—"}\nLink: ${link}\n\nThanks`;
+              const smsMsg = `Your e-invoice${num ? ` #${num}` : ""} (${amt}) is ready. View: ${link}`;
+              const emailSubject = `E-Invoice ${num || ""}`;
+              const emailBody = `Hi ${customerName},%0D%0A%0D%0APlease find your e-invoice${num ? ` #${num}` : ""} details below.%0D%0A%0D%0AAmount: ${amt}%0D%0AIRN: ${r.irn || "—"}%0D%0AAck No: ${r.ackNo || "—"}%0D%0A%0D%0AView: ${link}`;
+
+              if (shareMenuChannel === "confirm") {
+                return null;
+              }
+
+              const items = [
+                {
+                  label: "WhatsApp",
+                  icon: <MessageCircle className="w-4 h-4 text-green-600" />,
+                  onClick: () => { window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, "_blank"); closeMenu(); },
+                },
+                {
+                  label: "Email",
+                  icon: <Mail className="w-4 h-4 text-blue-600" />,
+                  onClick: () => { window.open(`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${emailBody}`, "_blank"); closeMenu(); },
+                },
+                {
+                  label: "SMS",
+                  icon: <MessageSquare className="w-4 h-4 text-purple-600" />,
+                  onClick: () => { window.open(`sms:?body=${encodeURIComponent(smsMsg)}`, "_blank"); closeMenu(); },
+                },
+                {
+                  label: "Copy Link",
+                  icon: <Copy className="w-4 h-4 text-gray-500" />,
+                  onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); },
+                },
+              ];
+              return items.map(({ label, icon, onClick }) => (
+                <button
+                  key={label}
+                  onClick={(e) => { e.stopPropagation(); onClick(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  {icon}
+                  {label}
+                </button>
+              ));
+            })()}
           </div>
         </>,
         document.body
