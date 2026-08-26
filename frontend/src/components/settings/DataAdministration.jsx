@@ -80,25 +80,33 @@ function DataAdministration() {
             </div>
           </div>
 
-          {/* Wallet balance — right here so buying an add-on's cost is
-              visible against what's actually available to spend. */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 flex items-center gap-4 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <WalletIcon className="w-4 h-4 text-emerald-700" />
-              <div>
-                <p className="text-[11px] font-medium text-emerald-700 leading-tight">Wallet Balance</p>
-                <p className="text-lg font-bold text-emerald-900 leading-tight">
-                  {walletLoading ? "…" : wallet ? `₹${wallet.balance.toFixed(2)}` : "—"}
-                </p>
+          {/* Wallet balance — same card design as the Wallet page itself
+              (gradient, icon badge, decorative circles), just shorter, so
+              buying an add-on's cost is visible against what's actually
+              available to spend without leaving this page. */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 px-5 py-3.5 text-white shadow-sm flex-shrink-0 w-full sm:w-auto">
+            <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/10" />
+            <div className="pointer-events-none absolute -bottom-8 -left-4 h-16 w-16 rounded-full bg-white/5" />
+            <div className="relative flex items-center gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-white/20 p-1.5 backdrop-blur-sm">
+                  <WalletIcon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-emerald-50 leading-tight">Wallet Balance</p>
+                  <p className="text-2xl font-bold leading-tight tracking-tight">
+                    {walletLoading ? "…" : wallet ? wallet.balance.toFixed(2) : "—"}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => navigate("/settings/wallet")}
+                className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Money
+              </button>
             </div>
-            <button
-              onClick={() => navigate("/settings/wallet")}
-              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Money
-            </button>
           </div>
         </div>
 
