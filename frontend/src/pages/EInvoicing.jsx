@@ -879,18 +879,17 @@ export default function EInvoicing() {
   // Pagination controls — server-driven, same shape as SalesReturn.jsx's.
   const PaginationControls = () => (
     <div className="flex items-center justify-between w-full px-4 lg:px-6">
-      <div className="text-xs text-gray-500 font-inter">
-        Showing{" "}
-        <span className="font-semibold text-gray-800">{pagination.totalCount === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1}</span>
-        {" "}to{" "}
-        <span className="font-semibold text-gray-800">{Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}</span>
-        {" "}of{" "}
-        <span className="font-semibold text-gray-800">{pagination.totalCount}</span>
-        {" "}results
-      </div>
-
-      <div className="flex items-center gap-2">
-        <div className="relative">
+      <div className="flex items-center space-x-2">
+        <div className="text-sm text-gray-700 font-inter">
+          Showing{" "}
+          <span className="font-semibold text-gray-800">{pagination.totalCount === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1}</span>
+          {" "}to{" "}
+          <span className="font-semibold text-gray-800">{Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}</span>
+          {" "}of{" "}
+          <span className="font-semibold text-gray-800">{pagination.totalCount}</span>
+          {" "}results
+        </div>
+        <div className="relative ml-2">
           <select
             value={pagination.limit}
             onChange={(e) => handleLimitChange(Number(e.target.value))}
@@ -902,6 +901,9 @@ export default function EInvoicing() {
           </select>
           <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
 
         <button
           onClick={() => handlePageChange(pagination.currentPage - 1)}
