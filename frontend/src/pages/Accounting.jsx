@@ -2522,7 +2522,7 @@ const Accounting = () => {
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
               mounted and clickable while the table loads. */}
-          <div className="relative flex-shrink-0 inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
+          <div className="relative flex-shrink-0 hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}
@@ -2664,6 +2664,25 @@ const Accounting = () => {
                     onClick={(e) => e.stopPropagation()}
                     className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
                   >
+                    {/* Tab switcher — folded in here on mobile since the pill
+                        selector itself is hidden below lg. */}
+                    <div className="lg:hidden py-1 border-b border-[#E1E4EA]">
+                      {TABS.map((tab) => (
+                        <button
+                          key={tab.key}
+                          onClick={() => {
+                            setActiveTab(tab.key);
+                            setShowMoreMenu(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${activeTab === tab.key
+                            ? "text-[#0085FF] font-medium bg-blue-50"
+                            : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
                     <button
                       onClick={() => {
                         setShowMoreMenu(false);
