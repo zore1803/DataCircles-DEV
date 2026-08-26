@@ -108,8 +108,10 @@ const DealsFunnelChart = ({ stages }) => {
   const SVG_H = 310;
   const n = stages.length;
   const midY = SVG_H / 2;
+  const topLabelY = 30;
+  const bottomLabelY = SVG_H - 14;
   const minH = SVG_H * 0.08;
-  const maxH = SVG_H - 16;
+  const maxH = SVG_H - 60;
 
   const values = stages.map((s) => Math.max(0, Number(s.value) || 0));
   const maxVal = Math.max(...values, 1);
@@ -154,6 +156,39 @@ const DealsFunnelChart = ({ stages }) => {
           "Z",
         ].join(" ");
         return <path key={stage.name} d={d} fill="#0085FF" fillOpacity={opacityFor(i)} />;
+      })}
+
+      {/* White divider lines between segments. */}
+      {boundaryX.slice(1, -1).map((x, i) => (
+        <line key={`divider-${i}`} x1={x} y1={midY - boundaryH[i + 1] / 2} x2={x} y2={midY + boundaryH[i + 1] / 2} stroke="#FFFFFF" strokeWidth={2} />
+      ))}
+
+      {/* Value (top) and stage name (bottom) labels, centered per segment. */}
+      {stages.map((stage, i) => {
+        const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
+        return (
+          <g key={`label-${stage.name}`}>
+            <text x={cx} y={topLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
+              ₹{formatNumberToIndian(Math.round(values[i]))}
+            </text>
+            <text x={cx} y={bottomLabelY} textAnchor="middle" fontSize={12} fill="#525866">
+              {stage.name}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Percentage badge centered in each segment. */}
+      {stages.map((stage, i) => {
+        const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
+        return (
+          <g key={`badge-${stage.name}`}>
+            <rect x={cx - 26} y={midY - 14} width={52} height={28} rx={14} fill="#0F0E0E" />
+            <text x={cx} y={midY + 5} textAnchor="middle" fontSize={14} fontWeight={600} fill="#FFFFFF">
+              {stage.pct}%
+            </text>
+          </g>
+        );
       })}
     </svg>
   );
