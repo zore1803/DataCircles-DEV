@@ -138,7 +138,21 @@ const DealsFunnelChart = ({ stages }) => {
         const x1 = boundaryX[i + 1];
         const h0 = boundaryH[i];
         const h1 = boundaryH[i + 1];
-        const d = `M ${x0} ${midY - h0 / 2} L ${x1} ${midY - h1 / 2} L ${x1} ${midY + h1 / 2} L ${x0} ${midY + h0 / 2} Z`;
+        const top0 = midY - h0 / 2;
+        const top1 = midY - h1 / 2;
+        const bot1 = midY + h1 / 2;
+        const bot0 = midY + h0 / 2;
+        // S-curve control points at 60% of the segment's width so each
+        // boundary tapers smoothly into the next instead of a hard corner —
+        // reads as one continuous funnel silhouette instead of stacked bars.
+        const cx = (x1 - x0) * 0.6;
+        const d = [
+          `M ${x0} ${top0}`,
+          `C ${x0 + cx} ${top0}, ${x1 - cx} ${top1}, ${x1} ${top1}`,
+          `L ${x1} ${bot1}`,
+          `C ${x1 - cx} ${bot1}, ${x0 + cx} ${bot0}, ${x0} ${bot0}`,
+          "Z",
+        ].join(" ");
         return <path key={stage.name} d={d} fill="#0085FF" fillOpacity={opacityFor(i)} />;
       })}
     </svg>
