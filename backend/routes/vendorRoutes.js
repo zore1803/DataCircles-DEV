@@ -94,10 +94,13 @@ router.put("/:id",
 );
 
 // Delete Vendor
+// skipLimit: true — an org already at/over its limit must still be able to
+// delete back under it; the un-flagged limit check would otherwise block
+// delete too.
 router.delete("/:id",
   requireAuth,
   subscriptionGate,
-  restrictByPlan("vendors", "write"),
+  restrictByPlan("vendors", "write", { skipLimit: true }),
   checkPermission("vendors", "read-write"),
   vendorController.deleteVendor
 );

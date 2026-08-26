@@ -1490,7 +1490,7 @@ function Deals() {
       if (error.response && error.response.status === 402) {
         errorMessage = error.response.data.message || "An active subscription is required to make changes.";
       } else if (error.response && error.response.status === 403) {
-        errorMessage = error.response.data.message || "Access denied";
+        errorMessage = error.response.data.message || error.response.data.error || "Access denied";
       }
       toast.error(errorMessage, {
         id: loadingToast,

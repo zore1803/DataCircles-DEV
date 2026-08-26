@@ -1267,7 +1267,7 @@ function Contacts() {
       if (err.response?.status === 402) {
         errorMessage = err.response?.data?.message || "An active subscription is required to make changes.";
       } else if (err.response?.status === 403) {
-        errorMessage = err.response.data.message || "Access denied";
+        errorMessage = err.response.data.message || err.response.data.error || "Access denied";
       }
       toast.error(errorMessage, { id: loadingToast });
     } finally {

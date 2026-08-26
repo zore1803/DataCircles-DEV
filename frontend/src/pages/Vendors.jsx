@@ -861,7 +861,7 @@ function Vendors() {
     } catch (err) {
       if (requestId !== vendorRequestIdRef.current) return;
       if (err.response && err.response.status === 403) {
-        toast.error(err.response.data.message || "Access denied");
+        toast.error(err.response.data.message || err.response.data.error || "Access denied");
       } else {
         toast.error("Failed to load vendors");
       }
@@ -1090,7 +1090,7 @@ function Vendors() {
       if (err.response && err.response.status === 402) {
         errorMessage = err.response.data.message || "An active subscription is required to make changes.";
       } else if (err.response && err.response.status === 403) {
-        errorMessage = err.response.data.message || "Access denied";
+        errorMessage = err.response.data.message || err.response.data.error || "Access denied";
       }
       toast.error(errorMessage, { id: loadingToast });
     } finally {
