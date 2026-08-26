@@ -30,6 +30,7 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 
+import API from "../services/api";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -148,6 +149,24 @@ export default function EInvoicing() {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
     return () => clearTimeout(t);
   }, [searchTerm]);
+
+  // Fetch e-invoices
+  useEffect(() => {
+    const fetchEInvoices = async () => {
+      setLoading(true);
+      try {
+        const res = await API.get("/e-invoices");
+        setEInvoices(res.data || EMPTY_LIST);
+      } catch (err) {
+        console.error("Error fetching e-invoices:", err);
+        toast.error("Failed to load e-invoices");
+      } finally {
+        setLoading(false);
+        hasLoadedOnceRef.current = true;
+      }
+    };
+    fetchEInvoices();
+  }, []);
 
   // Click-outside
   useEffect(() => {

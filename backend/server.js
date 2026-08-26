@@ -204,6 +204,9 @@ app.use("/api/purchases", purchaseRoutes);
 const purchaseReturnRoutes = require("./routes/purchaseReturn");
 app.use("/api/purchase-returns", purchaseReturnRoutes);
 
+const eInvoiceRoutes = require("./routes/eInvoiceRoutes");
+app.use("/api/e-invoices", eInvoiceRoutes);
+
 const itemFieldsRoutes = require('./routes/itemFields');
 app.use('/api/item-fields', itemFieldsRoutes);
 
