@@ -3081,10 +3081,10 @@ const CreateInvoicePanel = ({
                 type="button"
                 onClick={() => setShowTemplates(true)}
                 title={`${docName} settings`}
-                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                className="h-8 w-8 lg:w-auto lg:px-4 flex items-center justify-center lg:justify-start gap-1.5 bg-white border border-[#E1E4EA] rounded-full lg:rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 <Settings className="w-3.5 h-3.5 text-[#525866]" />
-                Settings
+                <span className="hidden lg:inline">Settings</span>
               </button>
               {/* Saving/creating lives in the sticky bar at the foot of the
                   form; this slot offers the draft escape hatch instead. */}
