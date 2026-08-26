@@ -1,182 +1,1471 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import API from "../services/api";
+import toast from "react-hot-toast";
 import {
+  Plus,
+  X,
+  ChevronUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Plus,
-  Search,
-  Filter,
+  Upload,
   Download,
-  MoreVertical,
-  CheckCircle2,
   Edit2,
-  X,
+  Trash2,
+  Eye,
+  EyeOff,
+  Pin,
+  PinOff,
+  MoreVertical,
+  Settings,
+  CheckSquare,
+  CheckCircle2,
+  ClipboardList,
+  DollarSign,
+  RotateCcw,
 } from "lucide-react";
+import TableSkeletonRows from "../components/common/TableSkeletonRows";
+import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
+import Skeleton from "../components/common/Skeleton";
+import HighlightText from "../components/common/HighlightText";
+import SearchIcon from "../components/common/SearchIcon";
+import FilterIcon from "../components/common/FilterIcon";
+import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
+import { useColumnSettings } from "../hooks/useColumnSettings";
+import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
+import BulkActions from "../components/BulkActions";
+import AppToaster from "../components/AppToaster";
+import { exportClientSide, formatINR } from "../utils/clientExport";
+import SalesReturnForm from "../components/salesReturn/SalesReturnForm";
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+} from "@tanstack/react-table";
 
-// UI-only Sales page — the backend Sales Order module has been removed.
-// All API/form/preview/share/export logic was intentionally stripped; this
-// screen now renders the shell (toolbar, table, empty state, pagination)
-// with static placeholder rows so the layout stays intact for a future
-// rebuild of the Sales module.
-const PLACEHOLDER_ROWS = [
-  {
-    _id: "1",
-    number: "SO-0001",
-    customer: "—",
-    amount: 0,
-    status: "Draft",
-    fulfillment: "Pending",
-    date: "",
-    dueDate: "",
-  },
-];
+/*
+ * Sales Returns — edge-to-edge list.
+ *
+ * Mirrors Companies.jsx exactly for shell (fixed toolbar at top, fixed
+ * pagination at bottom, table filling the rest, sticky/pinned columns,
+ * drag-to-reorder headers, per-column pin/sort/hide menu, bulk-selection
+ * animated strip). See salesReturnController for backend rules — Confirmed is
+ * the only stock-moving state, Refunded is financial only.
+ */
+const getAncestorZoom = (el) => {
+  let z = 1;
+  let node = el;
+  while (node && node.nodeType === 1) {
+    const cz = parseFloat(getComputedStyle(node).zoom);
+    if (cz && !Number.isNaN(cz)) z *= cz;
+    node = node.parentElement;
+  }
+  return z || 1;
+};
 
 const STATUS_STYLES = {
-  Draft: "bg-gray-100 text-gray-600 border-gray-200",
+  Draft: "bg-gray-100 text-gray-700 border-gray-200",
+  Pending: "bg-amber-50 text-amber-700 border-amber-200",
   Confirmed: "bg-green-50 text-green-700 border-green-200",
+  Refunded: "bg-blue-50 text-blue-700 border-blue-200",
   Cancelled: "bg-red-50 text-red-700 border-red-200",
 };
-
 const STATUS_ICONS = {
   Draft: Edit2,
+  Pending: ClipboardList,
   Confirmed: CheckCircle2,
+  Refunded: DollarSign,
   Cancelled: X,
 };
+const STATUS_OPTIONS = ["Draft", "Pending", "Confirmed", "Refunded", "Cancelled"];
+
+const customerOf = (r) =>
+  r.deal?.contact?.name ||
+  r.deal?.company?.name ||
+  r.deal?.contactPerson ||
+  r.deal?.title ||
+  "—";
+const invoiceOf = (r) => r.invoice?.invoiceNumber || "—";
+const money = (n) =>
+  `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const SalesReturn = () => {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
+  const showLoadingSkeleton = loading && rows.length === 0 && !hasLoadedOnceRef.current;
+  useTopLoadingSignal(loading);
+
   const [searchTerm, setSearchTerm] = useState("");
-  const rows = PLACEHOLDER_ROWS;
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
+
+  const [statusFilter, setStatusFilter] = useState("");
+  const [activeFilters, setActiveFilters] = useState([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingReturn, setEditingReturn] = useState(null);
+
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [toDelete, setToDelete] = useState(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const [selectionMode, setSelectionMode] = useState(true);
+
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  useEffect(() => {
+    const active = selectionMode && selected.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectionMode, selected.length]);
+
+  const [openRowActionsId, setOpenRowActionsId] = useState(null);
+  const [rowActionsPos, setRowActionsPos] = useState(null);
+  const rowActionsRef = useRef(null);
+  const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
+  const [columnMenuPos, setColumnMenuPos] = useState(null);
+  const columnMenuRef = useRef(null);
+  const tableScrollRef = useRef(null);
+
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 0,
+    totalCount: 0,
+    limit: 50,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
+  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInput, setPageInput] = useState("");
+
+  const [pinnedColumns, setPinnedColumns] = useState([]);
+  const pinColumnToSide = (colKey, side) =>
+    setPinnedColumns((prev) => [...prev.filter((p) => p.key !== colKey), { key: colKey, side }]);
+  const unpinColumn = (colKey) =>
+    setPinnedColumns((prev) => prev.filter((p) => p.key !== colKey));
+  const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
+
+  const [draggedColKey, setDraggedColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
+  const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
+
+  // Debounce search — same "wait until the user stops typing" pattern the
+  // other list pages use to avoid firing a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const skipInitialReset = useRef(true);
+  useEffect(() => {
+    if (skipInitialReset.current) {
+      skipInitialReset.current = false;
+      return;
+    }
+    exitSelectionMode();
+    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, statusFilter]);
+
+  const fetchRows = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: pagination.currentPage,
+        limit: pagination.limit,
+        sortBy: sortConfig.key,
+        sortOrder: sortConfig.direction,
+      });
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter) params.append("status", statusFilter);
+      const res = await API.get(`/sales-returns/pagination?${params.toString()}`);
+      setRows(res.data.salesReturns || []);
+      setPagination((prev) => ({ ...prev, ...res.data.pagination }));
+      hasLoadedOnceRef.current = true;
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to load sales returns");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.currentPage, pagination.limit, sortConfig, debouncedSearch, statusFilter]);
+
+  useEffect(() => {
+    const onClick = (event) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setIsMoreMenuOpen(false);
+      }
+      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target)) {
+        setOpenColumnMenuKey(null);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  // Lock page scroll while a row-actions or column-options menu is open —
+  // same reasoning as Companies.jsx: the menu is portaled to document.body,
+  // so a background scroll would slide the table out from under it.
+  useEffect(() => {
+    if (!openRowActionsId && !openColumnMenuKey) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const close = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      setOpenColumnMenuKey(null);
+      setColumnMenuPos(null);
+    };
+    const onWheel = (e) => { e.preventDefault(); close(); };
+    const onKey = (e) => {
+      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(e.key)) close();
+    };
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("wheel", onWheel, { capture: true });
+      window.removeEventListener("keydown", onKey, { capture: true });
+    };
+  }, [openRowActionsId, openColumnMenuKey]);
+
+  // Column model
+  const defaultColumns = useMemo(
+    () => [
+      { key: "returnNumber", label: "SR Number", visible: true, order: 0, required: true, sortable: true },
+      { key: "invoice", label: "Invoice", visible: true, order: 1, sortable: false },
+      { key: "customer", label: "Customer", visible: true, order: 2, sortable: false },
+      { key: "returnDate", label: "Return Date", visible: true, order: 3, sortable: true },
+      { key: "grandTotal", label: "Amount", visible: true, order: 4, sortable: true },
+      { key: "status", label: "Status", visible: true, order: 5, sortable: true, options: STATUS_OPTIONS },
+      { key: "refund", label: "Refund", visible: true, order: 6, sortable: false },
+      { key: "reason", label: "Reason", visible: false, order: 7, sortable: false },
+      { key: "notes", label: "Notes", visible: false, order: 8, sortable: false },
+    ],
+    []
+  );
+
+  const { columns, saveColumns, getVisibleColumns } = useColumnSettings("salesReturns", defaultColumns);
+  const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
+
+  const getFieldValue = (r, key) => {
+    if (key === "returnNumber") return r.returnNumber || "";
+    if (key === "invoice") return invoiceOf(r);
+    if (key === "customer") return customerOf(r);
+    if (key === "returnDate")
+      return r.returnDate ? new Date(r.returnDate).toLocaleDateString("en-IN") : "";
+    if (key === "grandTotal") return money(r.grandTotal);
+    if (key === "status") return r.status || "";
+    if (key === "refund")
+      return r.status === "Refunded"
+        ? `${r.refundMode || "Settled"}${r.refundReference ? ` · ${r.refundReference}` : ""}`
+        : r.refundMode || "—";
+    if (key === "reason") return r.reason || "";
+    if (key === "notes") return r.notes || "";
+    return "";
+  };
+
+  const openCreate = () => { setEditingReturn(null); setShowForm(true); };
+  const openEdit = (row) => { setEditingReturn(row); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setEditingReturn(null); };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(true);
+    setSelected([]);
+    setShowBulkActions(false);
+  };
+
+  const handleSelect = (id) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const handleSelectAll = () => {
+    if (selected.length === rows.length && rows.length > 0) setSelected([]);
+    else setSelected(rows.map((r) => r._id));
+  };
+  const handleSelectAllAcrossPages = async () => {
+    try {
+      const params = new URLSearchParams({ allIds: "true" });
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      if (statusFilter) params.append("status", statusFilter);
+      const res = await API.get(`/sales-returns/pagination?${params.toString()}`);
+      setSelected(res.data.ids || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to select all rows");
+    }
+  };
+  const handleDeselectAllExtra = () => setSelected(rows.map((r) => r._id));
+
+  const handleDelete = (id) => { setToDelete(id); setShowDeleteModal(true); };
+  const confirmDelete = async () => {
+    if (!toDelete) return;
+    const toastId = toast.loading("Deleting…");
+    try {
+      await API.delete(`/sales-returns/${toDelete}`);
+      toast.success("Sales return deleted", { id: toastId });
+      fetchRows();
+      exitSelectionMode();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Delete failed", { id: toastId });
+    } finally {
+      setShowDeleteModal(false);
+      setToDelete(null);
+    }
+  };
+
+  const handleBulkDelete = async (ids) => {
+    setBulkLoading(true);
+    try {
+      await Promise.all(ids.map((id) => API.delete(`/sales-returns/${id}`)));
+      toast.success(`Deleted ${ids.length} sales returns`);
+      fetchRows();
+      exitSelectionMode();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Bulk delete failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkUpdate = async ({ field, value, itemIds }) => {
+    setBulkLoading(true);
+    try {
+      await Promise.all(
+        itemIds.map((id) =>
+          field === "status"
+            ? API.put(`/sales-returns/${id}/status`, { status: value })
+            : API.put(`/sales-returns/${id}`, { [field]: value })
+        )
+      );
+      toast.success(`Updated ${itemIds.length} sales returns`);
+      fetchRows();
+      exitSelectionMode();
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Bulk update failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const srFieldConfig = {
+    fields: [{ key: "status", label: "Status", type: "select", options: STATUS_OPTIONS }],
+  };
+
+  const handleStatusChange = async (row, next) => {
+    try {
+      await API.put(`/sales-returns/${row._id}/status`, { status: next });
+      toast.success("Status updated");
+      fetchRows();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to update status");
+    }
+    setOpenRowActionsId(null);
+  };
+
+  const EXPORT_COLUMNS = [
+    { label: "SR Number", value: (r) => r.returnNumber },
+    { label: "Invoice", value: (r) => invoiceOf(r) },
+    { label: "Customer", value: (r) => customerOf(r) },
+    { label: "Return Date", value: (r) => new Date(r.returnDate || r.createdAt).toLocaleDateString() },
+    { label: "Amount", value: (r) => formatINR(r.grandTotal) },
+    { label: "Status", value: (r) => r.status },
+    { label: "Refund", value: (r) => (r.status === "Refunded" ? "Refunded" : r.refundMode || "—") },
+  ];
+  const handleExport = (format) => {
+    if (!window.confirm(`Export in ${format}?`)) return;
+    exportClientSide(format, {
+      rows,
+      columns: EXPORT_COLUMNS,
+      fileNamePrefix: "sales_returns_export",
+      title: "Sales Returns Report",
+    });
+  };
+
+  const srFilterColumns = [
+    { key: "returnNumber", label: "SR Number" },
+    { key: "status", label: "Status", options: STATUS_OPTIONS },
+    { key: "grandTotal", label: "Amount" },
+    { key: "reason", label: "Reason" },
+    { key: "notes", label: "Notes" },
+  ];
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= pagination.totalPages && page !== pagination.currentPage) {
+      setPagination((prev) => ({ ...prev, currentPage: page }));
+    }
+  };
+  const handleLimitChange = (n) => setPagination((prev) => ({ ...prev, limit: n, currentPage: 1 }));
+
+  // Column drag/drop — identical mechanic to Companies.jsx.
+  const startColumnDrag = (e, colId) => {
+    if (e.button !== 0) return;
+    if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
+    const th = e.currentTarget;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5;
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
+    };
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
+      if (dragOverRef.current !== overKey) {
+        dragOverRef.current = overKey;
+        setDragOverColKey(overKey);
+      }
+    };
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+      const rect = th.getBoundingClientRect();
+      const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
+      const previewRows = rows.map((r) => String(getFieldValue(r, colId) ?? "").trim() || "—");
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label,
+        previewRows,
+        offsetX: dragState.offsetX,
+        offsetY: dragState.offsetY,
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+    const handleMouseMove = (moveEvent) => {
+      if (!dragState.started) {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.preventDefault();
+        beginDrag();
+      }
+      positionGhost(moveEvent.clientX, moveEvent.clientY);
+      updateDragOver(moveEvent.clientX, moveEvent.clientY);
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (!dragState.started) return;
+      document.body.style.userSelect = "";
+      const overKey = dragOverRef.current;
+      if (overKey && overKey !== colId) handleColumnReorder(colId, overKey);
+      dragOverRef.current = null;
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      setDragGhost(null);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleColumnReorder = (draggedKey, targetKey) => {
+    if (!draggedKey || draggedKey === targetKey) return;
+    const sorted = [...columns].sort((a, b) => a.order - b.order);
+    const visibleSorted = sorted.filter((c) => c.visible);
+    const draggedIdx = visibleSorted.findIndex((c) => c.key === draggedKey);
+    const targetIdx = visibleSorted.findIndex((c) => c.key === targetKey);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+    const reorderedVisible = [...visibleSorted];
+    const [moved] = reorderedVisible.splice(draggedIdx, 1);
+    reorderedVisible.splice(targetIdx, 0, moved);
+    let visibleCursor = 0;
+    const newColumns = sorted
+      .map((c) => (c.visible ? reorderedVisible[visibleCursor++] : c))
+      .map((c, idx) => ({ ...c, order: idx }));
+    saveColumns(newColumns);
+  };
+
+  const columnHelper = createColumnHelper();
+
+  const renderRowActionsMenu = (row) => {
+    const isOpen = openRowActionsId === row._id;
+    const close = () => { setOpenRowActionsId(null); setRowActionsPos(null); };
+    return (
+      <div
+        className="relative flex-shrink-0"
+        ref={isOpen ? rowActionsRef : null}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isOpen) return close();
+            const zMenu = getAncestorZoom(document.body);
+            const MENU_W = 180;
+            const MARGIN = 8;
+            const MENU_H = 260;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const viewportH = window.innerHeight / zMenu;
+            const viewportW = window.innerWidth / zMenu;
+            const top = rect.bottom / zMenu + 4;
+            const bottomAnchor = rect.top / zMenu - 4;
+            const openUp = viewportH - top < MENU_H + MARGIN;
+            let calcTop = openUp ? bottomAnchor - MENU_H : top;
+            calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+            let calcLeft = rect.right / zMenu - MENU_W;
+            calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+            calcLeft = Math.max(calcLeft, MARGIN);
+            setRowActionsPos({ top: calcTop, left: calcLeft });
+            setOpenRowActionsId(row._id);
+          }}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          title="More actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+        {isOpen && rowActionsPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={close} />
+            <div
+              style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
+              className="w-[180px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+            >
+              <button
+                onClick={() => { close(); openEdit(row); }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                View / Edit
+              </button>
+              {row.status === "Confirmed" && (
+                <button
+                  onClick={() => { close(); handleStatusChange(row, "Refunded"); }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-blue-600 hover:bg-blue-50"
+                >
+                  <DollarSign className="w-3.5 h-3.5" />
+                  Mark Refunded
+                </button>
+              )}
+              {row.status !== "Confirmed" && row.status !== "Refunded" && (
+                <>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <div className="px-2 py-0.5 text-[10px] uppercase text-gray-400">Change status</div>
+                  {STATUS_OPTIONS.filter((s) => s !== row.status).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { close(); handleStatusChange(row, s); }}
+                      className="w-full text-left px-2 py-1.5 text-xs text-[#161618] hover:bg-gray-50 rounded-md"
+                    >
+                      → {s}
+                    </button>
+                  ))}
+                </>
+              )}
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <button
+                onClick={() => { close(); handleDelete(row._id); }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-[#CD3636]" />
+                Delete
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
+      </div>
+    );
+  };
+
+  const tableColumns = useMemo(() => {
+    const cols = [];
+
+    if (selectionMode) {
+      cols.push(
+        columnHelper.display({
+          id: "selection",
+          size: 60,
+          enableResizing: false,
+          header: () => (
+            <div className="flex justify-center items-center w-full">
+              <input
+                type="checkbox"
+                checked={selected.length === rows.length && rows.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+              />
+            </div>
+          ),
+          cell: ({ row }) => (
+            <div className="flex justify-center items-center gap-1 w-full">
+              <input
+                type="checkbox"
+                checked={selectedSet.has(row.original._id)}
+                onChange={() => handleSelect(row.original._id)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+              />
+            </div>
+          ),
+        })
+      );
+    }
+
+    const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+    const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+    const leftPinnedFields = visibleColumns.filter((vc) => leftPinnedKeys.includes(vc.key));
+    const rightPinnedFields = visibleColumns.filter((vc) => rightPinnedKeys.includes(vc.key));
+    const unpinnedFields = visibleColumns.filter(
+      (vc) => !leftPinnedKeys.includes(vc.key) && !rightPinnedKeys.includes(vc.key)
+    );
+    const orderedFields = [...leftPinnedFields, ...unpinnedFields, ...rightPinnedFields];
+
+    orderedFields.forEach((vc) => {
+      cols.push(
+        columnHelper.accessor((r) => getFieldValue(r, vc.key), {
+          id: vc.key,
+          size:
+            vc.key === "returnNumber" ? 150 :
+            vc.key === "customer" ? 220 :
+            vc.key === "invoice" ? 150 :
+            vc.key === "grandTotal" ? 140 :
+            vc.key === "status" ? 140 :
+            160,
+          header: () => {
+            const isSortable = vc.sortable !== false;
+            const pinSide = getColumnPinSide(vc.key);
+            const isMenuOpen = openColumnMenuKey === vc.key;
+            return (
+              <div className="flex items-center justify-between w-full group">
+                <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
+                  <span className="truncate">{vc.label}</span>
+                  {pinSide && (
+                    <Pin
+                      size={12}
+                      className="text-blue-500 fill-blue-500 flex-shrink-0"
+                      style={{ transform: "rotate(45deg)" }}
+                    />
+                  )}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isMenuOpen) {
+                      setOpenColumnMenuKey(null);
+                      setColumnMenuPos(null);
+                      return;
+                    }
+                    const zMenu = getAncestorZoom(document.body);
+                    const MENU_W = 160;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const boundsRight = tableScrollRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+                    let calcLeft = rect.right / zMenu - MENU_W;
+                    calcLeft = Math.min(calcLeft, boundsRight / zMenu - MENU_W - 8);
+                    calcLeft = Math.max(calcLeft, 8);
+                    setColumnMenuPos({ top: rect.bottom / zMenu + 4, left: calcLeft });
+                    setOpenColumnMenuKey(vc.key);
+                  }}
+                  className="p-1 rounded hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
+                  title="Column options"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {isMenuOpen && columnMenuPos && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => { setOpenColumnMenuKey(null); setColumnMenuPos(null); }} />
+                    <div
+                      ref={columnMenuRef}
+                      style={{ position: "fixed", top: columnMenuPos.top, left: columnMenuPos.left }}
+                      className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+                    >
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null); setColumnMenuPos(null);
+                          pinSide === "left" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "left");
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                        Pin to Left
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenColumnMenuKey(null); setColumnMenuPos(null);
+                          pinSide === "right" ? unpinColumn(vc.key) : pinColumnToSide(vc.key, "right");
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                        Pin to Right
+                      </button>
+                      {isSortable && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null); setColumnMenuPos(null);
+                              setSortConfig({ key: vc.key, direction: "asc" });
+                              setPagination((p) => ({ ...p, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Sort Ascending
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenColumnMenuKey(null); setColumnMenuPos(null);
+                              setSortConfig({ key: vc.key, direction: "desc" });
+                              setPagination((p) => ({ ...p, currentPage: 1 }));
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            Sort Descending
+                          </button>
+                        </>
+                      )}
+                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                      <button
+                        disabled={vc.required}
+                        onClick={() => {
+                          if (vc.required) return;
+                          setOpenColumnMenuKey(null); setColumnMenuPos(null);
+                          saveColumns(columns.map((c) => (c.key === vc.key ? { ...c, visible: false } : c)));
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${vc.required ? "text-gray-300 cursor-not-allowed" : "text-[#161618] hover:bg-gray-50"}`}
+                      >
+                        <EyeOff className={`w-3.5 h-3.5 ${vc.required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
+                        Hide Column
+                      </button>
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
+            );
+          },
+          cell: ({ row }) => {
+            const r = row.original;
+            if (vc.key === "returnNumber") {
+              return (
+                <div className="flex items-center justify-between w-full group">
+                  <button
+                    onClick={() => openEdit(r)}
+                    className="text-[#0085FF] font-semibold hover:underline truncate"
+                    title={r.returnNumber}
+                  >
+                    <HighlightText text={r.returnNumber} query={searchTerm} />
+                  </button>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    {renderRowActionsMenu(r)}
+                  </div>
+                </div>
+              );
+            }
+            if (vc.key === "invoice") {
+              return <span className="text-blue-600 truncate block" title={invoiceOf(r)}><HighlightText text={invoiceOf(r)} query={searchTerm} /></span>;
+            }
+            if (vc.key === "customer") {
+              return <span className="text-gray-700 truncate block" title={customerOf(r)}><HighlightText text={customerOf(r)} query={searchTerm} /></span>;
+            }
+            if (vc.key === "returnDate") {
+              return <span className="text-gray-600">{r.returnDate ? new Date(r.returnDate).toLocaleDateString("en-IN") : "—"}</span>;
+            }
+            if (vc.key === "grandTotal") {
+              return <span className="text-gray-900 font-medium">{money(r.grandTotal)}</span>;
+            }
+            if (vc.key === "status") {
+              const Icon = STATUS_ICONS[r.status] || Edit2;
+              return (
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_STYLES[r.status] || STATUS_STYLES.Draft}`}>
+                  <Icon className="w-3 h-3" />
+                  {r.status}
+                </span>
+              );
+            }
+            if (vc.key === "refund") {
+              return (
+                <span className="text-xs text-gray-600">
+                  {r.status === "Refunded"
+                    ? `${r.refundMode || "Settled"}${r.refundReference ? ` · ${r.refundReference}` : ""}`
+                    : r.refundMode || "—"}
+                </span>
+              );
+            }
+            if (vc.key === "reason" || vc.key === "notes") {
+              const val = r[vc.key] || "";
+              return <span className="text-xs text-gray-600 truncate block" title={val}><HighlightText text={val || "—"} query={searchTerm} /></span>;
+            }
+            return "—";
+          },
+        })
+      );
+    });
+
+    return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleColumns, pinnedColumns, selectionMode, rows, selected, selectedSet, openColumnMenuKey, columnMenuPos, openRowActionsId, rowActionsPos, columns, searchTerm]);
+
+  const table = useReactTable({
+    data: rows,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: {},
+    columnResizeMode: "onChange",
+  });
+
+  const totalPages = pagination.totalPages || 1;
 
   return (
-    <div className="max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Sales Return</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage your sales returns
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium opacity-60 cursor-not-allowed"
-          title="Sales module is not connected"
-        >
-          <Plus className="w-4 h-4" />
-          New Sales Return
-        </button>
-      </div>
+    <div className="-mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4">
+      <AppToaster />
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search sales returns..."
-              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
-        </div>
+      <ColumnSettingsPanel
+        isOpen={showColumnSettings}
+        onClose={() => setShowColumnSettings(false)}
+        columns={columns}
+        onSave={saveColumns}
+        moduleName="Sales Returns"
+      />
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-              <tr>
-                <th className="px-4 py-3 text-left w-12">
-                  <input type="checkbox" className="w-4 h-4 text-blue-600 border-gray-300 rounded" />
-                </th>
-                <th className="px-4 py-3 text-left">Number</th>
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Fulfillment</th>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Expected Delivery</th>
-                <th className="px-4 py-3 w-12" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
-                    No sales returns yet.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((row) => {
-                  const StatusIcon = STATUS_ICONS[row.status] || Edit2;
-                  return (
-                    <tr key={row._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <input type="checkbox" className="w-4 h-4 text-blue-600 border-gray-300 rounded" />
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{row.number}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.customer}</td>
-                      <td className="px-4 py-3 text-right text-gray-900">
-                        ₹{row.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_STYLES[row.status] || STATUS_STYLES.Draft}`}
-                        >
-                          <StatusIcon className="w-3 h-3" />
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{row.fulfillment}</td>
-                      <td className="px-4 py-3 text-gray-600">{row.date || "—"}</td>
-                      <td className="px-4 py-3 text-gray-600">{row.dueDate || "—"}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      <AdvancedFilterPanel
+        isOpen={showAdvancedFilters}
+        onClose={() => setShowAdvancedFilters(false)}
+        columns={srFilterColumns}
+        filters={activeFilters}
+        setFilters={setActiveFilters}
+        onApply={(nf) => setActiveFilters(nf)}
+        title="Filter Sales Returns"
+        subtitle="Narrow down by number, status, amount or reason"
+        emptyStateText="Add a rule to filter the list."
+      />
 
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
-          <div>Showing {rows.length} of {rows.length}</div>
-          <div className="flex items-center gap-2">
-            <button className="p-1.5 border border-gray-200 rounded hover:bg-gray-50" disabled>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="px-2">Page 1 of 1</span>
-            <button className="p-1.5 border border-gray-200 rounded hover:bg-gray-50" disabled>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <div className="ml-4 flex items-center gap-1 text-xs">
-              <span>Rows</span>
-              <button className="inline-flex items-center gap-1 px-2 py-1 border border-gray-200 rounded">
-                50 <ChevronDown className="w-3 h-3" />
-              </button>
+      {/* Delete Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Sales Return?</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                If this return has been Confirmed, its stock IN will be reversed. This cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => { setShowDeleteModal(false); setToDelete(null); }}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-sm"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Bulk Delete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Delete <strong>{selected.length}</strong> sales returns? Confirmed returns will reverse their stock movements.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleBulkDelete(selected);
+                    setShowBulkDeleteModal(false);
+                  }}
+                  disabled={bulkLoading}
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-sm flex items-center justify-center min-w-[120px]"
+                >
+                  {bulkLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Deleting…
+                    </>
+                  ) : "Delete All"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <SalesReturnForm
+          editingReturn={editingReturn}
+          onRequestClose={closeForm}
+          onSuccess={() => { toast.success(editingReturn ? "Sales return updated" : "Sales return created"); closeForm(); fetchRows(); }}
+          onError={(msg) => toast.error(msg)}
+        />
+      )}
+
+      <BulkActions
+        isOpen={showBulkActions}
+        onClose={() => setShowBulkActions(false)}
+        selectedItems={rows.filter((r) => selected.includes(r._id))}
+        onBulkUpdate={handleBulkUpdate}
+        fieldConfig={srFieldConfig}
+        module="salesReturns"
+      />
+
+      {/* Fixed edge-to-edge toolbar */}
+      <div className="bg-white overflow-visible">
+        <div
+          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            zIndex: 40,
+            minHeight: "64px",
+            maxHeight: "64px",
+            boxSizing: "border-box",
+          }}
+        >
+          {showBulkStrip ? (
+            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+                <button
+                  onClick={() => handleExport("Excel")}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4 text-green-600" />
+                  Export
+                </button>
+                <button
+                  onClick={() => setShowBulkActions(true)}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Edit2 className="w-4 h-4 text-blue-600" />
+                  Bulk Update
+                </button>
+                <button
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  disabled={bulkLoading}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 whitespace-nowrap"
+                >
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                  Delete
+                </button>
+                <button
+                  onClick={exitSelectionMode}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-800 font-semibold whitespace-nowrap">
+                  {selected.length} return{selected.length !== 1 ? "s" : ""} selected
+                </span>
+                <button
+                  onClick={handleSelectAllAcrossPages}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={handleDeselectAllExtra}
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <X className="w-4 h-4" />
+                  Deselect All
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
+              <div className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}>
+                {showLoadingSkeleton ? (
+                  <>
+                    <Skeleton width={110} height={18} />
+                    <Skeleton width={170} height={12} />
+                  </>
+                ) : (
+                  <>
+                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Sales Returns</h1>
+                    <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 truncate">
+                      Goods returned by customers against sales invoices
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {showLoadingSkeleton ? (
+                <div className="relative flex-1 flex items-center justify-end gap-3">
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={40} height={40} shape="circle" />
+                  <Skeleton width={140} height={40} shape="circle" />
+                </div>
+              ) : (
+                <>
+                  <div className="relative flex-1 min-w-0 flex items-center justify-end">
+                    <div className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}>
+                      <SearchIcon
+                        className="absolute left-3 cursor-pointer z-10 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
+                        onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
+                      />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onFocus={() => setIsSearchExpanded(true)}
+                        onBlur={() => { if (!searchTerm) setIsSearchExpanded(false); }}
+                        className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+                        placeholder="Search returns by SR#, invoice, customer, reason…"
+                      />
+                      {isSearchExpanded && searchTerm && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setSearchTerm("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 rounded-full text-gray-900 hover:bg-gray-100"
+                          aria-label="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
+                    <button
+                      onClick={() => setShowAdvancedFilters(true)}
+                      className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
+                      title="Filters"
+                    >
+                      <FilterIcon size={16} />
+                      {activeFilters.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                          {activeFilters.length}
+                        </span>
+                      )}
+                    </button>
+
+                    <div className="relative" ref={moreMenuRef}>
+                      <button
+                        onClick={() => setIsMoreMenuOpen((v) => !v)}
+                        className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50"
+                        title="More options"
+                      >
+                        <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                        {statusFilter && (
+                          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
+                        )}
+                      </button>
+                      {isMoreMenuOpen && (
+                        <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                          <div className="pt-1">
+                            <button
+                              onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
+                              className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <FilterIcon size={16} className="text-gray-400" />
+                              Filters
+                            </button>
+                            <button
+                              onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Settings className="w-4 h-4 text-gray-400" />
+                              Columns
+                            </button>
+                            <div className="border-t border-gray-100 my-1" />
+                            <div className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wider">Status</div>
+                            <button
+                              onClick={() => { setStatusFilter(""); setIsMoreMenuOpen(false); }}
+                              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${!statusFilter ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                            >
+                              All statuses
+                            </button>
+                            {STATUS_OPTIONS.map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => { setStatusFilter(s); setIsMoreMenuOpen(false); }}
+                                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${statusFilter === s ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                            <div className="border-t border-gray-100 my-1" />
+                            <button
+                              onClick={() => { setIsMoreMenuOpen(false); handleExport("Excel"); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Download className="w-4 h-4 text-green-600" />
+                              Export to Excel
+                            </button>
+                            <button
+                              onClick={() => { setIsMoreMenuOpen(false); handleExport("PDF"); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Download className="w-4 h-4 text-red-600" />
+                              Export to PDF
+                            </button>
+                            <button
+                              disabled
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 cursor-not-allowed"
+                              title="Import coming soon"
+                            >
+                              <Upload className="w-4 h-4" />
+                              Import (soon)
+                            </button>
+                            <div className="border-t border-gray-100 my-1" />
+                            <button
+                              onClick={() => { setIsMoreMenuOpen(false); fetchRows(); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <RotateCcw className="w-4 h-4 text-gray-400" />
+                              Refresh
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={openCreate}
+                      className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 flex-shrink-0"
+                      title="New Sales Return"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span className="hidden lg:inline">New Sales Return</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Fixed edge-to-edge table area */}
+        <div
+          ref={tableScrollRef}
+          className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+          style={{
+            position: "fixed",
+            left: "var(--sidebar-width, 0px)",
+            right: 0,
+            bottom: !showLoadingSkeleton ? 64 : 0,
+          }}
+        >
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || rows.length > 0 ? "border-b" : ""}`}>
+            <table
+              className="w-full border-separate border-spacing-0 text-left"
+              style={{ minWidth: `${table.getTotalSize()}px`, tableLayout: "fixed" }}
+            >
+              {(() => {
+                const leftPinnedKeys = pinnedColumns.filter((p) => p.side === "left").map((p) => p.key);
+                const rightPinnedKeys = pinnedColumns.filter((p) => p.side === "right").map((p) => p.key);
+                const allHeaders = table.getHeaderGroups()[0]?.headers || [];
+                const leftInOrder = allHeaders.map((h) => h.column.id).filter((id) => leftPinnedKeys.includes(id));
+                const rightInOrder = allHeaders.map((h) => h.column.id).filter((id) => rightPinnedKeys.includes(id));
+                const lastLeftPinnedKey = leftInOrder.length ? leftInOrder[leftInOrder.length - 1] : null;
+                const firstRightPinnedKey = rightInOrder.length ? rightInOrder[0] : null;
+
+                const pinnedLeftOffsets = {};
+                let cumL = 0;
+                allHeaders.forEach((h) => {
+                  const isLS = h.column.id === "selection" || leftPinnedKeys.includes(h.column.id);
+                  if (isLS) { pinnedLeftOffsets[h.column.id] = cumL; cumL += h.getSize(); }
+                });
+                const pinnedRightOffsets = {};
+                let cumR = 0;
+                [...allHeaders].reverse().forEach((h) => {
+                  if (rightPinnedKeys.includes(h.column.id)) { pinnedRightOffsets[h.column.id] = cumR; cumR += h.getSize(); }
+                });
+
+                return (
+                  <>
+                    <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30 select-none">
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <tr key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => {
+                            const colId = header.column.id;
+                            const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                            const isRightSticky = rightPinnedKeys.includes(colId);
+                            const isSticky = isLeftSticky || isRightSticky;
+                            const isLeftBoundary = colId === lastLeftPinnedKey;
+                            const isRightBoundary = colId === firstRightPinnedKey;
+                            const boundaryShadowSide = isLeftBoundary ? "left" : isRightBoundary ? "right" : null;
+                            const isDraggable = colId !== "selection";
+                            const isDragging = draggedColKey === colId;
+                            const isDragOver = dragOverColKey === colId && draggedColKey && draggedColKey !== colId;
+                            return (
+                              <th
+                                key={header.id}
+                                data-col-id={colId}
+                                onMouseDown={isDraggable ? (e) => startColumnDrag(e, colId) : undefined}
+                                style={{
+                                  width: header.getSize(),
+                                  position: isSticky ? "sticky" : "relative",
+                                  left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                  right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                  zIndex: isSticky ? 20 : 1,
+                                }}
+                                className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] last:border-r-0 transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                              >
+                                <div className="w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
+                                  {flexRender(header.column.columnDef.header, header.getContext())}
+                                </div>
+                                {boundaryShadowSide && (
+                                  <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                                )}
+                                {colId !== "selection" && header.column.getCanResize() && (
+                                  <div
+                                    data-resize-handle="true"
+                                    onMouseDown={(e) => { e.stopPropagation(); header.getResizeHandler()(e); }}
+                                    onTouchStart={header.getResizeHandler()}
+                                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none z-50 bg-transparent"
+                                  />
+                                )}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </thead>
+
+                    <tbody className="bg-white">
+                      {showLoadingSkeleton ? (
+                        <TableSkeletonRows numRows={pagination.limit} columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")} hasCheckbox />
+                      ) : rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={table.getAllColumns().length} className="px-6 py-16 text-center text-gray-500">
+                            <div className="flex flex-col items-center gap-3">
+                              <ClipboardList className="w-10 h-10 text-gray-300" />
+                              <p className="font-medium">No sales returns found</p>
+                              <button
+                                onClick={openCreate}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                Create your first return
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        table.getRowModel().rows.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                          >
+                            {row.getVisibleCells().map((cell) => {
+                              const colId = cell.column.id;
+                              const isLeftSticky = colId === "selection" || leftPinnedKeys.includes(colId);
+                              const isRightSticky = rightPinnedKeys.includes(colId);
+                              const isSticky = isLeftSticky || isRightSticky;
+                              const isLeftBoundary = colId === lastLeftPinnedKey;
+                              const isRightBoundary = colId === firstRightPinnedKey;
+                              const boundaryShadowSide = isLeftBoundary ? "left" : isRightBoundary ? "right" : null;
+                              const isColDragging = draggedColKey === colId;
+                              return (
+                                <td
+                                  key={cell.id}
+                                  style={{
+                                    width: cell.column.getSize(),
+                                    position: isSticky ? "sticky" : "static",
+                                    left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
+                                    right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
+                                    zIndex: isSticky ? 10 : 1,
+                                  }}
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                >
+                                  <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                  </div>
+                                  {boundaryShadowSide && (
+                                    <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSide)} />
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </>
+                );
+              })()}
+            </table>
+          </div>
+        </div>
+
+        {/* Column drag ghost */}
+        {dragGhost && createPortal(
+          <div
+            ref={ghostElRef}
+            style={{ position: "fixed", top: -9999, left: -9999, width: dragGhost.width, zIndex: 10000, pointerEvents: "none" }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]" style={{ height: dragGhost.height }}>
+              <span className="text-sm font-bold text-[#525866] truncate block">{dragGhost.label}</span>
+            </div>
+            {dragGhost.previewRows.map((v, i) => (
+              <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+                <span className="text-sm text-gray-700 truncate block">{v}</span>
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
+
+        {/* Fixed edge-to-edge pagination */}
+        {!showLoadingSkeleton && (
+          <div
+            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+            style={{
+              left: "var(--sidebar-width, 0px)",
+              height: 64,
+              filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+            }}
+          >
+            <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-semibold">{pagination.totalCount === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1}</span> to{" "}
+                    <span className="font-semibold">{Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}</span> of{" "}
+                    <span className="font-semibold">{pagination.totalCount}</span> results
+                  </p>
+                  <div className="relative ml-2">
+                    <select
+                      value={pagination.limit}
+                      onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+                      className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {[10, 20, 50, 100, 150].map((n) => <option key={n} value={n}>{n} per page</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={!pagination.hasPrevPage}
+                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {(() => {
+                    const items = [1];
+                    if (pagination.currentPage > 2) items.push("left-dots");
+                    if (pagination.currentPage !== 1 && pagination.currentPage !== totalPages) items.push(pagination.currentPage);
+                    if (pagination.currentPage < totalPages - 1) items.push("right-dots");
+                    if (totalPages > 1) items.push(totalPages);
+                    const commit = () => {
+                      const n = parseInt(pageInput, 10);
+                      if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
+                      setEditingPage(false);
+                    };
+                    return items.map((item, idx) => {
+                      if (item === "left-dots" || item === "right-dots") {
+                        return <span key={`${item}-${idx}`} className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none">…</span>;
+                      }
+                      const isCurrent = item === pagination.currentPage;
+                      if (isCurrent && editingPage) {
+                        return (
+                          <input
+                            key="page-edit"
+                            autoFocus
+                            type="number"
+                            min={1}
+                            max={totalPages}
+                            value={pageInput}
+                            onChange={(e) => setPageInput(e.target.value)}
+                            onBlur={commit}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commit();
+                              if (e.key === "Escape") setEditingPage(false);
+                            }}
+                            className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none"
+                          />
+                        );
+                      }
+                      return (
+                        <button
+                          key={`p-${item}`}
+                          onClick={() => handlePageChange(item)}
+                          onDoubleClick={() => { if (isCurrent) { setPageInput(String(pagination.currentPage)); setEditingPage(true); } }}
+                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          {item}
+                        </button>
+                      );
+                    });
+                  })()}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={!pagination.hasNextPage}
+                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -120,6 +120,9 @@ app.use('/api/performa-invoices', performaInvoiceRoutes);
 const quotationRoutes = require('./routes/quotationRoutes');
 app.use('/api/quotations', quotationRoutes);
 
+const salesReturnRoutes = require('./routes/salesReturnRoutes');
+app.use('/api/sales-returns', salesReturnRoutes);
+
 const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
 app.use('/api/delivery-challans', deliveryChallanRoutes);
 
