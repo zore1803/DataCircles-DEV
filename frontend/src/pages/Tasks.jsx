@@ -3162,10 +3162,7 @@ function Tasks() {
                           right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                         }}
-                        /* No `overflow-hidden` on the boundary cell — it would clip
-                           the shadow overlay that deliberately hangs outside it.
-                           The inner `truncate` already handles long labels. */
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
@@ -3235,7 +3232,10 @@ function Tasks() {
                           key={cell.id}
                           style={{
                             width: cell.column.getSize(),
-                            height: 37,
+                            height: "37px",
+                            maxHeight: "37px",
+                            overflow: "hidden",
+                            boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
@@ -3325,10 +3325,7 @@ function Tasks() {
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                         }}
-                        /* No `overflow-hidden` on the boundary cell — it would clip
-                           the shadow overlay that deliberately hangs outside it.
-                           The inner `truncate` already handles long labels. */
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
@@ -3392,7 +3389,10 @@ function Tasks() {
                         key={cell.id}
                         style={{
                           width: cell.column.getSize(),
-                          height: 37,
+                          height: "37px",
+                          maxHeight: "37px",
+                          overflow: "hidden",
+                          boxSizing: "border-box",
                           position: isSticky ? "sticky" : "static",
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",

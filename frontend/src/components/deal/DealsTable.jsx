@@ -964,13 +964,12 @@ export default function DealsTable({
                         width: header.getSize(),
                         minWidth: header.getSize(),
                         maxWidth: header.getSize(),
-                        height: "37px",
                         position: isSticky ? "sticky" : "relative",
                         left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                         right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                         zIndex: isSticky ? 20 : 1,
                       }}
-                      className={`px-4 py-2 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] overflow-hidden ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                      className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
                       {/* Opacity on this wrapper, not the <th>, so dragging never
                           dims the pinned border or its boundary shadow. */}
@@ -1067,6 +1066,9 @@ export default function DealsTable({
                             minWidth: cell.column.getSize(),
                             maxWidth: cell.column.getSize(),
                             height: "37px",
+                            maxHeight: "37px",
+                            overflow: "hidden",
+                            boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",

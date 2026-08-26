@@ -2239,6 +2239,10 @@ function Companies() {
                                     key={cell.id}
                                     style={{
                                       width: cell.column.getSize(),
+                                      height: "37px",
+                                      maxHeight: "37px",
+                                      overflow: "hidden",
+                                      boxSizing: "border-box",
                                       position: isSticky ? "sticky" : "static",
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
