@@ -6,6 +6,7 @@ import {
   TrendingDown, Boxes, IndianRupee, Wallet, History, ArrowRight, Check,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { formatINR } from "../utils/clientExport";
 import BulkActionBar from "../components/common/BulkActionBar";
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
@@ -556,9 +557,9 @@ export default function Inventory() {
         "Current Stock": getItemStock(i),
         Unit: i.primaryUnit || "",
         Status: stockStatusOf(i).label,
-        "Purchase Price": Number(i.purchasePrice) || 0,
-        "Selling Price": Number(i.sellingPrice) || 0,
-        "Stock Value": Math.max(getItemStock(i), 0) * (Number(i.sellingPrice) || 0),
+        "Purchase Price": formatINR(i.purchasePrice),
+        "Selling Price": formatINR(i.sellingPrice),
+        "Stock Value": formatINR(Math.max(getItemStock(i), 0) * (Number(i.sellingPrice) || 0)),
       }))
     );
     sheet["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];

@@ -29,7 +29,7 @@ import ItemForm from "../components/item/ItemForm";
 import QuickItemDrawer from "../components/item/QuickItemDrawer";
 import ImportItems from "../components/item/ImportItems";
 import ExportModal from "../components/common/ExportModal";
-import { exportClientSide } from "../utils/clientExport";
+import { exportClientSide, formatINR } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -651,8 +651,8 @@ function ProductsServices() {
   const EXPORT_COLUMNS = [
     { label: "Name", value: (item) => item.name },
     { label: "Category", value: (item) => item.category },
-    { label: "Purchase Price", value: (item) => item.purchasePrice },
-    { label: "Selling Price", value: (item) => item.sellingPrice },
+    { label: "Purchase Price", value: (item) => formatINR(item.purchasePrice) },
+    { label: "Selling Price", value: (item) => formatINR(item.sellingPrice) },
     { label: "Status", value: (item) => (item.isActive ? "Active" : "Inactive") },
   ];
 

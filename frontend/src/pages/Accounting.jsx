@@ -66,6 +66,7 @@ import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import HighlightText from "../components/common/HighlightText";
 import { formatNumberFixed } from "../utils/numberFormatter";
+import { formatINR } from "../utils/clientExport";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
 import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
@@ -1538,7 +1539,7 @@ const Accounting = () => {
         d.deal?.title || "N/A",
         d.date ? new Date(d.date).toLocaleDateString() : "",
         d.dueDate ? new Date(d.dueDate).toLocaleDateString() : "",
-        d.amount ?? 0,
+        formatINR(d.amount),
         d.status || "",
       ]
         .map(esc)

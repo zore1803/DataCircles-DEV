@@ -10,13 +10,14 @@ const TEMPLATES = [
   "Vibrant",
   "Mono",
 ];
-const DOC_TYPES = ["tax", "performa", "quotation", "deliveryChallan"];
+const DOC_TYPES = ["tax", "performa", "quotation", "deliveryChallan", "salesOrder"];
 
 const DEFAULTS = {
   tax: "Classic",
   performa: "Classic",
   quotation: "Classic",
   deliveryChallan: "Classic",
+  salesOrder: "Classic",
 };
 
 /*

@@ -9,9 +9,8 @@ import API from "../services/api";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import Skeleton from "../components/common/Skeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
-import PurchaseOrderForm from "../components/purchaseOrder/PurchaseOrderForm";
-import PurchaseOrderPreview from "../components/purchaseOrder/PurchaseOrderPreview";
-import ImportPurchaseOrders from "../components/purchaseOrder/ImportPurchaseOrders";
+import SalesOrderForm from "../components/salesOrder/SalesOrderForm";
+import SalesOrderPreview from "../components/salesOrder/SalesOrderPreview";
 import BulkActions from "../components/BulkActions";
 import {
   ChevronUp,
@@ -21,7 +20,6 @@ import {
   ClipboardList,
   Trash2,
   Edit2,
-  Truck,
   MoreVertical,
   Plus,
   X,
@@ -30,12 +28,10 @@ import {
   EyeOff,
   Download,
   Share2,
-  Clock,
   CheckCircle2,
   Pin,
   PinOff,
   Settings,
-  Upload,
   Video,
   MessageCircle,
   Mail,
@@ -54,7 +50,6 @@ import toast from "react-hot-toast";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AppToaster from "../components/AppToaster";
-import ExportModal from "../components/common/ExportModal";
 import { exportClientSide, formatINR } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
@@ -156,15 +151,15 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, variant = "p
   );
 };
 
-const PurchaseOrderPage = () => {
+const SalesOrder = () => {
   const isSearchOverlayOpen = useSearchOverlayOpen();
-  const [vendors, setVendors] = useState([]);
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [deals, setDeals] = useState([]);
+  const [salesOrders, setSalesOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [editingPO, setEditingPO] = useState(null);
-  // Id of the PO currently being converted — disables just that row's button
+  const [editingSO, setEditingSO] = useState(null);
+  // Id of the SO currently being converted — disables just that row's button
   // while the request is in flight instead of blocking the whole page.
-  const [convertingPOId, setConvertingPOId] = useState(null);
+  const [convertingSOId, setConvertingSOId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -175,9 +170,8 @@ const PurchaseOrderPage = () => {
   };
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   // filterStatus removed — status filtering now done via AdvancedFilterPanel rule builder.
-  const [selectedPO, setSelectedPO] = useState(null);
+  const [selectedSO, setSelectedSO] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchInputRef = useRef(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -185,7 +179,6 @@ const PurchaseOrderPage = () => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
-  const [showImport, setShowImport] = useState(false);
   const tableScrollRef = useRef(null);
   // Client-side Excel/PDF export — same "no selection required, export what
   // you're currently looking at" flow as Deals.jsx, instead of the
@@ -211,14 +204,14 @@ const PurchaseOrderPage = () => {
   // has loaded once, a search/filter that narrows results to zero must NOT
   // re-skeleton the toolbar.
   const hasLoadedOnceRef = useRef(false);
-  const showLoadingSkeleton = loading && purchaseOrders.length === 0 && !hasLoadedOnceRef.current;
+  const showLoadingSkeleton = loading && salesOrders.length === 0 && !hasLoadedOnceRef.current;
   // Signal the top progress bar on EVERY fetch, not just the skeleton case —
   // same as Companies.jsx.
   useTopLoadingSignal(loading);
 
   // Bulk Selection
-  const [selectedPurchaseOrders, setSelectedPurchaseOrders] = useState([]);
-  const selectedPOSet = useMemo(() => new Set(selectedPurchaseOrders), [selectedPurchaseOrders]);
+  const [selectedSalesOrders, setSelectedSalesOrders] = useState([]);
+  const selectedSOSet = useMemo(() => new Set(selectedSalesOrders), [selectedSalesOrders]);
   const [selectionMode, setSelectionMode] = useState(true);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -232,7 +225,7 @@ const PurchaseOrderPage = () => {
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
   useEffect(() => {
-    const active = selectionMode && selectedPurchaseOrders.length > 0;
+    const active = selectionMode && selectedSalesOrders.length > 0;
     if (active) {
       setBulkStripClosing(false);
       setShowBulkStrip(true);
@@ -244,11 +237,11 @@ const PurchaseOrderPage = () => {
       }, 300);
       return () => clearTimeout(t);
     }
-  }, [selectionMode, selectedPurchaseOrders.length]);
+  }, [selectionMode, selectedSalesOrders.length]);
 
   // Delete Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [poToDelete, setPoToDelete] = useState(null);
+  const [soToDelete, setSoToDelete] = useState(null);
 
   // Video Tutorial
   const [showVideoTutorial, setShowVideoTutorial] = useState(false);
@@ -328,58 +321,51 @@ const PurchaseOrderPage = () => {
   });
 
   const statusOptions = [
-    { value: "Pending", label: "Pending", icon: Clock, className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
-    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-green-50 text-green-700 border-green-200" },
-    { value: "Rejected", label: "Rejected", icon: X, className: "bg-red-50 text-red-700 border-red-200" },
-    { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-blue-50 text-blue-700 border-blue-200" },
+    { value: "Draft", label: "Draft", icon: Edit2, className: "bg-gray-100 text-gray-600 border-gray-200" },
+    { value: "Confirmed", label: "Confirmed", icon: CheckCircle2, className: "bg-green-50 text-green-700 border-green-200" },
+    { value: "Cancelled", label: "Cancelled", icon: X, className: "bg-red-50 text-red-700 border-red-200" },
   ];
+
+  // Customer name resolution — same fallback chain Accounting.jsx uses for
+  // every deal-based document type (contact -> company -> contactPerson ->
+  // deal title), since a Sales Order has no vendor/customer field of its
+  // own, only the Deal it's linked to.
+  const dealCustomerName = (so) =>
+    so.deal?.contact?.name || so.deal?.company?.name || so.deal?.contactPerson || so.deal?.title || "—";
 
   // Columns available in the rule-builder filter panel (mirrors Companies.jsx pattern).
-  const poFilterColumns = [
-    { key: "poNumber", label: "PO Number" },
-    { key: "vendor", label: "Vendor" },
+  const soFilterColumns = [
+    { key: "salesOrderNumber", label: "SO Number" },
     { key: "status", label: "Status", options: statusOptions.map((s) => s.value).filter(Boolean) },
-    { key: "totalAmount", label: "Total Amount" },
-    { key: "paymentTerms", label: "Payment Terms" },
+    { key: "amount", label: "Amount" },
+    { key: "reference", label: "Reference" },
     { key: "notes", label: "Notes" },
   ];
 
-  // Column list handed to the shared ExportModal — same shape Vendors/Companies use.
-  const exportColumns = [
-    { key: "poNumber", label: "PO Number" },
-    { key: "vendor", label: "Vendor" },
-    { key: "orderDate", label: "Order Date" },
-    { key: "items", label: "Items" },
-    { key: "totalAmount", label: "Total Amount" },
-    { key: "paymentTerms", label: "Payment Terms" },
-    { key: "status", label: "Status" },
-    { key: "notes", label: "Notes" },
-  ];
-
-  const handleSelectPurchaseOrder = (poId) => {
-    setSelectedPurchaseOrders((prev) =>
-      prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId],
+  const handleSelectSalesOrder = (soId) => {
+    setSelectedSalesOrders((prev) =>
+      prev.includes(soId) ? prev.filter((id) => id !== soId) : [...prev, soId],
     );
   };
 
   const handleSelectAll = () => {
     if (
-      selectedPurchaseOrders.length === purchaseOrders.length &&
-      purchaseOrders.length > 0
+      selectedSalesOrders.length === salesOrders.length &&
+      salesOrders.length > 0
     ) {
-      setSelectedPurchaseOrders([]);
+      setSelectedSalesOrders([]);
     } else {
-      setSelectedPurchaseOrders(purchaseOrders.map((po) => po._id));
+      setSelectedSalesOrders(salesOrders.map((so) => so._id));
     }
   };
 
   const exitSelectionMode = () => {
     setSelectionMode(true);
-    setSelectedPurchaseOrders([]);
+    setSelectedSalesOrders([]);
     setShowBulkActions(false);
   };
 
-  // "Select All" grabs every purchase order ID matching the current
+  // "Select All" grabs every sales order ID matching the current
   // search/filter straight from the database (not just the loaded page).
   // "Deselect All" is its counterpart: it doesn't clear the selection
   // outright (that's what "Cancel" does) — it steps back down to only the
@@ -388,15 +374,15 @@ const PurchaseOrderPage = () => {
     try {
       const params = new URLSearchParams({ allIds: "true" });
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
-      const res = await API.get(`/purchase-orders/pagination?${params.toString()}`);
-      setSelectedPurchaseOrders(res.data.ids || []);
+      const res = await API.get(`/sales-orders/pagination?${params.toString()}`);
+      setSelectedSalesOrders(res.data.ids || []);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to select all rows");
     }
   };
 
   const handleDeselectAllExtra = () => {
-    setSelectedPurchaseOrders(purchaseOrders.map((po) => po._id));
+    setSelectedSalesOrders(salesOrders.map((so) => so._id));
   };
 
   // Debounce search
@@ -418,7 +404,7 @@ const PurchaseOrderPage = () => {
 
   // Fetch data
   useEffect(() => {
-    fetchPurchaseOrders();
+    fetchSalesOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pagination.currentPage,
@@ -428,16 +414,16 @@ const PurchaseOrderPage = () => {
   ]);
 
   useEffect(() => {
-    fetchVendors();
+    fetchDeals();
     fetchShareSettings();
   }, []);
 
-  const fetchVendors = async () => {
+  const fetchDeals = async () => {
     try {
-      const res = await API.get("/vendors");
-      setVendors(res.data.vendors || res.data || []);
+      const res = await API.get("/deals");
+      setDeals(res.data.deals || res.data || []);
     } catch {
-      toast.error("Failed to load vendors");
+      toast.error("Failed to load deals");
     }
   };
 
@@ -455,11 +441,11 @@ const PurchaseOrderPage = () => {
       setEmailTemplatesList(Array.isArray(settingsRes.data?.emailTemplates) ? settingsRes.data.emailTemplates : []);
       if (brandingRes?.data?.companyName) setShareCompanyName(brandingRes.data.companyName);
     } catch (err) {
-      console.error("Failed to load share settings in PurchaseOrderPage", err);
+      console.error("Failed to load share settings in SalesOrder", err);
     }
   };
 
-  const fetchPurchaseOrders = async () => {
+  const fetchSalesOrders = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
@@ -471,9 +457,9 @@ const PurchaseOrderPage = () => {
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
 
       const res = await API.get(
-        `/purchase-orders/pagination?${params.toString()}`,
+        `/sales-orders/pagination?${params.toString()}`,
       );
-      setPurchaseOrders(res.data.purchaseOrders || []);
+      setSalesOrders(res.data.salesOrders || []);
       setPagination((prev) => ({
         ...prev,
         ...res.data.pagination,
@@ -481,70 +467,78 @@ const PurchaseOrderPage = () => {
       hasLoadedOnceRef.current = true;
     } catch (err) {
       toast.error(
-        err.response?.data?.error || "Failed to load purchase orders",
+        err.response?.data?.error || "Failed to load sales orders",
       );
-      setPurchaseOrders([]);
+      setSalesOrders([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // One-click convert: creates the Purchase straight from the PO's own
-  // vendor/items/notes/tax fields — same payload PurchaseForm.jsx builds
-  // when it pre-fills from a PO, just submitted immediately instead of
-  // opening a form for review first. Stays on this page; just refetches so
-  // this row flips from "Convert to Purchase" to "View <purchaseNumber>".
-  const handleConvertToPurchase = async (po) => {
-    if (po.status !== "Approved" && po.status !== "Delivered") {
-      toast.error("Only Approved or Delivered Purchase Orders can be converted.");
+  // One-click convert: creates the Invoice straight from the SO's own
+  // deal/items/notes/tax fields — same back-reference pattern
+  // PurchaseOrderPage.jsx uses for Convert to Purchase (invoiceController's
+  // createInvoice validates the salesOrder id and rejects a duplicate
+  // conversion, so this can never silently double-create). Stock is never
+  // touched by the Sales Order itself — only the resulting Invoice's own
+  // creation flow moves stock (baseDirection "out"), same as any other
+  // Invoice.
+  const handleConvertToInvoice = async (so) => {
+    if (so.status === "Cancelled") {
+      toast.error("A Cancelled Sales Order can't be converted to an Invoice.");
       return;
     }
-    setConvertingPOId(po._id);
+    setConvertingSOId(so._id);
     try {
-      await API.post("/purchases", {
-        vendor: po.vendor?._id || po.vendor,
-        purchaseOrder: po._id,
-        items: po.items,
-        notes: po.notes || "",
-        transactionType: po.transactionType,
-        gstRate: po.gstRate,
+      await API.post("/invoices", {
+        deal: so.deal?._id || so.deal,
+        salesOrder: so._id,
+        date: new Date().toISOString().slice(0, 10),
+        dueDate: so.dueDate,
+        amount: so.amount,
+        discount: so.discount,
         status: "Draft",
+        items: so.items,
+        notes: so.notes || "",
+        terms: so.terms || "",
+        isTaxInvoice: true,
+        transactionType: so.transactionType,
+        receiverGSTIN: so.receiverGSTIN,
+        billingAddress: so.billingAddress,
+        shippingAddress: so.shippingAddress,
       });
-      toast.success("Converted to purchase successfully");
-      await fetchPurchaseOrders();
+      toast.success("Converted to invoice successfully");
+      await fetchSalesOrders();
     } catch (err) {
-      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to convert to purchase");
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to convert to invoice");
     } finally {
-      setConvertingPOId(null);
+      setConvertingSOId(null);
     }
   };
 
   const handleSuccess = () => {
-    toast.success("Purchase order saved successfully");
-    fetchPurchaseOrders();
+    toast.success("Sales order saved successfully");
+    fetchSalesOrders();
     exitSelectionMode();
   };
 
-  const handleEdit = (po) => {
-    setEditingPO(po);
+  const handleEdit = (so) => {
+    setEditingSO(so);
     setShowForm(true);
   };
 
-  const handleView = (po) => {
-    setSelectedPO(po);
+  const handleView = (so) => {
+    setSelectedSO(so);
     setShowPreview(true);
   };
 
   // Same authenticated per-module download route Accounting.jsx's Download
   // button hits for its own tabs (/${apiPath}/download/${id}) — reused
-  // as-is rather than a Purchase-Order-specific PDF pipeline.
-  const handleDownload = async (po) => {
-    // Purchase Order downloads aren't wired to the customizable PDF filename
-    // settings (only Invoice/Pro Forma/Quotation/Delivery Challan are, for
-    // now) — fixed filename shape.
-    const filename = `Purchase-Order-${po.poNumber || po._id}`;
+  // as-is rather than a Sales-Order-specific PDF pipeline.
+  const handleDownload = async (so) => {
+    const filename = `Sales-Order-${so.salesOrderNumber || so._id}`;
     try {
-      const response = await API.get(`/purchase-orders/download/${po._id}`, {
+      const response = await API.get(`/sales-orders/download/${so._id}`, {
         responseType: "blob",
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
@@ -556,14 +550,14 @@ const PurchaseOrderPage = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("Purchase order downloaded successfully");
+      toast.success("Sales order downloaded successfully");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to download purchase order");
+      toast.error(err.response?.data?.error || "Failed to download sales order");
     }
   };
 
   const handleDelete = (id) => {
-    setPoToDelete(id);
+    setSoToDelete(id);
     setShowDeleteModal(true);
   };
 
@@ -571,31 +565,32 @@ const PurchaseOrderPage = () => {
   // Excel (CSV via window.XLSX) or PDF (window.jspdf + autoTable), against
   // whatever's currently filtered/visible rather than a manual selection.
   const EXPORT_COLUMNS = [
-    { label: "PO Number", value: (po) => po.poNumber },
-    { label: "Vendor", value: (po) => po.vendor?.name },
-    { label: "Order Date", value: (po) => new Date(po.createdAt).toLocaleDateString() },
-    { label: "Total Amount", value: (po) => formatINR(po.totalAmount) },
-    { label: "Payment Terms", value: (po) => po.paymentTerms },
-    { label: "Status", value: (po) => po.status },
+    { label: "SO Number", value: (so) => so.salesOrderNumber },
+    { label: "Customer", value: (so) => dealCustomerName(so) },
+    { label: "Order Date", value: (so) => new Date(so.date || so.createdAt).toLocaleDateString() },
+    { label: "Expected Delivery", value: (so) => so.dueDate ? new Date(so.dueDate).toLocaleDateString() : "" },
+    { label: "Amount", value: (so) => formatINR(so.amount) },
+    { label: "Status", value: (so) => so.status },
+    { label: "Fulfillment", value: (so) => so.convertedInvoice ? "Fulfilled" : "Pending" },
   ];
 
-  const handleExport = (format) => {
+  const handleExport = (format, rows = filteredSalesOrders) => {
     if (!window.confirm(`Do you want to export in ${format}?`)) return;
     exportClientSide(format, {
-      rows: filteredPurchaseOrders,
+      rows,
       columns: EXPORT_COLUMNS,
-      fileNamePrefix: "purchase_orders_export",
-      title: "Purchase Orders Report",
+      fileNamePrefix: "sales_orders_export",
+      title: "Sales Orders Report",
     });
   };
 
   const confirmDelete = async () => {
-    if (!poToDelete) return;
+    if (!soToDelete) return;
     const toastId = toast.loading("Deleting...");
     try {
-      await API.delete(`/purchase-orders/${poToDelete}`);
-      toast.success("Purchase order deleted", { id: toastId });
-      fetchPurchaseOrders();
+      await API.delete(`/sales-orders/${soToDelete}`);
+      toast.success("Sales order deleted", { id: toastId });
+      fetchSalesOrders();
       exitSelectionMode();
     } catch (err) {
       toast.error(err.response?.data?.error || "Delete failed", {
@@ -603,14 +598,14 @@ const PurchaseOrderPage = () => {
       });
     } finally {
       setShowDeleteModal(false);
-      setPoToDelete(null);
+      setSoToDelete(null);
     }
   };
 
   const handleStatusChange = async (id, status) => {
     try {
-      await API.put(`/purchase-orders/${id}/status`, { status });
-      fetchPurchaseOrders();
+      await API.put(`/sales-orders/${id}/status`, { status });
+      fetchSalesOrders();
       toast.success("Status updated");
     } catch (err) {
       if (err.response?.status === 402) {
@@ -626,10 +621,10 @@ const PurchaseOrderPage = () => {
     setBulkLoading(true);
     try {
       await Promise.all(
-        itemIds.map((id) => API.delete(`/purchase-orders/${id}`)),
+        itemIds.map((id) => API.delete(`/sales-orders/${id}`)),
       );
-      toast.success(`Deleted ${itemIds.length} purchase orders`);
-      fetchPurchaseOrders();
+      toast.success(`Deleted ${itemIds.length} sales orders`);
+      fetchSalesOrders();
       exitSelectionMode();
     } catch (err) {
       if (err.response?.status === 402) {
@@ -645,13 +640,20 @@ const PurchaseOrderPage = () => {
   const handleBulkUpdate = async ({ field, value, itemIds }) => {
     setBulkLoading(true);
     try {
+      // The only bulk-editable field is status (soFieldConfig), and
+      // updateSalesOrder requires the document's full field set (deal,
+      // date, amount, discount, items) — same as Quotation's own strict
+      // update validation. The dedicated status endpoint is a proper
+      // partial update, so bulk status changes go there instead.
       await Promise.all(
         itemIds.map((id) =>
-          API.put(`/purchase-orders/${id}`, { [field]: value }),
+          field === "status"
+            ? API.put(`/sales-orders/${id}/status`, { status: value })
+            : API.put(`/sales-orders/${id}`, { [field]: value }),
         ),
       );
-      toast.success(`Updated ${itemIds.length} purchase orders`);
-      fetchPurchaseOrders();
+      toast.success(`Updated ${itemIds.length} sales orders`);
+      fetchSalesOrders();
       exitSelectionMode();
     } catch (err) {
       if (err.response?.status === 402) {
@@ -664,7 +666,7 @@ const PurchaseOrderPage = () => {
     }
   };
 
-  const poFieldConfig = {
+  const soFieldConfig = {
     fields: [
       {
         key: "status",
@@ -677,8 +679,8 @@ const PurchaseOrderPage = () => {
 
   const updateSingleStatus = async (id, newStatus) => {
     try {
-      await API.put(`/purchase-orders/${id}/status`, { status: newStatus });
-      setPurchaseOrders((prev) => prev.map((po) => po._id === id ? { ...po, status: newStatus } : po));
+      await API.put(`/sales-orders/${id}/status`, { status: newStatus });
+      setSalesOrders((prev) => prev.map((so) => so._id === id ? { ...so, status: newStatus } : so));
       toast.success("Status updated successfully!");
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to update status");
@@ -702,34 +704,33 @@ const PurchaseOrderPage = () => {
 
   // ---------------------------------------------------------------------
   // Column model — same generic pin/reorder/visibility system as Companies.jsx,
-  // persisted per-module under the "purchaseOrders" key.
+  // persisted per-module under the "salesOrders" key.
   // ---------------------------------------------------------------------
   const defaultColumns = useMemo(
     () => [
       {
-        key: "poNumber",
-        label: "PO Number",
+        key: "salesOrderNumber",
+        label: "SO Number",
         visible: true,
         order: 0,
         required: true,
         sortable: true,
-        sortKey: "poNumber",
+        sortKey: "salesOrderNumber",
       },
       {
-        key: "vendor",
-        label: "Vendor",
+        key: "customer",
+        label: "Customer",
         visible: true,
         order: 1,
-        sortable: true,
-        sortKey: "vendor.name",
+        sortable: false,
       },
       {
-        key: "totalAmount",
+        key: "amount",
         label: "Amount",
         visible: true,
         order: 2,
         sortable: true,
-        sortKey: "totalAmount",
+        sortKey: "amount",
       },
       {
         key: "status",
@@ -740,35 +741,53 @@ const PurchaseOrderPage = () => {
         sortKey: "status",
       },
       {
-        key: "createdAt",
-        label: "Date",
+        key: "fulfillment",
+        label: "Fulfillment",
         visible: true,
         order: 4,
+        sortable: false,
+      },
+      {
+        key: "date",
+        label: "Order Date",
+        visible: true,
+        order: 5,
         sortable: true,
-        sortKey: "createdAt",
+        sortKey: "date",
+      },
+      {
+        key: "dueDate",
+        label: "Expected Delivery",
+        visible: true,
+        order: 6,
+        sortable: true,
+        sortKey: "dueDate",
       },
     ],
     [],
   );
 
   const { columns, saveColumns, getVisibleColumns } = useColumnSettings(
-    "purchaseOrders",
+    "salesOrders",
     defaultColumns,
   );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
 
-  const getFieldValue = (po, key) => {
-    if (key === "poNumber") return po.poNumber || "";
-    if (key === "vendor") return po.vendor?.name || "";
-    if (key === "totalAmount")
-      return `₹${(po.totalAmount ?? 0).toLocaleString("en-IN", {
+  const getFieldValue = (so, key) => {
+    if (key === "salesOrderNumber") return so.salesOrderNumber || "";
+    if (key === "customer") return dealCustomerName(so);
+    if (key === "amount")
+      return `₹${(so.amount ?? 0).toLocaleString("en-IN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`;
-    if (key === "status") return po.status || "";
-    if (key === "createdAt")
-      return po.createdAt ? new Date(po.createdAt).toLocaleDateString("en-IN") : "";
+    if (key === "status") return so.status || "";
+    if (key === "fulfillment") return so.convertedInvoice ? "Fulfilled" : "Pending";
+    if (key === "date")
+      return so.date ? new Date(so.date).toLocaleDateString("en-IN") : "";
+    if (key === "dueDate")
+      return so.dueDate ? new Date(so.dueDate).toLocaleDateString("en-IN") : "";
     return "";
   };
 
@@ -809,7 +828,7 @@ const PurchaseOrderPage = () => {
 
       const rect = th.getBoundingClientRect();
       const label = visibleColumns.find((vc) => vc.key === colId)?.label || colId;
-      const previewRows = purchaseOrders.map((po) => getFieldValue(po, colId) || "—");
+      const previewRows = salesOrders.map((so) => getFieldValue(so, colId) || "—");
       dragState.zGhost = getAncestorZoom(document.body);
       dragState.offsetX = startX - rect.left;
       dragState.offsetY = startY - rect.top;
@@ -883,8 +902,8 @@ const PurchaseOrderPage = () => {
 
   const columnHelper = createColumnHelper();
 
-  const renderRowActionsMenu = (po) => {
-    const isOpen = openRowActionsId === po._id;
+  const renderRowActionsMenu = (so) => {
+    const isOpen = openRowActionsId === so._id;
     const closeRowMenu = () => {
       setOpenRowActionsId(null);
       setRowActionsPos(null);
@@ -922,7 +941,7 @@ const PurchaseOrderPage = () => {
             setShareMenu(null);
             setShareMenuChannel(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
-            setOpenRowActionsId(po._id);
+            setOpenRowActionsId(so._id);
             setActiveRowMenuState("main");
           }}
           className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -933,7 +952,7 @@ const PurchaseOrderPage = () => {
           <>
             <div className="fixed inset-0 z-[100050]" onClick={closeRowMenu} />
             <div
-              key={po._id}
+              key={so._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
             >
@@ -952,8 +971,8 @@ const PurchaseOrderPage = () => {
                     return (
                       <button
                         key={optVal}
-                        onClick={(e) => { e.stopPropagation(); updateSingleStatus(po._id, optVal); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-gray-700'}`}
+                        onClick={(e) => { e.stopPropagation(); updateSingleStatus(so._id, optVal); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${so.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-gray-700'}`}
                       >
                         {optLabel}
                       </button>
@@ -963,21 +982,21 @@ const PurchaseOrderPage = () => {
               ) : (
                 <>
                   <button
-                    onClick={() => { closeRowMenu(); handleView(po); }}
+                    onClick={() => { closeRowMenu(); handleView(so); }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <Eye className="w-4 h-4 text-blue-600" />
                     View
                   </button>
                   <button
-                    onClick={() => { closeRowMenu(); handleEdit(po); }}
+                    onClick={() => { closeRowMenu(); handleEdit(so); }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <Edit2 className="w-4 h-4 text-blue-600" />
                     Edit
                   </button>
                   <button
-                    onClick={() => { closeRowMenu(); handleDownload(po); }}
+                    onClick={() => { closeRowMenu(); handleDownload(so); }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4 text-green-600" />
@@ -990,7 +1009,7 @@ const PurchaseOrderPage = () => {
                       const anchorRight = rowActionsPos.left + 224;
                       closeRowMenu();
                       setShareMenu({
-                        doc: po,
+                        doc: so,
                         x: Math.max(4, anchorRight - DROPDOWN_W),
                         y: rowActionsPos.top,
                       });
@@ -1003,13 +1022,15 @@ const PurchaseOrderPage = () => {
                   </button>
                   <div className="border-t border-gray-100 my-1" />
                   <button
-                    onClick={() => { closeRowMenu(); handleDelete(po._id); }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    onClick={() => { closeRowMenu(); handleDelete(so._id); }}
+                    disabled={!!so.convertedInvoice}
+                    title={so.convertedInvoice ? "Already converted — can't be deleted" : undefined}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:text-gray-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
                   </button>
-                  {po.status !== "Delivered" && (
+                  {so.status !== "Cancelled" && !so.convertedInvoice && (
                     <>
                       <div className="border-t border-gray-100 my-1" />
                       <button
@@ -1021,16 +1042,28 @@ const PurchaseOrderPage = () => {
                     </>
                   )}
                   <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={() => { closeRowMenu(); handleConvertToPurchase(po); }}
-                    disabled={convertingPOId === po._id || !!po.convertedPurchase}
-                    title={po.convertedPurchase ? `Already converted to ${po.convertedPurchase.purchaseNumber}` : undefined}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-                      !po.convertedPurchase && (po.status === "Approved" || po.status === "Delivered") ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
-                    } disabled:opacity-50`}
-                  >
-                    {convertingPOId === po._id ? "Converting…" : "Convert to Purchase"}
-                  </button>
+                  {so.convertedInvoice ? (
+                    <button
+                      onClick={() => {
+                        closeRowMenu();
+                        window.location.href = "/invoices?view=" + so.convertedInvoice._id;
+                      }}
+                      title={`Already converted to ${so.convertedInvoice.invoiceNumber}`}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      View {so.convertedInvoice.invoiceNumber}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { closeRowMenu(); handleConvertToInvoice(so); }}
+                      disabled={convertingSOId === so._id || so.status === "Cancelled"}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+                        so.status !== "Cancelled" ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
+                      } disabled:opacity-50`}
+                    >
+                      {convertingSOId === so._id ? "Converting…" : "Convert to Invoice"}
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1055,8 +1088,8 @@ const PurchaseOrderPage = () => {
             <input
               type="checkbox"
               checked={
-                selectedPurchaseOrders.length === purchaseOrders.length &&
-                purchaseOrders.length > 0
+                selectedSalesOrders.length === salesOrders.length &&
+                salesOrders.length > 0
               }
               onChange={handleSelectAll}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
@@ -1067,8 +1100,8 @@ const PurchaseOrderPage = () => {
           <div className="flex justify-center items-center gap-1 w-full">
             <input
               type="checkbox"
-              checked={selectedPOSet.has(row.original._id)}
-              onChange={() => handleSelectPurchaseOrder(row.original._id)}
+              checked={selectedSOSet.has(row.original._id)}
+              onChange={() => handleSelectSalesOrder(row.original._id)}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
             />
           </div>
@@ -1091,7 +1124,7 @@ const PurchaseOrderPage = () => {
       cols.push(
         columnHelper.accessor((row) => getFieldValue(row, vc.key), {
           id: vc.key,
-          size: vc.key === "poNumber" ? 160 : vc.key === "vendor" ? 220 : 150,
+          size: vc.key === "salesOrderNumber" ? 160 : vc.key === "customer" ? 220 : 150,
           header: () => {
             const isSortable = vc.sortable !== false;
             const pinSide = getColumnPinSide(vc.key);
@@ -1222,56 +1255,72 @@ const PurchaseOrderPage = () => {
             );
           },
           cell: ({ row }) => {
-            const po = row.original;
+            const so = row.original;
             let baseContent;
 
-            if (vc.key === "poNumber") {
+            if (vc.key === "salesOrderNumber") {
               baseContent = (
                 <div className="flex items-center min-w-0 flex-1 pr-4">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleView(po);
+                      handleView(so);
                     }}
                     className="text-[#0085FF] font-semibold hover:underline truncate transition-all duration-150 ease-out group-hover:text-[#004CFF] min-w-0 text-left"
-                    title={po.poNumber}
+                    title={so.salesOrderNumber}
                   >
-                    <HighlightText text={po.poNumber} query={searchTerm} />
+                    <HighlightText text={so.salesOrderNumber} query={searchTerm} />
                   </button>
                 </div>
               );
-            } else if (vc.key === "vendor") {
+            } else if (vc.key === "customer") {
+              const name = dealCustomerName(so);
               baseContent = (
-                <div className="truncate text-sm font-semibold text-gray-900" title={po.vendor?.name}>
-                  {po.vendor?.name ? <HighlightText text={po.vendor.name} query={searchTerm} /> : "—"}
+                <div className="truncate text-sm font-semibold text-gray-900" title={name}>
+                  {name !== "—" ? <HighlightText text={name} query={searchTerm} /> : "—"}
                 </div>
               );
-            } else if (vc.key === "totalAmount") {
+            } else if (vc.key === "amount") {
               baseContent = (
                 <div className="truncate text-sm font-medium text-gray-700">
-                  ₹{(po.totalAmount ?? 0).toLocaleString("en-IN", {
+                  ₹{(so.amount ?? 0).toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </div>
               );
             } else if (vc.key === "status") {
-              const statusObj = statusOptions.find(opt => opt.value === po.status) || statusOptions[0];
+              const statusObj = statusOptions.find(opt => opt.value === so.status) || statusOptions[0];
               baseContent = (
                 <div className="flex items-center justify-start -ml-3">
                   <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${statusObj.className || "bg-gray-50 text-gray-700 border-gray-200"}`}>
-                    {statusObj.label || po.status}
+                    {statusObj.label || so.status}
                   </span>
                 </div>
               );
-            } else if (vc.key === "createdAt") {
+            } else if (vc.key === "fulfillment") {
+              const fulfilled = !!so.convertedInvoice;
+              baseContent = (
+                <div className="flex items-center justify-start -ml-3">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${fulfilled ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                    {fulfilled ? `Fulfilled (${so.convertedInvoice.invoiceNumber})` : "Pending"}
+                  </span>
+                </div>
+              );
+            } else if (vc.key === "date") {
               baseContent = (
                 <div className="truncate text-sm text-gray-600">
-                  {po.createdAt ? new Date(po.createdAt).toLocaleDateString("en-IN") : "—"}
+                  {so.date ? new Date(so.date).toLocaleDateString("en-IN") : "—"}
+                </div>
+              );
+            } else if (vc.key === "dueDate") {
+              baseContent = (
+                <div className="truncate text-sm text-gray-600">
+                  {so.dueDate ? new Date(so.dueDate).toLocaleDateString("en-IN") : "—"}
                 </div>
               );
             } else if (baseContent === undefined) {
-              const val = po[vc.key];
+              const val = so[vc.key];
               const truncated = truncateText(String(val ?? ""), 30);
               baseContent = (
                 <div className="truncate text-sm text-gray-700 w-full" title={String(val ?? "")}>
@@ -1289,7 +1338,7 @@ const PurchaseOrderPage = () => {
               return (
                 <div className="flex items-center justify-between w-full gap-2">
                   <div className="min-w-0 flex-1">{withHoverActions}</div>
-                  {renderRowActionsMenu(po)}
+                  {renderRowActionsMenu(so)}
                 </div>
               );
             }
@@ -1303,9 +1352,9 @@ const PurchaseOrderPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     visibleColumns,
-    selectedPurchaseOrders,
-    selectedPOSet,
-    purchaseOrders,
+    selectedSalesOrders,
+    selectedSOSet,
+    salesOrders,
     sortConfig,
     pinnedColumns,
     openRowActionsId,
@@ -1316,18 +1365,11 @@ const PurchaseOrderPage = () => {
   ]);
 
   // Client-side advanced filter — applied on top of the server-fetched page.
-  const filteredPurchaseOrders = useMemo(() => {
-    if (!activeFilters || activeFilters.length === 0) return purchaseOrders;
-    return purchaseOrders.filter((row) =>
+  const filteredSalesOrders = useMemo(() => {
+    if (!activeFilters || activeFilters.length === 0) return salesOrders;
+    return salesOrders.filter((row) =>
       activeFilters.every((f) => {
-        let rawVal;
-        if (f.column === "vendor") {
-          rawVal = typeof row.vendor === "object"
-            ? (row.vendor?.name || "")
-            : (row.vendor || "");
-        } else {
-          rawVal = row[f.column];
-        }
+        const rawVal = row[f.column];
         const val = String(rawVal ?? "").toLowerCase().trim();
         const filterVal = String(f.value ?? "").toLowerCase().trim();
         switch (f.operator) {
@@ -1343,10 +1385,10 @@ const PurchaseOrderPage = () => {
         }
       }),
     );
-  }, [purchaseOrders, activeFilters]);
+  }, [salesOrders, activeFilters]);
 
   const table = useReactTable({
-    data: filteredPurchaseOrders,
+    data: filteredSalesOrders,
     columns: tableColumns,
     state: { columnSizing },
     onColumnSizingChange: setColumnSizing,
@@ -1507,8 +1549,8 @@ const PurchaseOrderPage = () => {
       <VideoTutorialModal
         isOpen={showVideoTutorial}
         onClose={() => setShowVideoTutorial(false)}
-        videoId={getVideoTutorial("purchase-orders")?.videoId}
-        title={getVideoTutorial("purchase-orders")?.title}
+        videoId={getVideoTutorial("sales-orders")?.videoId}
+        title={getVideoTutorial("sales-orders")?.title}
       />
 
       <ColumnSettingsPanel
@@ -1516,26 +1558,17 @@ const PurchaseOrderPage = () => {
         onClose={() => setShowColumnSettings(false)}
         columns={columns}
         onSave={saveColumns}
-        moduleName="Purchase Orders"
-      />
-
-      <ImportPurchaseOrders
-        isOpen={showImport}
-        onClose={() => setShowImport(false)}
-        onImportSuccess={() => {
-          fetchPurchaseOrders();
-          toast.success("Purchase orders imported successfully");
-        }}
+        moduleName="Sales Orders"
       />
 
       {/* Form & Preview */}
       {showForm && (
-        <PurchaseOrderForm
-          editingPO={editingPO}
-          vendors={vendors}
+        <SalesOrderForm
+          editingSO={editingSO}
+          deals={deals}
           onRequestClose={() => {
             setShowForm(false);
-            setEditingPO(null);
+            setEditingSO(null);
           }}
           onSuccess={handleSuccess}
           onError={(msg) => toast.error(msg)}
@@ -1543,17 +1576,17 @@ const PurchaseOrderPage = () => {
       )}
 
       {showPreview && (
-        <PurchaseOrderPreview
-          purchaseOrder={selectedPO}
+        <SalesOrderPreview
+          salesOrder={selectedSO}
           isOpen={showPreview}
           onClose={() => setShowPreview(false)}
           onEdit={() => {
             setShowPreview(false);
-            handleEdit(selectedPO);
+            handleEdit(selectedSO);
           }}
           onDelete={() => {
             setShowPreview(false);
-            handleDelete(selectedPO._id);
+            handleDelete(selectedSO._id);
           }}
         />
       )}
@@ -1567,16 +1600,16 @@ const PurchaseOrderPage = () => {
                 <Trash2 className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
-                Delete Purchase Order
+                Delete Sales Order
               </h3>
               <p className="text-sm text-gray-500 font-inter mb-6">
-                Are you sure you want to delete this purchase order? This action cannot be undone.
+                Are you sure you want to delete this sales order? This action cannot be undone.
               </p>
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => {
                     setShowDeleteModal(false);
-                    setPoToDelete(null);
+                    setSoToDelete(null);
                   }}
                   className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
                 >
@@ -1611,7 +1644,7 @@ const PurchaseOrderPage = () => {
             <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
               <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
                 <button
-                  onClick={() => setShowExportModal(true)}
+                  onClick={() => handleExport("xlsx", salesOrders.filter((so) => selectedSalesOrders.includes(so._id)))}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <Download className="w-4 h-4 text-green-600" />
@@ -1625,7 +1658,7 @@ const PurchaseOrderPage = () => {
                   Bulk Update
                 </button>
                 <button
-                  onClick={() => handleBulkDelete(selectedPurchaseOrders)}
+                  onClick={() => handleBulkDelete(selectedSalesOrders)}
                   disabled={bulkLoading}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                 >
@@ -1643,7 +1676,7 @@ const PurchaseOrderPage = () => {
               <div className="flex items-center gap-3 flex-shrink-0">
                 <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
                 <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
-                  {selectedPurchaseOrders.length} purchase order{selectedPurchaseOrders.length !== 1 ? "s" : ""} selected
+                  {selectedSalesOrders.length} sales order{selectedSalesOrders.length !== 1 ? "s" : ""} selected
                 </span>
                 <button
                   onClick={handleSelectAllAcrossPages}
@@ -1674,11 +1707,11 @@ const PurchaseOrderPage = () => {
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
-                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Purchase Orders</h1>
+                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Sales Orders</h1>
                       
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
-                      Manage your purchase orders
+                      Manage your sales orders
                     </p>
                   </>
                 )}
@@ -1713,7 +1746,7 @@ const PurchaseOrderPage = () => {
                           if (!searchTerm) setIsSearchExpanded(false);
                         }}
                         className={`w-full h-full pl-9 pr-9 bg-transparent text-sm focus:outline-none transition-opacity duration-200 font-inter cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
-                        placeholder="Search by PO number or vendor..."
+                        placeholder="Search by SO number or customer..."
                       />
                       {isSearchExpanded && searchTerm && (
                         <button
@@ -1735,7 +1768,7 @@ const PurchaseOrderPage = () => {
                 {/* Advanced filter button — opens AdvancedFilterPanel slide-in panel */}
                 <button
                   onClick={() => setShowAdvancedFilters(true)}
-                  className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                  className={`flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                     activeFilters.length > 0
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
@@ -1762,31 +1795,6 @@ const PurchaseOrderPage = () => {
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
-                      <button
-                        onClick={() => {
-                          setShowAdvancedFilters(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        <FilterIcon size={14} className="text-gray-400" />
-                        Filters
-                        {activeFilters.length > 0 && (
-                          <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                            {activeFilters.length}
-                          </span>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowImport(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        <Upload className="w-4 h-4 text-gray-400" />
-                        Import
-                      </button>
                       <div className="relative" ref={exportButtonRef}>
                         <button
                           onClick={() => setShowExportMenu((prev) => !prev)}
@@ -1837,14 +1845,14 @@ const PurchaseOrderPage = () => {
 
                 <button
                   onClick={() => {
-                    setEditingPO(null);
+                    setEditingSO(null);
                     setShowForm(true);
                   }}
                   className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
-                  title="New Purchase Order"
+                  title="New Sales Order"
                 >
                   <Plus className="w-4 h-4 flex-shrink-0" />
-                  <span className="hidden lg:inline">New Purchase Order</span>
+                  <span className="hidden lg:inline">New Sales Order</span>
                 </button>
               </div>
                 </>
@@ -1863,7 +1871,7 @@ const PurchaseOrderPage = () => {
             bottom: !showLoadingSkeleton ? 64 : 0,
           }}
         >
-          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || purchaseOrders.length > 0 ? "border-b" : ""}`}>
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || salesOrders.length > 0 ? "border-b" : ""}`}>
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -1970,18 +1978,18 @@ const PurchaseOrderPage = () => {
                           columns={table.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
                           hasCheckbox
                         />
-                      ) : purchaseOrders.length === 0 ? (
+                      ) : salesOrders.length === 0 ? (
                         <tr>
                           <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500 font-inter">
                             <ClipboardList className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                            <p className="font-medium">No purchase orders found</p>
+                            <p className="font-medium">No sales orders found</p>
                           </td>
                         </tr>
                       ) : (
                         table.getRowModel().rows.map((row) => (
                           <tr
                             key={row.id}
-                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedPOSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            className={`bg-white hover:bg-blue-50 transition-colors ${selectedSOSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;
@@ -2070,35 +2078,26 @@ const PurchaseOrderPage = () => {
       <BulkActions
         isOpen={showBulkActions}
         onClose={() => setShowBulkActions(false)}
-        selectedItems={purchaseOrders.filter((po) =>
-          selectedPurchaseOrders.includes(po._id),
+        selectedItems={salesOrders.filter((so) =>
+          selectedSalesOrders.includes(so._id),
         )}
         onBulkUpdate={handleBulkUpdate}
         onBulkDelete={handleBulkDelete}
-        fieldConfig={poFieldConfig}
-        module="purchase orders"
+        fieldConfig={soFieldConfig}
+        module="sales orders"
         loading={bulkLoading}
-      />
-
-      <ExportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        columns={exportColumns}
-        selectedIds={selectedPurchaseOrders}
-        exportUrl="/purchase-orders/export-selected"
-        fileName="Exported_PurchaseOrders.csv"
       />
 
       <AdvancedFilterPanel
         isOpen={showAdvancedFilters}
         onClose={() => setShowAdvancedFilters(false)}
-        columns={poFilterColumns}
+        columns={soFilterColumns}
         filters={activeFilters}
         setFilters={setActiveFilters}
         onApply={(newFilters) => setActiveFilters(newFilters)}
-        title="Filter Purchase Orders"
-        subtitle="Find specific purchase orders quickly"
-        emptyStateText="Add a rule to narrow down your purchase order list."
+        title="Filter Sales Orders"
+        subtitle="Find specific sales orders quickly"
+        emptyStateText="Add a rule to narrow down your sales order list."
       />
 
       {shareMenu && createPortal(
@@ -2109,28 +2108,28 @@ const PurchaseOrderPage = () => {
             style={{ top: shareMenu.y, left: shareMenu.x }}
           >
             {(() => {
-              const link = `${window.location.origin}/view/purchaseOrder/${shareMenu.doc._id}`;
-              const num = shareMenu.doc.poNumber;
+              const link = `${window.location.origin}/view/salesOrder/${shareMenu.doc._id}`;
+              const num = shareMenu.doc.salesOrderNumber;
               const d = shareMenu.doc;
-              const customerName = d.vendor?.name || "Vendor";
-              const amt = d.grandTotal != null ? `₹${Number(d.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+              const customerName = dealCustomerName(d);
+              const amt = d.amount != null ? `₹${Number(d.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
               const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
               const fillTpl = (tpl) => tpl
                 .replace(/{customerName}/g, customerName)
-                .replace(/{docType}/g, "Purchase Order")
+                .replace(/{docType}/g, "Sales Order")
                 .replace(/{number}/g, num || "—")
                 .replace(/{amount}/g, amt)
                 .replace(/{link}/g, link)
                 .replace(/{company}/g, shareCompanyName || "");
 
-              const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your Purchase Order is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
+              const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your Sales Order is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
               const buildSmsMsg = (tpl) => tpl?.body
                 ? fillTpl(tpl.body)
-                : `Your Purchase Order${num ? ` #${num}` : ""} from ${shareCompanyName || "us"} is ready. View & Download: ${link}`;
-              const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `Purchase Order ${num || ""}`;
+                : `Your Sales Order${num ? ` #${num}` : ""} from ${shareCompanyName || "us"} is ready. View & Download: ${link}`;
+              const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `Sales Order ${num || ""}`;
               const buildEmailBody = (tpl) => tpl?.body
                 ? fillTpl(tpl.body)
-                : `Hi ${customerName},\n\nPlease find attached your Purchase Order${num ? ` #${num}` : ""}.\n\nYou can also view and download it online:\n${link}\n\nThank you for your business!`;
+                : `Hi ${customerName},\n\nPlease find attached your Sales Order${num ? ` #${num}` : ""}.\n\nYou can also view and download it online:\n${link}\n\nThank you for your business!`;
               const textToEmailHtml = (text) => (text || "").replace(/\n/g, "<br>");
 
               const channels = {
@@ -2141,7 +2140,7 @@ const PurchaseOrderPage = () => {
                 email: {
                   list: emailTemplatesList,
                   send: (tpl) => {
-                    setEmailComposeTo(d.vendor?.email || "");
+                    setEmailComposeTo(d.deal?.contact?.email || d.deal?.company?.email || d.deal?.email || "");
                     setEmailComposeSubject(buildEmailSubject(tpl));
                     setEmailComposeBody(textToEmailHtml(buildEmailBody(tpl)));
                     setEmailCompose({ doc: d });
@@ -2151,7 +2150,7 @@ const PurchaseOrderPage = () => {
                 sms: {
                   list: smsTemplatesList,
                   send: (tpl) => {
-                    setSmsComposeTo(d.vendor?.phone || "");
+                    setSmsComposeTo(d.deal?.contact?.phone || d.deal?.company?.phone || d.deal?.phone || "");
                     setSmsComposeBody(buildSmsMsg(tpl));
                     setSmsCompose({ doc: d });
                     closeMenu();
@@ -2212,12 +2211,12 @@ const PurchaseOrderPage = () => {
       )}
       {emailCompose && (() => {
         const textToEmailHtml = (text) => (text || "").replace(/\n/g, "<br>");
-        const dname = "Purchase Order";
-        const dnum = emailCompose.doc.poNumber;
-        const link = `${window.location.origin}/view/purchaseOrder/${emailCompose.doc._id}`;
-        const cname = emailCompose.doc.vendor?.name || "Vendor";
-        const eAmt = emailCompose.doc.grandTotal != null
-          ? `₹${Number(emailCompose.doc.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+        const dname = "Sales Order";
+        const dnum = emailCompose.doc.salesOrderNumber;
+        const link = `${window.location.origin}/view/salesOrder/${emailCompose.doc._id}`;
+        const cname = dealCustomerName(emailCompose.doc);
+        const eAmt = emailCompose.doc.amount != null
+          ? `₹${Number(emailCompose.doc.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
           : "";
         const fillEmailTpl = (tpl) => tpl
           .replace(/{customerName}/g, cname)
@@ -2254,7 +2253,7 @@ const PurchaseOrderPage = () => {
           if (!emailComposeTo || emailComposeSending) return;
           setEmailComposeSending(true);
           try {
-            await API.post(`/public/purchaseOrder/${emailCompose.doc._id}/email`, {
+            await API.post(`/public/salesOrder/${emailCompose.doc._id}/email`, {
               email: emailComposeTo,
               cc: emailComposeCc,
               bcc: emailComposeBcc,
@@ -2453,7 +2452,7 @@ const PurchaseOrderPage = () => {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-gray-900">Send SMS</h2>
-                  <p className="text-xs text-gray-400">Purchase Order #{smsCompose.doc.poNumber}</p>
+                  <p className="text-xs text-gray-400">Sales Order #{smsCompose.doc.salesOrderNumber}</p>
                 </div>
               </div>
               <button onClick={() => setSmsCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -2479,7 +2478,7 @@ const PurchaseOrderPage = () => {
                   if (!smsComposeTo || smsComposeSending) return;
                   setSmsComposeSending(true);
                   try {
-                    await API.post(`/public/purchaseOrder/${smsCompose.doc._id}/sms`, {
+                    await API.post(`/public/salesOrder/${smsCompose.doc._id}/sms`, {
                       phone: smsComposeTo,
                       message: smsComposeBody,
                     });
@@ -2509,4 +2508,4 @@ const PurchaseOrderPage = () => {
   );
 };
 
-export default PurchaseOrderPage;
+export default SalesOrder;

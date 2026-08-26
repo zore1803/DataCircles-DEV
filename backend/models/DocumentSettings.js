@@ -25,6 +25,12 @@ const defaultDocumentTypeSettings = {
     prefixes: ['DC'],
     suffixes: [],
   },
+  salesOrder: {
+    prefix: 'SO-',
+    suffix: '',
+    prefixes: ['SO-'],
+    suffixes: [],
+  },
 };
 
 const documentSettingsSchema = new mongoose.Schema(
@@ -115,6 +121,7 @@ const documentSettingsSchema = new mongoose.Schema(
         deliveryChallan: ['documentType', 'documentNumber', 'companyName'],
         purchase:        ['documentType', 'documentNumber', 'companyName'],
         purchaseOrder:   ['documentType', 'documentNumber', 'companyName'],
+        salesOrder:      ['documentType', 'documentNumber', 'companyName'],
       },
     },
     whatsappTemplate: {

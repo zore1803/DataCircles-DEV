@@ -110,7 +110,7 @@ class ExcelExporter {
   static export(deals) {
     const data = deals?.map((deal) => ({
       Title: deal.title || "",
-      Amount: deal.amount || "",
+      Amount: deal.amount ? `₹${formatNumberToIndian(parseFloat(String(deal.amount).replace(/,/g, '')) || 0)}` : "",
       Status: deal.status || "",
       Company: deal.company?.name || "N/A",
       Contact: deal.contact?.name || "N/A",
@@ -165,7 +165,7 @@ class PDFExporter {
       const dealData = [
         index + 1,
         deal.title || "—",
-        `Rs. ${formatNumberToIndian(parseFloat(String(deal.amount || 0).replace(/,/g, '')) || 0)}`,
+        `₹${formatNumberToIndian(parseFloat(String(deal.amount || 0).replace(/,/g, '')) || 0)}`,
         deal.status || "—",
         deal.company?.name || "—",
         deal.contact?.name || "—",

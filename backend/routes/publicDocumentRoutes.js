@@ -10,6 +10,7 @@ const DeliveryChallan = require('../models/deliveryChallan');
 const Purchase = require('../models/Purchase');
 const PurchaseOrder = require('../models/PurchaseOrder');
 const PurchaseReturn = require('../models/PurchaseReturn');
+const SalesOrder = require('../models/SalesOrder');
 const Branding = require('../models/Branding');
 const getDefaultBankDetails = require('../utils/getDefaultBankDetails');
 const htmlDocumentPdf = require('../utils/htmlDocumentPdf');
@@ -26,6 +27,7 @@ const MODELS = {
   purchase: Purchase,
   purchaseOrder: PurchaseOrder,
   purchaseReturn: PurchaseReturn,
+  salesOrder: SalesOrder,
 };
 
 // Purchase/PurchaseOrder/PurchaseReturn are vendor-facing (not deal-based)
@@ -42,6 +44,7 @@ const NUMBER_KEYS = {
   purchase: 'purchaseNumber',
   purchaseOrder: 'poNumber',
   purchaseReturn: 'returnNumber',
+  salesOrder: 'salesOrderNumber',
 };
 
 const DOC_NAMES = {
@@ -52,6 +55,7 @@ const DOC_NAMES = {
   purchase: 'Purchase',
   purchaseOrder: 'Purchase Order',
   purchaseReturn: 'Purchase Return',
+  salesOrder: 'Sales Order',
 };
 
 const DOC_TYPES = {
@@ -62,6 +66,7 @@ const DOC_TYPES = {
   purchase: 'purchase',
   purchaseOrder: 'purchaseOrder',
   purchaseReturn: 'purchaseReturn',
+  salesOrder: 'salesOrder',
 };
 
 function resolveAmount(doc, type) {

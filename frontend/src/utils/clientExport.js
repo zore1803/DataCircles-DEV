@@ -1,5 +1,11 @@
 import { autoTable } from "jspdf-autotable";
 
+export function formatINR(value) {
+  const n = Number(value);
+  if (value == null || isNaN(n)) return "—";
+  return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 // Client-side Excel/PDF export — same approach as Deals.jsx's ExcelExporter/
 // PDFExporter (window.XLSX / window.jspdf loaded from CDN on first use, no
 // backend round trip), generalized so Purchase, Purchase Order and
