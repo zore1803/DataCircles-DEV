@@ -6433,7 +6433,7 @@ const Insights = () => {
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl p-6 flex flex-col justify-between" style={{ background: "#0085FF", height: 420 }}>
+            <div className="mt-4 rounded-2xl p-6 flex flex-col justify-between max-w-[220px]" style={{ background: "#0085FF", height: 420 }}>
               <span className="text-sm font-medium text-white/80">Total Invoiced</span>
               <div>
                 <div className="text-4xl font-semibold text-white">
