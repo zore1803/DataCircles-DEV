@@ -3360,6 +3360,27 @@ const Insights = () => {
       {}
     );
 
+    // Full dynamic list of every real deal status in use (not just the
+    // fixed Open/Won/Lost trio) — orgs can add custom Kanban stages (e.g.
+    // "Postponed"), and the funnel/table/charts below all need to reflect
+    // whatever stages actually exist instead of silently dropping them.
+    // Non-terminal stages sort by count desc; Won/Lost (if present) always
+    // trail last since they're outcomes, not pipeline stages.
+    const TERMINAL_STATUSES = ["Won", "Lost"];
+    const orderedStatuses = [
+      ...Object.keys(statusDistribution)
+        .filter((s) => !TERMINAL_STATUSES.includes(s))
+        .sort((a, b) => statusDistribution[b].count - statusDistribution[a].count),
+      ...TERMINAL_STATUSES.filter((s) => statusDistribution[s]),
+    ];
+    const STATUS_COLOR_MAP = { Won: "#00C950", Lost: "#F60000", Open: "#0085FF", Negotiation: "#f59e0b" };
+    const FALLBACK_STATUS_COLORS = ["#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"];
+    const statusColors = {};
+    let fallbackColorIdx = 0;
+    orderedStatuses.forEach((s) => {
+      statusColors[s] = STATUS_COLOR_MAP[s] || FALLBACK_STATUS_COLORS[fallbackColorIdx++ % FALLBACK_STATUS_COLORS.length];
+    });
+
     // Won, Lost, Open deals
     const wonDeals = filteredData.filteredDeals.filter(
       (d) => d.status === "Won"
@@ -3467,11 +3488,15 @@ const Insights = () => {
           wonValue: 0,
           lostValue: 0,
           openValue: 0,
+          statusCounts: {},
         };
       }
 
       acc[userId].totalDeals += 1;
       acc[userId].totalValue += deal.amount || 0;
+
+      const status = deal.status || "Unknown";
+      acc[userId].statusCounts[status] = (acc[userId].statusCounts[status] || 0) + 1;
 
       if (deal.status === "Won") {
         acc[userId].wonDeals += 1;
@@ -3530,56 +3555,37 @@ const Insights = () => {
         name: status,
         value: data.count,
         amount: data.amount,
-        color:
-          status === "Won"
-            ? "#10b981"
-            : status === "Lost"
-            ? "#ef4444"
-            : status === "Negotiation"
-            ? "#f59e0b"
-            : status === "Open"
-            ? "#3b82f6"
-            : "#6b7280",
+        color: statusColors[status] || "#6b7280",
       }))
       .filter((item) => item.value > 0);
 
-    // Chart data for user performance - filtered
+    // Chart data for user performance - filtered. Dynamic per-status
+    // columns (statusCounts) instead of a fixed Won/Lost/Open trio, so
+    // custom Kanban stages show up here too.
+    const buildUserPerformanceRow = (user) => {
+      const row = { name: user.name.split(" ")[0], Total: user.totalDeals };
+      orderedStatuses.forEach((s) => {
+        row[s] = user.statusCounts[s] || 0;
+      });
+      return row;
+    };
     const userPerformanceChartData = (() => {
       if (selectedUser === "all") {
         // Show top 10 users when "All Users" is selected
-        return userStats.slice(0, 10).map((user) => ({
-          name: user.name.split(" ")[0],
-          Total: user.totalDeals,
-          Won: user.wonDeals,
-          Lost: user.lostDeals,
-          Open: user.openDeals,
-        }));
-      } else {
-        // Show only selected user
-        const user = userStats.find((u) => u.id === selectedUser);
-        if (!user) return [];
-        return [
-          {
-            name: user.name.split(" ")[0],
-            Total: user.totalDeals,
-            Won: user.wonDeals,
-            Lost: user.lostDeals,
-            Open: user.openDeals,
-          },
-        ];
+        return userStats.slice(0, 10).map(buildUserPerformanceRow);
       }
+      const user = userStats.find((u) => u.id === selectedUser);
+      return user ? [buildUserPerformanceRow(user)] : [];
     })();
 
-    // Deals Funnel data — this system only has 3 fixed deal statuses
-    // (Open/Won/Lost, not a Lead/Qualified/Proposal taxonomy), so the funnel
-    // always shows exactly those 3, in that order, each real value/count.
+    // Deals Funnel data — reflects every real status in use (custom Kanban
+    // stages included), not a fixed Open/Won/Lost trio.
     const funnelStages = (() => {
-      const baseline = openValue || 1;
-      return [
-        { name: "Open", value: openValue, count: openDeals.length },
-        { name: "Won", value: wonValue, count: wonDeals.length },
-        { name: "Lost", value: lostValue, count: lostDeals.length },
-      ].map((s) => ({ ...s, pct: Math.round((s.value / baseline) * 100) }));
+      const baseline = statusDistribution[orderedStatuses[0]]?.amount || 1;
+      return orderedStatuses.map((name) => {
+        const s = statusDistribution[name] || { count: 0, amount: 0 };
+        return { name, value: s.amount, count: s.count, pct: Math.round((s.amount / baseline) * 100) };
+      });
     })();
 
     // Deals by Stage table — same real stages as the funnel above (not a
@@ -3640,13 +3646,15 @@ const Insights = () => {
         const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
         return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) };
       });
-      const buckets = Object.fromEntries(months.map((m) => [m.key, { Open: 0, Won: 0, Lost: 0 }]));
+      const buckets = Object.fromEntries(
+        months.map((m) => [m.key, Object.fromEntries(orderedStatuses.map((s) => [s, 0]))])
+      );
       filteredData.filteredDeals.forEach((d) => {
         const created = new Date(d.createdAt);
         const key = `${created.getFullYear()}-${created.getMonth()}`;
         if (!buckets[key]) return;
-        const bucket = d.status === "Won" || d.status === "Lost" ? d.status : "Open";
-        buckets[key][bucket] += d.amount || 0;
+        const status = d.status && orderedStatuses.includes(d.status) ? d.status : orderedStatuses[0];
+        buckets[key][status] += d.amount || 0;
       });
       // A linear axis makes small months (₹7K-95K) visually indistinguishable
       // from 0 next to the ₹22L peak — a log scale keeps them readable
@@ -3656,13 +3664,11 @@ const Insights = () => {
       const LOG_FLOOR = 5000;
       return months.map((m) => {
         const raw = buckets[m.key];
-        return {
-          name: m.label,
-          ...raw,
-          OpenPlot: Math.max(raw.Open, LOG_FLOOR),
-          WonPlot: Math.max(raw.Won, LOG_FLOOR),
-          LostPlot: Math.max(raw.Lost, LOG_FLOOR),
-        };
+        const row = { name: m.label, ...raw };
+        orderedStatuses.forEach((s) => {
+          row[`${s}Plot`] = Math.max(raw[s], LOG_FLOOR);
+        });
+        return row;
       });
     })();
     // Compact, single-line ticks (no space before the unit, so recharts
@@ -3682,7 +3688,7 @@ const Insights = () => {
     // gridlines end up visibly uneven. Generating ticks with one constant
     // ratio instead guarantees every gap is pixel-identical.
     const revenueYAxis = (() => {
-      const allValues = revenueTrendData.flatMap((d) => [d.OpenPlot, d.WonPlot, d.LostPlot]);
+      const allValues = revenueTrendData.flatMap((d) => orderedStatuses.map((s) => d[`${s}Plot`]));
       const minV = Math.min(...allValues);
       const maxV = Math.max(...allValues);
       const TICK_COUNT = 7;
@@ -3761,14 +3767,10 @@ const Insights = () => {
           <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-sm font-semibold text-[#0E121B] opacity-70">Revenue Trend</h3>
-              <div className="flex items-center gap-4">
-                {[
-                  { key: "Lost", color: "#F60000" },
-                  { key: "Open", color: "#0085FF" },
-                  { key: "Won", color: "#00C950" },
-                ].map(({ key, color }) => (
+              <div className="flex items-center gap-4 flex-wrap">
+                {orderedStatuses.map((key) => (
                   <div key={key} className="flex items-center gap-1.5">
-                    <span className="inline-block w-5 h-0.5 rounded-full" style={{ background: color }} />
+                    <span className="inline-block w-5 h-0.5 rounded-full" style={{ background: statusColors[key] }} />
                     <span className="text-xs" style={{ color: "rgba(31,31,33,0.56)" }}>
                       {key} Deal Value
                     </span>
@@ -3801,16 +3803,11 @@ const Insights = () => {
                   content={({ active, label, payload }) => {
                     if (!active || !payload?.length) return null;
                     const raw = payload[0]?.payload || {};
-                    const rows = [
-                      { key: "Lost", color: "#F60000" },
-                      { key: "Open", color: "#0085FF" },
-                      { key: "Won", color: "#00C950" },
-                    ];
                     return (
                       <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3">
                         <p className="text-sm font-semibold text-[#0E121B] mb-1">{label}</p>
-                        {rows.map(({ key, color }) => (
-                          <p key={key} className="text-sm" style={{ color }}>
+                        {orderedStatuses.map((key) => (
+                          <p key={key} className="text-sm" style={{ color: statusColors[key] }}>
                             {key} : ₹{formatNumberToIndian(raw[key] || 0)}
                           </p>
                         ))}
@@ -3818,9 +3815,17 @@ const Insights = () => {
                     );
                   }}
                 />
-                <Line type="monotone" dataKey="OpenPlot" name="Open" stroke="#0085FF" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="WonPlot" name="Won" stroke="#00C950" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="LostPlot" name="Lost" stroke="#F60000" strokeWidth={2} dot={false} />
+                {orderedStatuses.map((key) => (
+                  <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={`${key}Plot`}
+                    name={key}
+                    stroke={statusColors[key]}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -3969,9 +3974,15 @@ const Insights = () => {
                   <YAxis tick={{ fontSize: 10, fill: "#1F2937" }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Won" stackId="a" fill="#00C950" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="Lost" stackId="a" fill="#F60000" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="Open" stackId="a" fill="#0085FF" radius={[4, 4, 0, 0]} />
+                  {orderedStatuses.map((s, i) => (
+                    <Bar
+                      key={s}
+                      dataKey={s}
+                      stackId="a"
+                      fill={statusColors[s]}
+                      radius={i === orderedStatuses.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    />
+                  ))}
                 </BarChart>
               </ResponsiveContainer>
             )}
