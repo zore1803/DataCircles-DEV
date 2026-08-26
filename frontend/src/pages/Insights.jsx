@@ -3047,7 +3047,7 @@ const Insights = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 items-stretch">
         {/* Deal Velocity by Company */}
-        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm flex flex-col">
           <h3 className="text-sm font-semibold text-[#0E121B]">Deal Velocity by Company</h3>
           <p className="text-xs text-[#525866] mt-1">Analyse average deal size vs sales cycle</p>
           <p className="text-[10px] text-[#525866] text-center mt-1">
@@ -3056,7 +3056,7 @@ const Insights = () => {
           {velocityPoints.length === 0 ? (
             <p className="text-sm text-gray-400 py-16 text-center">No won deals with companies yet</p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height="100%" className="flex-1 min-h-[260px]">
               <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
                 <XAxis
