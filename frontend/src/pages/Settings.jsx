@@ -430,6 +430,61 @@ const Settings = () => {
     );
   }
 
+  if (activeSection && activeSection.id === "google-integration") {
+    // Matches the Companies page's fixed toolbar-strip pattern instead of the
+    // generic gray-gradient/breadcrumb-card layout other sections use — flat
+    // white background, no outer gutters, title strip aligned with the
+    // sidebar switcher.
+    return (
+      <div
+        className="min-h-screen bg-white"
+        style={{
+          marginTop: -24,
+          marginLeft: -32,
+          marginRight: -32,
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            zIndex: 40,
+            minHeight: "64px",
+            maxHeight: "64px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div className="flex items-center gap-4 w-full">
+            <button
+              onClick={goBack}
+              className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium flex-shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
+            <div className={`p-2 rounded-lg ${activeSection.bgColor} ${activeSection.color} flex-shrink-0`}>
+              {activeSection.icon}
+            </div>
+            <div className="min-w-0">
+              <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">
+                {activeSection.label}
+              </h1>
+              <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 truncate">
+                {activeSection.description}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-[118px] lg:pt-[128px] px-4 lg:px-6 pb-8">
+          {activeSection.component}
+        </div>
+      </div>
+    );
+  }
+
   if (activeSection) {
     return (
       <div
