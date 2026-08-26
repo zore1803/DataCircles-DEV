@@ -3730,9 +3730,6 @@ const Insights = () => {
           <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-[#0E121B]">Deals Funnel</h3>
-              <span className="text-xs text-[#525866]">
-                Win {winRate.toFixed(1)}% · Loss {lossRate.toFixed(1)}%
-              </span>
             </div>
             <div className="flex-1 flex items-center mt-2">
               <DealsFunnelChart stages={funnelStages} />
