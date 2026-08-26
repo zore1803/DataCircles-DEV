@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Database, TrendingUp, Loader2 } from "lucide-react";
+import { Database, TrendingUp, Loader2, Wallet as WalletIcon, Plus } from "lucide-react";
 import API from "../../services/api";
+import { walletAPI } from "../../services/walletApi";
 
 // One usage bar shared by seats/storage/email-templates/every capped
 // module — same visual treatment regardless of what's being measured.
@@ -40,12 +41,20 @@ function DataAdministration() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(true);
 
   useEffect(() => {
     API.get("/usage-overview")
       .then((res) => setOverview(res.data))
       .catch(() => setOverview(null))
       .finally(() => setLoading(false));
+
+    walletAPI
+      .getWallet()
+      .then((res) => setWallet(res.data))
+      .catch(() => setWallet(null))
+      .finally(() => setWalletLoading(false));
   }, []);
 
   const anyNearOrOverLimit =
@@ -57,16 +66,39 @@ function DataAdministration() {
   return (
     <div className="space-y-6">
       <div className="bg-white border-2 border-gray-200 shadow-xl rounded-2xl overflow-hidden">
-        <div className="p-8 border-b-2 border-gray-100 flex items-center gap-3">
-          <div className="bg-blue-50 p-2.5 rounded-xl">
-            <Database className="w-6 h-6 text-blue-600" />
+        <div className="p-8 border-b-2 border-gray-100 flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-50 p-2.5 rounded-xl">
+              <Database className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Data Administration</h2>
+              <p className="text-sm text-gray-600">
+                {overview ? `You're on the ${overview.planName} plan. ` : ""}
+                See what your plan includes and how much of it you've used.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Data Administration</h2>
-            <p className="text-sm text-gray-600">
-              {overview ? `You're on the ${overview.planName} plan. ` : ""}
-              See what your plan includes and how much of it you've used.
-            </p>
+
+          {/* Wallet balance — right here so buying an add-on's cost is
+              visible against what's actually available to spend. */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 flex items-center gap-4 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <WalletIcon className="w-4 h-4 text-emerald-700" />
+              <div>
+                <p className="text-[11px] font-medium text-emerald-700 leading-tight">Wallet Balance</p>
+                <p className="text-lg font-bold text-emerald-900 leading-tight">
+                  {walletLoading ? "…" : wallet ? `₹${wallet.balance.toFixed(2)}` : "—"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate("/settings/wallet")}
+              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Money
+            </button>
           </div>
         </div>
 
