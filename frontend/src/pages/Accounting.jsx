@@ -2522,8 +2522,15 @@ const Accounting = () => {
           {/* Mobile-only page title — fills the same left slot the tab pill
               occupies on desktop, so justify-between actually has two
               children to space apart (with only the icon group visible, a
-              single flex child sits at flex-start instead of the far right). */}
-          <h1 className="lg:hidden text-base font-bold text-[#0E121B] flex-shrink-0">Accountings</h1>
+              single flex child sits at flex-start instead of the far right).
+              Collapses away when the mobile search is expanded, same as
+              Companies.jsx's title, so the search field gets the freed
+              width instead of staying pinned to a small fixed size. */}
+          <h1
+            className={`lg:hidden text-base font-bold text-[#0E121B] overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-auto opacity-100 flex-shrink-0"}`}
+          >
+            Accountings
+          </h1>
 
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
@@ -2557,11 +2564,14 @@ const Accounting = () => {
               <Skeleton width={140} height={40} shape="circle" className="ml-1" />
             </div>
           ) : (
-            <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
+            <div className="flex flex-row items-center gap-2 justify-end min-w-0 flex-1 lg:flex-initial lg:flex-shrink-0">
               {/* Search field — expands in place from the search icon,
-                  matching the Companies strip behaviour. */}
+                  matching the Companies strip behaviour: on mobile it grows
+                  to fill the space the title vacates (this wrapper becomes
+                  flex-1 above); on desktop it's the same fixed 380px as
+                  before. */}
               <div
-                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
               >
                 <SearchIcon
                   className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
