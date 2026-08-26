@@ -395,6 +395,42 @@ exports.deleteFolder = async (req, res) => {
   }
 };
 
+// Org-wide storage consumption — sums every user's StorageUsage record
+// under the organization, for the Data Administration settings card.
+exports.getOrgStorageInfo = async (req, res) => {
+  try {
+    const [agg] = await StorageUsage.aggregate([
+      { $match: { organization: req.user.organization } },
+      {
+        $group: {
+          _id: null,
+          currentUsage: { $sum: "$currentUsage" },
+          storageLimit: { $sum: "$storageLimit" },
+        },
+      },
+    ]);
+
+    const currentUsage = agg?.currentUsage || 0;
+    const storageLimit = agg?.storageLimit || 0;
+    const remainingSpace = Math.max(0, storageLimit - currentUsage);
+    const usagePercentage = storageLimit > 0 ? ((currentUsage / storageLimit) * 100).toFixed(2) : "0.00";
+    const toGB = (bytes) => (bytes / (1024 * 1024 * 1024)).toFixed(2);
+
+    res.json({
+      currentUsage,
+      storageLimit,
+      remainingSpace,
+      usagePercentage,
+      currentUsageFormatted: `${toGB(currentUsage)} GB`,
+      storageLimitFormatted: `${toGB(storageLimit)} GB`,
+      remainingSpaceFormatted: `${toGB(remainingSpace)} GB`,
+    });
+  } catch (err) {
+    console.error("Get org storage info error:", err);
+    res.status(500).json({ error: "Failed to get organization storage info" });
+  }
+};
+
 // Get storage usage info
 exports.getStorageInfo = async (req, res) => {
   try {

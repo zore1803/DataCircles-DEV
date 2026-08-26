@@ -47,6 +47,7 @@ import Referrals from "../components/settings/Referrals";
 import Wallet from "../components/settings/Wallet";
 import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
+import DataAdministration from "../components/settings/DataAdministration";
 import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
 import CustomDomain from "../components/settings/CustomDomain";
 import GoogleIntegration, { GoogleGIcon } from "../components/settings/GoogleIntegration";
@@ -170,6 +171,18 @@ const Settings = () => {
       borderColor: "border-emerald-200",
       hoverBg: "hover:bg-emerald-50",
       component: <Wallet />,
+      category: "Billing",
+    },
+    {
+      id: "data-administration",
+      icon: <Database className="w-5 h-5" />,
+      label: "Data Administration",
+      description: "See your storage consumption and buy add-ons or upgrade",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <DataAdministration />,
       category: "Billing",
     },
     {

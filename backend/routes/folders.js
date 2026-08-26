@@ -107,4 +107,11 @@ router.get('/storage-info',
   folderController.getStorageInfo
 );
 
+// Org-wide storage consumption (Data Administration settings card)
+router.get('/org-storage-info',
+  requireAuth,
+  subscriptionGate,
+  folderController.getOrgStorageInfo
+);
+
 module.exports = router;
