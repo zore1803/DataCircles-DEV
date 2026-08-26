@@ -107,12 +107,6 @@ const DealsFunnelChart = ({ stages }) => {
   const SVG_W = 770;
   const SVG_H = 310;
 
-  const n = stages.length;
-  const bottomLabelY = SVG_H - 14;
-  // Equal-width columns (the horn's own silhouette already does the
-  // narrowing visually) — n-1 divider lines split it into n real segments.
-  const boundaryX = Array.from({ length: n + 1 }, (_, i) => (i / n) * SVG_W);
-
   return (
     <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} width="100%" height="100%" style={{ overflow: "visible" }}>
       {/* Base horn silhouette — exact path data from the Figma source, 5
@@ -126,27 +120,6 @@ const DealsFunnelChart = ({ stages }) => {
         <path opacity="0.2" d="M615.393 134.536L566.5 131.367C557.153 130.761 548.188 127.435 540.709 121.797C533.101 116.061 523.958 112.719 514.445 112.197L463.818 109.42V199.758L513.621 197.025C523.691 196.473 533.396 193.063 541.599 187.196C549.735 181.378 559.348 177.976 569.333 177.382L615.393 174.641V134.536Z" fill="#0085FF" fillOpacity="0.25" />
         <path opacity="0.2" d="M770 174.945V133.594H618.424V174.945H770Z" fill="#0085FF" />
       </g>
-
-      {/* The first stage sits before any divider, so it needs its own
-          name label at the funnel's left edge instead of at a boundary —
-          otherwise only the later stages (at dividers) get labeled. */}
-      <text x={boundaryX[0] + 4} y={bottomLabelY} textAnchor="start" fontSize={12} fill="#525866">
-        {stages[0].name}
-      </text>
-
-      {/* Divider lines + stage name label, at the boundary between each
-          pair of consecutive stages. */}
-      {stages.slice(0, -1).map((stage, i) => {
-        const x = boundaryX[i + 1];
-        return (
-          <g key={`divider-${stage.name}`}>
-            <line x1={x} y1={20} x2={x} y2={SVG_H - 20} stroke="#1F2937" strokeOpacity={0.15} strokeWidth={1.5} />
-            <text x={x} y={bottomLabelY} textAnchor="middle" fontSize={12} fill="#525866">
-              {stages[i + 1].name}
-            </text>
-          </g>
-        );
-      })}
     </svg>
   );
 };
