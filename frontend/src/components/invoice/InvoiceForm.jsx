@@ -2942,7 +2942,7 @@ const CreateInvoicePanel = ({
           style={{ width: formWidth }}
           className="flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch max-lg:!w-full"
         >
-          <div className="w-full flex items-center justify-between gap-2 lg:border-b lg:border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
+          <div className="w-full flex items-center justify-between gap-2 lg:border-b lg:border-[#E1E4EA] lg:shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
             <div className="min-w-0">
               {isEditing && docNumber ? (
                 <>
@@ -3142,17 +3142,13 @@ const CreateInvoicePanel = ({
       </div>
 
       {/* Frame 2147225003 — the two panels sit side by side, each scrolling
-          independently, so neither one's height depends on the other. */}
-      {/* Independent per-pane scrolling (each pane below gets its own
-          overflow-y-auto) only makes sense once the panes sit side by side
-          at lg — on mobile (flex-col) it instead trapped the whole modal:
-          this row's overflow-hidden clipped anything past one viewport-ish
-          slice, and the panes' own bounded-height overflow-y-auto never
-          got a real height in a flex-col context, so nothing scrolled.
-          Below lg this is now a plain block flow that scrolls as one
-          continuous page inside the modal's own overflow-y-auto (line
-          ~1221). */}
-      <div ref={splitRef} className="flex-1 lg:min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 lg:overflow-hidden">
+          independently, so neither one's height depends on the other. This
+          whole screen is `position: fixed` to the viewport (see the wrapper
+          a few lines up), not nested inside a scrolling page — so on mobile
+          the single visible pane (preview is hidden there) still needs its
+          own internal overflow-y-auto; there's no outer page scroll to fall
+          back on. */}
+      <div ref={splitRef} className="flex-1 min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 overflow-hidden">
         {/* Left: form. Frame 1351649637
             The scrolling element itself must NOT be a flex container: when a
             flex item's parent has `overflow` other than visible, the spec
@@ -3169,7 +3165,7 @@ const CreateInvoicePanel = ({
             for real instead of silently crushing them. */}
         <div
           style={{ width: formWidth }}
-          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 lg:overflow-y-auto lg:self-stretch"
+          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
         >
           <div className="w-full flex flex-col items-start gap-1">
           {/* Sections 01-04 (Details/Address/GST/Items) swap to the
