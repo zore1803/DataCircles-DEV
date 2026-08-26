@@ -108,8 +108,6 @@ const DealsFunnelChart = ({ stages }) => {
   const SVG_H = 310;
 
   const n = stages.length;
-  const midY = SVG_H / 2;
-  const topLabelY = 30;
   const bottomLabelY = SVG_H - 14;
   // Equal-width columns (the horn's own silhouette already does the
   // narrowing visually) — n-1 divider lines split it into n real segments.
@@ -130,40 +128,21 @@ const DealsFunnelChart = ({ stages }) => {
       </g>
 
       {/* The first stage sits before any divider, so it needs its own
-          value/name label at the funnel's left edge instead of at a
-          boundary — otherwise only the later stages (at dividers) get labeled. */}
-      <text x={boundaryX[0] + 4} y={topLabelY} textAnchor="start" fontSize={13} fontWeight={600} fill="#0E121B">
-        ₹{formatNumberToIndian(Math.round(stages[0].value))}
-      </text>
+          name label at the funnel's left edge instead of at a boundary —
+          otherwise only the later stages (at dividers) get labeled. */}
       <text x={boundaryX[0] + 4} y={bottomLabelY} textAnchor="start" fontSize={12} fill="#525866">
         {stages[0].name}
       </text>
 
-      {/* Divider lines + value (above) / stage name (below) labels, at the
-          boundary between each pair of consecutive stages. */}
+      {/* Divider lines + stage name label, at the boundary between each
+          pair of consecutive stages. */}
       {stages.slice(0, -1).map((stage, i) => {
         const x = boundaryX[i + 1];
         return (
           <g key={`divider-${stage.name}`}>
             <line x1={x} y1={20} x2={x} y2={SVG_H - 20} stroke="#1F2937" strokeOpacity={0.15} strokeWidth={1.5} />
-            <text x={x} y={topLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
-              ₹{formatNumberToIndian(Math.round(stages[i + 1].value))}
-            </text>
             <text x={x} y={bottomLabelY} textAnchor="middle" fontSize={12} fill="#525866">
               {stages[i + 1].name}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Percentage badge centered in each stage segment. */}
-      {stages.map((stage, i) => {
-        const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
-        return (
-          <g key={`badge-${stage.name}`}>
-            <rect x={cx - 26} y={midY - 14} width={52} height={28} rx={14} fill="#0F0E0E" />
-            <text x={cx} y={midY + 5} textAnchor="middle" fontSize={14} fontWeight={600} fill="#FFFFFF">
-              {stage.pct}%
             </text>
           </g>
         );
