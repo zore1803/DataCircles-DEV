@@ -1343,7 +1343,7 @@ function Vendors() {
             )}
           </div>
 
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0 hidden lg:block">
             <button
               title="Filters"
               onClick={() => setShowAdvancedFilters(true)}
@@ -1380,6 +1380,23 @@ function Vendors() {
                 onClick={(e) => e.stopPropagation()}
                 className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
               >
+                {/* Filters — hidden on mobile as a standalone button; folded
+                    in here instead. */}
+                <button
+                  onClick={() => {
+                    setShowAdvancedFilters(true);
+                    setShowMoreMenu(false);
+                  }}
+                  className="lg:hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <FilterIcon className="w-4 h-4 text-gray-400" />
+                  Filters
+                  {activeFilters.length > 0 && (
+                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     setShowImport((v) => !v);
@@ -1417,10 +1434,11 @@ function Vendors() {
               setEditVendor(null);
               setShowQuickAdd((v) => !v);
             }}
-            className="h-10 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
+            title={showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
+            className="h-10 w-10 lg:w-auto lg:px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
           >
-            <Plus size={18} className="text-white" />
-            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
+            <Plus size={18} className="text-white flex-shrink-0" />
+            <span className="hidden lg:inline text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
               {showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
             </span>
           </button>
