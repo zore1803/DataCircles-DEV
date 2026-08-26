@@ -54,13 +54,6 @@ export const TOKEN_DEFINITIONS = {
     { key: 'companyName',    label: 'Company Name',  example: 'DataCircles' },
     { key: 'date',           label: 'Date',          example: '25-08-2026' },
   ],
-  salesOrder: [
-    { key: 'documentType',   label: 'Document Name', example: 'Sales Order' },
-    { key: 'documentNumber', label: 'SO Number',     example: 'SO-00012' },
-    { key: 'customerName',   label: 'Customer Name', example: 'Acme Corp' },
-    { key: 'companyName',    label: 'Company Name',  example: 'DataCircles' },
-    { key: 'date',           label: 'Date',          example: '25-08-2026' },
-  ],
 };
 
 /**
@@ -74,7 +67,6 @@ export const DEFAULT_FORMATS = {
   deliveryChallan: ['documentType', 'documentNumber', 'companyName'],
   purchase:        ['documentType', 'documentNumber', 'companyName'],
   purchaseOrder:   ['documentType', 'documentNumber', 'companyName'],
-  salesOrder:      ['documentType', 'documentNumber', 'companyName'],
 };
 
 /**
@@ -121,7 +113,6 @@ export const extractDocData = (doc, docType, orgName = '') => {
     deliveryChallan: 'Delivery Challan',
     purchase:        'Purchase',
     purchaseOrder:   'Purchase Order',
-    salesOrder:      'Sales Order',
   };
 
   const number =
@@ -133,7 +124,6 @@ export const extractDocData = (doc, docType, orgName = '') => {
     doc?.purchaseNumber ||
     doc?.purchaseOrderNumber ||
     doc?.poNumber ||
-    doc?.salesOrderNumber ||
     '';
 
   const customer =

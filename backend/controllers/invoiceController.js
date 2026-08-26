@@ -1,5 +1,4 @@
 const Invoice = require("../models/Invoice");
-const SalesOrder = require("../models/SalesOrder");
 const Counter = require("../models/Counter");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
@@ -78,7 +77,6 @@ const createInvoice = async (req, res) => {
       nextInvoiceNumber,
       billingAddress,
       shippingAddress,
-      salesOrder,
     } = req.body;
 
     // Validate items
@@ -167,35 +165,6 @@ const createInvoice = async (req, res) => {
     //   return res.status(400).json({ error: "Provided amount does not match calculated amount" });
     // }
 
-    // If salesOrder is provided, this Invoice is being created via "Convert
-    // to Invoice" from the Sales Order page — validate it the same way
-    // Purchase validates an incoming purchaseOrder before converting.
-    if (salesOrder) {
-      const soExists = await SalesOrder.findOne({
-        _id: salesOrder,
-        organization: req.user.organization,
-      }).session(session);
-      if (!soExists) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(404).json({ error: "Sales Order not found" });
-      }
-      if (soExists.status === "Cancelled") {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({ error: "A Cancelled Sales Order cannot be converted to an Invoice." });
-      }
-      const duplicateInvoiceForSO = await Invoice.findOne({
-        salesOrder,
-        organization: req.user.organization,
-      }).session(session);
-      if (duplicateInvoiceForSO) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({ error: "An Invoice has already been created for this Sales Order." });
-      }
-    }
-
     // Invoice number: Document Settings' configured prefix
     // (documentTypeSettings.invoice.prefix) is the source of truth when the
     // client doesn't send one. Numbering is scoped to the resolved prefix
@@ -255,7 +224,6 @@ const createInvoice = async (req, res) => {
 
     const invoice = new Invoice({
       deal,
-      salesOrder: salesOrder || null,
       date,
       dueDate,
       amount,

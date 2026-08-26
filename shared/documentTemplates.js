@@ -37,7 +37,6 @@ const NUMBER_KEY = {
   performa: "performaInvoiceNumber",
   quotation: "quotationNumber",
   deliveryChallan: "deliveryChallanNumber",
-  salesOrder: "salesOrderNumber",
 };
 
 const DOC_LABEL = {
@@ -45,7 +44,6 @@ const DOC_LABEL = {
   performa: "Pro Forma Invoice",
   quotation: "Quotation",
   deliveryChallan: "Delivery Challan",
-  salesOrder: "Sales Order",
 };
 
 /* ------------------------------------------------------------------ utils */

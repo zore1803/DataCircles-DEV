@@ -9,7 +9,6 @@ const DEFAULT_DOCUMENT_TYPES = {
   quote: { label: 'Quote', prefix: 'QT', suffix: '', prefixes: ['QT', 'QTN'], suffixes: [] },
   proformaInvoice: { label: 'Proforma Invoice', prefix: 'PI', suffix: '', prefixes: ['PI', 'PFI'], suffixes: [] },
   deliveryChallan: { label: 'Delivery Challan', prefix: 'DC', suffix: '', prefixes: ['DC'], suffixes: [] },
-  salesOrder: { label: 'Sales Order', prefix: 'SO-', suffix: '', prefixes: ['SO-'], suffixes: [] },
 };
 
 function toList(values) {
@@ -50,7 +49,7 @@ function normalizeDocumentTypeSettingsMap(documentTypeSettings = {}) {
 // Footer text keyed by document type. Only the accounting document types this
 // app actually renders a footer for are accepted, so a malformed payload can't
 // grow the document arbitrarily.
-const FOOTER_DOC_TYPES = ['tax', 'performa', 'quotation', 'deliveryChallan', 'salesOrder'];
+const FOOTER_DOC_TYPES = ['tax', 'performa', 'quotation', 'deliveryChallan'];
 
 function normalizeFooterMap(map) {
   const out = {};

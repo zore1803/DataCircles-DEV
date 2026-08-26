@@ -62,7 +62,7 @@ import PlanManagement from "./pages/PlanManagement";
 import Accounting from "./pages/Accounting";
 import PublicDocumentPage from "./pages/PublicDocumentPage";
 import PromotionsAndRewards from "./pages/PromotionsAndRewards";
-import SalesOrder from "./pages/SalesOrder";
+import SalesReturn from "./pages/SalesReturn";
 import SalesSubscription from "./pages/SalesSubscription";
 import EInvoicing from "./pages/EInvoicing";
 import PurchaseReturn from "./pages/PurchaseReturn";
@@ -494,10 +494,10 @@ function App() {
               }
             />
             <Route
-              path="/sales-order"
+              path="/sales-return"
               element={
                 <PrivateRoute>
-                  <SalesOrder />
+                  <SalesReturn />
                 </PrivateRoute>
               }
             />

@@ -11,10 +11,6 @@ const postalAddressSchema = new mongoose.Schema({
 
 const invoiceSchema = new mongoose.Schema({
   deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true },
-  // Set when this Invoice was created via "Convert to Invoice" from a Sales
-  // Order — same back-reference pattern as Purchase.purchaseOrder. Null on
-  // every invoice created directly.
-  salesOrder: { type: mongoose.Schema.Types.ObjectId, ref: 'SalesOrder', default: null },
   invoiceNumber: { type: String, required: true },
   date: { type: Date, required: true },
   dueDate: { type: Date },

@@ -268,7 +268,7 @@ const Navbar = () => {
   ];
 
   const salesChildren = [
-    { name: "Sales Order", href: "/sales-order" },
+    { name: "Sales Return", href: "/sales-return" },
     { name: "Subscription", href: "/sales-subscription" },
     { name: "E-Invoicing", href: "/e-invoicing" },
   ];

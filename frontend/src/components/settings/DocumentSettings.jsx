@@ -85,11 +85,10 @@ const documentTypeMeta = [
   { key: "quote", label: "Quote" },
   { key: "proformaInvoice", label: "Proforma Invoice" },
   { key: "deliveryChallan", label: "Delivery Challan" },
-  { key: "salesOrder", label: "Sales Order" },
 ];
 
 // Notes/Terms are stored server-side keyed by the document's own type string
-// (tax | performa | quotation | deliveryChallan | salesOrder — see backend
+// (tax | performa | quotation | deliveryChallan — see backend
 // DocumentSettings model), not the numbering tab's keys above, so map
 // between the two.
 const FOOTER_TYPE_KEY = {
@@ -97,7 +96,6 @@ const FOOTER_TYPE_KEY = {
   quote: "quotation",
   proformaInvoice: "performa",
   deliveryChallan: "deliveryChallan",
-  salesOrder: "salesOrder",
 };
 
 const createDefaultDocumentTypeSettings = () => ({
@@ -105,7 +103,6 @@ const createDefaultDocumentTypeSettings = () => ({
   quote: { prefix: "QT", suffix: "", prefixes: ["QT", "QTN"], suffixes: [] },
   proformaInvoice: { prefix: "PI", suffix: "", prefixes: ["PI", "PFI"], suffixes: [] },
   deliveryChallan: { prefix: "DC", suffix: "", prefixes: ["DC"], suffixes: [] },
-  salesOrder: { prefix: "SO-", suffix: "", prefixes: ["SO-"], suffixes: [] },
 });
 
 function DocumentSettings() {
@@ -127,7 +124,6 @@ function DocumentSettings() {
     quote: { prefix: "", suffix: "" },
     proformaInvoice: { prefix: "", suffix: "" },
     deliveryChallan: { prefix: "", suffix: "" },
-    salesOrder: { prefix: "", suffix: "" },
   });
   const [activeTab, setActiveTab] = useState("prefix");
   const [activeDocumentType, setActiveDocumentType] = useState("invoice");
@@ -244,7 +240,6 @@ function DocumentSettings() {
             quote: normalizeSection("quote", { prefix: "QT", suffix: "", prefixes: ["QT", "QTN"], suffixes: [] }),
             proformaInvoice: normalizeSection("proformaInvoice", { prefix: "PI", suffix: "", prefixes: ["PI", "PFI"], suffixes: [] }),
             deliveryChallan: normalizeSection("deliveryChallan", { prefix: "DC", suffix: "", prefixes: ["DC"], suffixes: [] }),
-            salesOrder: normalizeSection("salesOrder", { prefix: "SO-", suffix: "", prefixes: ["SO-"], suffixes: [] }),
           },
           pdfFilenameFormats: res.data?.pdfFilenameFormats || DEFAULT_FORMATS,
         });
