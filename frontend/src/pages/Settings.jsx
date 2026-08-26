@@ -242,7 +242,7 @@ const Settings = () => {
       borderColor: "border-sky-200",
       hoverBg: "hover:bg-sky-50",
       component: <DocumentSettings />,
-      category: "Billing",
+      category: "General",
     },
     {
       id: "kanban",
