@@ -3560,12 +3560,15 @@ const Insights = () => {
       .sort((a, b) => (b.amount || 0) - (a.amount || 0))
       .slice(0, 5);
 
-    // Chart data for deal status pie chart
-    const dealStatusChartData = Object.entries(statusDistribution)
-      .map(([status, data]) => ({
+    // Chart data for deal status pie chart — same orderedStatuses source of
+    // truth as the funnel/table/User Performance/Revenue Trend, so a deal
+    // stuck on a stage that's been renamed/deleted from Kanban Settings
+    // doesn't show up here either.
+    const dealStatusChartData = orderedStatuses
+      .map((status) => ({
         name: status,
-        value: data.count,
-        amount: data.amount,
+        value: statusDistribution[status]?.count || 0,
+        amount: statusDistribution[status]?.amount || 0,
         color: statusColors[status] || "#6b7280",
       }))
       .filter((item) => item.value > 0);
