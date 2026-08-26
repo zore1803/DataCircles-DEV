@@ -1496,8 +1496,8 @@ function Vendors() {
               <tr>
                 <th
                   data-col-id="selection"
-                  style={{ width: colWidths.selection }}
-                  className="px-4 py-3 border-b border-r border-[#E1E4EA]"
+                  style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
+                  className="px-4 py-3 border-b border-r border-[#E1E4EA] bg-[#F5F7FA]"
                 >
                   <div className="flex justify-center items-center w-full">
                     <input
