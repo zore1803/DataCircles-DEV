@@ -6432,6 +6432,25 @@ const Insights = () => {
                 </span>
               </div>
             </div>
+
+            <div className="mt-4 rounded-2xl p-6 flex flex-col justify-between" style={{ background: "#0085FF", height: 420 }}>
+              <span className="text-sm font-medium text-white/80">Total Invoiced</span>
+              <div>
+                <div className="text-4xl font-semibold text-white">
+                  ₹{formatNumberToIndian(Math.round(totalAmount))}
+                </div>
+                <div className="flex items-center gap-1.5 mt-2 text-white/90">
+                  {totalInvoicedChange >= 0 ? (
+                    <ArrowUp className="w-4 h-4" />
+                  ) : (
+                    <ArrowDown className="w-4 h-4" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {Math.abs(totalInvoicedChange).toFixed(2)}% vs last month
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="flex flex-col gap-4">
             <div className="bg-white p-3 rounded-xl border border-[#E7E4E3] shadow-sm h-[242px] flex flex-col gap-2 overflow-hidden">
