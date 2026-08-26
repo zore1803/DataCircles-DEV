@@ -2940,7 +2940,7 @@ const CreateInvoicePanel = ({
         {/* Left: form header */}
         <div
           style={{ width: formWidth }}
-          className={`flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch ${hidePreview ? "" : "max-lg:!w-1/2"}`}
+          className="flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch max-lg:!w-full"
         >
           <div className="w-full flex items-center justify-between gap-2 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
             <div className="min-w-0">
