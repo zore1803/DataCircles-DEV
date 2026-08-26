@@ -26,6 +26,7 @@ import {
   Gift,
   FileText,
   Wallet as WalletIcon,
+  AtSign,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -49,6 +50,7 @@ import UserManagement from "./UserManagement";
 import DocumentSettings from "../components/settings/DocumentSettings";
 import SystemDefaultsSettings from "../components/settings/SystemDefaultsSettings";
 import CustomDomain from "../components/settings/CustomDomain";
+import EmailHandle from "../components/settings/EmailHandle";
 import GoogleIntegration, { GoogleGIcon } from "../components/settings/GoogleIntegration";
 import PageSkeleton from "../components/common/PageSkeleton";
 
@@ -218,6 +220,18 @@ const Settings = () => {
       borderColor: "border-indigo-200",
       hoverBg: "hover:bg-indigo-50",
       component: <CustomDomain />,
+      category: "General",
+    },
+    {
+      id: "email-handle",
+      icon: <AtSign className="w-5 h-5" />,
+      label: "Email Domain",
+      description: "Claim your unique .dc handle for outgoing emails",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <EmailHandle />,
       category: "General",
     },
     {

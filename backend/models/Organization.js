@@ -9,6 +9,11 @@ const organizationSchema = new mongoose.Schema(
     state: { type: String },
     logo: { type: String },
     gstNumber: { type: String, trim: true },
+    // Reserved "<handle>.dc" identity slug — claimed via the Email Domain
+    // settings card. Not yet wired into actual mail sending (no SendGrid
+    // domain authentication behind it); it just reserves the name so it's
+    // ready to use once that infra is built.
+    emailHandle: { type: String, trim: true, lowercase: true, unique: true, sparse: true },
   },
   { timestamps: true },
 );

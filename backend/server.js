@@ -138,6 +138,9 @@ app.use('/api/auth', authRoutes);
 const brandingRoutes = require('./routes/brandingRoutes');
 app.use('/api/branding', brandingRoutes);
 
+const emailHandleRoutes = require('./routes/emailHandleRoutes');
+app.use('/api/email-handle', emailHandleRoutes);
+
 const documentSettingsRoutes = require('./routes/documentSettingsRoutes');
 app.use('/api/document-settings', documentSettingsRoutes);
 
