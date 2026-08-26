@@ -3064,7 +3064,7 @@ const CreateInvoicePanel = ({
                       : "Hide preview — full width form"
                 }
                 aria-pressed={onRequestFullWidth ? undefined : hidePreview}
-                className="h-8 w-8 flex items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                className="hidden lg:flex h-8 w-8 items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 {hidePreview && !onRequestFullWidth ? (
                   <Minimize2 className="w-3.5 h-3.5" />
@@ -3103,9 +3103,12 @@ const CreateInvoicePanel = ({
         {/* Gap reserved for the absolute resizer line — no bottom border here,
             so the strip line reads as two separate parts (left / right). */}
         {!hidePreview && <div className="hidden lg:block w-1.5 flex-shrink-0 self-stretch" />}
-        {/* Right: preview header */}
+        {/* Right: preview header. Hidden outright on mobile — same reasoning
+            as the preview body pane below: no room for it on a phone-width
+            screen, so its "Change Template" button shouldn't crowd the
+            create-invoice actions on the left either. */}
         <div
-          className={`flex-1 min-w-0 items-stretch px-3 lg:pl-6 self-stretch ${hidePreview ? "hidden" : "flex"}`}
+          className={`flex-1 min-w-0 items-stretch px-3 lg:pl-6 self-stretch hidden ${hidePreview ? "lg:hidden" : "lg:flex"}`}
         >
           <div className="w-full flex items-center justify-between gap-4 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
           <div className="min-w-0">
