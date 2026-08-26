@@ -4002,9 +4002,11 @@ const CreateInvoicePanel = ({
         {/* Gap reserved for the absolute resizer line (rendered at panel level). */}
         {!hidePreview && <div className="hidden lg:block w-1.5 flex-shrink-0" />}
 
-        {/* Right: preview. Frame 1351649638 — stretches to fill whatever's left beside the form panel. */}
+        {/* Right: preview. Frame 1351649638 — stretches to fill whatever's left beside the form panel.
+            Hidden outright on mobile regardless of the hidePreview toggle — there's no room for a
+            side-by-side live preview on a phone-width screen. */}
         <div
-          className={`relative w-full lg:flex-1 min-w-0 bg-white p-3 lg:pl-6 flex-col items-start gap-4 self-stretch ${hidePreview ? "hidden" : "flex"}`}
+          className={`relative w-full lg:flex-1 min-w-0 bg-white p-3 lg:pl-6 flex-col items-start gap-4 self-stretch hidden ${hidePreview ? "lg:hidden" : "lg:flex"}`}
         >
           {/* Live invoice preview — mirrors the structure of the downloaded /
               printed document and reflects the form's changes in real time. */}
