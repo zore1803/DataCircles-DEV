@@ -3010,8 +3010,12 @@ const CreateInvoicePanel = ({
                       change the numbering before saving; split view silently
                       used whatever Document Settings configured with no
                       visibility into it. */}
+                  {/* Hidden on mobile — three editable boxes plus the title
+                      and action buttons don't fit one clean header row on a
+                      phone screen; document numbering is still reachable via
+                      Settings. */}
                   {!isEditing && (
-                    <div className="flex items-center border border-[#E1E4EA] rounded-lg overflow-hidden h-9 bg-white flex-shrink-0">
+                    <div className="hidden lg:flex items-center border border-[#E1E4EA] rounded-lg overflow-hidden h-9 bg-white flex-shrink-0">
                       <input
                         type="text"
                         value={form.invoicePrefix}
