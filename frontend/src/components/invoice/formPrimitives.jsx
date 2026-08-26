@@ -135,6 +135,7 @@ export const PickerSelect = ({
   onSelect,
   searchable = true,
   icon: Icon,
+  invalid = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -220,7 +221,11 @@ export const PickerSelect = ({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full h-10 flex items-center gap-2 px-3 rounded-lg border border-[#E1E4EA] bg-white text-left hover:border-[#C9CFD8] focus:outline-none focus:border-[#0085FF] transition-colors"
+        className={`w-full h-10 flex items-center gap-2 px-3 rounded-lg border bg-white text-left focus:outline-none transition-colors ${
+          invalid
+            ? "border-red-400 hover:border-red-500 focus:border-red-500"
+            : "border-[#E1E4EA] hover:border-[#C9CFD8] focus:border-[#0085FF]"
+        }`}
       >
         {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />}
         <span

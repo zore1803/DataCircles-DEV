@@ -2225,6 +2225,9 @@ const CreateInvoicePanel = ({
   const [catalogue, setCatalogue] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [stockErrorMessage, setStockErrorMessage] = useState(null);
+  // Required/invalid fields are marked red in place instead of popping a
+  // toast — clears itself the moment the field is actually filled in/fixed.
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showTemplates, setShowTemplates] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
@@ -2677,19 +2680,25 @@ const CreateInvoicePanel = ({
 
   const submitInvoice = async (statusValue) => {
     const isDraft = statusValue === "Draft";
-    if (!form.deal) return toast.error("Please select a deal.");
-    if (!form.date) return toast.error(`Please pick a ${docName} date.`);
+    // Required/invalid fields are marked red in place (see fieldErrors)
+    // instead of a toast — no notification popup, the field itself shows
+    // what's wrong.
+    const nextErrors = {};
+    if (!form.deal) nextErrors.deal = true;
+    if (!form.date) nextErrors.date = true;
+    if (!isDraft && supportsGSTIN) {
+      if (!form.receiverGSTIN.trim()) nextErrors.receiverGSTIN = true;
+      else if (!GSTIN_REGEX.test(form.receiverGSTIN.trim().toUpperCase()))
+        nextErrors.receiverGSTIN = true;
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+    setFieldErrors({});
     // A quick draft only needs enough to identify the document; full GSTIN and
     // item validation apply once it's actually being created for real.
     if (!isDraft) {
-      if (supportsGSTIN) {
-        if (!form.receiverGSTIN.trim())
-          return toast.error("Receiver GSTIN is required.");
-        if (!GSTIN_REGEX.test(form.receiverGSTIN.trim().toUpperCase()))
-          return toast.error(
-            "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-          );
-      }
       const badItem = form.items.find(
         (it) => !it.name || !it.rate || !it.quantity
       );
@@ -3205,7 +3214,9 @@ const CreateInvoicePanel = ({
                   options={dealOptions}
                   placeholder="Search and select deal"
                   icon={Search}
+                  invalid={fieldErrors.deal}
                   onSelect={(o) => {
+                    setFieldErrors((prev) => ({ ...prev, deal: false }));
                     // Switching the deal always replaces the Receiver GSTIN
                     // and billing/shipping address with whatever the new
                     // deal's company has — including clearing them to empty
@@ -3261,6 +3272,7 @@ const CreateInvoicePanel = ({
                     value={form.date}
                     onChange={(e) => {
                       const newDate = e.target.value;
+                      setFieldErrors((prev) => ({ ...prev, date: false }));
                       setForm((prev) => {
                         let newDueDate = prev.dueDate;
                         if (!isEditing && !prev.dueDate && newDate) {
@@ -3271,7 +3283,7 @@ const CreateInvoicePanel = ({
                         return { ...prev, date: newDate, dueDate: newDueDate };
                       });
                     }}
-                    className={inputClass}
+                    className={fieldErrors.date ? inputClass.replace("border-[#E1E4EA]", "border-red-400") : inputClass}
                   />
                 </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
@@ -3320,7 +3332,7 @@ const CreateInvoicePanel = ({
                     }
                     onClick={() => {
                       if (!form.date) {
-                        toast.error(`Please select the ${docName} date first.`);
+                        setFieldErrors((prev) => ({ ...prev, date: true }));
                         return;
                       }
                       const d = new Date(form.date);
@@ -3409,9 +3421,12 @@ const CreateInvoicePanel = ({
                 <input
                   type="text"
                   value={form.receiverGSTIN}
-                  onChange={(e) => setField("receiverGSTIN", e.target.value)}
+                  onChange={(e) => {
+                    setFieldErrors((prev) => ({ ...prev, receiverGSTIN: false }));
+                    setField("receiverGSTIN", e.target.value);
+                  }}
                   placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                  className={`${inputClass} flex-1 min-w-0`}
+                  className={`${fieldErrors.receiverGSTIN ? inputClass.replace("border-[#E1E4EA]", "border-red-400") : inputClass} flex-1 min-w-0`}
                 />
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
