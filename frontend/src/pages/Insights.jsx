@@ -296,6 +296,7 @@ const Insights = () => {
   const [loading, setLoading] = useState(false);
   const [expandedRows, setExpandedRows] = useState([]);
   const [selectedUser, setSelectedUser] = React.useState("all");
+  const [kanbanStatuses, setKanbanStatuses] = useState(null);
 
   const toggleExpandRow = (companyId) => {
     setExpandedRows((prev) =>
@@ -387,6 +388,7 @@ const Insights = () => {
         purchasesRes,
         invoicesRes,
         meetingsRes,
+        kanbanRes,
       ] = await Promise.all([
         API.get("/contacts"),
         API.get("/companies"),
@@ -397,6 +399,12 @@ const Insights = () => {
         API.get("/purchases"),
         API.get("/invoices"),
         API.get("/meetings").catch(() => ({ data: { meetings: [] } })),
+        // The Deals pipeline stages are whatever's configured in Settings >
+        // Kanban Settings, not a fixed Open/Won/Lost trio — Insights' deal
+        // breakdowns should only ever show stages that currently exist
+        // there, not stale statuses left behind on deals after a stage was
+        // renamed/deleted.
+        API.get("/kanban").catch(() => ({ data: null })),
       ]);
 
       setContacts(contactsRes.data);
@@ -408,6 +416,7 @@ const Insights = () => {
       setPurchases(purchasesRes.data);
       setInvoices(invoicesRes.data);
       setMeetings(meetingsRes.data?.meetings || meetingsRes.data || []);
+      setKanbanStatuses(kanbanRes.data?.statuses || null);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -3360,19 +3369,21 @@ const Insights = () => {
       {}
     );
 
-    // Full dynamic list of every real deal status in use (not just the
-    // fixed Open/Won/Lost trio) — orgs can add custom Kanban stages (e.g.
-    // "Postponed"), and the funnel/table/charts below all need to reflect
-    // whatever stages actually exist instead of silently dropping them.
-    // Non-terminal stages sort by count desc; Won/Lost (if present) always
-    // trail last since they're outcomes, not pipeline stages.
+    // The stages shown here must match Settings > Kanban Settings exactly —
+    // not just whatever distinct status strings happen to exist on deals.
+    // A deal can be left pointing at a status that's since been renamed or
+    // deleted from the board (a stale value), and that stage shouldn't
+    // reappear here as if it still exists. Falls back to deriving from the
+    // deals themselves only if the Kanban board couldn't be fetched.
     const TERMINAL_STATUSES = ["Won", "Lost"];
-    const orderedStatuses = [
-      ...Object.keys(statusDistribution)
-        .filter((s) => !TERMINAL_STATUSES.includes(s))
-        .sort((a, b) => statusDistribution[b].count - statusDistribution[a].count),
-      ...TERMINAL_STATUSES.filter((s) => statusDistribution[s]),
-    ];
+    const orderedStatuses = kanbanStatuses
+      ? kanbanStatuses.filter((s) => statusDistribution[s])
+      : [
+          ...Object.keys(statusDistribution)
+            .filter((s) => !TERMINAL_STATUSES.includes(s))
+            .sort((a, b) => statusDistribution[b].count - statusDistribution[a].count),
+          ...TERMINAL_STATUSES.filter((s) => statusDistribution[s]),
+        ];
     const STATUS_COLOR_MAP = { Won: "#00C950", Lost: "#F60000", Open: "#0085FF", Negotiation: "#f59e0b" };
     const FALLBACK_STATUS_COLORS = ["#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"];
     const statusColors = {};
