@@ -1602,6 +1602,7 @@ function Vendors() {
                     className={`bg-white hover:bg-blue-50 transition-colors ${
                       selectedVendors.includes(vendor._id) ? "!bg-blue-50" : ""
                     }`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     <td
                       style={{
@@ -1610,7 +1611,7 @@ function Vendors() {
                         left: 0,
                         zIndex: 4,
                       }}
-                      className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                      className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                     >
                       <div className="flex justify-center items-center w-full">
                         <input
@@ -1626,7 +1627,7 @@ function Vendors() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                       >
                         {col.id === lastColumnId ? (
                           <div className="flex items-center justify-between w-full gap-2">

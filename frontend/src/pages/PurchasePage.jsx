@@ -1902,6 +1902,7 @@ const PurchasePage = () => {
                           <tr
                             key={row.id}
                             className={`bg-white hover:bg-blue-50 transition-colors ${selectedPurchasesSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            style={{ height: 37, maxHeight: 37 }}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;
@@ -1923,7 +1924,7 @@ const PurchasePage = () => {
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 10 : 1,
                                   }}
-                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                                 >
                                   <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
                                     {flexRender(

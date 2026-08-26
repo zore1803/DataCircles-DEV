@@ -3198,7 +3198,7 @@ function Tasks() {
                   numRows={taskPagination.limit}
                   columns={taskTable.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
                   hasCheckbox
-                  rowHeight={54}
+                  rowHeight={37}
                 />
               ) : tasks.length === 0 ? (
                 <tr>
@@ -3222,6 +3222,7 @@ function Tasks() {
                       handleTaskView(row.original);
                     }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedTasks.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
@@ -3234,13 +3235,13 @@ function Tasks() {
                           key={cell.id}
                           style={{
                             width: cell.column.getSize(),
-                            height: 54,
+                            height: 37,
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                          className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           {cellBoundaryShadowSide && (
@@ -3360,7 +3361,7 @@ function Tasks() {
                   numRows={meetingPagination.limit}
                   columns={meetingTable.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
                   hasCheckbox
-                  rowHeight={54}
+                  rowHeight={37}
                 />
               ) : meetings.length === 0 ? (
                 <tr>
@@ -3378,6 +3379,7 @@ function Tasks() {
                       handleMeetingEdit(row.original);
                     }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedMeetings.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
@@ -3390,13 +3392,13 @@ function Tasks() {
                         key={cell.id}
                         style={{
                           width: cell.column.getSize(),
-                          height: 54,
+                          height: 37,
                           position: isSticky ? "sticky" : "static",
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isSticky ? 10 : 1,
                         }}
-                        className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                        className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         {cellBoundaryShadowSide && (

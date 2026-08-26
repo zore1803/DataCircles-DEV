@@ -1614,11 +1614,12 @@ export default function PaymentsTimeline() {
                 <tr
                   key={doc._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(doc._id) ? "!bg-blue-50" : ""}`}
+                  style={{ height: 37, maxHeight: 37 }}
                 >
                   {/* Selection cell */}
                   <td
                     style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
                       <input

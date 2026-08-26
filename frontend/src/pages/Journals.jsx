@@ -970,10 +970,10 @@ export default function Journals() {
               </tr>
             ) : (
               paginatedJournals.map((j) => (
-                <tr key={j._id} className="bg-white hover:bg-blue-50 transition-colors">
+                <tr key={j._id} className="bg-white hover:bg-blue-50 transition-colors" style={{ height: 37, maxHeight: 37 }}>
                   <td
                     style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
                       <input
@@ -998,7 +998,7 @@ export default function Journals() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${
+                        className={`px-4 py-2 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${
                           cellBoundaryShadowSide ? "" : "overflow-hidden"
                         }`}
                       >

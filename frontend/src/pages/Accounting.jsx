@@ -2831,6 +2831,7 @@ const Accounting = () => {
                   key={doc?._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(doc._id) ? "!bg-blue-50" : ""
                     }`}
+                  style={{ height: 37, maxHeight: 37 }}
                 >
                   <td
                     style={{
@@ -2839,7 +2840,7 @@ const Accounting = () => {
                       left: 0,
                       zIndex: 10,
                     }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
+                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
                   >
                     <div className="flex justify-center items-center w-full">
                       <input
@@ -2860,7 +2861,7 @@ const Accounting = () => {
                           width: colWidths[col.id],
                           ...stickyStyleFor(col.id),
                         }}
-                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                       >
                         {isLastCol ? (
                           <div className="flex items-center justify-between gap-2 w-full">
