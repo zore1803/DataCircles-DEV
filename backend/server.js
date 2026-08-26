@@ -159,6 +159,9 @@ app.use('/api/company-fields', companyFields);
 const folderRoutes = require('./routes/folders');
 app.use('/api/folders', folderRoutes);
 
+const usageOverviewRoutes = require('./routes/usageOverview');
+app.use('/api/usage-overview', usageOverviewRoutes);
+
 const noteRoutes = require('./routes/notes');
 app.use('/api/notes', noteRoutes);
 
