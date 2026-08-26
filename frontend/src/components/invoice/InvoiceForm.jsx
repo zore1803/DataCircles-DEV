@@ -3135,7 +3135,16 @@ const CreateInvoicePanel = ({
 
       {/* Frame 2147225003 — the two panels sit side by side, each scrolling
           independently, so neither one's height depends on the other. */}
-      <div ref={splitRef} className="flex-1 min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 overflow-hidden">
+      {/* Independent per-pane scrolling (each pane below gets its own
+          overflow-y-auto) only makes sense once the panes sit side by side
+          at lg — on mobile (flex-col) it instead trapped the whole modal:
+          this row's overflow-hidden clipped anything past one viewport-ish
+          slice, and the panes' own bounded-height overflow-y-auto never
+          got a real height in a flex-col context, so nothing scrolled.
+          Below lg this is now a plain block flow that scrolls as one
+          continuous page inside the modal's own overflow-y-auto (line
+          ~1221). */}
+      <div ref={splitRef} className="flex-1 lg:min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 lg:overflow-hidden">
         {/* Left: form. Frame 1351649637
             The scrolling element itself must NOT be a flex container: when a
             flex item's parent has `overflow` other than visible, the spec
@@ -3152,7 +3161,7 @@ const CreateInvoicePanel = ({
             for real instead of silently crushing them. */}
         <div
           style={{ width: formWidth }}
-          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
+          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 lg:overflow-y-auto lg:self-stretch"
         >
           <div className="w-full flex flex-col items-start gap-1">
           {/* Sections 01-04 (Details/Address/GST/Items) swap to the
@@ -4001,7 +4010,7 @@ const CreateInvoicePanel = ({
               printed document and reflects the form's changes in real time. */}
           <div
             ref={previewAreaRef}
-            className="group w-full flex-1 min-h-0 self-stretch overflow-y-auto overflow-x-hidden relative p-1.5"
+            className="group w-full lg:flex-1 lg:min-h-0 lg:self-stretch lg:overflow-y-auto overflow-x-hidden relative p-1.5"
           >
             {/* Full-view button — appears on hover, opens the same document
                 viewer as the eye action in the list (edit mode only). */}
