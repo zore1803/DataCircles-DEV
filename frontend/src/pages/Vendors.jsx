@@ -861,7 +861,7 @@ function Vendors() {
     } catch (err) {
       if (requestId !== vendorRequestIdRef.current) return;
       if (err.response && err.response.status === 403) {
-        toast.error(err.response.data.message || "Access denied");
+        toast.error(err.response.data.message || err.response.data.error || "Access denied");
       } else {
         toast.error("Failed to load vendors");
       }
@@ -1090,7 +1090,7 @@ function Vendors() {
       if (err.response && err.response.status === 402) {
         errorMessage = err.response.data.message || "An active subscription is required to make changes.";
       } else if (err.response && err.response.status === 403) {
-        errorMessage = err.response.data.message || "Access denied";
+        errorMessage = err.response.data.message || err.response.data.error || "Access denied";
       }
       toast.error(errorMessage, { id: loadingToast });
     } finally {
@@ -1195,7 +1195,7 @@ function Vendors() {
           toolbar, the bulk-action strip slides in and takes over this exact
           bar, so nothing shifts and it feels identical to Companies.jsx. */}
       <div
-        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${
+        className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${
           showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
         }`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
@@ -1291,7 +1291,7 @@ function Vendors() {
               )}
             </div>
 
-            <div className="flex-1" />
+            <div className="hidden lg:block lg:flex-1" />
 
         {showLoadingSkeleton ? (
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -1301,11 +1301,11 @@ function Vendors() {
             <Skeleton width={130} height={40} shape="circle" />
           </div>
         ) : (
-        <div className="flex flex-row items-center gap-2 h-10 flex-shrink-0">
+        <div className="flex flex-row items-center gap-2 h-10 justify-end min-w-0 flex-1 lg:flex-initial lg:flex-shrink-0">
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
-              isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"
-            } max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white min-w-0 max-w-full ${
+              isSearchExpanded ? "flex-1 lg:flex-initial lg:w-[380px]" : "w-10 flex-shrink-0"
+            }`}
           >
             <SearchIcon
               className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
@@ -1343,7 +1343,7 @@ function Vendors() {
             )}
           </div>
 
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0 hidden lg:block">
             <button
               title="Filters"
               onClick={() => setShowAdvancedFilters(true)}
@@ -1380,6 +1380,23 @@ function Vendors() {
                 onClick={(e) => e.stopPropagation()}
                 className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
               >
+                {/* Filters — hidden on mobile as a standalone button; folded
+                    in here instead. */}
+                <button
+                  onClick={() => {
+                    setShowAdvancedFilters(true);
+                    setShowMoreMenu(false);
+                  }}
+                  className="lg:hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <FilterIcon className="w-4 h-4 text-gray-400" />
+                  Filters
+                  {activeFilters.length > 0 && (
+                    <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     setShowImport((v) => !v);
@@ -1417,10 +1434,11 @@ function Vendors() {
               setEditVendor(null);
               setShowQuickAdd((v) => !v);
             }}
-            className="h-10 px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
+            title={showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
+            className="h-10 w-10 lg:w-auto lg:px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
           >
-            <Plus size={18} className="text-white" />
-            <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
+            <Plus size={18} className="text-white flex-shrink-0" />
+            <span className="hidden lg:inline text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
               {showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
             </span>
           </button>
@@ -1487,7 +1505,7 @@ function Vendors() {
           </div>
         )}
 
-        <div className="bg-white border border-[#E1E4EA]">
+        <div className="bg-white border border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="border-separate border-spacing-0 text-left"
             style={{ minWidth: "100%", width: tableWidth, tableLayout: "fixed" }}
@@ -1496,8 +1514,8 @@ function Vendors() {
               <tr>
                 <th
                   data-col-id="selection"
-                  style={{ width: colWidths.selection }}
-                  className="px-4 py-3 border-b border-r border-[#E1E4EA]"
+                  style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
+                  className="px-4 py-3 border-b border-r border-[#E1E4EA] bg-[#F5F7FA]"
                 >
                   <div className="flex justify-center items-center w-full">
                     <input
@@ -1602,6 +1620,7 @@ function Vendors() {
                     className={`bg-white hover:bg-blue-50 transition-colors ${
                       selectedVendors.includes(vendor._id) ? "!bg-blue-50" : ""
                     }`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     <td
                       style={{
@@ -1610,7 +1629,7 @@ function Vendors() {
                         left: 0,
                         zIndex: 4,
                       }}
-                      className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                      className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                     >
                       <div className="flex justify-center items-center w-full">
                         <input
@@ -1626,7 +1645,7 @@ function Vendors() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                       >
                         {col.id === lastColumnId ? (
                           <div className="flex items-center justify-between w-full gap-2">
@@ -1839,7 +1858,7 @@ function Vendors() {
         )}
 
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-100 p-2 rounded-lg">

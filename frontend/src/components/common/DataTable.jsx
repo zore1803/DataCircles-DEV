@@ -229,6 +229,7 @@ export default function DataTable({
           position: "fixed",
           top: fixedTop,
           left: "var(--sidebar-width, 0px)",
+          paddingLeft: "var(--content-inset, 16px)",
           right: 0,
           bottom: fixedBottom,
         }

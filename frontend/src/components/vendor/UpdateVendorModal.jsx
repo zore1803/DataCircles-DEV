@@ -24,6 +24,7 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
   const [profilePreview, setProfilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const fileInputRef = useRef(null);
 
   const getRandomColor = (name) => {
@@ -78,6 +79,7 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
       }
       setAdditionalFieldValues(additionalFields);
       setError("");
+      setEmailError("");
     }
   }, [vendor, isOpen]);
 
@@ -152,9 +154,15 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
       return;
     }
 
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setEmailError("Invalid email format");
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
+      setEmailError("");
 
       const formData = new FormData();
       formData.append("name", form.name);
@@ -187,7 +195,7 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
       if (err.response?.status === 402) {
         setError(err.response?.data?.message || "An active subscription is required to make changes.");
       } else if (err.response?.status === 403) {
-        setError(err.response.data.message || "Access denied");
+        setError(err.response.data.message || err.response.data.error || "Access denied");
       } else {
         console.error("Error updating vendor:", err);
         setError(err.response?.data?.error || "Failed to update vendor");
@@ -200,7 +208,7 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4 pt-20">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4 pt-20">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -214,7 +222,7 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} noValidate className="p-6">
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-700 text-sm">{error}</p>
@@ -297,10 +305,18 @@ const UpdateVendorModal = ({ isOpen, onClose, vendor, onUpdateSuccess }) => {
               <input
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                onChange={(e) => {
+                  setForm({ ...form, email: e.target.value });
+                  if (emailError) setEmailError("");
+                }}
+                className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent ${
+                  emailError ? "border-red-500" : "border-gray-300"
+                }`}
                 placeholder="Enter Email"
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-600">{emailError}</p>
+              )}
             </div>
 
             <div>

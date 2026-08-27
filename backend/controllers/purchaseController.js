@@ -34,6 +34,11 @@ async function syncItemMasterPricing(items, organizationId) {
   }
 }
 
+// Mirrors companyController's isOwnedByUser — Purchase only carries a single `user` field.
+const isOwnedByUser = (purchase, userId) => {
+  return purchase.user?.toString() === userId.toString();
+};
+
 // Helper function to calculate item total
 const calculateItemTotal = (quantity, unitPrice) => {
   return parseFloat(quantity) * parseFloat(unitPrice);
@@ -181,6 +186,10 @@ exports.getAllPurchases = async (req, res) => {
     const { search } = req.query;
     let query = { organization: req.user.organization };
 
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       query.$or = [
         { purchaseNumber: { $regex: search, $options: 'i' } },
@@ -215,6 +224,10 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
 
     // Build query object
     let query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
 
     // Search functionality
     if (search) {
@@ -326,6 +339,11 @@ exports.getPurchaseById = async (req, res) => {
       .populate("items.itemId", "name description purchasePrice hsnSac gstRate");
 
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
+    if (req.ownOnly && !isOwnedByUser(purchase, req.user._id)) {
+      return res.status(403).json({ message: "You can only view purchases you own" });
+    }
+
     res.json(purchase);
   } catch (err) {
     console.error("Error fetching purchase:", err);
@@ -344,6 +362,10 @@ exports.updatePurchase = async (req, res) => {
     });
 
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
+    if (req.ownOnly && !isOwnedByUser(purchase, req.user._id)) {
+      return res.status(403).json({ message: "You can only edit purchases you own" });
+    }
 
     // Paid is terminal — same rule as updatePurchaseStatus, applied here too
     // since this endpoint is also how the edit form changes status.
@@ -545,6 +567,10 @@ exports.deletePurchase = async (req, res) => {
 
     if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(purchase, req.user._id)) {
+      return res.status(403).json({ message: "You can only delete purchases you own" });
     }
 
     if (purchase.stockMovementStatus === 'applied') {

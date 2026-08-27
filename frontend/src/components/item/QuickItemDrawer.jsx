@@ -313,7 +313,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
           same dc-panel-card inset/rounded-corner chrome and slide animation
           as the rest of the quick-drawer forms. */}
       <div
-        className={`fixed dc-panel-card z-[100006] w-full max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        className={`fixed dc-panel-card z-[100006] w-[calc(100%-3rem)] max-w-[860px] bg-[#F9FAFB] flex flex-col shadow-2xl transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -392,22 +392,22 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                 <div>
                   <label className={lbl}>Selling Price</label>
                   <div className="flex h-11 border border-[#1F2937]/10 rounded-full overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 font-inter">
-                    <span className="flex items-center px-3 bg-gray-50 border-r border-[#1F2937]/10 text-gray-500 text-sm">₹</span>
+                    <span className="flex items-center px-2 bg-gray-50 border-r border-[#1F2937]/10 text-gray-500 text-sm flex-shrink-0">₹</span>
                     <input
                       type="number"
                       value={form.sellingPrice}
                       onChange={(e) => handleChange("sellingPrice", e.target.value)}
                       onWheel={(e) => e.target.blur()}
                       placeholder="0"
-                      className="flex-1 px-3 text-sm text-[#1F2937] focus:outline-none min-w-0 bg-white"
+                      className="flex-1 px-2 text-sm text-[#1F2937] focus:outline-none min-w-0 w-0 bg-white"
                     />
                     <select
                       value={form.sellingPriceTax}
                       onChange={(e) => handleChange("sellingPriceTax", e.target.value)}
-                      className="px-2 bg-gray-50 border-l border-[#1F2937]/10 text-xs text-gray-600 focus:outline-none"
+                      className="px-1.5 bg-gray-50 border-l border-[#1F2937]/10 text-[10px] text-gray-600 focus:outline-none flex-shrink-0 w-[62px]"
                     >
-                      <option value="without Tax">without Tax</option>
-                      <option value="with Tax">with Tax</option>
+                      <option value="without Tax">w/o Tax</option>
+                      <option value="with Tax">w/ Tax</option>
                     </select>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-500">Exclusive of Taxes</p>
@@ -418,18 +418,18 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   {/* Single control: its value IS the saved GST rate. (This used
                       to be a number box plus a separate breakdown dropdown that
                       weren't wired together — picking a breakdown option didn't
-                      change the number that actually got saved.) */}
-                  <select
-                    value={form.taxPercent}
-                    onChange={(e) => handleChange("taxPercent", e.target.value)}
-                    className={inp + " cursor-pointer"}
-                  >
-                    {GST_RATES.map((rate) => (
-                      <option key={rate} value={rate}>
-                        {rate}% ({rate / 2}% CGST & {rate / 2}% SGST, {rate}% IGST)
-                      </option>
-                    ))}
-                  </select>
+                      change the number that actually got saved.)
+                      CustomDropdown instead of a native <select> — the
+                      breakdown labels are long, and a native <select>'s
+                      expanded option list uses the OS/browser's own font
+                      size on mobile (not stylable via CSS), which rendered
+                      far larger than the rest of the form. */}
+                  <CustomDropdown
+                    options={GST_RATES.map((rate) => `${rate}% (${rate / 2}% CGST & ${rate / 2}% SGST, ${rate}% IGST)`)}
+                    value={`${form.taxPercent}% (${Number(form.taxPercent) / 2}% CGST & ${Number(form.taxPercent) / 2}% SGST, ${form.taxPercent}% IGST)`}
+                    onChange={(label) => handleChange("taxPercent", label.split("%")[0])}
+                    buttonClassName={inp + " cursor-pointer flex items-center justify-between text-left"}
+                  />
                 </div>
               </div>
               )}

@@ -356,7 +356,7 @@ const CallLogForm = ({
                   value={form.duration}
                   onChange={(e) => handleFormChange("duration", e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg text-sm ${validationErrors.duration
-                    ? 'border-red-300 focus:ring-red-500'
+                    ? 'border-red-500 focus:ring-red-500'
                     : allowDuration
                       ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                       : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"

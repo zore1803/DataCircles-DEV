@@ -465,8 +465,14 @@ function Login() {
       setShowSetupForm(false);
     } catch (err) {
       const data = err.response?.data;
-      setEmailError(data?.message || "Failed to complete setup");
-      setShowEmailInput(true);
+      if (err.response?.status === 403 && data?.joinMethod === "code") {
+        setEmailError(
+          data?.message ||
+            "This company already has the maximum number of users allowed. You cannot join this account. Please go back and join a different company, or create a new one."
+        );
+      } else {
+        setEmailError(data?.message || "Failed to complete setup");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1023,7 +1029,7 @@ function Login() {
 
   if (showSetupForm) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen w-full -my-6 -mx-8 flex items-center justify-center bg-white">
         <div className="max-w-md w-full space-y-8 p-8">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl overflow-hidden  mb-4">

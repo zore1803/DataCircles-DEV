@@ -200,7 +200,11 @@ const BillingSidebar = ({ subscription }) => {
             <span className="text-gray-400 font-normal"> · {formatPrice(recurringTotal)}</span>
           )}
         </Row>
-        {seatStatus && <Row label="Seats">{seatStatus.occupiedSeats} / {seatStatus.totalSeats}</Row>}
+        {seatStatus && (
+          <Row label="Seats">
+            Admin {seatStatus.occupiedAdminSeats}/{seatStatus.includedSeats} · Staff {seatStatus.occupiedStaffSeats}/{seatStatus.totalStaffSeats}
+          </Row>
+        )}
         {/* Task 4 (Aug 2026), extended per live-QA follow-up: monthly and
             annual add-ons shown separately (they can coexist as independent
             billable items — Phase 2c — with different prices/cadences) AND

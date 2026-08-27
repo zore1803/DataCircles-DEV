@@ -1391,7 +1391,7 @@ const Header = () => {
   return (
     <>
       <header
-        className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
+        className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 sm:px-6 lg:px-8 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
         {/* Left Section: Breadcrumb / Dashboard tabs */}

@@ -1082,7 +1082,7 @@ const PurchaseReturn = () => {
     const endItem = Math.min(currentPage * limit, totalCount);
 
     return (
-      <div className="flex items-center justify-between w-full px-4 lg:px-6">
+      <div className="flex items-center justify-between w-full px-4 sm:px-6 lg:px-8">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1435,7 +1435,7 @@ const PurchaseReturn = () => {
         return (
           <>
             <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
-            <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed dc-panel-card w-[calc(100%-3rem)] max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -1715,7 +1715,7 @@ const PurchaseReturn = () => {
 
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
         >
           {showBulkStrip ? (
@@ -1935,7 +1935,7 @@ const PurchaseReturn = () => {
         <div
           ref={tableScrollRef}
           className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
-          style={{ position: "fixed", left: "var(--sidebar-width, 0px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
+          style={{ position: "fixed", left: "var(--sidebar-width, 0px)", paddingLeft: "var(--content-inset, 16px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
         >
           <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || purchaseReturns.length > 0 ? "border-b" : ""}`}>
             <table
@@ -2041,6 +2041,7 @@ const PurchaseReturn = () => {
                           <tr
                             key={row.id}
                             className={`bg-white hover:bg-blue-50 transition-colors ${selectedReturnsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            style={{ height: 37, maxHeight: 37 }}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;
@@ -2057,12 +2058,16 @@ const PurchaseReturn = () => {
                                   key={cell.id}
                                   style={{
                                     width: cell.column.getSize(),
+                                    height: "37px",
+                                    maxHeight: "37px",
+                                    overflow: "hidden",
+                                    boxSizing: "border-box",
                                     position: isSticky ? "sticky" : "static",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 10 : 1,
                                   }}
-                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                                 >
                                   <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

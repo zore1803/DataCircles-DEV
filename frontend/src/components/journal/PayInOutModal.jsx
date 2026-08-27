@@ -132,6 +132,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
   const [notifySMS, setNotifySMS] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerEmailError, setCustomerEmailError] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [signatures, setSignatures] = useState([]);
   const [selectedSignature, setSelectedSignature] = useState("");
@@ -174,6 +175,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
     setNotifySMS(false);
     setNotifyEmail(false);
     setCustomerEmail("");
+    setCustomerEmailError("");
     setCustomerPhone("");
     setSelectedSignature("");
 
@@ -217,6 +219,12 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
       toast.error("Please enter a valid amount greater than 0");
       return;
     }
+
+    if (notifyEmail && customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      setCustomerEmailError("Invalid email format");
+      return;
+    }
+    setCustomerEmailError("");
 
     setLoading(true);
     try {
@@ -282,7 +290,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
 
         {/* Scrollable body */}
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <form id="payinout-form" onSubmit={handleSubmit}>
+          <form id="payinout-form" onSubmit={handleSubmit} noValidate>
             {/* Current -> projected balance, so the effect is visible before saving */}
             <div className="mx-6 mt-4 mb-1 flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 border border-[#1F2937]/10">
               <span className="text-[11px] text-gray-500">Journal balance</span>
@@ -501,10 +509,16 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                       <input
                         type="email"
                         value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        onChange={(e) => {
+                          setCustomerEmail(e.target.value);
+                          if (customerEmailError) setCustomerEmailError("");
+                        }}
                         placeholder="Customer email address"
-                        className={fieldClass}
+                        className={`${fieldClass} ${customerEmailError ? "border-red-500" : ""}`}
                       />
+                      {customerEmailError && (
+                        <p className="mt-1 text-xs text-red-600">{customerEmailError}</p>
+                      )}
                     </div>
                   )}
                 </div>

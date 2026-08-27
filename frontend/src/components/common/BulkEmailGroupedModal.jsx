@@ -68,8 +68,11 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
     };
   }, [isOpen, selectedIds, documents, emailOverrides]);
 
-  const sendableIds = groups.filter(g => g.email.trim() !== "").flatMap((g) => g.invoices.map((inv) => inv._id));
-  const totalEmails = groups.filter(g => g.email.trim() !== "").length;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isValidGroupEmail = (g) => g.email.trim() !== "" && emailRegex.test(g.email.trim());
+  const sendableIds = groups.filter(isValidGroupEmail).flatMap((g) => g.invoices.map((inv) => inv._id));
+  const totalEmails = groups.filter(isValidGroupEmail).length;
+  const invalidFormatCount = groups.filter((g) => g.email.trim() !== "" && !emailRegex.test(g.email.trim())).length;
 
   const handleSend = async () => {
     if (sendableIds.length === 0) return;
@@ -185,6 +188,9 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
                           className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all placeholder:text-gray-400 bg-white shadow-sm"
                         />
                         {!group.email && <p className="text-[10px] text-red-500 absolute -bottom-4 right-0">Email required</p>}
+                        {group.email.trim() !== "" && !emailRegex.test(group.email.trim()) && (
+                          <p className="text-[10px] text-red-500 absolute -bottom-4 right-0">Invalid email format</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -237,6 +243,14 @@ const BulkEmailGroupedModal = ({ isOpen, onClose, selectedIds, documents, onSucc
               &nbsp;·&nbsp;
               {sendableIds.length} invoice{sendableIds.length !== 1 ? "s" : ""}{" "}
               attached
+              {invalidFormatCount > 0 && (
+                <>
+                  &nbsp;·&nbsp;
+                  <span className="text-red-500">
+                    {invalidFormatCount} invalid email{invalidFormatCount !== 1 ? "s" : ""}
+                  </span>
+                </>
+              )}
             </p>
           </div>
 

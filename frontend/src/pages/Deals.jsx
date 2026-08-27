@@ -1340,7 +1340,7 @@ function Deals() {
   const fetchStatuses = async () => {
     try {
       const res = await API.get("/kanban");
-      setStatuses(res.data?.statuses);
+      setStatuses(res.data?.statuses || []);
     } catch (error) {
       console.error("Error fetching statuses:", error);
       toast.error("Failed to fetch statuses", {
@@ -1490,7 +1490,7 @@ function Deals() {
       if (error.response && error.response.status === 402) {
         errorMessage = error.response.data.message || "An active subscription is required to make changes.";
       } else if (error.response && error.response.status === 403) {
-        errorMessage = error.response.data.message || "Access denied";
+        errorMessage = error.response.data.message || error.response.data.error || "Access denied";
       }
       toast.error(errorMessage, {
         id: loadingToast,
@@ -2293,7 +2293,7 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className={`fixed right-0 border-b flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -2615,7 +2615,7 @@ function Deals() {
 
       {showStats && (
         <div
-          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
+          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 39,
@@ -2755,7 +2755,7 @@ function Deals() {
 
         {/* Delete Modal */}
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-6 h-6 text-red-600" />

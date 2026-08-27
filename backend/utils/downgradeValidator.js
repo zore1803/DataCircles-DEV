@@ -119,7 +119,7 @@ async function validateSeats(subscription, targetPlanId, plannedNewAddons = [], 
     }, 0);
   }
 
-  const includedSeats = targetPlan.features?.includedSeats ?? 1;
+  const includedSeats = (targetPlan.features?.includedSeats ?? 1) + (targetPlan.features?.staffSeats ?? 0);
 
   // The seat add-on actually purchasable on the TARGET plan — looked up
   // before computing planned quantity, since plannedNewAddons must be

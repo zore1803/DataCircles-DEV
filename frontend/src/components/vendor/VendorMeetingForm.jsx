@@ -490,7 +490,7 @@ const VendorMeetingForm = ({
                       onChange={(e) => handleChange("time", e.target.value)}
                       className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 ${
                         timeConflict
-                          ? "border-red-300 bg-red-50 focus:ring-red-500"
+                          ? "border-red-500 bg-red-50 focus:ring-red-500"
                           : "border-gray-300 bg-white focus:ring-purple-500"
                       }`}
                     />

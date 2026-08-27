@@ -1136,7 +1136,7 @@ export default function PaymentsTimeline() {
           block stacked (name + video icon, subtitle below) instead of a
           single title+badge line. ──────────────────────────────────────── */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -1531,6 +1531,7 @@ export default function PaymentsTimeline() {
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
           top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0),
+          paddingLeft: "var(--content-inset, 16px)",
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -1614,11 +1615,12 @@ export default function PaymentsTimeline() {
                 <tr
                   key={doc._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(doc._id) ? "!bg-blue-50" : ""}`}
+                  style={{ height: 37, maxHeight: 37 }}
                 >
                   {/* Selection cell */}
                   <td
                     style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
                       <input
@@ -2305,7 +2307,7 @@ export default function PaymentsTimeline() {
                         onChange={(e) => setSelfTransferAmount(e.target.value)}
                         className={`w-full h-11 px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 text-sm font-bold transition-all ${
                           isOverdraft
-                            ? "border-red-300 bg-red-50/10 focus:border-red-500 focus:ring-red-500 text-red-600"
+                            ? "border-red-500 bg-red-50/10 focus:ring-red-500 text-red-600"
                             : selfTransferAmount
                               ? "border-emerald-300 bg-emerald-50/10 focus:border-emerald-500 focus:ring-emerald-500 text-emerald-600"
                               : "border-[#E1E4EA] focus:border-[#0085FF] focus:ring-[#0085FF] text-gray-700"

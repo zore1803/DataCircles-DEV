@@ -188,7 +188,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
   };
 
   const getBorderColor = () => {
-    if (error) return "border-red-300 focus:ring-red-500";
+    if (error) return "border-red-500 focus:ring-red-500";
     return "border-[#1F2937]/10 focus:ring-blue-500";
   };
 

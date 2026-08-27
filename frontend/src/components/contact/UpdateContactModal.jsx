@@ -22,6 +22,7 @@ const UpdateContactModal = ({
   const [profilePreview, setProfilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
 
   const getRandomColor = (name) => {
     const colors = [
@@ -70,6 +71,7 @@ const UpdateContactModal = ({
       setProfilePicture(null);
       setProfilePreview(null);
       setError("");
+      setEmailError("");
     }
   }, [contact, isOpen]);
 
@@ -107,9 +109,15 @@ const UpdateContactModal = ({
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setEmailError("Invalid email format");
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
+      setEmailError("");
 
       const formData = new FormData();
       formData.append("name", form.name);
@@ -150,7 +158,7 @@ const UpdateContactModal = ({
       if (err.response?.status === 402) {
         setError(err.response?.data?.message || "An active subscription is required to make changes.");
       } else if (err.response?.status === 403) {
-        setError(err.response.data.message || "Access denied");
+        setError(err.response.data.message || err.response.data.error || "Access denied");
       } else {
         setError(err.response?.data?.error || "Failed to update contact");
       }
@@ -162,7 +170,7 @@ const UpdateContactModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -178,7 +186,7 @@ const UpdateContactModal = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} noValidate className="p-6">
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-700 text-sm">{error}</p>
@@ -260,11 +268,19 @@ const UpdateContactModal = ({
               <input
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                onChange={(e) => {
+                  setForm({ ...form, email: e.target.value });
+                  if (emailError) setEmailError("");
+                }}
+                className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent ${
+                  emailError ? "border-red-500" : "border-gray-300"
+                }`}
                 placeholder="Enter Email"
                 required
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-600">{emailError}</p>
+              )}
             </div>
 
             <div>

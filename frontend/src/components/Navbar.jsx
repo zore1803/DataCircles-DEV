@@ -159,14 +159,18 @@ const Navbar = () => {
   // 280px panel overlay the page.
   useEffect(() => {
     const applyWidth = () => {
+      const isExpanded = isHovered || isPinned;
       if (window.innerWidth >= 1024) {
         document.documentElement.style.setProperty(
           "--sidebar-width",
-          isHovered || isPinned ? "280px" : "64px"
+          isExpanded ? "280px" : "64px"
         );
       } else {
         document.documentElement.style.setProperty("--sidebar-width", "0px");
       }
+      // List/table content stays edge-to-edge against the sidebar in every
+      // state (collapsed or expanded/pinned) — no gutter.
+      document.documentElement.style.setProperty("--content-inset", "0px");
     };
     applyWidth();
     window.addEventListener("resize", applyWidth);

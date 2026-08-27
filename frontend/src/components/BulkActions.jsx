@@ -142,7 +142,7 @@ const BulkActions = ({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
         {/* Modal */}
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           {/* Header */}

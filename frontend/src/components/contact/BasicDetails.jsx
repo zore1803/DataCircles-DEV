@@ -83,7 +83,7 @@ const LifecycleStageModal = ({ isOpen, onClose, contact, onUpdate }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg shadow-xl p-5 w-full max-w-md border border-gray-200">
         <div className="flex items-center justify-between mb-5">
           <div>

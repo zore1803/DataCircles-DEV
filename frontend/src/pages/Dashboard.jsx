@@ -1058,8 +1058,9 @@ function Dashboard() {
     return { clearedPct, topClient, topClientPct, points, linePath, months: months.map((m) => m.month) };
   }, [invoices, deals, invoiceStats]);
 
-  // Sales Revenue widget — 100 evenly-spaced points across the last 12 months, seeded with a
-  // gentle upward trend and topped up with real invoice totals so the demo chart has a dense curve to scroll through.
+  // Sales Revenue widget — 100 evenly-spaced points across the last 12 months,
+  // built entirely from this org's own invoices (no fabricated baseline/noise —
+  // a org with no invoices yet sees a flat line at 0, not a fake growth curve).
   const monthlySalesRevenueData = useMemo(() => {
     const pointCount = 100;
     const totalDays = 365;
@@ -1067,24 +1068,12 @@ function Dashboard() {
     const startTime = now.getTime() - totalDays * 24 * 60 * 60 * 1000;
     const msPerPoint = (totalDays * 24 * 60 * 60 * 1000) / (pointCount - 1);
 
-    // Deterministic pseudo-random noise per point (stable across re-renders) using a seeded hash.
-    const pseudoRandom = (seed) => {
-      const x = Math.sin(seed * 12.9898) * 43758.5453;
-      return x - Math.floor(x);
-    };
-
-    let trailingRevenue = 400000;
     const points = Array.from({ length: pointCount }, (_, i) => {
       const d = new Date(startTime + i * msPerPoint);
-      const progress = i / (pointCount - 1);
-      const growthBaseline = 400000 + progress * 500000;
-      const wobble = (pseudoRandom(i) - 0.5) * 220000;
-      // Smooth the noise against the previous point so consecutive values don't jump around.
-      trailingRevenue = trailingRevenue * 0.55 + (growthBaseline + wobble) * 0.45;
       return {
         date: d,
         month: d.toLocaleDateString("en-US", { day: "2-digit", month: "short" }),
-        revenue: Math.max(0, Math.round(trailingRevenue / 500) * 500),
+        revenue: 0,
       };
     });
 
@@ -1097,16 +1086,16 @@ function Dashboard() {
       points[idx].revenue += inv.amount || 0;
     });
 
-    // Inverse wave: a pure cosine curve (not derived from the noisy data) that starts
-    // high while revenue is low and eases down as revenue trends up over the year —
-    // a clean sinusoidal shape rather than a mirrored copy of the real line.
-    const revenueMax = Math.max(...points.map((p) => p.revenue));
-    const revenueMin = Math.min(...points.map((p) => p.revenue));
-    const mid = (revenueMax + revenueMin) / 2;
-    const amplitude = (revenueMax - revenueMin) / 2;
+    // Trend line: a real trailing moving average of this org's own revenue
+    // (not a decorative shape) — smooths the day-to-day spikes so the actual
+    // direction of the business is visible alongside the raw daily total.
+    const windowSize = 10;
+    let windowSum = 0;
     points.forEach((p, i) => {
-      const t = i / (pointCount - 1);
-      p.inverseRevenue = mid + amplitude * Math.cos(t * Math.PI);
+      windowSum += p.revenue;
+      if (i >= windowSize) windowSum -= points[i - windowSize].revenue;
+      const count = Math.min(i + 1, windowSize);
+      p.trendRevenue = windowSum / count;
     });
 
     return points;
@@ -1234,7 +1223,7 @@ function Dashboard() {
   // ------------------- Loading UI -------------------
   // if (loading) {
   //   return (
-  //     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 z-50">
+  //     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 z-[10000]">
   //       <img
   //         src={logo}
   //         alt="Loading..."
@@ -1286,7 +1275,7 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
@@ -1334,7 +1323,7 @@ function Dashboard() {
             same card shape (icon + label/value + bottom-right trend badge)
             as the Overview tab's KPI row. */}
         <div
-          className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+          className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ marginTop: 24 }}
         >
           {crmKpis.map(({ icon: Icon, label, value, trend, trendUp }, i) => (
@@ -1424,14 +1413,13 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center"
+          className="box-border flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8"
           style={{
             position: "fixed",
             top: 64,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             zIndex: 40,
-            padding: "0px 24px",
             gap: 16,
             height: 64,
             minHeight: 64,
@@ -1475,7 +1463,7 @@ function Dashboard() {
 
         {/* KPI Cards */}
         <div
-          className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+          className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ gap: 16, marginTop: 24 }}
         >
           {[
@@ -2168,7 +2156,7 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -2218,7 +2206,7 @@ function Dashboard() {
 
       {/* KPI Cards */}
       <div
-        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
         style={{ marginTop: 24 }}
       >
         {[
@@ -2450,7 +2438,7 @@ function Dashboard() {
                     />
                     <Line
                       type="natural"
-                      dataKey="inverseRevenue"
+                      dataKey="trendRevenue"
                       stroke="#34C759"
                       strokeWidth={2}
                       strokeDasharray="4 3"

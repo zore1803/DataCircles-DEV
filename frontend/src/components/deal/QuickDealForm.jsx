@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import API, { configureAxios } from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
@@ -39,6 +39,11 @@ const QuickDealForm = ({
 
   // Add validation errors state
   const [validationErrors, setValidationErrors] = useState({});
+  const titleInputRef = useRef(null);
+  const amountInputRef = useRef(null);
+  const companyRef = useRef(null);
+  const contactRef = useRef(null);
+  const statusRef = useRef(null);
 
   useEffect(() => {
     setShouldRender(true);
@@ -178,7 +183,7 @@ const QuickDealForm = ({
 
     const hasError = validationErrors[fieldDef.name];
     const inputClassName = `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
-        ? 'border-red-300 ring-1 ring-red-500'
+        ? 'border-red-500 focus:ring-red-500'
         : 'border-[#1F2937]/10 focus:ring-blue-500'
       }`;
 
@@ -203,7 +208,6 @@ const QuickDealForm = ({
             placeholder={`Select ${fieldDef.name}`}
             displayKey="name"
             valueKey="_id"
-            required={fieldDef.required}
             compact
           />
         );
@@ -213,7 +217,7 @@ const QuickDealForm = ({
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className={`w-full border rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter resize-vertical ${hasError ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'}`}
+            className={`w-full border rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter resize-vertical ${hasError ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'}`}
             placeholder={`Enter ${fieldDef.name}`}
           />
         );
@@ -320,6 +324,11 @@ const QuickDealForm = ({
       hasErrors = true;
     }
 
+    if (!form.status || !form.status.trim()) {
+      errors.status = "Status is required";
+      hasErrors = true;
+    }
+
     // Validate required company
     if (!form.company) {
       errors.company = "Please select a company";
@@ -345,7 +354,26 @@ const QuickDealForm = ({
 
     if (hasErrors) {
       setValidationErrors(errors);
-      toast.error("Please fill in all required fields");
+
+      // Scroll to whichever invalid field appears first on the page (not
+      // necessarily the one checked first above), so the user always lands
+      // on the top-most problem instead of being surprised by one further
+      // down after fixing what looked like the only error.
+      const candidates = [
+        errors.title ? titleInputRef.current : null,
+        errors.amount ? amountInputRef.current : null,
+        errors.status ? statusRef.current : null,
+        errors.company ? companyRef.current : null,
+        errors.contact ? contactRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -467,7 +495,7 @@ const QuickDealForm = ({
         className={`fixed dc-panel-card z-[10001] dc-panel-w bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full overflow-hidden">
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Deal" : "Create New Deal"}
@@ -490,13 +518,13 @@ const QuickDealForm = ({
                 Deal Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 value={form.title}
                 onChange={(e) => handleFormChange("title", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 placeholder="Enter Deal Title"
-                required
               />
               {validationErrors.title && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.title}</p>
@@ -509,15 +537,15 @@ const QuickDealForm = ({
                 Amount <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={amountInputRef}
                 type="number"
                 value={form.amount}
                 onChange={(e) => handleFormChange("amount", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.amount ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.amount ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 min={"0"}
                 step="1"
                 placeholder="Enter Deal Amount"
-                required
               />
               {validationErrors.amount && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.amount}</p>
@@ -525,7 +553,7 @@ const QuickDealForm = ({
             </div>
 
             {/* Status */}
-            <div>
+            <div ref={statusRef}>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Status <span className="text-[#FF4935]">*</span>
               </label>
@@ -538,7 +566,7 @@ const QuickDealForm = ({
                   displayKey="name"
                   valueKey="_id"
                   className="flex-1"
-                  required={true}
+                  error={validationErrors.status}
                   compact
                 />
                 <button
@@ -548,10 +576,13 @@ const QuickDealForm = ({
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
               </div>
+              {validationErrors.status && (
+                <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.status}</p>
+              )}
             </div>
 
             {/* Company - NOW REQUIRED */}
-            <div>
+            <div ref={companyRef}>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Company <span className="text-[#FF4935]">*</span>
               </label>
@@ -564,7 +595,6 @@ const QuickDealForm = ({
                   displayKey="name"
                   valueKey="_id"
                   className="flex-1"
-                  required={true}
                   error={validationErrors.company}
                   compact
                 />
@@ -583,7 +613,7 @@ const QuickDealForm = ({
             </div>
 
             {/* Contact - NOW REQUIRED */}
-            <div>
+            <div ref={contactRef}>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Contact <span className="text-[#FF4935]">*</span>
               </label>
@@ -596,7 +626,6 @@ const QuickDealForm = ({
                   displayKey="displayName"
                   valueKey="_id"
                   className="flex-1"
-                  required={true}
                   error={validationErrors.contact}
                   compact
                 />

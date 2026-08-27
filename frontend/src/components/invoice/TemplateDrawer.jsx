@@ -376,7 +376,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
       <aside
         role="dialog"
         aria-label="Document setup"
-        className="fixed dc-panel-card w-full lg:w-[70vw] bg-white shadow-2xl flex flex-col overflow-hidden animate-slideInRight"
+        className="fixed dc-panel-card w-[calc(100%-3rem)] lg:w-[70vw] bg-white shadow-2xl flex flex-col overflow-hidden animate-slideInRight"
       >
         <header className="flex-shrink-0 flex items-center justify-between gap-3 px-5 pt-4 border-b border-[#E1E4EA]">
           <div className="flex items-center gap-2.5 min-w-0 pb-4">
@@ -401,20 +401,23 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
           </button>
         </header>
 
-        {/* Tab bar — one row that switches which control set fills the body. */}
-        <div className="flex-shrink-0 flex items-center gap-1 px-4 pt-3 border-b border-[#E1E4EA]">
+        {/* Tab bar — one row that switches which control set fills the body.
+            Smaller text/padding/icon and tighter gap on mobile so all three
+            tabs fit the narrower drawer width without clipping; back to the
+            original sizing at lg. */}
+        <div className="flex-shrink-0 flex items-center gap-0.5 lg:gap-1 px-2 lg:px-4 pt-3 border-b border-[#E1E4EA]">
           {TABS.map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => setTab(key)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors ${
+              className={`inline-flex items-center gap-1 lg:gap-1.5 px-2 lg:px-3.5 py-2 text-xs lg:text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors whitespace-nowrap ${
                 tab === key
                   ? "border-[#0085FF] text-[#0085FF]"
                   : "border-transparent text-[#525866] hover:text-[#1F2937]"
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4 flex-shrink-0" />
               {label}
             </button>
           ))}

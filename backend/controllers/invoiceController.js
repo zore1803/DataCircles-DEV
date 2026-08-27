@@ -379,6 +379,16 @@ const getAllInvoices = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to invoices this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const invoices = await Invoice.find(query).populate("deal");
     res.json(invoices);
   } catch (error) {
@@ -526,6 +536,17 @@ const getAllInvoicesPaginated = async (req, res) => {
       query.status = status;
     }
 
+    // own-only: restrict to invoices this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query.$and = query.$and ? [...query.$and, { $or: query.$or }, ownFilter] : [{ $or: query.$or }, ownFilter];
+        delete query.$or;
+      } else {
+        query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
+      }
+    }
+
     // Build sort object
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -567,6 +588,16 @@ const getAllInvoicesPaginated = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+// A user with own-only permission may only touch invoices they own — shared
+// here since getInvoiceById/updateInvoice/deleteInvoice all need the same check.
+// record.user may be a raw ObjectId or, if a caller populates it, a User
+// subdocument — handle both so a populated lookup doesn't false-negative.
+const isOwnedByUser = (record, userId) => {
+  const uid = userId.toString();
+  const recordUserId = record.user?._id ?? record.user;
+  return recordUserId?.toString() === uid;
 };
 
 const getMyInvoices = async (req, res) => {
@@ -633,6 +664,12 @@ const deleteInvoice = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
       return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(invoice, req.user._id)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({ error: "You can only delete invoices you own" });
     }
 
     if (invoice.stockMovementStatus === 'applied') {
@@ -784,6 +821,12 @@ const updateInvoice = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
       return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(invoice, req.user._id)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({ error: "You can only edit invoices you own" });
     }
 
     const previousItems = invoice.items.map(item => ({
@@ -1265,6 +1308,9 @@ const getInvoiceById = async (req, res) => {
       .populate("deal", "title")
       .populate("payments.recordedBy", "name email");
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    if (req.ownOnly && !isOwnedByUser(invoice, req.user._id)) {
+      return res.status(403).json({ error: "You can only view invoices you own" });
+    }
     res.json(invoice);
   } catch (error) {
     res.status(500).json({ error: `Failed to fetch invoice: ${error.message}` });

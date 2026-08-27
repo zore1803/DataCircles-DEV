@@ -35,6 +35,15 @@ const parseSearchAsDayRange = (search) => {
   return { $gte: start, $lte: end };
 };
 
+// A user with own-only permission may only touch tasks they're assigned to
+// (users array) or created — shared by getAllTask/getAllTasksPaginated/
+// updateTask/updateTaskStatus/deleteTask.
+const isTaskOwnedByUser = (task, userId) => {
+  const uid = userId.toString();
+  const inUsers = (task.users || []).some((u) => u?.toString() === uid);
+  return inUsers || task.createdBy?.toString() === uid;
+};
+
 const createTask = async (req, res) => {
   try {
     let assignedUsers = [];
@@ -244,6 +253,16 @@ const getAllTask = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to tasks this user is assigned to or created.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ users: req.user._id }, { createdBy: req.user._id }] };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const tasks = await Task.find(query)
       .populate("relatedEntities.entityId")
       .populate("users", "name email role profileUrl userData.mainData.profilePic")
@@ -364,6 +383,12 @@ const getAllTasksPaginated = async (req, res) => {
       end.setUTCHours(23, 59, 59, 999);
 
       query.dueDate = { $gte: start, $lte: end };
+    }
+
+    // own-only: restrict to tasks this user is assigned to or created.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ users: req.user._id }, { createdBy: req.user._id }] };
+      query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
     }
 
     // Sorting
@@ -579,6 +604,10 @@ const updateTask = async (req, res) => {
 
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    if (req.ownOnly && !isTaskOwnedByUser(task, req.user._id)) {
+      return res.status(403).json({ message: "You can only edit tasks you own" });
+    }
+
     // Validate new users belong to the organization if provided
     if (req.body.users) {
       const users = await User.find({
@@ -769,6 +798,19 @@ const updateTaskStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
+    const existing = await Task.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (req.ownOnly && !isTaskOwnedByUser(existing, req.user._id)) {
+      return res.status(403).json({ message: "You can only edit tasks you own" });
+    }
+
     const task = await Task.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -799,6 +841,10 @@ const deleteTask = async (req, res) => {
     });
 
     if (!task) return res.status(404).json({ message: "Task not found" });
+
+    if (req.ownOnly && !isTaskOwnedByUser(task, req.user._id)) {
+      return res.status(403).json({ message: "You can only delete tasks you own" });
+    }
 
     await task.deleteOne();
     res.status(200).json({ message: "Task deleted successfully" });

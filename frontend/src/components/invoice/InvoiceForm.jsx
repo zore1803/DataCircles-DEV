@@ -2222,6 +2222,16 @@ const CreateInvoicePanel = ({
   const [catalogue, setCatalogue] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [stockErrorMessage, setStockErrorMessage] = useState(null);
+  // Required/invalid fields are marked red in place instead of popping a
+  // toast — clears itself the moment the field is actually filled in/fixed.
+  const [fieldErrors, setFieldErrors] = useState({});
+  // Refs so a failed submit can scroll the invalid field into view instead
+  // of just coloring it — on mobile especially, a red border off-screen is
+  // easy to miss entirely.
+  const dealFieldRef = useRef(null);
+  const dateFieldRef = useRef(null);
+  const billingFieldRef = useRef(null);
+  const gstinFieldRef = useRef(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
@@ -2674,19 +2684,37 @@ const CreateInvoicePanel = ({
 
   const submitInvoice = async (statusValue) => {
     const isDraft = statusValue === "Draft";
-    if (!form.deal) return toast.error("Please select a deal.");
-    if (!form.date) return toast.error(`Please pick a ${docName} date.`);
+    // Required/invalid fields are marked red in place (see fieldErrors)
+    // instead of a toast — no notification popup, the field itself shows
+    // what's wrong.
+    const nextErrors = {};
+    if (!form.deal) nextErrors.deal = true;
+    if (!form.date) nextErrors.date = true;
+    if (isAddressEmpty(form.billingAddress)) nextErrors.billingAddress = true;
+    if (!isDraft && supportsGSTIN) {
+      if (!form.receiverGSTIN.trim()) nextErrors.receiverGSTIN = true;
+      else if (!GSTIN_REGEX.test(form.receiverGSTIN.trim().toUpperCase()))
+        nextErrors.receiverGSTIN = true;
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      // Scroll to whichever invalid field comes first on the form, not just
+      // color it — a red border off-screen (especially on mobile) is easy
+      // to miss entirely.
+      const firstInvalidRef = nextErrors.deal
+        ? dealFieldRef
+        : nextErrors.date
+          ? dateFieldRef
+          : nextErrors.billingAddress
+            ? billingFieldRef
+            : gstinFieldRef;
+      firstInvalidRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setFieldErrors({});
     // A quick draft only needs enough to identify the document; full GSTIN and
     // item validation apply once it's actually being created for real.
     if (!isDraft) {
-      if (supportsGSTIN) {
-        if (!form.receiverGSTIN.trim())
-          return toast.error("Receiver GSTIN is required.");
-        if (!GSTIN_REGEX.test(form.receiverGSTIN.trim().toUpperCase()))
-          return toast.error(
-            "Invalid GSTIN format. It should be 15 characters (e.g., 22AAAAA0000A1Z5)."
-          );
-      }
       const badItem = form.items.find(
         (it) => !it.name || !it.rate || !it.quantity
       );
@@ -2933,13 +2961,13 @@ const CreateInvoicePanel = ({
           two segments stay visually separate and the resizer gap between them
           casts nothing. `relative z-10` matters: without it the panels below
           paint their white background over the shadows and they vanish. */}
-      <div className="relative z-10 flex-shrink-0 h-16 flex items-stretch bg-white px-2">
+      <div className="relative z-10 flex-shrink-0 h-16 flex items-stretch bg-white px-2 border-b border-[#E1E4EA] lg:border-b-0">
         {/* Left: form header */}
         <div
           style={{ width: formWidth }}
-          className={`flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch ${hidePreview ? "" : "max-lg:!w-1/2"}`}
+          className="flex items-stretch px-3 lg:px-4 lg:pr-6 min-w-0 self-stretch max-lg:!w-full"
         >
-          <div className="w-full flex items-center justify-between gap-2 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
+          <div className="w-full flex items-center justify-between gap-2 lg:border-b lg:border-[#E1E4EA] lg:shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
             <div className="min-w-0">
               {isEditing && docNumber ? (
                 <>
@@ -3007,8 +3035,12 @@ const CreateInvoicePanel = ({
                       change the numbering before saving; split view silently
                       used whatever Document Settings configured with no
                       visibility into it. */}
+                  {/* Hidden on mobile — three editable boxes plus the title
+                      and action buttons don't fit one clean header row on a
+                      phone screen; document numbering is still reachable via
+                      Settings. */}
                   {!isEditing && (
-                    <div className="flex items-center border border-[#E1E4EA] rounded-lg overflow-hidden h-9 bg-white flex-shrink-0">
+                    <div className="hidden lg:flex items-center border border-[#E1E4EA] rounded-lg overflow-hidden h-9 bg-white flex-shrink-0">
                       <input
                         type="text"
                         value={form.invoicePrefix}
@@ -3061,7 +3093,7 @@ const CreateInvoicePanel = ({
                       : "Hide preview — full width form"
                 }
                 aria-pressed={onRequestFullWidth ? undefined : hidePreview}
-                className="h-8 w-8 flex items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                className="hidden lg:flex h-8 w-8 items-center justify-center bg-white border border-[#E1E4EA] rounded-full text-[#525866] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 {hidePreview && !onRequestFullWidth ? (
                   <Minimize2 className="w-3.5 h-3.5" />
@@ -3078,10 +3110,10 @@ const CreateInvoicePanel = ({
                 type="button"
                 onClick={() => setShowTemplates(true)}
                 title={`${docName} settings`}
-                className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
+                className="h-8 w-8 lg:w-auto lg:px-4 flex items-center justify-center lg:justify-start gap-1.5 bg-white border border-[#E1E4EA] rounded-full lg:rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
                 <Settings className="w-3.5 h-3.5 text-[#525866]" />
-                Settings
+                <span className="hidden lg:inline">Settings</span>
               </button>
               {/* Saving/creating lives in the sticky bar at the foot of the
                   form; this slot offers the draft escape hatch instead. */}
@@ -3092,7 +3124,8 @@ const CreateInvoicePanel = ({
                 className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <FileText className="w-3.5 h-3.5" />
-                Save as Draft
+                <span className="lg:hidden">Draft</span>
+                <span className="hidden lg:inline">Save as Draft</span>
               </button>
             </div>
           </div>
@@ -3100,9 +3133,12 @@ const CreateInvoicePanel = ({
         {/* Gap reserved for the absolute resizer line — no bottom border here,
             so the strip line reads as two separate parts (left / right). */}
         {!hidePreview && <div className="hidden lg:block w-1.5 flex-shrink-0 self-stretch" />}
-        {/* Right: preview header */}
+        {/* Right: preview header. Hidden outright on mobile — same reasoning
+            as the preview body pane below: no room for it on a phone-width
+            screen, so its "Change Template" button shouldn't crowd the
+            create-invoice actions on the left either. */}
         <div
-          className={`flex-1 min-w-0 items-stretch px-3 lg:pl-6 self-stretch ${hidePreview ? "hidden" : "flex"}`}
+          className={`flex-1 min-w-0 items-stretch px-3 lg:pl-6 self-stretch hidden ${hidePreview ? "lg:hidden" : "lg:flex"}`}
         >
           <div className="w-full flex items-center justify-between gap-4 border-b border-[#E1E4EA] shadow-[0_4px_5px_-3px_rgba(0,0,0,0.16)]">
           <div className="min-w-0">
@@ -3131,7 +3167,12 @@ const CreateInvoicePanel = ({
       </div>
 
       {/* Frame 2147225003 — the two panels sit side by side, each scrolling
-          independently, so neither one's height depends on the other. */}
+          independently, so neither one's height depends on the other. This
+          whole screen is `position: fixed` to the viewport (see the wrapper
+          a few lines up), not nested inside a scrolling page — so on mobile
+          the single visible pane (preview is hidden there) still needs its
+          own internal overflow-y-auto; there's no outer page scroll to fall
+          back on. */}
       <div ref={splitRef} className="flex-1 min-h-0 flex flex-col lg:flex-row items-stretch px-2 pb-2 pt-0 gap-0 overflow-hidden">
         {/* Left: form. Frame 1351649637
             The scrolling element itself must NOT be a flex container: when a
@@ -3148,8 +3189,8 @@ const CreateInvoicePanel = ({
             keep their natural `min-height: auto` and the outer box scrolls
             for real instead of silently crushing them. */}
         <div
-          style={{ width: formWidth }}
-          className="@container max-lg:!w-full flex-shrink-0 bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
+          style={{ width: formWidth, WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+          className="@container max-lg:!w-full flex-1 min-h-0 lg:flex-none bg-white p-3 lg:p-4 lg:pr-6 overflow-y-auto self-stretch"
         >
           <div className="w-full flex flex-col items-start gap-1">
           {/* Sections 01-04 (Details/Address/GST/Items) swap to the
@@ -3181,7 +3222,7 @@ const CreateInvoicePanel = ({
           <>
           <SectionHeader number={sectionNo.details} title={`${docName} Details`} />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={dealFieldRef}>
               <FieldLabel required>Select Deal</FieldLabel>
               <div className="flex items-center gap-2">
                 <PickerSelect
@@ -3189,7 +3230,9 @@ const CreateInvoicePanel = ({
                   options={dealOptions}
                   placeholder="Search and select deal"
                   icon={Search}
+                  invalid={fieldErrors.deal}
                   onSelect={(o) => {
+                    setFieldErrors((prev) => ({ ...prev, deal: false }));
                     // Switching the deal always replaces the Receiver GSTIN
                     // and billing/shipping address with whatever the new
                     // deal's company has — including clearing them to empty
@@ -3232,9 +3275,12 @@ const CreateInvoicePanel = ({
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
+              {fieldErrors.deal && (
+                <p className="text-xs text-red-600 mt-1">Deal is required</p>
+              )}
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={dateFieldRef}>
               <FieldLabel required>{docName} Date</FieldLabel>
               {/* Reserve the same 40px + gap the Select Deal "+" button takes,
                   so this input lines up with the deal picker's width. */}
@@ -3245,6 +3291,7 @@ const CreateInvoicePanel = ({
                     value={form.date}
                     onChange={(e) => {
                       const newDate = e.target.value;
+                      setFieldErrors((prev) => ({ ...prev, date: false }));
                       setForm((prev) => {
                         let newDueDate = prev.dueDate;
                         if (!isEditing && !prev.dueDate && newDate) {
@@ -3255,11 +3302,14 @@ const CreateInvoicePanel = ({
                         return { ...prev, date: newDate, dueDate: newDueDate };
                       });
                     }}
-                    className={inputClass}
+                    className={fieldErrors.date ? inputClass.replace("border-[#E1E4EA]", "border-red-400") : inputClass}
                   />
                 </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+              {fieldErrors.date && (
+                <p className="text-xs text-red-600 mt-1">{docName} date is required</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -3304,7 +3354,7 @@ const CreateInvoicePanel = ({
                     }
                     onClick={() => {
                       if (!form.date) {
-                        toast.error(`Please select the ${docName} date first.`);
+                        setFieldErrors((prev) => ({ ...prev, date: true }));
                         return;
                       }
                       const d = new Date(form.date);
@@ -3326,10 +3376,14 @@ const CreateInvoicePanel = ({
 
           <SectionHeader number={sectionNo.address} title="Billing & Shipping Address" />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
+            <div ref={billingFieldRef} className="contents">
             <AddressFieldsGroup
               label="Billing address"
+              required
+              invalid={fieldErrors.billingAddress}
               value={form.billingAddress}
               onChange={(next) => {
+                setFieldErrors((prev) => ({ ...prev, billingAddress: false }));
                 // Same seller-state vs. customer-state re-check the deal
                 // picker above runs, so editing the billing state directly
                 // on this document also flips CGST/SGST vs IGST instead of
@@ -3345,6 +3399,10 @@ const CreateInvoicePanel = ({
                 }));
               }}
             />
+            {fieldErrors.billingAddress && (
+              <p className="text-xs text-red-600 mt-1">Billing address is required</p>
+            )}
+            </div>
             <div className="flex items-center gap-2 @md:col-span-2 -mb-1">
               <button
                 type="button"
@@ -3386,19 +3444,25 @@ const CreateInvoicePanel = ({
           <>
           <SectionHeader number={sectionNo.billing} title="Billing & Tax Information" />
           <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-2 w-full">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" ref={gstinFieldRef}>
               <FieldLabel required>Receiver GSTIN</FieldLabel>
               {/* Match the Select Deal picker width (reserve the "+" button space). */}
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={form.receiverGSTIN}
-                  onChange={(e) => setField("receiverGSTIN", e.target.value)}
+                  onChange={(e) => {
+                    setFieldErrors((prev) => ({ ...prev, receiverGSTIN: false }));
+                    setField("receiverGSTIN", e.target.value);
+                  }}
                   placeholder="Enter Receiver GSTIN (e.g., 22AAAAA0000A1Z5)"
-                  className={`${inputClass} flex-1 min-w-0`}
+                  className={`${fieldErrors.receiverGSTIN ? inputClass.replace("border-[#E1E4EA]", "border-red-400") : inputClass} flex-1 min-w-0`}
                 />
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+              {fieldErrors.receiverGSTIN && (
+                <p className="text-xs text-red-600 mt-1">Valid receiver GSTIN is required</p>
+              )}
             </div>
 
 
@@ -3990,15 +4054,17 @@ const CreateInvoicePanel = ({
         {/* Gap reserved for the absolute resizer line (rendered at panel level). */}
         {!hidePreview && <div className="hidden lg:block w-1.5 flex-shrink-0" />}
 
-        {/* Right: preview. Frame 1351649638 — stretches to fill whatever's left beside the form panel. */}
+        {/* Right: preview. Frame 1351649638 — stretches to fill whatever's left beside the form panel.
+            Hidden outright on mobile regardless of the hidePreview toggle — there's no room for a
+            side-by-side live preview on a phone-width screen. */}
         <div
-          className={`relative w-full lg:flex-1 min-w-0 bg-white p-3 lg:pl-6 flex-col items-start gap-4 self-stretch ${hidePreview ? "hidden" : "flex"}`}
+          className={`relative w-full lg:flex-1 min-w-0 bg-white p-3 lg:pl-6 flex-col items-start gap-4 self-stretch hidden ${hidePreview ? "lg:hidden" : "lg:flex"}`}
         >
           {/* Live invoice preview — mirrors the structure of the downloaded /
               printed document and reflects the form's changes in real time. */}
           <div
             ref={previewAreaRef}
-            className="group w-full flex-1 min-h-0 self-stretch overflow-y-auto overflow-x-hidden relative p-1.5"
+            className="group w-full lg:flex-1 lg:min-h-0 lg:self-stretch lg:overflow-y-auto overflow-x-hidden relative p-1.5"
           >
             {/* Full-view button — appears on hover, opens the same document
                 viewer as the eye action in the list (edit mode only). */}

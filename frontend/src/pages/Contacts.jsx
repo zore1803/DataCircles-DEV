@@ -1298,7 +1298,7 @@ function Contacts() {
       if (err.response?.status === 402) {
         errorMessage = err.response?.data?.message || "An active subscription is required to make changes.";
       } else if (err.response?.status === 403) {
-        errorMessage = err.response.data.message || "Access denied";
+        errorMessage = err.response.data.message || err.response.data.error || "Access denied";
       }
       toast.error(errorMessage, { id: loadingToast });
     } finally {
@@ -1429,7 +1429,7 @@ function Contacts() {
     if (!showMobileFilters) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-end justify-center z-50 md:hidden">
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-end justify-center z-[10000] md:hidden">
         <div className="bg-white w-full max-h-96 rounded-t-xl shadow-2xl">
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
@@ -2280,7 +2280,7 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -2870,7 +2870,7 @@ function Contacts() {
             // loads; the top progress bar reports the fetch instead.
             // No border-t: the toolbar strip right above already has its own
             // border-b, so a top border here would double up against it.
-            <div className="relative bg-white border-r border-b border-[#E1E4EA]">
+            <div className="relative bg-white border-r border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -2985,6 +2985,7 @@ function Contacts() {
                             <tr
                               key={row.id}
                               className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                              style={{ height: 37, maxHeight: 37 }}
                               onClick={(e) => {
                                 // While a row-actions (⋮) menu is open — for THIS row or
                                 // any other — a click anywhere on the table should only
@@ -3016,12 +3017,16 @@ function Contacts() {
                                     onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
                                     style={{
                                       width: cell.column.getSize(),
+                                      height: "37px",
+                                      maxHeight: "37px",
+                                      overflow: "hidden",
+                                      boxSizing: "border-box",
                                       position: isSticky ? "sticky" : "static",
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                     }}
-                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                                   >
                                     <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
                                       {flexRender(
@@ -3091,7 +3096,7 @@ function Contacts() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-100 p-2 rounded-lg">

@@ -42,7 +42,8 @@ const planConfigSchema = new mongoose.Schema({
       },
       rottenDeals: false,
       advancedReports: false,
-      includedSeats: 1,
+      includedSeats: 1, // admin seats — always the org creator, exactly 1
+      staffSeats: 0, // staff seats — everyone invited/joined via company code
       extraSeatPrice: {
         monthly: 0,
         yearly: 0,

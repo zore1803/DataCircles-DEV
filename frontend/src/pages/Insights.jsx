@@ -106,57 +106,88 @@ const DealsFunnelChart = ({ stages }) => {
 
   const SVG_W = 770;
   const SVG_H = 310;
-
   const n = stages.length;
   const midY = SVG_H / 2;
-  const topLabelY = 30;
-  const bottomLabelY = SVG_H - 14;
-  // Equal-width columns (the horn's own silhouette already does the
-  // narrowing visually) — n-1 divider lines split it into n real segments.
+  const nameLabelY = SVG_H - 30;
+  const valueLabelY = SVG_H - 12;
+  const minH = SVG_H * 0.08;
+  const maxH = SVG_H - 76;
+
+  const values = stages.map((s) => Math.max(0, Number(s.value) || 0));
+  const maxVal = Math.max(...values, 1);
+  const heightFor = (v) => minH + (v / maxVal) * (maxH - minH);
+
+  // Equal-width columns; each segment's left/right edge height is driven by
+  // its stage's real value relative to the largest stage, so the shape
+  // actually reflects the data instead of a fixed decorative silhouette.
   const boundaryX = Array.from({ length: n + 1 }, (_, i) => (i / n) * SVG_W);
+  const boundaryH = [heightFor(values[0]), ...values.map((v) => heightFor(v))];
+
+  // Last segment is a highlighted accent (full opacity); the rest taper
+  // from solid down to faint, matching the original design's gradient feel
+  // regardless of how many stages there are.
+  const opacityFor = (i) => {
+    if (i === n - 1) return 1;
+    if (n <= 2) return 0.9;
+    const t = i / (n - 2);
+    return 0.9 - t * 0.7;
+  };
 
   return (
-    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} width="100%" height="100%" style={{ overflow: "visible" }}>
-      {/* Base horn silhouette — exact path data from the Figma source, 5
-          overlapping bezier petals at decreasing opacity blending into one
-          smooth tapering shape. Purely decorative background; the divider
-          lines/labels/badges above it are what carries the real data. */}
-      <g>
-        <path opacity="0.2" d="M151.575 45.5732L105.747 35.1826C94.8692 32.7162 85.0961 26.7608 77.9175 18.2246C68.2014 6.67093 53.8768 0 38.7808 0H-0.000488281V309.184H38.7808C53.8768 309.184 68.2014 302.513 77.9175 290.959C85.0961 282.423 94.8692 276.468 105.747 274.002L151.575 263.61V45.5732Z" fill="#0085FF" />
-        <path opacity="0.2" d="M203.578 256.031C212.601 254.612 221.127 250.964 228.384 245.418C237.957 238.102 249.672 234.138 261.721 234.138H305.423V75.1211H261.721C249.672 75.1211 237.957 71.157 228.384 63.8408C221.127 58.295 212.601 54.6478 203.578 53.2285L154.606 45.5244V263.734L203.578 256.031Z" fill="#0085FF" fillOpacity="0.75" />
-        <path opacity="0.2" d="M460.03 110.828L413.481 104.314C402.434 102.769 391.971 98.4024 383.102 91.6367C373.144 84.0402 361.201 79.4863 348.713 78.5244L308.455 75.4229V233.195L349.161 230.256C361.38 229.373 373.119 225.136 383.083 218.009C391.978 211.648 402.302 207.577 413.144 206.154L460.03 200.004V110.828Z" fill="#0085FF" fillOpacity="0.5" />
-        <path opacity="0.2" d="M615.393 134.536L566.5 131.367C557.153 130.761 548.188 127.435 540.709 121.797C533.101 116.061 523.958 112.719 514.445 112.197L463.818 109.42V199.758L513.621 197.025C523.691 196.473 533.396 193.063 541.599 187.196C549.735 181.378 559.348 177.976 569.333 177.382L615.393 174.641V134.536Z" fill="#0085FF" fillOpacity="0.25" />
-        <path opacity="0.2" d="M770 174.945V133.594H618.424V174.945H770Z" fill="#0085FF" />
-      </g>
-
-      {/* The first stage sits before any divider, so it needs its own
-          value/name label at the funnel's left edge instead of at a
-          boundary — otherwise only the later stages (at dividers) get labeled. */}
-      <text x={boundaryX[0] + 4} y={topLabelY} textAnchor="start" fontSize={13} fontWeight={600} fill="#0E121B">
-        ₹{formatNumberToIndian(Math.round(stages[0].value))}
-      </text>
-      <text x={boundaryX[0] + 4} y={bottomLabelY} textAnchor="start" fontSize={12} fill="#525866">
-        {stages[0].name}
-      </text>
-
-      {/* Divider lines + value (above) / stage name (below) labels, at the
-          boundary between each pair of consecutive stages. */}
-      {stages.slice(0, -1).map((stage, i) => {
-        const x = boundaryX[i + 1];
+    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} width="100%" height="100%" style={{ overflow: "visible" }} preserveAspectRatio="none">
+      {stages.map((stage, i) => {
+        const x0 = boundaryX[i];
+        const x1 = boundaryX[i + 1];
+        const h0 = boundaryH[i];
+        const h1 = boundaryH[i + 1];
+        const top0 = midY - h0 / 2;
+        const top1 = midY - h1 / 2;
+        const bot1 = midY + h1 / 2;
+        const bot0 = midY + h0 / 2;
+        // S-curve control points at 60% of the segment's width so each
+        // boundary tapers smoothly into the next instead of a hard corner —
+        // reads as one continuous funnel silhouette instead of stacked bars.
+        const cx = (x1 - x0) * 0.6;
+        const d = [
+          `M ${x0} ${top0}`,
+          `C ${x0 + cx} ${top0}, ${x1 - cx} ${top1}, ${x1} ${top1}`,
+          `L ${x1} ${bot1}`,
+          `C ${x1 - cx} ${bot1}, ${x0 + cx} ${bot0}, ${x0} ${bot0}`,
+          "Z",
+        ].join(" ");
+        // A separate stroke-only path tracing just the top curve — a thin
+        // brighter rim-light along the crest of the silhouette, matching a
+        // glossy/embossed funnel look rather than a flat fill.
+        const topEdge = `M ${x0} ${top0} C ${x0 + cx} ${top0}, ${x1 - cx} ${top1}, ${x1} ${top1}`;
         return (
-          <g key={`divider-${stage.name}`}>
-            <line x1={x} y1={20} x2={x} y2={SVG_H - 20} stroke="#1F2937" strokeOpacity={0.15} strokeWidth={1.5} />
-            <text x={x} y={topLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
-              ₹{formatNumberToIndian(Math.round(stages[i + 1].value))}
+          <g key={stage.name}>
+            <path d={d} fill="#0085FF" fillOpacity={opacityFor(i)} />
+            <path d={topEdge} fill="none" stroke="#FFFFFF" strokeOpacity={0.6} strokeWidth={2} strokeLinecap="round" />
+          </g>
+        );
+      })}
+
+      {/* White divider lines between segments. */}
+      {boundaryX.slice(1, -1).map((x, i) => (
+        <line key={`divider-${i}`} x1={x} y1={midY - boundaryH[i + 1] / 2} x2={x} y2={midY + boundaryH[i + 1] / 2} stroke="#FFFFFF" strokeWidth={2} />
+      ))}
+
+      {/* Stage name with its value stacked directly below it, centered per segment. */}
+      {stages.map((stage, i) => {
+        const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
+        return (
+          <g key={`label-${stage.name}`}>
+            <text x={cx} y={nameLabelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="#0E121B">
+              {stage.name}
             </text>
-            <text x={x} y={bottomLabelY} textAnchor="middle" fontSize={12} fill="#525866">
-              {stages[i + 1].name}
+            <text x={cx} y={valueLabelY} textAnchor="middle" fontSize={12} fill="#525866">
+              ₹{formatNumberToIndian(Math.round(values[i]))}
             </text>
           </g>
         );
       })}
 
-      {/* Percentage badge centered in each stage segment. */}
+      {/* Percentage badge centered in each segment. */}
       {stages.map((stage, i) => {
         const cx = (boundaryX[i] + boundaryX[i + 1]) / 2;
         return (
@@ -274,6 +305,7 @@ const Insights = () => {
   const [loading, setLoading] = useState(false);
   const [expandedRows, setExpandedRows] = useState([]);
   const [selectedUser, setSelectedUser] = React.useState("all");
+  const [kanbanStatuses, setKanbanStatuses] = useState(null);
 
   const toggleExpandRow = (companyId) => {
     setExpandedRows((prev) =>
@@ -365,6 +397,7 @@ const Insights = () => {
         purchasesRes,
         invoicesRes,
         meetingsRes,
+        kanbanRes,
       ] = await Promise.all([
         API.get("/contacts"),
         API.get("/companies"),
@@ -375,6 +408,12 @@ const Insights = () => {
         API.get("/purchases"),
         API.get("/invoices"),
         API.get("/meetings").catch(() => ({ data: { meetings: [] } })),
+        // The Deals pipeline stages are whatever's configured in Settings >
+        // Kanban Settings, not a fixed Open/Won/Lost trio — Insights' deal
+        // breakdowns should only ever show stages that currently exist
+        // there, not stale statuses left behind on deals after a stage was
+        // renamed/deleted.
+        API.get("/kanban").catch(() => ({ data: null })),
       ]);
 
       setContacts(contactsRes.data);
@@ -386,6 +425,7 @@ const Insights = () => {
       setPurchases(purchasesRes.data);
       setInvoices(invoicesRes.data);
       setMeetings(meetingsRes.data?.meetings || meetingsRes.data || []);
+      setKanbanStatuses(kanbanRes.data?.statuses || null);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -3016,7 +3056,7 @@ const Insights = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 items-stretch">
         {/* Deal Velocity by Company */}
-        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+        <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm flex flex-col">
           <h3 className="text-sm font-semibold text-[#0E121B]">Deal Velocity by Company</h3>
           <p className="text-xs text-[#525866] mt-1">Analyse average deal size vs sales cycle</p>
           <p className="text-[10px] text-[#525866] text-center mt-1">
@@ -3025,7 +3065,7 @@ const Insights = () => {
           {velocityPoints.length === 0 ? (
             <p className="text-sm text-gray-400 py-16 text-center">No won deals with companies yet</p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height="100%" className="flex-1 min-h-[260px]">
               <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
                 <XAxis
@@ -3338,6 +3378,29 @@ const Insights = () => {
       {}
     );
 
+    // The stages shown here must match Settings > Kanban Settings exactly —
+    // not just whatever distinct status strings happen to exist on deals.
+    // A deal can be left pointing at a status that's since been renamed or
+    // deleted from the board (a stale value), and that stage shouldn't
+    // reappear here as if it still exists. Falls back to deriving from the
+    // deals themselves only if the Kanban board couldn't be fetched.
+    const TERMINAL_STATUSES = ["Won", "Lost"];
+    const orderedStatuses = kanbanStatuses
+      ? kanbanStatuses.filter((s) => statusDistribution[s])
+      : [
+          ...Object.keys(statusDistribution)
+            .filter((s) => !TERMINAL_STATUSES.includes(s))
+            .sort((a, b) => statusDistribution[b].count - statusDistribution[a].count),
+          ...TERMINAL_STATUSES.filter((s) => statusDistribution[s]),
+        ];
+    const STATUS_COLOR_MAP = { Won: "#00C950", Lost: "#F60000", Open: "#0085FF", Negotiation: "#f59e0b" };
+    const FALLBACK_STATUS_COLORS = ["#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16"];
+    const statusColors = {};
+    let fallbackColorIdx = 0;
+    orderedStatuses.forEach((s) => {
+      statusColors[s] = STATUS_COLOR_MAP[s] || FALLBACK_STATUS_COLORS[fallbackColorIdx++ % FALLBACK_STATUS_COLORS.length];
+    });
+
     // Won, Lost, Open deals
     const wonDeals = filteredData.filteredDeals.filter(
       (d) => d.status === "Won"
@@ -3445,11 +3508,15 @@ const Insights = () => {
           wonValue: 0,
           lostValue: 0,
           openValue: 0,
+          statusCounts: {},
         };
       }
 
       acc[userId].totalDeals += 1;
       acc[userId].totalValue += deal.amount || 0;
+
+      const status = deal.status || "Unknown";
+      acc[userId].statusCounts[status] = (acc[userId].statusCounts[status] || 0) + 1;
 
       if (deal.status === "Won") {
         acc[userId].wonDeals += 1;
@@ -3502,62 +3569,46 @@ const Insights = () => {
       .sort((a, b) => (b.amount || 0) - (a.amount || 0))
       .slice(0, 5);
 
-    // Chart data for deal status pie chart
-    const dealStatusChartData = Object.entries(statusDistribution)
-      .map(([status, data]) => ({
+    // Chart data for deal status pie chart — same orderedStatuses source of
+    // truth as the funnel/table/User Performance/Revenue Trend, so a deal
+    // stuck on a stage that's been renamed/deleted from Kanban Settings
+    // doesn't show up here either.
+    const dealStatusChartData = orderedStatuses
+      .map((status) => ({
         name: status,
-        value: data.count,
-        amount: data.amount,
-        color:
-          status === "Won"
-            ? "#10b981"
-            : status === "Lost"
-            ? "#ef4444"
-            : status === "Negotiation"
-            ? "#f59e0b"
-            : status === "Open"
-            ? "#3b82f6"
-            : "#6b7280",
+        value: statusDistribution[status]?.count || 0,
+        amount: statusDistribution[status]?.amount || 0,
+        color: statusColors[status] || "#6b7280",
       }))
       .filter((item) => item.value > 0);
 
-    // Chart data for user performance - filtered
+    // Chart data for user performance - filtered. Dynamic per-status
+    // columns (statusCounts) instead of a fixed Won/Lost/Open trio, so
+    // custom Kanban stages show up here too.
+    const buildUserPerformanceRow = (user) => {
+      const row = { name: user.name.split(" ")[0], Total: user.totalDeals };
+      orderedStatuses.forEach((s) => {
+        row[s] = user.statusCounts[s] || 0;
+      });
+      return row;
+    };
     const userPerformanceChartData = (() => {
       if (selectedUser === "all") {
         // Show top 10 users when "All Users" is selected
-        return userStats.slice(0, 10).map((user) => ({
-          name: user.name.split(" ")[0],
-          Total: user.totalDeals,
-          Won: user.wonDeals,
-          Lost: user.lostDeals,
-          Open: user.openDeals,
-        }));
-      } else {
-        // Show only selected user
-        const user = userStats.find((u) => u.id === selectedUser);
-        if (!user) return [];
-        return [
-          {
-            name: user.name.split(" ")[0],
-            Total: user.totalDeals,
-            Won: user.wonDeals,
-            Lost: user.lostDeals,
-            Open: user.openDeals,
-          },
-        ];
+        return userStats.slice(0, 10).map(buildUserPerformanceRow);
       }
+      const user = userStats.find((u) => u.id === selectedUser);
+      return user ? [buildUserPerformanceRow(user)] : [];
     })();
 
-    // Deals Funnel data — this system only has 3 fixed deal statuses
-    // (Open/Won/Lost, not a Lead/Qualified/Proposal taxonomy), so the funnel
-    // always shows exactly those 3, in that order, each real value/count.
+    // Deals Funnel data — reflects every real status in use (custom Kanban
+    // stages included), not a fixed Open/Won/Lost trio.
     const funnelStages = (() => {
-      const baseline = openValue || 1;
-      return [
-        { name: "Open", value: openValue, count: openDeals.length },
-        { name: "Won", value: wonValue, count: wonDeals.length },
-        { name: "Lost", value: lostValue, count: lostDeals.length },
-      ].map((s) => ({ ...s, pct: Math.round((s.value / baseline) * 100) }));
+      const baseline = statusDistribution[orderedStatuses[0]]?.amount || 1;
+      return orderedStatuses.map((name) => {
+        const s = statusDistribution[name] || { count: 0, amount: 0 };
+        return { name, value: s.amount, count: s.count, pct: Math.round((s.amount / baseline) * 100) };
+      });
     })();
 
     // Deals by Stage table — same real stages as the funnel above (not a
@@ -3618,13 +3669,15 @@ const Insights = () => {
         const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
         return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) };
       });
-      const buckets = Object.fromEntries(months.map((m) => [m.key, { Open: 0, Won: 0, Lost: 0 }]));
+      const buckets = Object.fromEntries(
+        months.map((m) => [m.key, Object.fromEntries(orderedStatuses.map((s) => [s, 0]))])
+      );
       filteredData.filteredDeals.forEach((d) => {
         const created = new Date(d.createdAt);
         const key = `${created.getFullYear()}-${created.getMonth()}`;
         if (!buckets[key]) return;
-        const bucket = d.status === "Won" || d.status === "Lost" ? d.status : "Open";
-        buckets[key][bucket] += d.amount || 0;
+        const status = d.status && orderedStatuses.includes(d.status) ? d.status : orderedStatuses[0];
+        buckets[key][status] += d.amount || 0;
       });
       // A linear axis makes small months (₹7K-95K) visually indistinguishable
       // from 0 next to the ₹22L peak — a log scale keeps them readable
@@ -3634,13 +3687,11 @@ const Insights = () => {
       const LOG_FLOOR = 5000;
       return months.map((m) => {
         const raw = buckets[m.key];
-        return {
-          name: m.label,
-          ...raw,
-          OpenPlot: Math.max(raw.Open, LOG_FLOOR),
-          WonPlot: Math.max(raw.Won, LOG_FLOOR),
-          LostPlot: Math.max(raw.Lost, LOG_FLOOR),
-        };
+        const row = { name: m.label, ...raw };
+        orderedStatuses.forEach((s) => {
+          row[`${s}Plot`] = Math.max(raw[s], LOG_FLOOR);
+        });
+        return row;
       });
     })();
     // Compact, single-line ticks (no space before the unit, so recharts
@@ -3660,7 +3711,7 @@ const Insights = () => {
     // gridlines end up visibly uneven. Generating ticks with one constant
     // ratio instead guarantees every gap is pixel-identical.
     const revenueYAxis = (() => {
-      const allValues = revenueTrendData.flatMap((d) => [d.OpenPlot, d.WonPlot, d.LostPlot]);
+      const allValues = revenueTrendData.flatMap((d) => orderedStatuses.map((s) => d[`${s}Plot`]));
       const minV = Math.min(...allValues);
       const maxV = Math.max(...allValues);
       const TICK_COUNT = 7;
@@ -3730,9 +3781,6 @@ const Insights = () => {
           <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-[#0E121B]">Deals Funnel</h3>
-              <span className="text-xs text-[#525866]">
-                Win {winRate.toFixed(1)}% · Loss {lossRate.toFixed(1)}%
-              </span>
             </div>
             <div className="flex-1 flex items-center mt-2">
               <DealsFunnelChart stages={funnelStages} />
@@ -3742,14 +3790,10 @@ const Insights = () => {
           <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[360px] flex flex-col">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-sm font-semibold text-[#0E121B] opacity-70">Revenue Trend</h3>
-              <div className="flex items-center gap-4">
-                {[
-                  { key: "Lost", color: "#F60000" },
-                  { key: "Open", color: "#0085FF" },
-                  { key: "Won", color: "#00C950" },
-                ].map(({ key, color }) => (
+              <div className="flex items-center gap-4 flex-wrap">
+                {orderedStatuses.map((key) => (
                   <div key={key} className="flex items-center gap-1.5">
-                    <span className="inline-block w-5 h-0.5 rounded-full" style={{ background: color }} />
+                    <span className="inline-block w-5 h-0.5 rounded-full" style={{ background: statusColors[key] }} />
                     <span className="text-xs" style={{ color: "rgba(31,31,33,0.56)" }}>
                       {key} Deal Value
                     </span>
@@ -3757,7 +3801,7 @@ const Insights = () => {
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={280} className="mt-2">
+            <ResponsiveContainer width="100%" height="100%" className="mt-2 flex-1 min-h-0">
               <LineChart data={revenueTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(31,41,55,0.1)" />
                 <XAxis
@@ -3782,16 +3826,11 @@ const Insights = () => {
                   content={({ active, label, payload }) => {
                     if (!active || !payload?.length) return null;
                     const raw = payload[0]?.payload || {};
-                    const rows = [
-                      { key: "Lost", color: "#F60000" },
-                      { key: "Open", color: "#0085FF" },
-                      { key: "Won", color: "#00C950" },
-                    ];
                     return (
                       <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3">
                         <p className="text-sm font-semibold text-[#0E121B] mb-1">{label}</p>
-                        {rows.map(({ key, color }) => (
-                          <p key={key} className="text-sm" style={{ color }}>
+                        {orderedStatuses.map((key) => (
+                          <p key={key} className="text-sm" style={{ color: statusColors[key] }}>
                             {key} : ₹{formatNumberToIndian(raw[key] || 0)}
                           </p>
                         ))}
@@ -3799,9 +3838,17 @@ const Insights = () => {
                     );
                   }}
                 />
-                <Line type="monotone" dataKey="OpenPlot" name="Open" stroke="#0085FF" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="WonPlot" name="Won" stroke="#00C950" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="LostPlot" name="Lost" stroke="#F60000" strokeWidth={2} dot={false} />
+                {orderedStatuses.map((key) => (
+                  <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={`${key}Plot`}
+                    name={key}
+                    stroke={statusColors[key]}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -3950,9 +3997,15 @@ const Insights = () => {
                   <YAxis tick={{ fontSize: 10, fill: "#1F2937" }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Won" stackId="a" fill="#00C950" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="Lost" stackId="a" fill="#F60000" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="Open" stackId="a" fill="#0085FF" radius={[4, 4, 0, 0]} />
+                  {orderedStatuses.map((s, i) => (
+                    <Bar
+                      key={s}
+                      dataKey={s}
+                      stackId="a"
+                      fill={statusColors[s]}
+                      radius={i === orderedStatuses.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    />
+                  ))}
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -6282,24 +6335,6 @@ const Insights = () => {
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
       .slice(0, 5);
 
-    const statusSectionColors = {
-      Paid: { bg: "#34C759", text: "#FFFFFF" },
-      Sent: { bg: "#0085FF", text: "#FFFFFF" },
-      Overdue: { bg: "#F60000", text: "#FFFFFF" },
-      Draft: { bg: "#2A2726", text: "#FFFFFF" },
-      Pending: { bg: "#FC9C32", text: "#000000" },
-      Cancelled: { bg: "#78788D", text: "#FFFFFF" },
-    };
-    const statusSections = Object.entries(statusDistribution)
-      .filter(([, data]) => data.count > 0)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([status, data]) => ({
-        status,
-        count: data.count,
-        pct: totalInvoices > 0 ? (data.count / totalInvoices) * 100 : 0,
-        color: statusSectionColors[status] || { bg: "#0085FF", text: "#FFFFFF" },
-      }));
-
     const recentInvoiceActivity = [...filteredData.filteredInvoices]
       .filter((i) => i.updatedAt || i.createdAt)
       .sort(
@@ -6383,8 +6418,8 @@ const Insights = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[4fr_1fr] gap-4 items-stretch">
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[500px]">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E7E4E3]">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+            <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-[#21201F]/60">
                   Total invoiced this period
@@ -6410,38 +6445,23 @@ const Insights = () => {
               </div>
             </div>
 
-            <div className="flex items-stretch gap-1.5 pt-4" style={{ height: 420 }}>
-              {statusSections.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-                  No invoice data
+            <div className="mt-4 rounded-2xl p-6 flex flex-col justify-between max-w-[220px]" style={{ background: "#0085FF", height: 420 }}>
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm font-medium text-white/80">INVOICES</span>
+                <div className="flex items-center gap-1 text-white/90 flex-shrink-0">
+                  {totalInvoicedChange >= 0 ? (
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  )}
+                  <span className="text-xs font-medium">
+                    {Math.abs(totalInvoicedChange).toFixed(2)}%
+                  </span>
                 </div>
-              ) : (
-                statusSections.map((section) => (
-                  <div
-                    key={section.status}
-                    className="flex flex-col justify-between rounded-2xl p-4"
-                    style={{
-                      background: section.color.bg,
-                      color: section.color.text,
-                      flexGrow: Math.max(section.pct, 8),
-                      flexBasis: 0,
-                    }}
-                  >
-                    <span className="text-sm font-medium">{section.status}</span>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-lg font-medium">
-                        {section.pct.toFixed(0)}%
-                      </span>
-                      <span
-                        className="flex items-center justify-center px-1.5 py-0.5 rounded-md bg-white text-[10px] font-medium"
-                        style={{ color: "#21201F" }}
-                      >
-                        {section.count}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
+              </div>
+              <div className="text-2xl font-semibold text-white">
+                ₹{formatNumberToIndian(Math.round(totalAmount))}
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-4">
@@ -6813,7 +6833,7 @@ const Insights = () => {
           toolbar. Title text lives in the top navbar (Header.jsx) instead;
           this strip is just the spacer bar. */}
       <div
-        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,

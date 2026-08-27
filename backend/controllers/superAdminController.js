@@ -1682,7 +1682,7 @@ const updatePlan = async (req, res) => {
         return res.status(400).json({ error: 'features must be an object' });
       }
 
-      const numericFields = ['recordsLimit', 'emailTemplates', 'salesPipelines', 'customFields', 'recordTags', 'websiteForms', 'fileStorage', 'includedSeats'];
+      const numericFields = ['recordsLimit', 'emailTemplates', 'salesPipelines', 'customFields', 'recordTags', 'websiteForms', 'fileStorage', 'includedSeats', 'staffSeats'];
       for (const field of numericFields) {
         if (features[field] !== undefined && (typeof features[field] !== 'number' || features[field] < 0)) {
           return res.status(400).json({ error: `features.${field} must be a non-negative number` });

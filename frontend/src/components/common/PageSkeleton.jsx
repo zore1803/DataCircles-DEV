@@ -41,7 +41,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
         all sharing the same gap, matching the real collapsed-search strip.
         Mobile: filter/switcher fold away (same as the real mobile header),
         leaving just search + more-menu + add. */}
-    <div className="flex items-center gap-2 lg:gap-3 bg-white border-b border-gray-200 px-4 lg:px-6" style={{ height: 64 }}>
+    <div className="flex items-center gap-2 lg:gap-3 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8" style={{ height: 64 }}>
       <div className="flex flex-col gap-1.5 flex-shrink-0">
         <Skeleton width={50} height={16} />
         <Skeleton width={110} height={12} className="hidden sm:block" />
@@ -58,7 +58,7 @@ const KanbanSkeleton = ({ columns = 3, cards = 3, boardVariant = "kanban", table
     </div>
 
     {/* KPI strip: 4 stat cards — 2x2 grid on mobile, single row on desktop */}
-    <div className="grid grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-6 bg-white border-b border-gray-200 px-4 lg:px-6 py-4 lg:py-0" style={{ minHeight: 120 }}>
+    <div className="grid grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-6 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 lg:py-0" style={{ minHeight: 120 }}>
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="relative lg:flex-1 rounded-xl border border-gray-200 bg-white" style={{ padding: 16, height: 72 }}>
           <div className="flex items-end gap-3.5" style={{ height: 40 }}>
@@ -182,7 +182,7 @@ const InsightsSkeleton = () => (
   <div>
     {/* Fixed tabs strip */}
     <div
-      className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
+      className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
       style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
     >
       {/* One pill per real tab (Overview, Contacts, Companies, Deals, Vendors,

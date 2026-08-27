@@ -257,6 +257,16 @@ const getAllPerformaInvoices = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to proforma invoices this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const performaInvoices = await PerformaInvoice.find(query).populate("deal");
     res.json(performaInvoices);
   } catch (error) {
@@ -310,6 +320,17 @@ const getAllPerformaInvoicesPaginated = async (req, res) => {
     // Status filter
     if (status) {
       query.status = status;
+    }
+
+    // own-only: restrict to proforma invoices this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query.$and = query.$and ? [...query.$and, { $or: query.$or }, ownFilter] : [{ $or: query.$or }, ownFilter];
+        delete query.$or;
+      } else {
+        query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
+      }
     }
 
     // Build sort object
@@ -409,6 +430,17 @@ const downloadPerformaInvoice = async (req, res) => {
   }
 };
 
+// A user with own-only permission may only touch proforma invoices they
+// own — shared here since deletePerformaInvoice/updatePerformaInvoice both
+// need the same check.
+// record.user may be a raw ObjectId or, if a caller populates it, a User
+// subdocument — handle both so a populated lookup doesn't false-negative.
+const isOwnedByUser = (record, userId) => {
+  const uid = userId.toString();
+  const recordUserId = record.user?._id ?? record.user;
+  return recordUserId?.toString() === uid;
+};
+
 const deletePerformaInvoice = async (req, res) => {
   try {
     const performaInvoice = await PerformaInvoice.findOne({
@@ -418,6 +450,10 @@ const deletePerformaInvoice = async (req, res) => {
 
     if (!performaInvoice) {
       return res.status(404).json({ error: "proformaInvoice not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(performaInvoice, req.user._id)) {
+      return res.status(403).json({ error: "You can only delete proforma invoices you own" });
     }
 
     await performaInvoice.deleteOne();
@@ -489,6 +525,19 @@ const updatePerformaInvoice = async (req, res) => {
       }
       if (!finalReceiverGSTIN) {
         finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
+    if (req.ownOnly) {
+      const existing = await PerformaInvoice.findOne({
+        _id: req.params.id,
+        organization: req.user.organization,
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "proformaInvoice not found" });
+      }
+      if (!isOwnedByUser(existing, req.user._id)) {
+        return res.status(403).json({ error: "You can only edit proforma invoices you own" });
       }
     }
 

@@ -482,7 +482,7 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
   const fieldKeys = Object.keys(fieldData).filter((k) => !HIDDEN_RECORD_KEYS.has(k));
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-[10000] flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white h-full shadow-xl overflow-y-auto p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
@@ -832,7 +832,7 @@ function DuplicateReviewModal({ reviewId, onClose, onResolved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative w-full max-w-2xl max-h-[85vh] bg-white rounded-xl shadow-xl overflow-y-auto flex flex-col">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">

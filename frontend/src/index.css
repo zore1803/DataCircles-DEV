@@ -34,6 +34,19 @@
   min-height: 100vh;
 }
 
+/* Consistent left gutter between the sidebar edge and fixed-position page
+   content (toolbars, tables, footers) that pins itself via
+   `left: var(--sidebar-width, 0px)`. Applied ad-hoc as
+   `paddingLeft: "var(--content-inset, 16px)"` on flush-left wrappers that
+   don't already carry their own left padding (px-4/px-6/p-6/etc).
+   Kept in sync with the sidebar's collapsed/expanded state by
+   Navbar.jsx (0px collapsed — edge to edge; 16px once expanded). This
+   default (0px) only matters for the brief moment before that JS runs,
+   and matches the sidebar's default collapsed state. */
+:root {
+  --content-inset: 0px;
+}
+
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via
    `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
    whenever the sidebar expands/collapses/pins. Most of those inline styles
@@ -93,7 +106,12 @@
 }
 
 .dc-panel-w {
-  width: 100%;
+  /* Not 100%: dc-panel-card sets `right: 1.5rem` with no `left`, so a plain
+     100% width forces `left` to compute as -1.5rem to satisfy both,
+     overflowing every dc-panel-w consumer off-screen on mobile (confirmed
+     via VendorForm/CompanyForm/DealForm/etc. all clipping their left edge
+     by exactly 24px). This gives it a real, symmetric inset instead. */
+  width: calc(100% - 3rem);
 }
 
 .payment-panel {

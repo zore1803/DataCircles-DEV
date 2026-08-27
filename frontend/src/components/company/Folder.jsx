@@ -1054,7 +1054,7 @@ const AddLinkModal = ({ isOpen, onClose, onSubmit }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">Add Link</h3>
@@ -1134,7 +1134,7 @@ const EditLinkModal = ({ isOpen, onClose, onSubmit, initialName, initialUrl }) =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">Edit Link</h3>
@@ -1183,7 +1183,7 @@ const RenameFileModal = ({ isOpen, onClose, onSubmit, initialName }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4">
       <div className="bg-white rounded-lg p-4 w-full max-w-md border border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-900">Rename File</h3>

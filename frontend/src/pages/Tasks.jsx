@@ -158,17 +158,31 @@ const CustomKanbanIcon = (props) => (
 // Task Status Dropdown Component
 const StatusSelect = ({ task, onUpdate, query, statuses }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isOpen]);
 
   const getBadgeColor = (status) => {
     if (status === "Completed")
@@ -180,12 +194,19 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
     return "bg-gray-100 text-gray-800 border-gray-200";
   };
 
+  const openMenu = () => {
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+    setIsOpen(true);
+  };
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          isOpen ? setIsOpen(false) : openMenu();
         }}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${getBadgeColor(
           task.status,
@@ -198,8 +219,12 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 left-0 max-h-60 overflow-y-auto">
+      {isOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[10000] bg-white rounded-lg shadow-xl border border-gray-100 py-1 max-h-60 overflow-y-auto"
+        >
           {statuses.map((status) => (
             <button
               key={status}
@@ -222,7 +247,8 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -231,18 +257,32 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
 // Meeting Priority Dropdown Component
 const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
   const statuses = ["scheduled", "completed", "cancelled", "no-show"];
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isOpen]);
 
   const getBadgeColor = (status) => {
     if (status === "completed")
@@ -258,12 +298,19 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
 
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace("-", " ") : "");
 
+  const openMenu = () => {
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+    setIsOpen(true);
+  };
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          isOpen ? setIsOpen(false) : openMenu();
         }}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${getBadgeColor(
           meeting.status,
@@ -276,8 +323,12 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 left-0 max-h-60 overflow-y-auto">
+      {isOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[10000] bg-white rounded-lg shadow-xl border border-gray-100 py-1 max-h-60 overflow-y-auto"
+        >
           {statuses.map((status) => (
             <button
               key={status}
@@ -300,7 +351,8 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -2884,7 +2936,7 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16 gap-2 lg:gap-4"
+        className="flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 gap-2 lg:gap-4"
         style={{
           boxSizing: "border-box",
           height: 64,
@@ -3352,7 +3404,7 @@ function Tasks() {
           bar reports the fetch instead. */}
       {/* No border-t: the toolbar strip right above already has its own
           border-b, so a top border here would double up against it. */}
-      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3388,10 +3440,7 @@ function Tasks() {
                           right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                         }}
-                        /* No `overflow-hidden` on the boundary cell — it would clip
-                           the shadow overlay that deliberately hangs outside it.
-                           The inner `truncate` already handles long labels. */
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
@@ -3424,7 +3473,7 @@ function Tasks() {
                   numRows={taskPagination.limit}
                   columns={taskTable.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
                   hasCheckbox
-                  rowHeight={54}
+                  rowHeight={37}
                 />
               ) : tasks.length === 0 ? (
                 <tr>
@@ -3448,6 +3497,7 @@ function Tasks() {
                       handleTaskView(row.original);
                     }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedTasks.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
@@ -3460,13 +3510,16 @@ function Tasks() {
                           key={cell.id}
                           style={{
                             width: cell.column.getSize(),
-                            height: 54,
+                            height: "37px",
+                            maxHeight: "37px",
+                            overflow: "hidden",
+                            boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                          className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           {cellBoundaryShadowSide && (
@@ -3514,7 +3567,7 @@ function Tasks() {
           bar reports the fetch instead. */}
       {/* No border-t: the toolbar strip right above already has its own
           border-b, so a top border here would double up against it. */}
-      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3550,10 +3603,7 @@ function Tasks() {
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                         }}
-                        /* No `overflow-hidden` on the boundary cell — it would clip
-                           the shadow overlay that deliberately hangs outside it.
-                           The inner `truncate` already handles long labels. */
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${boundaryShadowSide ? "" : "overflow-hidden"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
@@ -3586,7 +3636,7 @@ function Tasks() {
                   numRows={meetingPagination.limit}
                   columns={meetingTable.getVisibleLeafColumns().filter((c) => c.id !== "selection")}
                   hasCheckbox
-                  rowHeight={54}
+                  rowHeight={37}
                 />
               ) : meetings.length === 0 ? (
                 <tr>
@@ -3604,6 +3654,7 @@ function Tasks() {
                       handleMeetingView(row.original);
                     }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedMeetings.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
@@ -3616,13 +3667,16 @@ function Tasks() {
                         key={cell.id}
                         style={{
                           width: cell.column.getSize(),
-                          height: 54,
+                          height: "37px",
+                          maxHeight: "37px",
+                          overflow: "hidden",
+                          boxSizing: "border-box",
                           position: isSticky ? "sticky" : "static",
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isSticky ? 10 : 1,
                         }}
-                        className="px-3 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                        className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         {cellBoundaryShadowSide && (
@@ -3796,7 +3850,7 @@ function Tasks() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             {/* Same content as before */}
             <div className="flex items-center gap-3 mb-4">

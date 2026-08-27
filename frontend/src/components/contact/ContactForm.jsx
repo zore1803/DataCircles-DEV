@@ -158,6 +158,8 @@ const ContactForm = ({
 
     if (!form.email.trim()) {
       errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errors.email = "Invalid email format";
     }
 
     if (!form.company) {

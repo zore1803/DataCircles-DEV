@@ -1466,7 +1466,7 @@ function ProductsServices() {
     const endItem = Math.min(currentPage * limit, totalCount);
 
     return (
-      <div className="flex items-center justify-between w-full px-4 lg:px-6">
+      <div className="flex items-center justify-between w-full px-4 sm:px-6 lg:px-8">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1706,7 +1706,7 @@ function ProductsServices() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -1974,7 +1974,7 @@ function ProductsServices() {
             bottom: !showLoadingSkeleton ? 64 : 0,
           }}
         >
-          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || items.length > 0 ? "border-b" : ""}`}>
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || items.length > 0 ? "border-b" : ""}`} style={{ paddingLeft: "var(--content-inset, 16px)" }}>
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -2101,6 +2101,7 @@ function ProductsServices() {
                               setShowDetails(true);
                             }}
                             className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedItemsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            style={{ height: 37, maxHeight: 37 }}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;
@@ -2117,12 +2118,16 @@ function ProductsServices() {
                                   key={cell.id}
                                   style={{
                                     width: cell.column.getSize(),
+                                    height: "37px",
+                                    maxHeight: "37px",
+                                    overflow: "hidden",
+                                    boxSizing: "border-box",
                                     position: isSticky ? "sticky" : "static",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 10 : 1,
                                   }}
-                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                                 >
                                   <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
                                     {flexRender(

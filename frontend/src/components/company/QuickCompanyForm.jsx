@@ -4,7 +4,23 @@ import { FaWhatsapp } from "react-icons/fa";
 import API from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
 import toast from "react-hot-toast";
-import { INDIA_STATES, COUNTRIES } from "../../constants/addressOptions";
+import { Country, State } from "country-state-city";
+
+// India first (GST is India-driven), then every other country alphabetically —
+// full list/state data from country-state-city instead of a hand-maintained one.
+const ALL_COUNTRIES = Country.getAllCountries();
+const COUNTRIES = [
+  "India",
+  ...ALL_COUNTRIES.filter((c) => c.name !== "India")
+    .map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b)),
+];
+const countryIsoByName = Object.fromEntries(ALL_COUNTRIES.map((c) => [c.name, c.isoCode]));
+const getStatesForCountry = (countryName) => {
+  const iso = countryIsoByName[countryName];
+  if (!iso) return [];
+  return State.getStatesOfCountry(iso).map((s) => s.name);
+};
 
 const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, editCompany = null }) => {
   const isEditing = !!editCompany;
@@ -35,6 +51,10 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       whatsapp: "",
     },
   });
+  const [nameError, setNameError] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [billingAddressError, setBillingAddressError] = useState(false);
+  const [shippingAddressErrors, setShippingAddressErrors] = useState([]);
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,6 +64,10 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [industries, setIndustries] = useState([]);
   const profilePictureInputRef = useRef(null);
+  const nameInputRef = useRef(null);
+  const emailInputRef = useRef(null);
+  const billingAddressRef = useRef(null);
+  const shippingAddressRefs = useRef([]);
   // Object URL for whatever file is currently picked, so both create and edit
   // show the actual image instead of just its filename. Revoked whenever the
   // selection changes or the form unmounts, since object URLs otherwise leak.
@@ -296,26 +320,41 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
 
   const handleSubmit = async (e, isSaveAndExit = false) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error("Company name is required");
-      if (!isSaveAndExit) closeForm();
-      return;
-    }
 
-    // Address fields are compulsory.
-    if (!isAddressComplete(form.billingAddress)) {
-      toast.error("Please complete the billing address");
-      return;
-    }
-    for (let i = 0; i < form.shippingAddresses.length; i++) {
-      if (!isAddressComplete(form.shippingAddresses[i])) {
-        toast.error(
-          form.shippingAddresses.length > 1
-            ? `Please complete shipping address ${i + 1}`
-            : "Please complete the shipping address"
-        );
-        return;
+    // Check every mandatory field up front — highlight all of them at once,
+    // then scroll to whichever invalid one appears first on the page (not
+    // necessarily the one checked first here), so the user always lands on
+    // the top-most problem instead of being surprised by one further down
+    // after fixing what looked like the only error.
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const nameInvalid = !form.name.trim();
+    const emailInvalid = !!form.email.trim() && !emailRegex.test(form.email.trim());
+    const billingInvalid = !isAddressComplete(form.billingAddress);
+    const newShippingErrors = form.shippingAddresses.map(
+      (ship) => !isAddressComplete(ship)
+    );
+
+    setNameError(nameInvalid);
+    setEmailError(emailInvalid ? "Invalid email format" : "");
+    setBillingAddressError(billingInvalid);
+    setShippingAddressErrors(newShippingErrors);
+
+    if (nameInvalid || emailInvalid || billingInvalid || newShippingErrors.some(Boolean)) {
+      const candidates = [
+        nameInvalid ? nameInputRef.current : null,
+        emailInvalid ? emailInputRef.current : null,
+        billingInvalid ? billingAddressRef.current : null,
+        ...newShippingErrors.map((invalid, i) => (invalid ? shippingAddressRefs.current[i] : null)),
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
       }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
     }
 
     // One-line summary of the billing address, kept in the legacy `address`
@@ -440,6 +479,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       return { ...prev, billingAddress, shippingAddresses };
     });
     setIsFormDirty(true);
+    if (billingAddressError) setBillingAddressError(false);
   };
 
   // Update one field of the shipping address at `index`.
@@ -451,6 +491,11 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       ),
     }));
     setIsFormDirty(true);
+    if (shippingAddressErrors[index]) {
+      setShippingAddressErrors((prev) =>
+        prev.map((e, i) => (i === index ? false : e))
+      );
+    }
   };
 
   // Toggle "same as billing" for one shipping address; copy billing in when on.
@@ -489,59 +534,83 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     !!(a.addressLine1?.trim() && a.city?.trim() && a.state?.trim() && a.pincode?.trim() && a.country?.trim());
 
   // Shared 6-field address grid, reused by billing and each shipping address.
-  const renderAddressGrid = (address, onFieldChange, disabled) => {
-    const inputCls =
-      "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400";
-    const ddCls = (val) =>
-      `w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`;
+  const renderAddressGrid = (address, onFieldChange, disabled, showError) => {
+    const inputCls = (missing) =>
+      `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 ${
+        showError && missing ? "border-red-500" : "border-[#1F2937]/10"
+      }`;
+    const ddCls = (val, missing) =>
+      `w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"} ${
+        showError && missing ? "border-red-500" : "border-[#1F2937]/10"
+      }`;
     return (
       <fieldset disabled={disabled} className={`space-y-3 ${disabled ? "opacity-70" : ""}`}>
         <input
           type="text"
           value={address.addressLine1}
           onChange={(e) => onFieldChange("addressLine1", e.target.value)}
-          className={inputCls}
+          className={inputCls(!address.addressLine1?.trim())}
           placeholder="Address Line 1 *"
         />
         <input
           type="text"
           value={address.addressLine2}
           onChange={(e) => onFieldChange("addressLine2", e.target.value)}
-          className={inputCls}
+          className={inputCls(false)}
           placeholder="Address Line 2"
         />
         <div className="grid grid-cols-2 gap-3">
-          <input
-            type="text"
-            value={address.city}
-            onChange={(e) => onFieldChange("city", e.target.value)}
-            className={inputCls}
-            placeholder="City *"
-          />
-          <CustomDropdown
-            options={INDIA_STATES}
-            value={address.state}
-            onChange={(value) => onFieldChange("state", value)}
-            placeholder="State *"
-            searchable
-            buttonClassName={ddCls(address.state)}
-          />
-          <input
-            type="text"
-            value={address.pincode}
-            onChange={(e) => onFieldChange("pincode", e.target.value)}
-            className={inputCls}
-            placeholder="Pincode *"
-          />
           <CustomDropdown
             options={COUNTRIES}
             value={address.country}
             onChange={(value) => onFieldChange("country", value)}
             placeholder="Country *"
             searchable
-            buttonClassName={ddCls(address.country)}
+            buttonClassName={ddCls(address.country, !address.country?.trim())}
+          />
+          {(() => {
+            const statesForCountry = getStatesForCountry(address.country);
+            // A handful of small countries have no state/province subdivisions
+            // in the dataset — fall back to free text rather than showing an
+            // empty, unusable dropdown.
+            return statesForCountry.length > 0 ? (
+              <CustomDropdown
+                options={statesForCountry}
+                value={address.state}
+                onChange={(value) => onFieldChange("state", value)}
+                placeholder="State *"
+                searchable
+                buttonClassName={ddCls(address.state, !address.state?.trim())}
+              />
+            ) : (
+              <input
+                type="text"
+                value={address.state}
+                onChange={(e) => onFieldChange("state", e.target.value)}
+                className={inputCls(!address.state?.trim())}
+                placeholder="State / Province *"
+              />
+            );
+          })()}
+          <input
+            type="text"
+            value={address.city}
+            onChange={(e) => onFieldChange("city", e.target.value)}
+            className={inputCls(!address.city?.trim())}
+            placeholder="City *"
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={address.pincode}
+            onChange={(e) => onFieldChange("pincode", e.target.value.replace(/\D/g, ""))}
+            className={inputCls(!address.pincode?.trim())}
+            placeholder="Pincode *"
           />
         </div>
+        {showError && !disabled && (
+          <p className="text-xs text-red-600">All fields marked * are required</p>
+        )}
       </fieldset>
     );
   };
@@ -603,7 +672,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the CompanyForm header spec */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
@@ -658,12 +727,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     handleFormChange("profilePicture", e.target.files[0]);
                   }}
                   className="hidden"
-                  // Only required when there's no picture yet — a browser
-                  // can't pre-populate a file input with the company's
-                  // already-uploaded image, so requiring it unconditionally
-                  // forced a re-upload on every edit even though one was
-                  // already on file (and showing right here as a preview).
-                  required={!profilePictureDisplayUrl}
                 />
               </div>
               <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
@@ -703,13 +766,21 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 Company Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={nameInputRef}
                 type="text"
                 value={form.name}
-                onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
-                required
+                onChange={(e) => {
+                  handleFormChange("name", e.target.value);
+                  if (nameError) setNameError(false);
+                }}
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
+                  nameError ? "border-red-500" : "border-[#1F2937]/10"
+                }`}
                 placeholder="Enter Company Name"
               />
+              {nameError && (
+                <p className="mt-1 text-xs text-red-600">Company name is required</p>
+              )}
             </div>
 
             <div>
@@ -740,20 +811,21 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             </div>
 
             {/* Billing Address (single — GST is calculated from its state) */}
-            <div>
+            <div ref={billingAddressRef}>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Billing Address <span className="text-[#FF4935]">*</span>
               </label>
               {renderAddressGrid(
                 form.billingAddress,
                 (field, value) => handleBillingChange(field, value),
-                false
+                false,
+                billingAddressError
               )}
             </div>
 
             {/* Shipping Addresses (one or more) */}
             {form.shippingAddresses.map((ship, index) => (
-              <div key={index}>
+              <div key={index} ref={(el) => (shippingAddressRefs.current[index] = el)}>
                 <div className="flex items-center justify-between mb-3">
                   <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em]">
                     Shipping Address{form.shippingAddresses.length > 1 ? ` ${index + 1}` : ""}{" "}
@@ -785,7 +857,8 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 {renderAddressGrid(
                   ship,
                   (field, value) => handleShippingChange(index, field, value),
-                  !!ship.sameAsBilling
+                  !!ship.sameAsBilling,
+                  !!shippingAddressErrors[index]
                 )}
               </div>
             ))}
@@ -823,7 +896,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
 
             <div>
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Website <span className="text-[#FF4935]">*</span>
+                Website
               </label>
               {/* "https://" is a fixed prefix, not part of the typed value — only
                   the domain is editable, so nobody has to type the scheme. An
@@ -856,12 +929,21 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 Email Address
               </label>
               <input
+                ref={emailInputRef}
                 type="email"
                 value={form.email}
-                onChange={(e) => handleFormChange("email", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                onChange={(e) => {
+                  handleFormChange("email", e.target.value);
+                  if (emailError) setEmailError("");
+                }}
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
+                  emailError ? "border-red-500" : "border-[#1F2937]/10"
+                }`}
                 placeholder="contact@company.com"
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-600">{emailError}</p>
+              )}
             </div>
 
             {/* Social Media Links — icon + pill input per platform, matching

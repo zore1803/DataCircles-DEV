@@ -71,12 +71,15 @@ router.post(
   contactController.toggleStarContact,
 );
 
-// DELETE /api/contacts/:id (Delete - requires write permission)
+// DELETE /api/contacts/:id (Delete - requires write permission). skipLimit:
+// true — the module limit check only makes sense for creation; without it,
+// an org already at/over its limit could never delete back under it, since
+// deleting is itself a "write" the un-flagged check would also block.
 router.delete(
   "/:id",
   requireAuth,
   subscriptionGate,
-  restrictByPlan("contacts", "write"),
+  restrictByPlan("contacts", "write", { skipLimit: true }),
   checkPermission("contacts", "read-write"),
   contactController.deleteContact
 );

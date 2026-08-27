@@ -15,6 +15,10 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [vendorSearch, setVendorSearch] = useState("");
   const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [validationErrors, setValidationErrors] = useState({});
+  const vendorInputRef = useRef(null);
+  const amountInputRef = useRef(null);
+  const paymentDateInputRef = useRef(null);
   const [formData, setFormData] = useState({
     amount: "",
     paymentDate: new Date().toISOString().slice(0, 10),
@@ -110,8 +114,43 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertNotesLink },
   ];
 
+  const validateForm = () => {
+    const errors = {};
+    if (!selectedVendorId && !vendorSearch.trim()) {
+      errors.vendor = "Vendor is required";
+    }
+    if (!formData.amount || Number(formData.amount) <= 0) {
+      errors.amount = "Amount is required";
+    }
+    if (!formData.paymentDate) {
+      errors.paymentDate = "Payment date is required";
+    }
+    return errors;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+
+      const candidates = [
+        errors.vendor ? vendorInputRef.current : null,
+        errors.amount ? amountInputRef.current : null,
+        errors.paymentDate ? paymentDateInputRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -165,8 +204,8 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         </div>
 
         <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
-          <form id="payment-form" onSubmit={handleSubmit} className="space-y-6">
-            <div>
+          <form id="payment-form" onSubmit={handleSubmit} noValidate className="space-y-6">
+            <div ref={vendorInputRef}>
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Vendor <span className="text-red-500">*</span></label>
               <div className="relative">
                 <input
@@ -175,11 +214,14 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                   onChange={(e) => {
                     setVendorSearch(e.target.value);
                     setSelectedVendorId("");
+                    if (validationErrors.vendor) setValidationErrors((p) => ({ ...p, vendor: undefined }));
                   }}
-                  required={!selectedVendorId}
                   placeholder="Search or enter new vendor name"
-                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                  className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${validationErrors.vendor ? "border-red-500" : "border-[#1F2937]/10"}`}
                 />
+                {validationErrors.vendor && (
+                  <p className="mt-1 text-xs text-red-600">{validationErrors.vendor}</p>
+                )}
                 {vendorSearch && !selectedVendorId && filteredVendors.length > 0 && (
                   <div className="absolute z-10 w-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                     {filteredVendors.map(v => (
@@ -200,31 +242,41 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
               </div>
             </div>
 
-            <div>
+            <div ref={amountInputRef}>
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Amount <span className="text-red-500">*</span></label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1F2937] opacity-50 text-[12px]">₹</span>
                 <input
                   type="number"
-                  required
                   min="0"
                   step="0.01"
                   value={formData.amount}
-                  onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-                  className="w-full border border-[#1F2937]/10 rounded-full pl-7 pr-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                  onChange={e => {
+                    setFormData(p => ({ ...p, amount: e.target.value }));
+                    if (validationErrors.amount) setValidationErrors((p) => ({ ...p, amount: undefined }));
+                  }}
+                  className={`w-full border rounded-full pl-7 pr-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${validationErrors.amount ? "border-red-500" : "border-[#1F2937]/10"}`}
                 />
               </div>
+              {validationErrors.amount && (
+                <p className="mt-1 text-xs text-red-600">{validationErrors.amount}</p>
+              )}
             </div>
 
-            <div>
+            <div ref={paymentDateInputRef}>
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Payment Date <span className="text-red-500">*</span></label>
               <input
                 type="date"
-                required
                 value={formData.paymentDate}
-                onChange={e => setFormData(p => ({ ...p, paymentDate: e.target.value }))}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                onChange={e => {
+                  setFormData(p => ({ ...p, paymentDate: e.target.value }));
+                  if (validationErrors.paymentDate) setValidationErrors((p) => ({ ...p, paymentDate: undefined }));
+                }}
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${validationErrors.paymentDate ? "border-red-500" : "border-[#1F2937]/10"}`}
               />
+              {validationErrors.paymentDate && (
+                <p className="mt-1 text-xs text-red-600">{validationErrors.paymentDate}</p>
+              )}
             </div>
 
             <div>

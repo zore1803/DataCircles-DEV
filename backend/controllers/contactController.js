@@ -12,6 +12,25 @@ const {
   defaultStatusForStage,
   invalidCombinationMessage,
 } = require("../constants/contactLifecycle");
+const { getOwnedCompanyIds } = require("../utils/ownedCompanies");
+
+// Mirrors companyController's isOwnedByUser, using the same `user`/`createdBy` fields the
+// list endpoints' req.ownOnly filter already uses — plus: a contact under a
+// company this user OWNS (Company.owner) counts as owned too, so being made
+// a company's owner surfaces everything tied to it, not just records the
+// user personally created. `ownedCompanyIds` is optional — pass it (from
+// getOwnedCompanyIds) when that broader check should apply.
+const isOwnedByUser = (contact, userId, ownedCompanyIds = []) => {
+  const uid = userId.toString();
+  // .populate("user"/"createdBy") turns these into subdocuments — normalize
+  // via ._id first so this works whether the field is populated or raw.
+  const ownerUid = (contact.user?._id ?? contact.user)?.toString();
+  const createdByUid = (contact.createdBy?._id ?? contact.createdBy)?.toString();
+  if (ownerUid === uid || createdByUid === uid) return true;
+
+  const companyId = (contact.company?._id ?? contact.company)?.toString();
+  return !!companyId && ownedCompanyIds.some((id) => id.toString() === companyId);
+};
 
 const createContact = async (req, res) => {
   try {
@@ -31,17 +50,27 @@ const updateContact = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Manual fallback: checkPermission is commented out on the PUT /update/:id route, so
+    // req.ownOnly is never set here — mirrors companyController.updateCompany's fallback.
     if (req.user.role !== "admin") {
-      const hasEditPermission = req.user.permissions?.some(
-        (p) =>
-          p.name.toLowerCase() === "contacts" && p.permission === "read-write",
-      );
+      const contactPerm = req.user.permissions?.find(
+        (p) => p.name.toLowerCase() === "contacts",
+      )?.permission;
 
-      if (!hasEditPermission) {
+      if (contactPerm !== "read-write" && contactPerm !== "own-only") {
         return res.status(403).json({
           error:
             "Access denied. You do not have read-write permissions for contacts.",
         });
+      }
+
+      if (contactPerm === "own-only") {
+        const existing = await Contact.findOne({ _id: id, organization: req.user.organization });
+        if (!existing) return res.status(404).json({ error: "Contact not found" });
+        const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+        if (!isOwnedByUser(existing, req.user._id, ownedCompanyIds)) {
+          return res.status(403).json({ error: "You can only edit contacts you own" });
+        }
       }
     }
 
@@ -64,9 +93,17 @@ const getAllContacts = async (req, res) => {
   try {
     const { search, lifecycleStage, stageStatus } = req.query;
     let query = { organization: req.user.organization };
+    const andConditions = [];
 
     if (req.ownOnly) {
-      query.$or = [{ user: req.user._id }, { createdBy: req.user._id }];
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      andConditions.push({
+        $or: [
+          { user: req.user._id },
+          { createdBy: req.user._id },
+          { company: { $in: ownedCompanyIds } },
+        ],
+      });
     }
 
     if (search) {
@@ -75,15 +112,21 @@ const getAllContacts = async (req, res) => {
         name: { $regex: search, $options: "i" },
       }).select("_id");
 
-      query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { stageStatus: { $regex: search, $options: "i" } },
-        { lifecycleStage: { $regex: search, $options: "i" } },
-        { "additionalFields.value": { $regex: search, $options: "i" } },
-        { company: { $in: matchingCompanies.map((c) => c._id) } },
-      ];
+      andConditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { stageStatus: { $regex: search, $options: "i" } },
+          { lifecycleStage: { $regex: search, $options: "i" } },
+          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { company: { $in: matchingCompanies.map((c) => c._id) } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     // Filter by lifecycle stage
@@ -128,9 +171,17 @@ const getAllContactsPaginated = async (req, res) => {
 
     // Build query object
     const query = { organization: req.user.organization };
+    const preAndConditions = [];
 
     if (req.ownOnly) {
-      query.$or = [{ user: req.user._id }, { createdBy: req.user._id }];
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      preAndConditions.push({
+        $or: [
+          { user: req.user._id },
+          { createdBy: req.user._id },
+          { company: { $in: ownedCompanyIds } },
+        ],
+      });
     }
 
     // Search functionality
@@ -140,15 +191,21 @@ const getAllContactsPaginated = async (req, res) => {
         name: { $regex: search, $options: "i" },
       }).select("_id");
 
-      query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { stageStatus: { $regex: search, $options: "i" } },
-        { lifecycleStage: { $regex: search, $options: "i" } },
-        { "additionalFields.value": { $regex: search, $options: "i" } },
-        { company: { $in: matchingCompanies.map((c) => c._id) } },
-      ];
+      preAndConditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { stageStatus: { $regex: search, $options: "i" } },
+          { lifecycleStage: { $regex: search, $options: "i" } },
+          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { company: { $in: matchingCompanies.map((c) => c._id) } },
+        ],
+      });
+    }
+
+    if (preAndConditions.length > 0) {
+      query.$and = preAndConditions;
     }
 
     // Lifecycle stage filter
@@ -377,6 +434,13 @@ const getContactById = async (req, res) => {
       return res.status(404).json({ error: "Contact not found" });
     }
 
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(contact, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only view contacts you own" });
+      }
+    }
+
     res.json(contact);
   } catch (err) {
     res.status(404).json({ error: "Contact not found" });
@@ -408,6 +472,13 @@ const deleteContact = async (req, res) => {
 
     if (!contact) {
       return res.status(404).json({ error: "Contact not found" });
+    }
+
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(contact, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only delete contacts you own" });
+      }
     }
 
     await contact.deleteOne();

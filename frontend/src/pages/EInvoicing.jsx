@@ -878,7 +878,7 @@ export default function EInvoicing() {
 
   // Pagination controls — server-driven, same shape as SalesReturn.jsx's.
   const PaginationControls = () => (
-    <div className="flex items-center justify-between w-full px-4 lg:px-6">
+    <div className="flex items-center justify-between w-full px-4 sm:px-6 lg:px-8">
       <div className="flex items-center space-x-2">
         <div className="text-sm text-gray-700 font-inter">
           Showing{" "}
@@ -998,7 +998,7 @@ export default function EInvoicing() {
 
       {/* ── Fixed header toolbar — edge-to-edge, matches PurchasePage ──*/}
       <div
-        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+        className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -1241,6 +1241,7 @@ export default function EInvoicing() {
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
+          paddingLeft: "var(--content-inset, 16px)",
           right: 0,
           bottom: !showLoadingSkeleton ? 64 : 0,
         }}
