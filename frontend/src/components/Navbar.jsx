@@ -159,14 +159,22 @@ const Navbar = () => {
   // 280px panel overlay the page.
   useEffect(() => {
     const applyWidth = () => {
+      const isExpanded = isHovered || isPinned;
       if (window.innerWidth >= 1024) {
         document.documentElement.style.setProperty(
           "--sidebar-width",
-          isHovered || isPinned ? "280px" : "64px"
+          isExpanded ? "280px" : "64px"
         );
       } else {
         document.documentElement.style.setProperty("--sidebar-width", "0px");
       }
+      // Edge-to-edge list content when the sidebar is collapsed to its
+      // narrow icon-only strip (plenty of width to spare); only add a
+      // gutter once the sidebar expands and eats into that space.
+      document.documentElement.style.setProperty(
+        "--content-inset",
+        isExpanded ? "16px" : "0px"
+      );
     };
     applyWidth();
     window.addEventListener("resize", applyWidth);

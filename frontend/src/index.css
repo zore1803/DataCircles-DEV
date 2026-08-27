@@ -38,9 +38,13 @@
    content (toolbars, tables, footers) that pins itself via
    `left: var(--sidebar-width, 0px)`. Applied ad-hoc as
    `paddingLeft: "var(--content-inset, 16px)"` on flush-left wrappers that
-   don't already carry their own left padding (px-4/px-6/p-6/etc). */
+   don't already carry their own left padding (px-4/px-6/p-6/etc).
+   Kept in sync with the sidebar's collapsed/expanded state by
+   Navbar.jsx (0px collapsed — edge to edge; 16px once expanded). This
+   default (0px) only matters for the brief moment before that JS runs,
+   and matches the sidebar's default collapsed state. */
 :root {
-  --content-inset: 16px;
+  --content-inset: 0px;
 }
 
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via
