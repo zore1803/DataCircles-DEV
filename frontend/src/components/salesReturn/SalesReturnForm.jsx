@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchableDropdown from "../contact/SearchableDropdown";
 
-const REFUND_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Credit Note", "Other"];
+const MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Credit Note", "Other"];
 const STATUS_OPTIONS = ["Draft", "Pending", "Confirmed", "Refunded", "Cancelled"];
 const REASON_OPTIONS = ["Damaged", "Defective", "Wrong Item", "Wrong Size/Variant", "Customer Changed Mind", "Other"];
 
@@ -16,15 +16,20 @@ const lineKey = (itemId, variantId) => `${itemId || ""}|${variantId || "none"}`;
 /*
  * Right-drawer create/edit form for a Sales Return.
  *
- * A Sales Return is ALWAYS against an existing Invoice — the backend derives
- * customer/deal from that Invoice server-side and refuses any Sales Return
- * without one. Flow: pick Invoice -> customer + invoice items auto-load with
- * Original / Already Returned / Remaining -> enter Return Qty + Reason per
- * line coming back -> Draft or Confirm.
+ * Mirrors PurchaseReturnForm's UI edge-to-edge — drawer chrome, pill inputs,
+ * stacked per-item cards, subtotal row, mode pills, uppercase title, styled
+ * footer — so Sales Return / Purchase Return / Purchase / Purchase Order all
+ * read as one family of forms.
+ *
+ * A Sales Return is ALWAYS against an existing Invoice. The backend derives
+ * customer/deal from that Invoice and refuses any Sales Return without one.
+ * Flow: pick Invoice -> customer + invoice items auto-load with Original /
+ * Already Returned / Remaining -> enter Return Qty + Reason per line coming
+ * back -> Draft or Confirm.
  *
  * "Confirmed" is the single status that moves stock (Sales Return brings
  * goods IN — see salesReturnController.syncSalesReturnStock) and is terminal
- * once reached; the STATUS can only move onward to Refunded (financial only).
+ * once reached; STATUS can only move onward to Refunded (financial only).
  * Item quantities remain editable after Confirmed: the backend applies the
  * delta between the old and new quantity, never the full new quantity again.
  */
@@ -39,18 +44,26 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
   const [availableItems, setAvailableItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(false);
 
+  // key (itemId|variantId) -> { returnQty, reason }
   const [lines, setLines] = useState({});
+  // key -> this return's own ORIGINAL saved qty (set once from editingReturn,
+  // never mutated by further typing) — the /available endpoint's
+  // alreadyReturned/remaining exclude this return's own contribution, so the
+  // Return Qty input's ceiling stays this line's true headroom while editing,
+  // but the Returned/Returnable columns should still show the whole picture.
   const [originalQuantities, setOriginalQuantities] = useState({});
 
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split("T")[0]);
   const [refundMode, setRefundMode] = useState("");
   const [refundReference, setRefundReference] = useState("");
-  const [reason, setReason] = useState("");
+  const [overallReason, setOverallReason] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("Draft");
   const [saving, setSaving] = useState(false);
 
   const oldStatus = editingReturn?.status;
+  // Once Confirmed, STATUS can only move onward to Refunded. Item quantities
+  // stay editable regardless (see the module comment above).
   const isLocked = oldStatus === "Confirmed" || oldStatus === "Refunded";
   const availableStatusOptions = oldStatus === "Confirmed"
     ? ["Confirmed", "Refunded"]
@@ -71,6 +84,9 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
       .catch(() => setInvoices([]));
   }, []);
 
+  // Loads an Invoice's items + already-returned/remaining figures. When
+  // editing, excludes this return's own prior contribution so its existing
+  // quantities don't count against themselves.
   const loadAvailableItems = async (id, excludeReturnId) => {
     if (!id) {
       setAvailableItems([]);
@@ -89,7 +105,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
       setInvoiceNumber(res.data.invoice.invoiceNumber);
       setAvailableItems(res.data.items || []);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to load invoice items");
+      toast.error(err.response?.data?.message || "Failed to load Invoice items");
       setAvailableItems([]);
     } finally {
       setLoadingItems(false);
@@ -107,7 +123,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
     );
     setRefundMode(editingReturn.refundMode || "");
     setRefundReference(editingReturn.refundReference || "");
-    setReason(editingReturn.reason || "");
+    setOverallReason(editingReturn.reason || "");
     setNotes(editingReturn.notes || "");
     setStatus(editingReturn.status || "Draft");
 
@@ -140,18 +156,16 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
     setLines((prev) => ({ ...prev, [key]: { ...(prev[key] || { returnQty: "", reason: "" }), ...patch } }));
   };
 
-  const selectedLines = useMemo(
-    () =>
-      availableItems
-        .map((item) => {
-          const key = lineKey(item.itemId, item.variantId);
-          const line = lines[key];
-          const qty = parseFloat(line?.returnQty) || 0;
-          return { item, key, qty, reason: line?.reason || "" };
-        })
-        .filter((l) => l.qty > 0),
-    [availableItems, lines]
-  );
+  const selectedLines = useMemo(() => {
+    return availableItems
+      .map((item) => {
+        const key = lineKey(item.itemId, item.variantId);
+        const line = lines[key];
+        const qty = parseFloat(line?.returnQty) || 0;
+        return { item, key, qty, reason: line?.reason || "" };
+      })
+      .filter((l) => l.qty > 0);
+  }, [availableItems, lines]);
 
   const subtotal = selectedLines.reduce((sum, l) => sum + l.qty * (l.item.unitPrice || 0), 0);
 
@@ -164,15 +178,29 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!invoiceId) return toast.error("Select an Invoice to return against");
-    if (selectedLines.length === 0) return toast.error("Enter a Return Qty for at least one item");
-
+    if (!invoiceId) {
+      toast.error("Select an Invoice to return against");
+      return;
+    }
+    if (selectedLines.length === 0) {
+      toast.error("Enter a Return Qty for at least one item");
+      return;
+    }
+    // Ceiling is remaining + this return's own original qty on that line —
+    // matches how displayReturnable is computed in the card below and what
+    // the backend validates against.
     const overLimit = selectedLines.find(
       (l) => l.qty > (l.item.remaining + (originalQuantities[l.key] || 0))
     );
     if (overLimit) {
       const cap = overLimit.item.remaining + (originalQuantities[overLimit.key] || 0);
-      return toast.error(`Only ${cap} unit(s) available to return for "${overLimit.item.name}"`);
+      toast.error(`Maximum returnable quantity for "${overLimit.item.name}" is ${cap}`);
+      return;
+    }
+    const missingReason = selectedLines.find((l) => !l.reason);
+    if (missingReason) {
+      toast.error(`Select a Return Reason for "${missingReason.item.name}"`);
+      return;
     }
 
     setSaving(true);
@@ -188,6 +216,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
           name: l.item.variantName ? `${l.item.name} (${l.item.variantName})` : l.item.name,
           description: l.item.description || "",
           hsn: l.item.hsn || "",
+          sku: l.item.sku,
           quantity: l.qty,
           unitPrice: l.item.unitPrice,
           gstRate: l.item.gstRate,
@@ -196,7 +225,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
         })),
         refundMode,
         refundReference,
-        reason,
+        reason: overallReason,
         notes,
         status,
       };
@@ -214,233 +243,268 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
     }
   };
 
+  const fieldClass =
+    "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
+  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
+
   return (
-    <div className="fixed inset-0 z-[100020] flex justify-end">
+    <>
       <div
-        className={`absolute inset-0 bg-black transition-opacity duration-300 ${isSliding ? "opacity-40" : "opacity-0"}`}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+        style={{ opacity: isSliding ? 1 : 0 }}
         onClick={handleClose}
       />
-      <form
-        onSubmit={handleSubmit}
-        className={`relative bg-white w-full max-w-3xl h-full overflow-y-auto shadow-2xl transition-transform duration-300 ${isSliding ? "translate-x-0" : "translate-x-full"}`}
+      <div
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {isEditing ? "Edit Sales Return" : "New Sales Return"}
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Return goods against an existing Invoice. Stock is restored on Confirm.
-            </p>
-          </div>
-          <button type="button" onClick={handleClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+            {isEditing ? `Edit Return ${editingReturn.returnNumber}` : "New Sales Return"}
+          </h2>
+          <button
+            type="button"
+            onClick={handleClose}
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
+          >
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <form id="sr-form" onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-6">
+          <div>
+            <label className={labelClass}>Against Invoice *</label>
+            <SearchableDropdown
+              options={invoiceOptions}
+              value={invoiceId}
+              onChange={handleInvoiceChange}
+              displayKey="label"
+              valueKey="_id"
+              placeholder="Select an Invoice"
+              required
+              compact
+              className={isEditing ? "pointer-events-none opacity-60" : ""}
+            />
+            {isEditing && (
+              <p className="text-[11px] text-gray-400 mt-1.5">The Invoice a return is against can't be changed after it's created.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Original Invoice *</label>
-              <SearchableDropdown
-                options={invoiceOptions}
-                value={invoiceId}
-                onChange={handleInvoiceChange}
-                placeholder="Select an invoice"
-                displayKey="label"
-                disabled={isEditing}
-              />
-              {isEditing && (
-                <p className="text-[11px] text-gray-400 mt-1">Invoice can't change after creation.</p>
-              )}
+              <label className={labelClass}>Customer</label>
+              <div className={`${fieldClass} flex items-center bg-gray-50 text-gray-500`}>
+                {customerName || "—"}
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Customer</label>
-              <input
-                type="text"
-                value={customerName}
-                readOnly
-                placeholder="Auto-filled from invoice"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Return Date</label>
-              <input
-                type="date"
-                value={returnDate}
-                onChange={(e) => setReturnDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {availableStatusOptions.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              {isLocked && (
-                <p className="text-[11px] text-amber-600 mt-1">
-                  Already {oldStatus} — stock has been applied; only Refunded is available.
-                </p>
-              )}
+              <label className={labelClass}>Return Date</label>
+              <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className={fieldClass} />
             </div>
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-900">Items to return</h3>
-              {loadingItems && <span className="text-xs text-gray-500">Loading…</span>}
+            <label className="text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2 block">
+              Items {invoiceNumber && <span className="text-gray-400 font-normal">— {invoiceNumber}</span>}
+            </label>
+
+            {!invoiceId ? (
+              <p className="text-[12px] text-gray-400 py-4 text-center border border-dashed border-gray-200 rounded-xl">
+                Select an Invoice above to see its items.
+              </p>
+            ) : loadingItems ? (
+              <p className="text-[12px] text-gray-400 py-4 text-center">Loading items…</p>
+            ) : availableItems.length === 0 ? (
+              <p className="text-[12px] text-gray-400 py-4 text-center">This Invoice has no items.</p>
+            ) : (
+              // Stacked cards, not a wide multi-column table — this drawer is
+              // only ~440px wide (.dc-panel-w's min-width), nowhere near
+              // enough for Item/Sold/Returned/Returnable/Return Qty/Reason/
+              // Amount side by side. Each item gets its own card: name+amount
+              // on top, a compact Sold/Returned/Returnable stat row, then
+              // Return Qty + Reason inputs full-width below.
+              <div className="space-y-2">
+                {availableItems.map((item) => {
+                  const key = lineKey(item.itemId, item.variantId);
+                  const line = lines[key] || { returnQty: "", reason: "" };
+                  const qty = parseFloat(line.returnQty) || 0;
+                  // item.alreadyReturned/remaining come from the API excluding
+                  // THIS return's own contribution (that's the true editing
+                  // ceiling, matching what the backend validates against).
+                  // For display, add this return's own originally-saved qty
+                  // back in so "Returned"/"Returnable" reflect the whole
+                  // picture — e.g. reopening a Confirmed return with qty 4
+                  // shows Returned 4 / Returnable 8, not 0 / 12.
+                  const ownQty = originalQuantities[key] || 0;
+                  const displayReturned = item.alreadyReturned + ownQty;
+                  const displayReturnable = (item.originalQuantity ?? item.purchasedQuantity ?? 0) - displayReturned;
+                  const ceiling = item.remaining + ownQty;
+                  const overLimit = qty > ceiling;
+                  const fullyReturned = ceiling <= 0;
+                  return (
+                    <div key={key} className="border border-gray-100 rounded-xl px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-medium text-gray-800 truncate">{item.name}</div>
+                          {item.variantName && <div className="text-[10px] text-gray-400 truncate">{item.variantName}</div>}
+                        </div>
+                        <span className="text-[12px] font-semibold text-gray-700 flex-shrink-0">
+                          {money(qty * (item.unitPrice || 0))}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-[10px] text-gray-400 mb-2">
+                        <span>Sold <b className="text-gray-600 font-medium">{item.originalQuantity ?? item.purchasedQuantity ?? 0}</b></span>
+                        <span>Returned <b className="text-gray-600 font-medium">{displayReturned}</b></span>
+                        <span>Returnable <b className="text-gray-700 font-semibold">{displayReturnable}</b></span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={line.returnQty}
+                          disabled={fullyReturned}
+                          onChange={(e) => setLine(key, { returnQty: e.target.value })}
+                          placeholder="Return Qty"
+                          title={fullyReturned ? "Fully returned already" : `Up to ${ceiling}`}
+                          className={`${fieldClass.replace('w-full', 'w-24')} flex-shrink-0 disabled:bg-gray-50 disabled:cursor-not-allowed ${overLimit ? "border-red-400 ring-1 ring-red-400" : ""}`}
+                        />
+                        <div className="relative flex-1 min-w-0">
+                          <select
+                            value={line.reason}
+                            disabled={fullyReturned || qty <= 0}
+                            onChange={(e) => setLine(key, { reason: e.target.value })}
+                            className={`${fieldClass} appearance-none bg-white cursor-pointer pr-6 disabled:bg-gray-50 disabled:cursor-not-allowed`}
+                          >
+                            <option value="">Reason…</option>
+                            {REASON_OPTIONS.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        </div>
+                      </div>
+                      {overLimit && (
+                        <p className="text-[10px] text-red-500 mt-1.5">
+                          Maximum returnable quantity is {ceiling}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end mt-2 text-sm">
+              <span className="text-gray-500 mr-2">Subtotal</span>
+              <span className="font-bold text-gray-900">{money(subtotal)}</span>
             </div>
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Product / Variant</th>
-                    <th className="px-3 py-2 text-right">Original</th>
-                    <th className="px-3 py-2 text-right">Returned</th>
-                    <th className="px-3 py-2 text-right">Returnable</th>
-                    <th className="px-3 py-2 text-right w-24">Return Qty</th>
-                    <th className="px-3 py-2 text-right">Rate</th>
-                    <th className="px-3 py-2 text-left w-40">Reason</th>
-                    <th className="px-3 py-2 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {availableItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-3 py-6 text-center text-gray-400">
-                        {invoiceId ? "No returnable items on this invoice." : "Select an invoice to load items."}
-                      </td>
-                    </tr>
-                  ) : (
-                    availableItems.map((item) => {
-                      const key = lineKey(item.itemId, item.variantId);
-                      const line = lines[key] || { returnQty: "", reason: "" };
-                      const originalOnThisReturn = originalQuantities[key] || 0;
-                      const displayReturned = item.alreadyReturned + originalOnThisReturn;
-                      const displayReturnable = item.remaining + originalOnThisReturn;
-                      const qty = parseFloat(line.returnQty) || 0;
-                      const total = qty * (item.unitPrice || 0);
-                      return (
-                        <tr key={key} className="hover:bg-gray-50">
-                          <td className="px-3 py-2">
-                            <div className="font-medium text-gray-900">{item.name}</div>
-                            {item.variantName && (
-                              <div className="text-[11px] text-gray-500">{item.variantName}</div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right">{item.originalQuantity}</td>
-                          <td className="px-3 py-2 text-right">{displayReturned}</td>
-                          <td className="px-3 py-2 text-right font-medium">{displayReturnable}</td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={displayReturnable}
-                              step="1"
-                              value={line.returnQty}
-                              onChange={(e) => setLine(key, { returnQty: e.target.value })}
-                              className="w-20 px-2 py-1 text-right border border-gray-200 rounded"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">{money(item.unitPrice)}</td>
-                          <td className="px-3 py-2">
-                            <select
-                              value={line.reason}
-                              onChange={(e) => setLine(key, { reason: e.target.value })}
-                              className="w-full px-2 py-1 text-xs border border-gray-200 rounded"
-                            >
-                              <option value="">—</option>
-                              {REASON_OPTIONS.map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-3 py-2 text-right font-medium">{money(total)}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+          </div>
+
+          <div>
+            <label className={labelClass}>Refund Mode</label>
+            <div className="flex flex-wrap gap-2">
+              {MODES.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setRefundMode((prev) => (prev === m ? "" : m))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    refundMode === m ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Refund Mode</label>
-              <select
-                value={refundMode}
-                onChange={(e) => setRefundMode(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                <option value="">—</option>
-                {REFUND_MODES.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Refund Reference</label>
+              <label className={labelClass}>Refund Reference</label>
               <input
                 type="text"
                 value={refundReference}
                 onChange={(e) => setRefundReference(e.target.value)}
                 placeholder="UTR / cheque #"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                className={fieldClass}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Overall Reason</label>
+              <label className={labelClass}>Overall Reason</label>
+              <div className="relative">
+                <select
+                  value={overallReason}
+                  onChange={(e) => setOverallReason(e.target.value)}
+                  className={`${fieldClass} appearance-none bg-white cursor-pointer pr-8`}
+                >
+                  <option value="">—</option>
+                  {REASON_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Status</label>
+            <div className="relative w-1/2">
               <select
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className={`${fieldClass} appearance-none bg-white cursor-pointer pr-8`}
               >
-                <option value="">—</option>
-                {REASON_OPTIONS.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                {availableStatusOptions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
+            {isLocked && (
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                Goods have already come back in stock — status can only move on to Refunded. Return Qty can still be
+                corrected; only the difference in stock will move.
+              </p>
+            )}
           </div>
 
-          <div className="flex justify-end text-sm text-gray-700">
-            <div className="w-64 space-y-1">
-              <div className="flex justify-between"><span>Subtotal</span><span className="font-medium">{money(subtotal)}</span></div>
-            </div>
+          <div>
+            <label className={labelClass}>Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Internal notes about this return..."
+              className="w-full px-3 py-2 border border-[#1F2937]/10 rounded-2xl text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none"
+            />
           </div>
-        </div>
+        </form>
 
-        <div className="sticky bottom-0 bg-white border-t px-6 py-3 flex justify-end gap-2">
-          <button type="button" onClick={handleClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
+          >
             Cancel
           </button>
           <button
             type="submit"
+            form="sr-form"
             disabled={saving}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? "Saving…" : isEditing ? "Update" : "Create"}
+            {saving ? "Saving..." : isEditing ? "Save Changes" : "Create Return"}
           </button>
         </div>
-      </form>
-    </div>
+      </div>
+    </>
   );
 };
 
