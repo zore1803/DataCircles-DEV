@@ -262,14 +262,23 @@ const CompanyProfilePage = () => {
   const [parentCompany, setParentCompany] = useState(null);
   const [childCompanies, setChildCompanies] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
   useEffect(() => {
     try {
       const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
       setIsAdmin(storedUser?.role === "admin");
+      setCurrentUserId(storedUser?._id || null);
     } catch {
       setIsAdmin(false);
+      setCurrentUserId(null);
     }
   }, []);
+
+  const isCompanyOwner =
+    !!currentUserId &&
+    !!company?.owner &&
+    (company.owner._id || company.owner) === currentUserId;
+  const canManageChildCompany = isAdmin || isCompanyOwner;
 
   const [showForm, setShowForm] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
@@ -1022,7 +1031,7 @@ const CompanyProfilePage = () => {
                     <Edit2 size={12} className="text-gray-400" />
                     Edit
                   </button>
-                  {isAdmin && !parentCompany && (
+                  {canManageChildCompany && !parentCompany && (
                     <button
                       onClick={() => {
                         setShowSubsidiaryModal(true);

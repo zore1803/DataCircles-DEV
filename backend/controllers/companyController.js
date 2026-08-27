@@ -581,16 +581,17 @@ const addSubsidiary = async (req, res) => {
   const { subsidiaryId } = req.body;       // child company ID to link
 
   try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Only admins can add a child company" });
-    }
-
     // 1. Validate both companies exist
     const parent = await Company.findById(id);
     const child = await Company.findById(subsidiaryId);
 
     if (!parent || !child) {
       return res.status(404).json({ message: "Company not found" });
+    }
+
+    const isOwner = parent.owner && parent.owner.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      return res.status(403).json({ message: "Only admins or the company owner can add a child company" });
     }
 
     if (parent.parentCompany) {
@@ -652,12 +653,13 @@ const removeSubsidiary = async (req, res) => {
   const { id, subsidiaryId } = req.params;
 
   try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Only admins can remove a child company" });
-    }
-
     const parent = await Company.findById(id);
     if (!parent) return res.status(404).json({ message: "Parent company not found" });
+
+    const isOwner = parent.owner && parent.owner.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      return res.status(403).json({ message: "Only admins or the company owner can remove a child company" });
+    }
 
     // Remove from parent's subsidiaries array
     await Company.findByIdAndUpdate(id, {
