@@ -2468,6 +2468,36 @@ function Companies() {
                 className="w-full border border-gray-200 rounded-full px-3 h-9 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
+            {companies.find((c) => c._id === ownerPickerCompanyId)?.owner && (
+              <div className="px-4 pb-2">
+                <button
+                  disabled={ownerPickerSaving}
+                  onClick={async () => {
+                    setOwnerPickerSaving(true);
+                    try {
+                      await API.patch(`/companies/${ownerPickerCompanyId}/owner`, {
+                        ownerId: null,
+                      });
+                      setCompanies((prev) =>
+                        prev.map((c) =>
+                          c._id === ownerPickerCompanyId ? { ...c, owner: null } : c
+                        )
+                      );
+                      toast.success("Company owner removed");
+                      setOwnerPickerCompanyId(null);
+                    } catch (err) {
+                      toast.error(err.response?.data?.error || "Failed to remove owner");
+                    } finally {
+                      setOwnerPickerSaving(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Remove Owner
+                </button>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto px-2 pb-2">
               {orgUsers
                 .filter((u) => u.role === "staff")
