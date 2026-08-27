@@ -6,6 +6,24 @@ const sendGridMail = require("../utils/sendGridMail");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
+const { getOwnedDealIds } = require("../utils/ownedCompanies");
+
+// A user with own-only permission may only touch quotations they own.
+// record.user may be a raw ObjectId or, if a caller populates it, a User
+// subdocument — handle both so a populated lookup doesn't false-negative.
+// Quotation links to a company only indirectly via `deal -> Deal.company`,
+// so a quotation under a deal whose company this user OWNS counts as owned
+// too — mirrors contactController's isOwnedByUser, swapping
+// company/ownedCompanyIds for deal/ownedDealIds (via getOwnedDealIds).
+// `ownedDealIds` is optional.
+const isOwnedByUser = (record, userId, ownedDealIds = []) => {
+  const uid = userId.toString();
+  const recordUserId = record.user?._id ?? record.user;
+  if (recordUserId?.toString() === uid) return true;
+
+  const dealId = (record.deal?._id ?? record.deal)?.toString();
+  return !!dealId && ownedDealIds.some((id) => id.toString() === dealId);
+};
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -248,9 +266,13 @@ exports.getAllQuotations = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
+    const andConditions = [];
 
     if (req.ownOnly) {
-      query.user = req.user._id;
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      andConditions.push({
+        $or: [{ user: req.user._id }, { deal: { $in: ownedDealIds } }],
+      });
     }
 
     if (search) {
@@ -258,12 +280,18 @@ exports.getAllQuotations = async (req, res) => {
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
         { _id: 1 }
       );
-      query.$or = [
-        { status: { $regex: search, $options: "i" } },
-        { quotationNumber: { $regex: search, $options: "i" } },
-        { deal: { $in: matchingDeals.map((d) => d._id) } },
-        { receiverGSTIN: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { status: { $regex: search, $options: "i" } },
+          { quotationNumber: { $regex: search, $options: "i" } },
+          { deal: { $in: matchingDeals.map((d) => d._id) } },
+          { receiverGSTIN: { $regex: search, $options: "i" } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     const quotations = await Quotation.find(query).populate("deal");
@@ -289,9 +317,13 @@ exports.getAllQuotationsPaginated = async (req, res) => {
     } = req.query;
 
     const query = { organization: req.user.organization };
+    const andConditions = [];
 
     if (req.ownOnly) {
-      query.user = req.user._id;
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      andConditions.push({
+        $or: [{ user: req.user._id }, { deal: { $in: ownedDealIds } }],
+      });
     }
 
     if (search) {
@@ -299,22 +331,29 @@ exports.getAllQuotationsPaginated = async (req, res) => {
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
         { _id: 1 }
       );
-      query.$or = [
-        { quotationNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-        { deal: { $in: matchingDeals.map((d) => d._id) } },
-        { receiverGSTIN: { $regex: search, $options: "i" } },
-        {
-          $expr: {
-            $regexMatch: {
-              input: { $toString: "$amount" },
-              regex: search,
-              options: "i",
+      andConditions.push({
+        $or: [
+          { quotationNumber: { $regex: search, $options: "i" } },
+          { status: { $regex: search, $options: "i" } },
+          { deal: { $in: matchingDeals.map((d) => d._id) } },
+          { receiverGSTIN: { $regex: search, $options: "i" } },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $toString: "$amount" },
+                regex: search,
+                options: "i",
+              },
             },
           },
-        },
-      ];
+        ],
+      });
     }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
+    }
+
     if (status) query.status = status;
 
     const sortObj = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
@@ -407,6 +446,13 @@ exports.deleteQuotation = async (req, res) => {
       return res.status(404).json({ error: "Quotation not found" });
     }
 
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(quotation, req.user._id, ownedDealIds)) {
+        return res.status(403).json({ error: "You can only delete quotations you own" });
+      }
+    }
+
     await quotation.deleteOne();
     res.json({ message: "Quotation deleted successfully" });
   } catch (err) {
@@ -473,6 +519,20 @@ exports.updateQuotation = async (req, res) => {
       }
       if (!finalReceiverGSTIN) {
         finalReceiverGSTIN = dealDoc.company.gstin || "";
+      }
+    }
+
+    if (req.ownOnly) {
+      const existing = await Quotation.findOne({
+        _id: req.params.id,
+        organization: req.user.organization,
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Quotation not found" });
+      }
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(existing, req.user._id, ownedDealIds)) {
+        return res.status(403).json({ error: "You can only edit quotations you own" });
       }
     }
 
