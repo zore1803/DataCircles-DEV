@@ -1201,9 +1201,6 @@ exports.completeRegistration = async (req, res) => {
         }
       }
 
-      // Seed sample data for new organization
-      const seedSampleData = require("../scripts/seedSampleData");
-      // await seedSampleData(organization, user._id);  // Note: user is created later, so move this after user.save()
     } else {
       return res.status(400).json({
         message: "Provide company code or organization name",
@@ -1282,11 +1279,7 @@ exports.completeRegistration = async (req, res) => {
       user: user._id, // null for org default
     });
 
-    // If new organization, seed sample data here (after user is created)
-    if (joinMethod === "create") {
-      const seedSampleData = require("../scripts/seedSampleData");
-      await seedSampleData(organization, user._id);
-    }
+    // Note: new organizations start empty — no sample/demo data is seeded.
 
     console.log(
       `User registered successfully - Method: ${joinMethod}, Email: ${email || phone
