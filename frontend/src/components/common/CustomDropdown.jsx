@@ -58,8 +58,14 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
         // Scroll on ANY ancestor (capture phase catches non-bubbling scroll
         // events from nested scrollable containers, not just window) closes
         // the menu rather than trying to keep a fixed-position portal glued
-        // to a moving trigger.
-        const handleScroll = () => setIsOpen(false);
+        // to a moving trigger. Scrolling the menu's OWN option list also
+        // fires a (capture-phase) scroll event that reaches this same
+        // window listener — exclude it, or scrolling to find an option
+        // (e.g. a long state/country list) closes the dropdown instantly.
+        const handleScroll = (event) => {
+            if (menuRef.current && menuRef.current.contains(event.target)) return;
+            setIsOpen(false);
+        };
         document.addEventListener("mousedown", handleClickOutside);
         window.addEventListener("scroll", handleScroll, true);
         window.addEventListener("resize", handleScroll);

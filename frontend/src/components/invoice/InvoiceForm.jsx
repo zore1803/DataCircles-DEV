@@ -3275,6 +3275,9 @@ const CreateInvoicePanel = ({
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
+              {fieldErrors.deal && (
+                <p className="text-xs text-red-600 mt-1">Deal is required</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1" ref={dateFieldRef}>
@@ -3304,6 +3307,9 @@ const CreateInvoicePanel = ({
                 </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+              {fieldErrors.date && (
+                <p className="text-xs text-red-600 mt-1">{docName} date is required</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -3393,6 +3399,9 @@ const CreateInvoicePanel = ({
                 }));
               }}
             />
+            {fieldErrors.billingAddress && (
+              <p className="text-xs text-red-600 mt-1">Billing address is required</p>
+            )}
             </div>
             <div className="flex items-center gap-2 @md:col-span-2 -mb-1">
               <button
@@ -3451,6 +3460,9 @@ const CreateInvoicePanel = ({
                 />
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+              {fieldErrors.receiverGSTIN && (
+                <p className="text-xs text-red-600 mt-1">Valid receiver GSTIN is required</p>
+              )}
             </div>
 
 

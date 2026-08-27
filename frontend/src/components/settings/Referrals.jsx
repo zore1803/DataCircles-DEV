@@ -70,6 +70,7 @@ const Referrals = () => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteEmailError, setInviteEmailError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [sendingInvite, setSendingInvite] = useState(false);
 
@@ -115,6 +116,11 @@ const Referrals = () => {
       toast.error("Enter an email address first.");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setInviteEmailError("Invalid email format");
+      return;
+    }
+    setInviteEmailError("");
     try {
       setSendingInvite(true);
       await subscriptionAPI.sendReferralEmail(trimmedEmail, inviteMessage.trim());
@@ -280,10 +286,18 @@ const Referrals = () => {
               <input
                 type="email"
                 value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
+                onChange={(e) => {
+                  setInviteEmail(e.target.value);
+                  if (inviteEmailError) setInviteEmailError("");
+                }}
                 placeholder="friend@company.com"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400"
+                className={`w-full bg-gray-50 border rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 ${
+                  inviteEmailError ? "border-red-500" : "border-gray-200"
+                }`}
               />
+              {inviteEmailError && (
+                <p className="text-xs text-red-600">{inviteEmailError}</p>
+              )}
               <textarea
                 value={inviteMessage}
                 onChange={(e) => setInviteMessage(e.target.value)}

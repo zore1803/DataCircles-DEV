@@ -73,6 +73,15 @@ router.post(
   companyController.toggleStarCompany,
 );
 
+// PATCH /api/companies/:id/owner (assign/clear the company's owning contact)
+router.patch(
+  "/:id/owner",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("Companies", "read-write"),
+  companyController.setCompanyOwner,
+);
+
 // DELETE /api/companies/:id
 // skipLimit: true — an org already at/over its limit must still be able to
 // delete back under it; the un-flagged limit check treats delete the same

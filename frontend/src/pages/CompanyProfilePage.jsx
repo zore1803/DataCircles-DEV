@@ -43,6 +43,8 @@ import {
   FolderOpen,
   LayoutGrid,
   X,
+  User,
+  Clock,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -239,6 +241,17 @@ const CompanyProfilePage = () => {
   const [activityFeedFilter, setActivityFeedFilter] = useState("All");
   const newEntryRef = useRef(null);
   const actionsMenuRef = useRef(null);
+  const [showLastUpdatedTooltip, setShowLastUpdatedTooltip] = useState(false);
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    return new Date(value).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
   const incomeChartScrollRef = useRef(null);
 
   const chartDotCursorSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#filter0_dd_2154_683)"><rect x="4" y="2" width="12" height="12" rx="6" fill="white"/><rect x="5" y="3" width="10" height="10" rx="5" stroke="#0F0E0E" stroke-width="2"/></g><defs><filter id="filter0_dd_2154_683" x="0" y="0" width="20" height="20" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="2"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="BackgroundImageFix" result="effect1_dropShadow_2154_683"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="1"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="effect1_dropShadow_2154_683" result="effect2_dropShadow_2154_683"/><feBlend mode="normal" in="SourceGraphic" in2="effect2_dropShadow_2154_683" result="shape"/></filter></defs></svg>`;
@@ -827,6 +840,60 @@ const CompanyProfilePage = () => {
 
           {/* RIGHT: Social Icons (desktop only here — shown below the name on mobile) + Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Owner — the contact designated as this company's point of
+                contact (Company.owner, set from the Companies list's row
+                menu). Links through to that contact when one is set. */}
+            {company?.owner ? (
+              <Link
+                to={`/contacts/${company.owner._id}`}
+                title={`Owner: ${company.owner.name}`}
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+              >
+                <User size={16} strokeWidth={2} />
+              </Link>
+            ) : (
+              <button
+                disabled
+                title="No owner assigned — set one from the Companies list"
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-300 cursor-not-allowed"
+              >
+                <User size={16} strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Last updated / created — hover for a small popover with both
+                timestamps instead of a single-line native tooltip. */}
+            <div
+              className="relative hidden lg:block"
+              onMouseEnter={() => setShowLastUpdatedTooltip(true)}
+              onMouseLeave={() => setShowLastUpdatedTooltip(false)}
+            >
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+              >
+                <Clock size={16} strokeWidth={2} />
+              </button>
+              {showLastUpdatedTooltip && company && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 z-50 text-left">
+                  <div className="mb-2">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Last updated</p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(company.updatedAt)}
+                      {company.lastUpdatedBy?.name ? ` by ${company.lastUpdatedBy.name}` : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Created on</p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(company.createdAt)}
+                      {company.createdBy?.name ? ` by ${company.createdBy.name}` : ""}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Twitter/X */}
             <button
               disabled={!hasSocialLink("twitter")}

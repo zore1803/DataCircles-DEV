@@ -238,7 +238,7 @@ const DealsForm = ({
 
     const hasError = validationErrors[fieldDef.name];
     const inputClassName = `w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${hasError
-      ? 'border-red-300 ring-1 ring-red-500'
+      ? 'border-red-500 focus:ring-red-500'
       : 'border-[#E0E0E1] focus:ring-blue-500'
       }`;
 
@@ -565,7 +565,7 @@ const DealsForm = ({
                 onChange={(e) =>
                   handleFormChange({ ...form, title: e.target.value })
                 }
-                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.title ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
+                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.title ? 'border-red-500 focus:ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
                   }`}
                 placeholder="Enter Deal Title"
                 required
@@ -586,7 +586,7 @@ const DealsForm = ({
                 onChange={(e) =>
                   handleFormChange({ ...form, amount: e.target.value })
                 }
-                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.amount ? 'border-red-300 ring-1 ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
+                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0] font-inter ${validationErrors.amount ? 'border-red-500 focus:ring-red-500' : 'border-[#E0E0E1] focus:ring-blue-500'
                   }`}
                 placeholder="Enter Deal Amount"
                 min={"0"}

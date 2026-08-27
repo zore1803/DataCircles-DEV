@@ -76,6 +76,7 @@ async function createCompany(
     { path: "user", select: "name" },
     { path: "createdBy", select: "name" },
     { path: "lastUpdatedBy", select: "name" },
+    { path: "owner", select: "name email" },
   ]);
 
   return company;
@@ -133,7 +134,8 @@ async function updateCompany(
   )
     .populate("user", "name")
     .populate("createdBy", "name")
-    .populate("lastUpdatedBy", "name");
+    .populate("lastUpdatedBy", "name")
+    .populate("owner", "name email");
 
   return company;
 }

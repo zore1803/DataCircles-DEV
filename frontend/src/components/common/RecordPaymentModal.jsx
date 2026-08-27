@@ -25,6 +25,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [notifySMS, setNotifySMS] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerEmailError, setCustomerEmailError] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [signatures, setSignatures] = useState([]); // [{label, value, url}]
   const [selectedSignature, setSelectedSignature] = useState("");
@@ -82,6 +83,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       setNotifySMS(false);
       setNotifyEmail(false);
       setCustomerEmail("");
+      setCustomerEmailError("");
       setCustomerPhone("");
       setSelectedSignature("");
 
@@ -131,6 +133,11 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       toast.error(`Payment cannot exceed the remaining balance of ${fmt(amountDue)}`);
       return;
     }
+    if (notifyEmail && customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      setCustomerEmailError("Invalid email format");
+      return;
+    }
+    setCustomerEmailError("");
 
     setLoading(true);
     try {
@@ -260,7 +267,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         {/* Scrollable body */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           {activeTab === "record" ? (
-            <form id="rp-form" onSubmit={handleSubmit}>
+            <form id="rp-form" onSubmit={handleSubmit} noValidate>
               {/* Payment gateway banner */}
               <div className="mx-6 mt-4 mb-1 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-start gap-3">
                 <div className="mt-0.5 text-blue-500">
@@ -516,10 +523,16 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                       <input
                         type="email"
                         value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        onChange={(e) => {
+                          setCustomerEmail(e.target.value);
+                          if (customerEmailError) setCustomerEmailError("");
+                        }}
                         placeholder="Customer email address"
-                        className={fieldClass}
+                        className={`${fieldClass} ${customerEmailError ? "border-red-500" : ""}`}
                       />
+                      {customerEmailError && (
+                        <p className="mt-1 text-xs text-red-600">{customerEmailError}</p>
+                      )}
                       <p className="text-[11px] text-gray-400 mt-1.5">
                         A payment receipt will be sent via SendGrid to this address.
                       </p>

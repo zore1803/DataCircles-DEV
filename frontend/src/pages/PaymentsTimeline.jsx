@@ -2307,7 +2307,7 @@ export default function PaymentsTimeline() {
                         onChange={(e) => setSelfTransferAmount(e.target.value)}
                         className={`w-full h-11 px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 text-sm font-bold transition-all ${
                           isOverdraft
-                            ? "border-red-300 bg-red-50/10 focus:border-red-500 focus:ring-red-500 text-red-600"
+                            ? "border-red-500 bg-red-50/10 focus:ring-red-500 text-red-600"
                             : selfTransferAmount
                               ? "border-emerald-300 bg-emerald-50/10 focus:border-emerald-500 focus:ring-emerald-500 text-emerald-600"
                               : "border-[#E1E4EA] focus:border-[#0085FF] focus:ring-[#0085FF] text-gray-700"

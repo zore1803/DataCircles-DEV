@@ -426,6 +426,17 @@ const InvoiceFormFull = ({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const formRef = useRef(null);
+  // Inline validation — mirrors QuickCompanyForm.jsx's pattern: per-field
+  // error flags cleared as the user fixes them, plus refs so an invalid
+  // submit can scroll straight to the topmost offending field instead of
+  // relying on native browser :invalid styling/scroll. Deal and Invoice
+  // Date are the only two fields this form actually enforced as required
+  // before (via toast.error checks in submitInvoice) — billing/shipping
+  // address were never required here, so no error state is added for them.
+  const [dealError, setDealError] = useState(false);
+  const [dateError, setDateError] = useState(false);
+  const dealFieldRef = useRef(null);
+  const dateInputRef = useRef(null);
 
   useEffect(() => {
     if (showItemForm) {
@@ -980,14 +991,26 @@ const InvoiceFormFull = ({
     setIsSubmitting(true);
     const isDraft = statusValue === "Draft";
 
-    if (!form.deal) {
-      toast.error("Deal is required.");
-      setIsSubmitting(false);
-      return;
-    }
+    // Compute every field's validity up front (not early-return per field)
+    // so all invalid fields light up together, then scroll to whichever
+    // one sits highest on the page — same pattern as QuickCompanyForm.jsx.
+    const isDealInvalid = !form.deal;
+    const isDateInvalid = !form.date;
+    setDealError(isDealInvalid);
+    setDateError(isDateInvalid);
 
-    if (!form.date) {
-      toast.error("Invoice Date is required.");
+    if (isDealInvalid || isDateInvalid) {
+      const candidates = [
+        isDealInvalid ? dealFieldRef.current : null,
+        isDateInvalid ? dateInputRef.current : null,
+      ].filter(Boolean);
+      let topMost = null;
+      candidates.forEach((el) => {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      });
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       setIsSubmitting(false);
       return;
     }
@@ -1251,7 +1274,7 @@ const InvoiceFormFull = ({
           isSliding ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <form onSubmit={handleSubmit} className="h-full flex flex-col bg-[#F8F9FA] w-full min-h-screen">
+        <form onSubmit={handleSubmit} noValidate className="h-full flex flex-col bg-[#F8F9FA] w-full min-h-screen">
           {/* Section 1: Header */}
           <div className="flex justify-between items-center px-6 py-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
             <div className="flex items-center gap-6">
@@ -1364,11 +1387,13 @@ const InvoiceFormFull = ({
                       + Create Deal
                     </button>
                   </div>
-                  <div className="bg-blue-50/50 rounded-lg">
+                  <div ref={dealFieldRef} className="bg-blue-50/50 rounded-lg">
                     <SearchableDropdown
                       options={localDeals}
                       value={form.deal}
+                      error={dealError ? "Deal is required" : null}
                       onChange={(value) => {
+                        if (dealError) setDealError(false);
                         // Switching the deal replaces the Receiver GSTIN and
                         // billing/shipping address with whatever the new
                         // deal's company has — same prefetch behavior as the
@@ -1403,6 +1428,9 @@ const InvoiceFormFull = ({
                       className="w-full"
                     />
                   </div>
+                  {dealError && (
+                    <p className="mt-1 text-xs text-red-600">Deal is required</p>
+                  )}
                 </div>
 
                 {/* Invoice Date */}
@@ -1410,9 +1438,9 @@ const InvoiceFormFull = ({
                   <label className="text-sm font-semibold text-gray-700">Document Date</label>
                   <div className="relative">
                     <input
+                      ref={dateInputRef}
                       type="date"
-                      className="w-full pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      required
+                      className={`w-full pl-3 pr-8 py-2.5 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:border-blue-500 ${dateError ? "border-red-500 focus:ring-red-500/20" : "border-gray-300 focus:ring-blue-500/20"}`}
                       value={form.date}
                       onChange={(e) => {
                         const newDate = e.target.value;
@@ -1425,10 +1453,14 @@ const InvoiceFormFull = ({
                           }
                           return { ...prev, date: newDate, dueDate: newDueDate };
                         });
+                        if (dateError) setDateError(false);
                         setHasUnsavedChanges(true);
                       }}
                     />
                   </div>
+                  {dateError && (
+                    <p className="mt-1 text-xs text-red-600">Invoice date is required</p>
+                  )}
                 </div>
 
                 {/* Validity */}

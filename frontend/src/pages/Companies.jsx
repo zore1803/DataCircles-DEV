@@ -38,6 +38,7 @@ import {
   PinOff,
   Star,
   Video,
+  User,
 } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -185,6 +186,9 @@ function Companies() {
   const columnMenuRef = useRef(null);
   const tableScrollRef = useRef(null);
   const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
+  const [ownerPickerCompanyId, setOwnerPickerCompanyId] = useState(null);
+  const [ownerPickerSearch, setOwnerPickerSearch] = useState("");
+  const [ownerPickerSaving, setOwnerPickerSaving] = useState(false);
 
   // Starring is per-user and persisted server-side (not localStorage) so the
   // paginated API can sort starred companies to the top of page 1 regardless
@@ -562,9 +566,9 @@ function Companies() {
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 160;
             const MARGIN = 8;
-            // 5 items (View Company, Edit, Add to Hotlist, Star/Unstar,
-            // Delete) + one divider + container padding.
-            const MENU_H = 184;
+            // 6 items (View Company, Edit, Add to Hotlist, Star/Unstar,
+            // Set/Change Owner, Delete) + one divider + container padding.
+            const MENU_H = 214;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -640,6 +644,19 @@ function Companies() {
               >
                 <Star className={`w-3.5 h-3.5 ${company.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
                 {company.isStarred ? "Unstar Company" : "Star Company"}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                  setOwnerPickerSearch("");
+                  setOwnerPickerCompanyId(company._id);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <User className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                {company.owner ? "Change Owner" : "Set Owner"}
               </button>
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
@@ -2407,6 +2424,86 @@ function Companies() {
         selectedCompanyIds={quickHotlistCompanyId ? [quickHotlistCompanyId] : []}
         onComplete={() => setQuickHotlistCompanyId(null)}
       />
+
+      {/* Set/Change Company Owner — pick a contact from this org's contact list */}
+      {ownerPickerCompanyId && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setOwnerPickerCompanyId(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-900">Set Company Owner</h3>
+              <button
+                onClick={() => setOwnerPickerCompanyId(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-4 pt-3 pb-2">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search contacts..."
+                value={ownerPickerSearch}
+                onChange={(e) => setOwnerPickerSearch(e.target.value)}
+                className="w-full border border-gray-200 rounded-full px-3 h-9 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-2">
+              {allContacts
+                .filter((c) =>
+                  !ownerPickerSearch.trim() ||
+                  c.name?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase()) ||
+                  c.email?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase())
+                )
+                .map((contact) => (
+                  <button
+                    key={contact._id}
+                    disabled={ownerPickerSaving}
+                    onClick={async () => {
+                      setOwnerPickerSaving(true);
+                      try {
+                        const res = await API.patch(`/companies/${ownerPickerCompanyId}/owner`, {
+                          ownerId: contact._id,
+                        });
+                        setCompanies((prev) =>
+                          prev.map((c) =>
+                            c._id === ownerPickerCompanyId ? { ...c, owner: res.data.owner } : c
+                          )
+                        );
+                        toast.success(`${contact.name} set as company owner`);
+                        setOwnerPickerCompanyId(null);
+                      } catch (err) {
+                        toast.error(err.response?.data?.error || "Failed to set owner");
+                      } finally {
+                        setOwnerPickerSaving(false);
+                      }
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-gray-50 text-left disabled:opacity-50"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                      {(contact.name || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{contact.name}</p>
+                      {contact.email && (
+                        <p className="text-xs text-gray-500 truncate">{contact.email}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              {allContacts.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-6">No contacts found.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export Selected Companies Modal */}
       <ExportModal

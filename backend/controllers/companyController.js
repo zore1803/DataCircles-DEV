@@ -39,7 +39,8 @@ const getAllCompanies = async (req, res) => {
     const companies = await Company.find(query)
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
+      .populate("lastUpdatedBy", "name")
+      .populate("owner", "name email");
 
     res.json(companies);
   } catch (error) {
@@ -212,6 +213,16 @@ const getAllCompaniesPaginated = async (req, res) => {
               },
             },
             { $unwind: { path: "$lastUpdatedBy", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "contacts",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [{ $project: { name: 1, email: 1 } }],
+              },
+            },
+            { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
             { $project: { __v: 0, starredBy: 0 } },
           ],
           totalCountArr: [{ $count: "count" }],
@@ -254,7 +265,8 @@ const getMyCompanies = async (req, res) => {
     })
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
+      .populate("lastUpdatedBy", "name")
+      .populate("owner", "name email");
     res.json(companies);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -269,7 +281,8 @@ const getCompanyById = async (req, res) => {
     })
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
+      .populate("lastUpdatedBy", "name")
+      .populate("owner", "name email");
 
     if (!company) {
       return res.status(404).json({ error: "Company not found" });
@@ -653,6 +666,38 @@ const toggleStarCompany = async (req, res) => {
   }
 };
 
+// Sets (or clears, with ownerId: null) the Contact designated as this
+// company's owner/point-of-contact. The contact must belong to the same
+// organization so a company can never be assigned an owner from outside it.
+const setCompanyOwner = async (req, res) => {
+  try {
+    const { ownerId } = req.body;
+
+    if (ownerId) {
+      const Contact = require("../models/Contact");
+      const contact = await Contact.findOne({
+        _id: ownerId,
+        organization: req.user.organization,
+      });
+      if (!contact) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+    }
+
+    const company = await Company.findOneAndUpdate(
+      { _id: req.params.id, organization: req.user.organization },
+      { owner: ownerId || null, lastUpdatedBy: req.user._id },
+      { new: true }
+    ).populate("owner", "name email");
+
+    if (!company) return res.status(404).json({ error: "Company not found" });
+
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to set company owner", message: error.message });
+  }
+};
+
 module.exports = {
   createCompany,
   getAllCompanies,
@@ -668,4 +713,5 @@ module.exports = {
   getSubsidiaries,
   getParentCompany,
   toggleStarCompany,
+  setCompanyOwner,
 };
