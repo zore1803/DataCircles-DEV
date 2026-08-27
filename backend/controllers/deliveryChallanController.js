@@ -6,6 +6,24 @@ const sendGridMail = require("../utils/sendGridMail");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
+const { getOwnedDealIds } = require("../utils/ownedCompanies");
+
+// A user with own-only permission may only touch delivery challans they
+// own. record.user may be a raw ObjectId or, if a caller populates it, a
+// User subdocument — handle both so a populated lookup doesn't
+// false-negative. DeliveryChallan links to a company only indirectly via
+// `deal -> Deal.company`, so a challan under a deal whose company this user
+// OWNS counts as owned too — mirrors contactController's isOwnedByUser,
+// swapping company/ownedCompanyIds for deal/ownedDealIds (via
+// getOwnedDealIds). `ownedDealIds` is optional.
+const isOwnedByUser = (record, userId, ownedDealIds = []) => {
+  const uid = userId.toString();
+  const recordUserId = record.user?._id ?? record.user;
+  if (recordUserId?.toString() === uid) return true;
+
+  const dealId = (record.deal?._id ?? record.deal)?.toString();
+  return !!dealId && ownedDealIds.some((id) => id.toString() === dealId);
+};
 
 // Utility function to format date as YYYYMMDD
 const formatDate = (date) => {
@@ -229,9 +247,13 @@ exports.getAllDeliveryChallans = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { organization: req.user.organization };
+    const andConditions = [];
 
     if (req.ownOnly) {
-      query.user = req.user._id;
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      andConditions.push({
+        $or: [{ user: req.user._id }, { deal: { $in: ownedDealIds } }],
+      });
     }
 
     if (search) {
@@ -239,11 +261,17 @@ exports.getAllDeliveryChallans = async (req, res) => {
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
         { _id: 1 }
       );
-      query.$or = [
-        { status: { $regex: search, $options: "i" } },
-        { deliveryChallanNumber: { $regex: search, $options: "i" } },
-        { deal: { $in: matchingDeals.map((d) => d._id) } },
-      ];
+      andConditions.push({
+        $or: [
+          { status: { $regex: search, $options: "i" } },
+          { deliveryChallanNumber: { $regex: search, $options: "i" } },
+          { deal: { $in: matchingDeals.map((d) => d._id) } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     const deliveryChallans = await DeliveryChallan.find(query).populate("deal");
@@ -269,9 +297,13 @@ exports.getAllDeliveryChallansPaginated = async (req, res) => {
     } = req.query;
 
     const query = { organization: req.user.organization };
+    const andConditions = [];
 
     if (req.ownOnly) {
-      query.user = req.user._id;
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      andConditions.push({
+        $or: [{ user: req.user._id }, { deal: { $in: ownedDealIds } }],
+      });
     }
 
     if (search) {
@@ -279,21 +311,28 @@ exports.getAllDeliveryChallansPaginated = async (req, res) => {
         { organization: req.user.organization, title: { $regex: search, $options: "i" } },
         { _id: 1 }
       );
-      query.$or = [
-        { deliveryChallanNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-        { deal: { $in: matchingDeals.map((d) => d._id) } },
-        {
-          $expr: {
-            $regexMatch: {
-              input: { $toString: "$amount" },
-              regex: search,
-              options: "i",
+      andConditions.push({
+        $or: [
+          { deliveryChallanNumber: { $regex: search, $options: "i" } },
+          { status: { $regex: search, $options: "i" } },
+          { deal: { $in: matchingDeals.map((d) => d._id) } },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $toString: "$amount" },
+                regex: search,
+                options: "i",
+              },
             },
           },
-        },
-      ];
+        ],
+      });
     }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
+    }
+
     if (status) query.status = status;
 
     const sortObj = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
@@ -386,6 +425,13 @@ exports.deleteDeliveryChallan = async (req, res) => {
       return res.status(404).json({ error: "Delivery Challan not found" });
     }
 
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(deliveryChallan, req.user._id, ownedDealIds)) {
+        return res.status(403).json({ error: "You can only delete delivery challans you own" });
+      }
+    }
+
     await deliveryChallan.deleteOne();
     res.json({ message: "Delivery Challan deleted successfully" });
   } catch (err) {
@@ -444,6 +490,20 @@ exports.updateDeliveryChallan = async (req, res) => {
       }
       if (!finalShippingAddress || Object.keys(finalShippingAddress).length === 0) {
         finalShippingAddress = dealDoc.company.shippingAddresses?.[0] || {};
+      }
+    }
+
+    if (req.ownOnly) {
+      const existing = await DeliveryChallan.findOne({
+        _id: req.params.id,
+        organization: req.user.organization,
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Delivery Challan not found" });
+      }
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(existing, req.user._id, ownedDealIds)) {
+        return res.status(403).json({ error: "You can only edit delivery challans you own" });
       }
     }
 

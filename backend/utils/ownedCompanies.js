@@ -1,4 +1,5 @@
 const Company = require("../models/Company");
+const Deal = require("../models/Deal");
 
 // Own-only staff should also see everything tied to a company they've been
 // made the owner of (Company.owner), not just records they personally
@@ -12,4 +13,19 @@ async function getOwnedCompanyIds(userId, organizationId) {
   return companies.map((c) => c._id);
 }
 
-module.exports = { getOwnedCompanyIds };
+// Accounting documents (Invoice, ProformaInvoice, Quotation, DeliveryChallan)
+// link to a company only indirectly, through their Deal (doc.deal ->
+// Deal.company) — there's no direct company field on these models. This
+// resolves "every deal id belonging to a company this user owns" in one
+// query, for controllers that need the same $in-friendly id list Contact/
+// Deal's own-only filter already uses.
+async function getOwnedDealIds(userId, organizationId) {
+  const ownedCompanyIds = await getOwnedCompanyIds(userId, organizationId);
+  if (ownedCompanyIds.length === 0) return [];
+  const deals = await Deal.find({ company: { $in: ownedCompanyIds }, organization: organizationId })
+    .select("_id")
+    .lean();
+  return deals.map((d) => d._id);
+}
+
+module.exports = { getOwnedCompanyIds, getOwnedDealIds };
