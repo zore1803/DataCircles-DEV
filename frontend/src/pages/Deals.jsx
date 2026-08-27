@@ -2293,7 +2293,7 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
+        className={`fixed right-0 border-b flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
