@@ -1082,7 +1082,7 @@ const PurchaseReturn = () => {
     const endItem = Math.min(currentPage * limit, totalCount);
 
     return (
-      <div className="flex items-center justify-between w-full px-4 lg:px-6">
+      <div className="flex items-center justify-between w-full px-4 sm:px-6 lg:px-8">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1715,7 +1715,7 @@ const PurchaseReturn = () => {
 
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
         >
           {showBulkStrip ? (
@@ -1935,7 +1935,7 @@ const PurchaseReturn = () => {
         <div
           ref={tableScrollRef}
           className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
-          style={{ position: "fixed", left: "var(--sidebar-width, 0px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
+          style={{ position: "fixed", left: "var(--sidebar-width, 0px)", paddingLeft: "var(--content-inset, 16px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
         >
           <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || purchaseReturns.length > 0 ? "border-b" : ""}`}>
             <table

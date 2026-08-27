@@ -1786,7 +1786,7 @@ function Companies() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -2097,7 +2097,7 @@ function Companies() {
           // the header + the "No companies found" row, so that border would
           // sit right under it as a second stray line with an odd gap instead
           // of closing off a real table body.
-          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`}>
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`} style={{ paddingLeft: "var(--content-inset, 16px)" }}>
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{

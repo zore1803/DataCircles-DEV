@@ -670,7 +670,7 @@ export default function Journals() {
     >
       {/* ── Fixed header bar (same shape as Inventory.jsx/PaymentsTimeline.jsx) ── */}
       <div
-        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-4 top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-4 top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: 64, maxHeight: 64, boxSizing: "border-box" }}
       >
         <div className="flex flex-col justify-center gap-1 min-w-0 flex-shrink-0">
@@ -731,7 +731,7 @@ export default function Journals() {
 
       {/* ── Active/Cancelled tabs ─────────────────────────────────────── */}
       <div
-        className="fixed right-0 h-11 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center gap-6 top-[118px] lg:top-[128px]"
+        className="fixed right-0 h-11 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center gap-6 top-[118px] lg:top-[128px]"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
         {[
@@ -812,7 +812,7 @@ export default function Journals() {
       {/* ── Bulk selection strip ─────────────────────────────────────── */}
       {showBulkStrip && (
         <div
-          className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
         >
           <div
@@ -886,7 +886,7 @@ export default function Journals() {
       {/* ── Full-bleed table, edge to edge ───────────────────────────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: 173 }}
+        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: 173, paddingLeft: "var(--content-inset, 16px)" }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">

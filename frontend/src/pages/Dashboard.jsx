@@ -1286,7 +1286,7 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
@@ -1334,7 +1334,7 @@ function Dashboard() {
             same card shape (icon + label/value + bottom-right trend badge)
             as the Overview tab's KPI row. */}
         <div
-          className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+          className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ marginTop: 24 }}
         >
           {crmKpis.map(({ icon: Icon, label, value, trend, trendUp }, i) => (
@@ -1424,14 +1424,13 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center"
+          className="box-border flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8"
           style={{
             position: "fixed",
             top: 64,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             zIndex: 40,
-            padding: "0px 24px",
             gap: 16,
             height: 64,
             minHeight: 64,
@@ -1475,7 +1474,7 @@ function Dashboard() {
 
         {/* KPI Cards */}
         <div
-          className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+          className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ gap: 16, marginTop: 24 }}
         >
           {[
@@ -2168,7 +2167,7 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -2218,7 +2217,7 @@ function Dashboard() {
 
       {/* KPI Cards */}
       <div
-        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
         style={{ marginTop: 24 }}
       >
         {[

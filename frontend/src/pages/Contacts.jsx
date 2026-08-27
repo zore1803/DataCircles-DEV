@@ -2511,7 +2511,7 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -3096,7 +3096,7 @@ function Contacts() {
             // loads; the top progress bar reports the fetch instead.
             // No border-t: the toolbar strip right above already has its own
             // border-b, so a top border here would double up against it.
-            <div className="relative bg-white border-r border-b border-[#E1E4EA]">
+            <div className="relative bg-white border-r border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{

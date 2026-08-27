@@ -2293,7 +2293,7 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -2615,7 +2615,7 @@ function Deals() {
 
       {showStats && (
         <div
-          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
+          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 39,

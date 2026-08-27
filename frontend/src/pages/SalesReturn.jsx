@@ -1516,7 +1516,7 @@ const SalesReturn = () => {
       {/* Fixed edge-to-edge toolbar */}
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -1740,6 +1740,7 @@ const SalesReturn = () => {
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
+            paddingLeft: "var(--content-inset, 16px)",
             right: 0,
             bottom: !showLoadingSkeleton ? 64 : 0,
           }}

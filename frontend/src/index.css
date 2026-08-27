@@ -34,6 +34,15 @@
   min-height: 100vh;
 }
 
+/* Consistent left gutter between the sidebar edge and fixed-position page
+   content (toolbars, tables, footers) that pins itself via
+   `left: var(--sidebar-width, 0px)`. Applied ad-hoc as
+   `paddingLeft: "var(--content-inset, 16px)"` on flush-left wrappers that
+   don't already carry their own left padding (px-4/px-6/p-6/etc). */
+:root {
+  --content-inset: 16px;
+}
+
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via
    `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
    whenever the sidebar expands/collapses/pins. Most of those inline styles

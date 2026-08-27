@@ -1136,7 +1136,7 @@ export default function PaymentsTimeline() {
           block stacked (name + video icon, subtitle below) instead of a
           single title+badge line. ──────────────────────────────────────── */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -1531,6 +1531,7 @@ export default function PaymentsTimeline() {
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
           top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0),
+          paddingLeft: "var(--content-inset, 16px)",
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">

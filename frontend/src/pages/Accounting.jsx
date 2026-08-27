@@ -2324,7 +2324,7 @@ const Accounting = () => {
             mirroring the Companies page layout and slide animation. */}
         {showBulkStrip && (
           <div
-            className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+            className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
@@ -2516,7 +2516,7 @@ const Accounting = () => {
         )}
         {/* 2nd Header - Tab Bar & Actions Row */}
         <div
-          className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
           {/* Mobile-only page title — fills the same left slot the tab pill
@@ -2785,7 +2785,7 @@ const Accounting = () => {
             above the pagination bar. */}
         <div
           className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[118px] lg:top-[128px]"
-          style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
+          style={{ left: "var(--sidebar-width, 0px)", bottom: 64, paddingLeft: "var(--content-inset, 16px)" }}
         >
           <table
             className="border-separate border-spacing-0 text-left"
@@ -3142,7 +3142,7 @@ const Accounting = () => {
             (same treatment as Companies.jsx). */}
         {!showForm && !showCreatePanel && (
           <div
-            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 lg:px-6 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6 lg:px-8 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
             style={{
               left: "var(--sidebar-width, 0px)",
               height: 64,

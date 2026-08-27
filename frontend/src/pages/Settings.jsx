@@ -458,7 +458,7 @@ const Settings = () => {
         }}
       >
         <div
-          className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -490,7 +490,7 @@ const Settings = () => {
           </div>
         </div>
 
-        <div className="pt-[118px] lg:pt-[128px] px-4 lg:px-6 pb-8">
+        <div className="pt-[118px] lg:pt-[128px] px-4 sm:px-6 lg:px-8 pb-8">
           {activeSection.component}
         </div>
       </div>
@@ -501,7 +501,7 @@ const Settings = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
       {/* Fixed page-header strip */}
       <div
-        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,

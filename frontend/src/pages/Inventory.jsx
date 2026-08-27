@@ -819,7 +819,7 @@ export default function Inventory() {
 
       {/* ── Fixed header bar ─────────────────────────────────────────── */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, height: 64, minHeight: 64, maxHeight: 64, boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -986,7 +986,7 @@ export default function Inventory() {
       {/* ── Full-bleed table ─────────────────────────────────────────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0) }}
+        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0), paddingLeft: "var(--content-inset, 16px)" }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">

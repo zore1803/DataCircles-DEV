@@ -1195,7 +1195,7 @@ function Vendors() {
           toolbar, the bulk-action strip slides in and takes over this exact
           bar, so nothing shifts and it feels identical to Companies.jsx. */}
       <div
-        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${
+        className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${
           showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
         }`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
@@ -1505,7 +1505,7 @@ function Vendors() {
           </div>
         )}
 
-        <div className="bg-white border border-[#E1E4EA]">
+        <div className="bg-white border border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="border-separate border-spacing-0 text-left"
             style={{ minWidth: "100%", width: tableWidth, tableLayout: "fixed" }}

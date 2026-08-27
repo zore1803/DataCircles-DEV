@@ -2794,7 +2794,7 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16 gap-2 lg:gap-4"
+        className="flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 gap-2 lg:gap-4"
         style={{
           boxSizing: "border-box",
           height: 64,
@@ -3262,7 +3262,7 @@ function Tasks() {
           bar reports the fetch instead. */}
       {/* No border-t: the toolbar strip right above already has its own
           border-b, so a top border here would double up against it. */}
-      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3425,7 +3425,7 @@ function Tasks() {
           bar reports the fetch instead. */}
       {/* No border-t: the toolbar strip right above already has its own
           border-b, so a top border here would double up against it. */}
-      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
