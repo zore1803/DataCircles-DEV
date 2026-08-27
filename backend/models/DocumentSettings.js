@@ -174,6 +174,16 @@ const documentSettingsSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+    // E-Invoice org-wide defaults.
+    // supplyType: drives the IRP SupTyp field.
+    //   Derive per-invoice later (GSTIN → B2B, SEZ → SEZWP/SEZWOP, etc.).
+    //   For now, one global default covers the sandbox phase.
+    // reverseCharge: maps to IRP RCB field (Y/N).
+    //   Most organisations never use reverse charge — default false.
+    eInvoiceDefaults: {
+      supplyType: { type: String, default: 'B2B' },
+      reverseCharge: { type: Boolean, default: false },
+    },
   },
   { timestamps: true }
 );

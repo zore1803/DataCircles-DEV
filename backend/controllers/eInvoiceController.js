@@ -1,4 +1,6 @@
 const EInvoice = require("../models/EInvoice");
+const eInvoiceService = require("../services/eInvoiceService");
+const irisProvider = require("../providers/iris/irisProvider");
 
 const POPULATE = [
   { path: "invoice", select: "invoiceNumber amount date" },
@@ -144,6 +146,105 @@ exports.updateEInvoiceStatus = async (req, res) => {
     console.error("Error updating e-invoice status:", err);
     res.status(500).json({ message: "Failed to update e-invoice status", error: err.message });
   }
+};
+
+// ── Phase 6/7/10/11/12/15 endpoints (new IRP flow) ────────────────────
+// All of these delegate to services/eInvoiceService.js. They are additive —
+// none of the legacy CRUD handlers above changed. If IRIS credentials are
+// missing, generate() returns ok:false with failureCode="PROVIDER_NOT_CONFIGURED"
+// (never a fake IRN).
+
+exports.previewPayload = async (req, res) => {
+  try {
+    const built = await eInvoiceService.buildAndValidate(req.params.invoiceId);
+    res.json({
+      payload: built.payload,
+      totals: built.totals,
+      warnings: built.warnings,
+      errors: built.errors,
+      providerConfigured: irisProvider.isConfigured(),
+    });
+  } catch (err) {
+    const code = err.code === "INVOICE_NOT_FOUND" ? 404 : 500;
+    res.status(code).json({ message: err.message });
+  }
+};
+
+exports.generate = async (req, res) => {
+  try {
+    const { record, ok } = await eInvoiceService.generate({
+      invoiceId: req.params.invoiceId,
+      user: req.user,
+      organizationId: req.user.organization,
+    });
+    res.status(ok ? 200 : 422).json({ ok, eInvoice: record });
+  } catch (err) {
+    const code =
+      err.code === "INVOICE_NOT_FOUND" ? 404 :
+      err.code === "ALREADY_GENERATED" ? 409 :
+      err.code === "ALREADY_IN_PROGRESS" ? 409 : 500;
+    res.status(code).json({ message: err.message, code: err.code });
+  }
+};
+
+exports.retrieve = async (req, res) => {
+  try {
+    const result = await eInvoiceService.retrieve({
+      invoiceId: req.params.invoiceId,
+      organizationId: req.user.organization,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message, code: err.code });
+  }
+};
+
+exports.cancel = async (req, res) => {
+  try {
+    const { reason, remarks } = req.body || {};
+    const result = await eInvoiceService.cancel({
+      invoiceId: req.params.invoiceId,
+      reason,
+      remarks,
+    });
+    res.status(result.ok ? 200 : 422).json(result);
+  } catch (err) {
+    const code =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "INVALID_STATE" ? 409 : 500;
+    res.status(code).json({ message: err.message, code: err.code });
+  }
+};
+
+exports.history = async (req, res) => {
+  try {
+    const rows = await eInvoiceService.history({
+      invoiceId: req.params.invoiceId,
+      organizationId: req.user.organization,
+    });
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.providerStatus = async (_req, res) => {
+  const cfg = irisProvider.readConfig();
+  res.json({
+    provider: irisProvider.name,
+    environment: cfg.environment,
+    configured: irisProvider.isConfigured(),
+    // NEVER leak the actual secrets — just tell the frontend which keys are present.
+    presentKeys: {
+      clientId: !!cfg.clientId,
+      clientSecret: !!cfg.clientSecret,
+      username: !!cfg.username,
+      password: !!cfg.password,
+      baseUrl: !!cfg.baseUrl,
+      authUrl: !!cfg.authUrl,
+      gstin: !!cfg.gstin,
+    },
+  });
 };
 
 exports.deleteEInvoice = async (req, res) => {

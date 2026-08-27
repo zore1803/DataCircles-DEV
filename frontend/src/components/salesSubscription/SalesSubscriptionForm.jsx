@@ -1,0 +1,503 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { X, Plus, Trash2, Search } from "lucide-react";
+import API from "../../services/api";
+import toast from "react-hot-toast";
+import SearchableDropdown from "../contact/SearchableDropdown";
+
+const UNITS = [
+  { value: "day", label: "Day(s)" },
+  { value: "week", label: "Week(s)" },
+  { value: "month", label: "Month(s)" },
+  { value: "year", label: "Year(s)" },
+];
+const STATUS_OPTIONS = ["Draft", "Active", "Expired", "Error", "Cancelled"];
+
+const money = (n) =>
+  `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const calcItemAmount = (it) => {
+  const rate = parseFloat(it.rate) || 0;
+  const qty = parseInt(it.quantity) || 0;
+  const subtotal = rate * qty;
+  const disc = parseFloat(it.discount) || 0;
+  return it.discountType === "percentage" ? subtotal * (1 - disc / 100) : subtotal - disc;
+};
+
+/*
+ * Right-drawer create/edit form for a Sales Subscription (recurring billing
+ * agreement with a customer — see backend/models/SalesSubscription.js).
+ *
+ * Unlike Sales Return (always against an existing document), a Subscription
+ * is built fresh from the product/service catalog — pick a customer, add
+ * line items with quantity/rate/GST, set the billing interval and start/end
+ * dates. "Generate Invoice Now" (row action on the list page, not this form)
+ * is what actually creates an Invoice from it.
+ */
+const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess, onError }) => {
+  const isEditing = !!editingSubscription;
+  const [isSliding, setIsSliding] = useState(false);
+
+  const [deals, setDeals] = useState([]);
+  const [dealId, setDealId] = useState("");
+
+  const [catalog, setCatalog] = useState([]);
+  const [itemSearch, setItemSearch] = useState("");
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const [lines, setLines] = useState([]);
+
+  const [intervalValue, setIntervalValue] = useState(1);
+  const [intervalUnit, setIntervalUnit] = useState("month");
+  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState("");
+  const [transactionType, setTransactionType] = useState("intra");
+  const [gstRate, setGstRate] = useState(0);
+  const [discountType, setDiscountType] = useState("fixed");
+  const [discountValue, setDiscountValue] = useState(0);
+  const [notes, setNotes] = useState("");
+  const [terms, setTerms] = useState("");
+  const [status, setStatus] = useState("Draft");
+  const [saving, setSaving] = useState(false);
+
+  const isCancelled = editingSubscription?.status === "Cancelled";
+  const availableStatusOptions = STATUS_OPTIONS.filter((s) => s !== "Cancelled" || isEditing);
+
+  useEffect(() => {
+    setTimeout(() => setIsSliding(true), 10);
+  }, []);
+
+  useEffect(() => {
+    API.get("/deals")
+      .then((res) => setDeals(res.data.deals || res.data || []))
+      .catch(() => setDeals([]));
+    API.get("/items")
+      .then((res) => {
+        const list = res.data?.items || res.data || [];
+        setCatalog(Array.isArray(list) ? list.filter((it) => it.type !== "service" || true) : []);
+      })
+      .catch(() => setCatalog([]));
+  }, []);
+
+  useEffect(() => {
+    if (!editingSubscription) return;
+    setDealId(editingSubscription.deal?._id || editingSubscription.deal || "");
+    setLines(
+      (editingSubscription.items || []).map((it, idx) => ({
+        _key: `${it.itemId?._id || it.itemId || "custom"}-${it.variantId || "none"}-${idx}`,
+        itemId: it.itemId?._id || it.itemId || null,
+        variantId: it.variantId || null,
+        parentItemId: it.parentItemId || null,
+        isVariant: !!it.isVariant,
+        name: it.name,
+        description: it.description || "",
+        hsn: it.hsn || "",
+        rate: it.rate,
+        quantity: it.quantity,
+        discountType: it.discountType || "amount",
+        discount: it.discount || 0,
+        gstRate: it.gstRate || 0,
+        taxInclusive: !!it.taxInclusive,
+      }))
+    );
+    setIntervalValue(editingSubscription.billingInterval?.value || 1);
+    setIntervalUnit(editingSubscription.billingInterval?.unit || "month");
+    setStartDate(editingSubscription.startDate ? new Date(editingSubscription.startDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+    setEndDate(editingSubscription.endDate ? new Date(editingSubscription.endDate).toISOString().split("T")[0] : "");
+    setTransactionType(editingSubscription.transactionType || "intra");
+    setGstRate(editingSubscription.gstRate || 0);
+    setDiscountType(editingSubscription.discount?.type || "fixed");
+    setDiscountValue(editingSubscription.discount?.value || 0);
+    setNotes(editingSubscription.notes || "");
+    setTerms(editingSubscription.terms || "");
+    setStatus(editingSubscription.status || "Draft");
+  }, [editingSubscription]);
+
+  const handleClose = () => {
+    setIsSliding(false);
+    setTimeout(() => onRequestClose(), 300);
+  };
+
+  const filteredCatalog = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
+    if (!q) return catalog.slice(0, 20);
+    return catalog.filter((it) => it.name?.toLowerCase().includes(q)).slice(0, 20);
+  }, [catalog, itemSearch]);
+
+  const addLine = (item) => {
+    setLines((prev) => [
+      ...prev,
+      {
+        _key: `${item._id}-${Date.now()}`,
+        itemId: item._id,
+        variantId: null,
+        parentItemId: null,
+        isVariant: false,
+        name: item.name,
+        description: item.description || "",
+        hsn: item.hsnSac || "",
+        rate: item.sellingPrice || 0,
+        quantity: 1,
+        discountType: "amount",
+        discount: 0,
+        gstRate: item.gstRate || 0,
+        taxInclusive: !!item.taxInclusive,
+      },
+    ]);
+    setItemSearch("");
+    setShowItemDropdown(false);
+  };
+
+  const updateLine = (key, patch) => {
+    setLines((prev) => prev.map((l) => (l._key === key ? { ...l, ...patch } : l)));
+  };
+  const removeLine = (key) => setLines((prev) => prev.filter((l) => l._key !== key));
+
+  const subtotal = lines.reduce((sum, l) => sum + calcItemAmount(l), 0);
+  const afterDiscount = discountValue > 0
+    ? (discountType === "percentage" ? subtotal * (1 - discountValue / 100) : subtotal - discountValue)
+    : subtotal;
+  const totalWithGst = gstRate > 0 ? afterDiscount * (1 + gstRate / 100) : afterDiscount;
+
+  const dealOptions = deals.map((d) => ({
+    _id: d._id,
+    label: `${d.contact?.name || d.company?.name || d.title || "Untitled deal"}`,
+  }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!dealId) return toast.error("Select a customer");
+    if (lines.length === 0) return toast.error("Add at least one product or service");
+    if (!startDate) return toast.error("Select a start date");
+    if (endDate && new Date(endDate) < new Date(startDate)) return toast.error("End date can't be before the start date");
+
+    setSaving(true);
+    try {
+      const payload = {
+        deal: dealId,
+        items: lines.map((l) => ({
+          itemId: l.itemId || undefined,
+          variantId: l.variantId || undefined,
+          parentItemId: l.parentItemId || undefined,
+          isVariant: l.isVariant,
+          name: l.name,
+          description: l.description,
+          hsn: l.hsn,
+          rate: parseFloat(l.rate) || 0,
+          quantity: parseInt(l.quantity) || 1,
+          discountType: l.discountType,
+          discount: parseFloat(l.discount) || 0,
+          gstRate: parseFloat(l.gstRate) || 0,
+          taxInclusive: l.taxInclusive,
+        })),
+        discount: { type: discountType, value: parseFloat(discountValue) || 0 },
+        transactionType,
+        gstRate: parseFloat(gstRate) || 0,
+        billingInterval: { value: parseInt(intervalValue, 10) || 1, unit: intervalUnit },
+        startDate,
+        endDate: endDate || null,
+        notes,
+        terms,
+        status,
+      };
+
+      if (isEditing) {
+        await API.put(`/sales-subscriptions/${editingSubscription._id}`, payload);
+      } else {
+        await API.post("/sales-subscriptions", payload);
+      }
+      onSuccess?.();
+    } catch (err) {
+      onError?.(err.response?.data?.error || err.response?.data?.message || "Failed to save subscription");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100020] flex justify-end">
+      <div
+        className={`absolute inset-0 bg-black transition-opacity duration-300 ${isSliding ? "opacity-40" : "opacity-0"}`}
+        onClick={handleClose}
+      />
+      <form
+        onSubmit={handleSubmit}
+        className={`relative bg-white w-full max-w-3xl h-full overflow-y-auto shadow-2xl transition-transform duration-300 ${isSliding ? "translate-x-0" : "translate-x-full"}`}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isEditing ? "Edit Subscription" : "New Subscription"}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              A recurring billing agreement — invoices are generated per cycle, not automatically edited here.
+            </p>
+          </div>
+          <button type="button" onClick={handleClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {isCancelled ? (
+          <div className="p-6">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              This subscription is Cancelled and can no longer be edited. Create a new one instead.
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 space-y-6">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Customer *</label>
+              <SearchableDropdown
+                options={dealOptions}
+                value={dealId}
+                onChange={setDealId}
+                placeholder="Select a customer"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-900">Products / Services</h3>
+              </div>
+
+              <div className="relative mb-3">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={itemSearch}
+                  onChange={(e) => { setItemSearch(e.target.value); setShowItemDropdown(true); }}
+                  onFocus={() => setShowItemDropdown(true)}
+                  placeholder="Search products/services to add…"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {showItemDropdown && filteredCatalog.length > 0 && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowItemDropdown(false)} />
+                    <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl z-20">
+                      {filteredCatalog.map((item) => (
+                        <button
+                          key={item._id}
+                          type="button"
+                          onClick={() => addLine(item)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                        >
+                          <span className="text-gray-800">{item.name}</span>
+                          <span className="text-xs text-gray-400">{item.type} · {money(item.sellingPrice)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Item</th>
+                      <th className="px-3 py-2 text-right w-20">Qty</th>
+                      <th className="px-3 py-2 text-right w-28">Rate</th>
+                      <th className="px-3 py-2 text-right w-20">GST %</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
+                      <th className="px-3 py-2 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {lines.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                          Search above to add a product or service.
+                        </td>
+                      </tr>
+                    ) : (
+                      lines.map((l) => (
+                        <tr key={l._key} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium text-gray-900">{l.name}</td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={1}
+                              value={l.quantity}
+                              onChange={(e) => updateLine(l._key, { quantity: e.target.value })}
+                              className="w-16 px-2 py-1 text-right border border-gray-200 rounded"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={l.rate}
+                              onChange={(e) => updateLine(l._key, { rate: e.target.value })}
+                              className="w-24 px-2 py-1 text-right border border-gray-200 rounded"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={l.gstRate}
+                              onChange={(e) => updateLine(l._key, { gstRate: e.target.value })}
+                              className="w-16 px-2 py-1 text-right border border-gray-200 rounded"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium">{money(calcItemAmount(l))}</td>
+                          <td className="px-3 py-2">
+                            <button type="button" onClick={() => removeLine(l._key)} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Repeat every</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={intervalValue}
+                    onChange={(e) => setIntervalValue(e.target.value)}
+                    className="w-20 px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                  />
+                  <select
+                    value={intervalUnit}
+                    onChange={(e) => setIntervalUnit(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                  >
+                    {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                >
+                  {availableStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Start Date *</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">End Date (optional)</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Transaction Type</label>
+                <select
+                  value={transactionType}
+                  onChange={(e) => setTransactionType(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                >
+                  <option value="intra">Intra-state</option>
+                  <option value="inter">Inter-state</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Overall GST Rate %</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={gstRate}
+                  onChange={(e) => setGstRate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Discount Type</label>
+                <select
+                  value={discountType}
+                  onChange={(e) => setDiscountType(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                >
+                  <option value="fixed">Fixed</option>
+                  <option value="percentage">Percentage</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Discount Value</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Terms</label>
+                <textarea
+                  value={terms}
+                  onChange={(e) => setTerms(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <div className="w-64 space-y-1 text-sm text-gray-700">
+                <div className="flex justify-between"><span>Subtotal</span><span className="font-medium">{money(subtotal)}</span></div>
+                <div className="flex justify-between"><span>After discount</span><span className="font-medium">{money(afterDiscount)}</span></div>
+                <div className="flex justify-between text-base font-semibold text-gray-900 pt-1 border-t">
+                  <span>Per-cycle amount</span><span>{money(totalWithGst)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="sticky bottom-0 bg-white border-t px-6 py-3 flex justify-end gap-2">
+          <button type="button" onClick={handleClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          {!isCancelled && (
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+            >
+              {saving ? "Saving…" : isEditing ? "Update" : "Create"}
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default SalesSubscriptionForm;

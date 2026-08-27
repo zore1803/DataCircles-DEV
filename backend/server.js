@@ -123,6 +123,9 @@ app.use('/api/quotations', quotationRoutes);
 const salesReturnRoutes = require('./routes/salesReturnRoutes');
 app.use('/api/sales-returns', salesReturnRoutes);
 
+const salesSubscriptionRoutes = require('./routes/salesSubscriptionRoutes');
+app.use('/api/sales-subscriptions', salesSubscriptionRoutes);
+
 const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
 app.use('/api/delivery-challans', deliveryChallanRoutes);
 

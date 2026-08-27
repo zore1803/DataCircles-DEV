@@ -115,6 +115,7 @@ function DocumentSettings() {
     defaultDueDateDays: "",
     documentTypeSettings: createDefaultDocumentTypeSettings(),
     pdfFilenameFormats: DEFAULT_FORMATS,
+    eInvoiceDefaults: { supplyType: "B2B", reverseCharge: false },
   });
   const [signatures, setSignatures] = useState([]);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
@@ -242,6 +243,10 @@ function DocumentSettings() {
             deliveryChallan: normalizeSection("deliveryChallan", { prefix: "DC", suffix: "", prefixes: ["DC"], suffixes: [] }),
           },
           pdfFilenameFormats: res.data?.pdfFilenameFormats || DEFAULT_FORMATS,
+          eInvoiceDefaults: {
+            supplyType: res.data?.eInvoiceDefaults?.supplyType || "B2B",
+            reverseCharge: res.data?.eInvoiceDefaults?.reverseCharge || false,
+          },
         });
         await fetchSignatures();
       } catch (error) {
@@ -273,6 +278,7 @@ function DocumentSettings() {
         defaultTermsByType: form.defaultTermsByType,
         defaultDueDateDays: form.defaultDueDateDays ? Number(form.defaultDueDateDays) : null,
         pdfFilenameFormats: form.pdfFilenameFormats,
+        eInvoiceDefaults: form.eInvoiceDefaults,
       });
       toast.success("Document settings updated");
     } catch (error) {
@@ -651,6 +657,60 @@ function DocumentSettings() {
                 </div>
               );
             })()}
+
+            {/* ── E-Invoice Defaults ── */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-sky-600" />
+                <h3 className="text-sm font-semibold text-gray-800">E-Invoice Defaults</h3>
+              </div>
+              <p className="text-xs text-gray-500 -mt-1">
+                These defaults apply when generating a GST e-invoice (IRP/IRIS). You can override them per-customer or per-invoice later.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Supply Type */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Supply Type</label>
+                  <select
+                    value={form.eInvoiceDefaults.supplyType}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, eInvoiceDefaults: { ...f.eInvoiceDefaults, supplyType: e.target.value } }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    <option value="B2B">B2B — Business to Business</option>
+                    <option value="SEZWP">SEZWP — SEZ with Payment</option>
+                    <option value="SEZWOP">SEZWOP — SEZ without Payment</option>
+                    <option value="EXPWP">EXPWP — Export with Payment</option>
+                    <option value="EXPWOP">EXPWOP — Export without Payment</option>
+                    <option value="DEXP">DEXP — Deemed Export</option>
+                  </select>
+                </div>
+                {/* Reverse Charge */}
+                <div className="flex flex-col justify-center">
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Reverse Charge</label>
+                  <label className="inline-flex items-center gap-3 cursor-pointer">
+                    <div
+                      onClick={() =>
+                        setForm((f) => ({ ...f, eInvoiceDefaults: { ...f.eInvoiceDefaults, reverseCharge: !f.eInvoiceDefaults.reverseCharge } }))
+                      }
+                      className={`relative w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer ${
+                        form.eInvoiceDefaults.reverseCharge ? "bg-sky-600" : "bg-gray-300"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                          form.eInvoiceDefaults.reverseCharge ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </div>
+                    <span className="text-sm text-gray-700">
+                      {form.eInvoiceDefaults.reverseCharge ? "Yes — Reverse charge applies" : "No — Standard charge"}
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
 
             <button
               type="submit"
