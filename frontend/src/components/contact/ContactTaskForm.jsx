@@ -326,7 +326,7 @@ const handleSubmit = async (e) => {
                       <input
                         type="date"
                         value={form.dueDate}
-                        min={new Date().toISOString().split("T")[0]}
+                        min="2000-01-01"
                         max="2099-12-31"
                         onChange={(e) => handleChange("dueDate", e.target.value)}
                         className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${

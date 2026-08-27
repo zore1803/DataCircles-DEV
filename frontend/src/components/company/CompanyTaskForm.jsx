@@ -678,7 +678,6 @@ const CompanyTaskForm = ({
                 <input
                   type="date"
                   value={form.dueDate}
-                  min={new Date().toISOString().split("T")[0]}
                   onChange={(e) => handleChange("dueDate", e.target.value)}
                   disabled={!isEditMode && mode === "view"}
                   className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"

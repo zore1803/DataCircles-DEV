@@ -733,7 +733,6 @@ const QuickTaskForm = ({
                   <input
                     type="date"
                     value={form.dueDate}
-                    min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => handleFormChange("dueDate", e.target.value)}
                     className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.dueDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                       }`}
