@@ -171,6 +171,7 @@ function Companies() {
   const [showImport, setShowImport] = useState(false);
   const [showHotlist, setShowHotlist] = useState(false);
   const [permission, setPermission] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showAddToHotlistModal, setShowAddToHotlistModal] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
@@ -189,6 +190,8 @@ function Companies() {
   const [ownerPickerCompanyId, setOwnerPickerCompanyId] = useState(null);
   const [ownerPickerSearch, setOwnerPickerSearch] = useState("");
   const [ownerPickerSaving, setOwnerPickerSaving] = useState(false);
+  const [orgUsers, setOrgUsers] = useState([]);
+  const [orgUsersLoaded, setOrgUsersLoaded] = useState(false);
 
   // Starring is per-user and persisted server-side (not localStorage) so the
   // paginated API can sort starred companies to the top of page 1 regardless
@@ -645,19 +648,29 @@ function Companies() {
                 <Star className={`w-3.5 h-3.5 ${company.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
                 {company.isStarred ? "Unstar Company" : "Star Company"}
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenRowActionsId(null);
-                  setRowActionsPos(null);
-                  setOwnerPickerSearch("");
-                  setOwnerPickerCompanyId(company._id);
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-              >
-                <User className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                {company.owner ? "Change Owner" : "Set Owner"}
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenRowActionsId(null);
+                    setRowActionsPos(null);
+                    setOwnerPickerSearch("");
+                    setOwnerPickerCompanyId(company._id);
+                    if (!orgUsersLoaded) {
+                      API.get("/auth/all-user-admin")
+                        .then((res) => {
+                          setOrgUsers(res.data?.allUsers || []);
+                          setOrgUsersLoaded(true);
+                        })
+                        .catch(() => toast.error("Failed to load users"));
+                    }
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                >
+                  <User className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                  {company.owner ? "Change Owner" : "Set Owner"}
+                </button>
+              )}
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
                 onClick={(e) => {
@@ -1145,6 +1158,7 @@ function Companies() {
         (p) => p.name.toLowerCase() === "companies",
       );
       setPermission(userPerm?.permission || "no");
+      setIsAdmin(user?.user?.role === "admin");
     } catch {
       setPermission("no");
       toast.error("Failed to fetch user permissions");
@@ -2448,35 +2462,36 @@ function Companies() {
               <input
                 type="text"
                 autoFocus
-                placeholder="Search contacts..."
+                placeholder="Search users..."
                 value={ownerPickerSearch}
                 onChange={(e) => setOwnerPickerSearch(e.target.value)}
                 className="w-full border border-gray-200 rounded-full px-3 h-9 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-2">
-              {allContacts
-                .filter((c) =>
+              {orgUsers
+                .filter((u) => u.role === "staff")
+                .filter((u) =>
                   !ownerPickerSearch.trim() ||
-                  c.name?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase()) ||
-                  c.email?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase())
+                  u.name?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase()) ||
+                  u.email?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase())
                 )
-                .map((contact) => (
+                .map((orgUser) => (
                   <button
-                    key={contact._id}
+                    key={orgUser._id}
                     disabled={ownerPickerSaving}
                     onClick={async () => {
                       setOwnerPickerSaving(true);
                       try {
                         const res = await API.patch(`/companies/${ownerPickerCompanyId}/owner`, {
-                          ownerId: contact._id,
+                          ownerId: orgUser._id,
                         });
                         setCompanies((prev) =>
                           prev.map((c) =>
                             c._id === ownerPickerCompanyId ? { ...c, owner: res.data.owner } : c
                           )
                         );
-                        toast.success(`${contact.name} set as company owner`);
+                        toast.success(`${orgUser.name} set as company owner`);
                         setOwnerPickerCompanyId(null);
                       } catch (err) {
                         toast.error(err.response?.data?.error || "Failed to set owner");
@@ -2487,18 +2502,21 @@ function Companies() {
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-gray-50 text-left disabled:opacity-50"
                   >
                     <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                      {(contact.name || "?").charAt(0).toUpperCase()}
+                      {(orgUser.name || "?").charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm text-gray-900 truncate">{contact.name}</p>
-                      {contact.email && (
-                        <p className="text-xs text-gray-500 truncate">{contact.email}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-900 truncate">{orgUser.name}</p>
+                      {orgUser.email && (
+                        <p className="text-xs text-gray-500 truncate">{orgUser.email}</p>
                       )}
                     </div>
+                    <span className="text-[10px] uppercase font-medium text-gray-400 flex-shrink-0">
+                      {orgUser.role}
+                    </span>
                   </button>
                 ))}
-              {allContacts.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-6">No contacts found.</p>
+              {orgUsersLoaded && orgUsers.filter((u) => u.role === "staff").length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-6">No staff users found.</p>
               )}
             </div>
           </div>

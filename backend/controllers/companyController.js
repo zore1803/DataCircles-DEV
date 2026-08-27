@@ -215,7 +215,7 @@ const getAllCompaniesPaginated = async (req, res) => {
             { $unwind: { path: "$lastUpdatedBy", preserveNullAndEmptyArrays: true } },
             {
               $lookup: {
-                from: "contacts",
+                from: "users",
                 localField: "owner",
                 foreignField: "_id",
                 as: "owner",
@@ -667,20 +667,28 @@ const toggleStarCompany = async (req, res) => {
 };
 
 // Sets (or clears, with ownerId: null) the Contact designated as this
-// company's owner/point-of-contact. The contact must belong to the same
-// organization so a company can never be assigned an owner from outside it.
+// company's owner — one of this org's own User accounts (staff/admin), not
+// a CRM contact. The user must belong to the same organization so a company
+// can never be assigned an owner from outside it.
 const setCompanyOwner = async (req, res) => {
   try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can set a company's owner" });
+    }
+
     const { ownerId } = req.body;
 
     if (ownerId) {
-      const Contact = require("../models/Contact");
-      const contact = await Contact.findOne({
+      const User = require("../models/User");
+      const ownerUser = await User.findOne({
         _id: ownerId,
         organization: req.user.organization,
       });
-      if (!contact) {
-        return res.status(404).json({ error: "Contact not found" });
+      if (!ownerUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      if (ownerUser.role !== "staff") {
+        return res.status(400).json({ error: "Company owner must be a staff user" });
       }
     }
 

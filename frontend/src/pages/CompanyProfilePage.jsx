@@ -840,17 +840,18 @@ const CompanyProfilePage = () => {
 
           {/* RIGHT: Social Icons (desktop only here — shown below the name on mobile) + Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Owner — the contact designated as this company's point of
-                contact (Company.owner, set from the Companies list's row
-                menu). Links through to that contact when one is set. */}
+            {/* Owner — the org User (staff/admin) designated as this
+                company's owner (Company.owner, set from the Companies
+                list's row menu, admin-only). Not a CRM contact, so this is
+                just a label, not a link to a profile page. */}
             {company?.owner ? (
-              <Link
-                to={`/contacts/${company.owner._id}`}
+              <button
+                disabled
                 title={`Owner: ${company.owner.name}`}
-                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-800"
               >
                 <User size={16} strokeWidth={2} />
-              </Link>
+              </button>
             ) : (
               <button
                 disabled
