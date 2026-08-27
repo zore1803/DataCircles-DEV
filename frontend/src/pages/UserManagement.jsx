@@ -383,50 +383,63 @@ function UserManagement() {
   const renderSeatInfo = () => {
     if (!subscription?.subscription) return null;
 
-    // Prefer seatStatus (includes extra_seat add-ons) over subscription.userCount
-    const userCount = seatStatus?.totalSeats ?? subscription.subscription.userCount;
-    const seatsUsed = seatStatus?.occupiedSeats ?? (users.length + invites.length);
-    const isAtLimit = seatsUsed >= userCount;
-    const percentage = Math.min(100, (seatsUsed / userCount) * 100);
+    // Admin seats (always exactly 1, the org creator) and staff seats
+    // (everyone invited or joined via code) are tracked separately —
+    // falls back to the combined legacy fields only if seatStatus hasn't
+    // loaded yet.
+    const hasSplit = seatStatus?.includedSeats !== undefined && seatStatus?.totalStaffSeats !== undefined;
+    const adminLimit = hasSplit ? seatStatus.includedSeats : 1;
+    const adminUsed = hasSplit ? seatStatus.occupiedAdminSeats : users.filter((u) => u.role === "admin").length;
+    const staffLimit = hasSplit ? seatStatus.totalStaffSeats : (seatStatus?.totalSeats ?? subscription.subscription.userCount);
+    const staffUsed = hasSplit
+      ? seatStatus.occupiedStaffSeats
+      : (seatStatus?.occupiedSeats ?? (users.length + invites.length));
+
+    const renderBar = (label, used, limit) => {
+      const isAtLimit = used >= limit;
+      const percentage = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+      return (
+        <div>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+            <p className="text-blue-700 text-sm font-semibold">
+              {label}: {used} of {limit} seats used
+              {isAtLimit && (
+                <span className="text-red-600 font-semibold ml-2">
+                  (At limit - payment required)
+                </span>
+              )}
+            </p>
+            <div className="text-right">
+              <span className="text-xl font-bold text-blue-700">
+                {used}/{limit}
+              </span>
+              <span className="text-xs text-blue-600 ml-2">
+                {Math.max(0, limit - used)} available
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 bg-blue-200 rounded-full h-3 overflow-hidden shadow-inner">
+            <div
+              className={`h-3 rounded-full transition-all duration-500 ${
+                percentage >= 90 ? "bg-red-500" : "bg-blue-600"
+              }`}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        </div>
+      );
+    };
 
     return (
-      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-2xl p-6 mb-8 shadow-lg">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-start gap-4">
-            <div className="bg-blue-600 p-3 rounded-xl shadow-md">
-              <Users className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-blue-900 mb-1">
-                Seat Usage
-              </h3>
-              <p className="text-blue-700 text-sm">
-                {seatsUsed} of {userCount} seats used
-                {isAtLimit && (
-                  <span className="text-red-600 font-semibold ml-2">
-                    (At limit - payment required)
-                  </span>
-                )}
-              </p>
-            </div>
+      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-2xl p-6 mb-8 shadow-lg space-y-5">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-600 p-3 rounded-xl shadow-md">
+            <Users className="w-6 h-6 text-white" />
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-blue-700">
-              {seatsUsed}/{userCount}
-            </div>
-            <p className="text-xs text-blue-600 mt-1">
-              {userCount - seatsUsed} available
-            </p>
-          </div>
+          <h3 className="text-lg font-bold text-blue-900">Seat Usage</h3>
         </div>
-        <div className="mt-4 bg-blue-200 rounded-full h-3 overflow-hidden shadow-inner">
-          <div
-            className={`h-3 rounded-full transition-all duration-500 ${
-              percentage >= 90 ? "bg-red-500" : "bg-blue-600"
-            }`}
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
+        {renderBar("Admin", adminUsed, adminLimit)}
+        {renderBar("Staff", staffUsed, staffLimit)}
       </div>
     );
   };
@@ -506,11 +519,11 @@ function UserManagement() {
         </div>
         {seatStatus && (
           <div className={`text-xs px-3 py-1.5 rounded-lg font-medium ${
-            seatStatus.occupiedSeats >= seatStatus.totalSeats
+            seatStatus.occupiedStaffSeats >= seatStatus.totalStaffSeats
               ? "bg-red-50 text-red-700"
               : "bg-gray-100 text-gray-600"
           }`}>
-            {seatStatus.occupiedSeats} / {seatStatus.totalSeats} seats used
+            Admin {seatStatus.occupiedAdminSeats} / {seatStatus.includedSeats} · Staff {seatStatus.occupiedStaffSeats} / {seatStatus.totalStaffSeats}
           </div>
         )}
         <button
