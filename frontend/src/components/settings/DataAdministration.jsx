@@ -59,7 +59,7 @@ function DataAdministration() {
 
   const anyNearOrOverLimit =
     overview &&
-    [overview.seats, overview.storage, overview.emailTemplates, ...overview.modules].some(
+    [overview.adminSeats, overview.staffSeats, overview.storage, overview.emailTemplates, ...overview.modules].some(
       (item) => !item.unlimited && item.limit && item.used / item.limit >= 0.8
     );
 
@@ -123,10 +123,16 @@ function DataAdministration() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <UsageBar
-                  label={overview.seats.label}
-                  used={overview.seats.used}
-                  limit={overview.seats.limit}
-                  unlimited={overview.seats.unlimited}
+                  label={overview.adminSeats.label}
+                  used={overview.adminSeats.used}
+                  limit={overview.adminSeats.limit}
+                  unlimited={overview.adminSeats.unlimited}
+                />
+                <UsageBar
+                  label={overview.staffSeats.label}
+                  used={overview.staffSeats.used}
+                  limit={overview.staffSeats.limit}
+                  unlimited={overview.staffSeats.unlimited}
                 />
                 <UsageBar
                   label={overview.storage.label}

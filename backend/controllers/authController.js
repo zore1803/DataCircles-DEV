@@ -555,7 +555,7 @@ exports.inviteUser = async (req, res) => {
     // Seat check via addonManagement utility
     const seatStatus = await getSeatStatus(req.user.organization);
 
-    if (seatStatus.hasFreeSeat) {
+    if (seatStatus.hasFreeStaffSeat) {
       // Seats available — proceed immediately
       await logUserAction({
         organization: req.user.organization,
@@ -563,7 +563,7 @@ exports.inviteUser = async (req, res) => {
         action: "invite_sent",
         targetEmail: email,
         targetPermissions: permissions || [],
-        details: { seatsAvailable: true, totalSeats: seatStatus.totalSeats },
+        details: { seatsAvailable: true, totalSeats: seatStatus.totalStaffSeats },
         req,
       });
 
@@ -582,8 +582,8 @@ exports.inviteUser = async (req, res) => {
 
       return res.json({
         message: "User invited successfully",
-        seatsUsed: seatStatus.occupiedSeats + 1,
-        totalSeats: seatStatus.totalSeats,
+        seatsUsed: seatStatus.occupiedStaffSeats + 1,
+        totalSeats: seatStatus.totalStaffSeats,
       });
     }
 
@@ -1094,15 +1094,15 @@ exports.completeRegistration = async (req, res) => {
         const seatStatus = await getSeatStatus(org._id);
 
         console.log(
-          `Code join attempt - Organization: ${org.name}, Occupied: ${seatStatus.occupiedSeats}, Total seats: ${seatStatus.totalSeats} (${seatStatus.includedSeats} included + ${seatStatus.extraSeatsOwned} extra)`,
+          `Code join attempt - Organization: ${org.name}, Staff occupied: ${seatStatus.occupiedStaffSeats}, Total staff seats: ${seatStatus.totalStaffSeats} (${seatStatus.staffSeatsIncluded} included + ${seatStatus.extraSeatsOwned} extra)`,
         );
 
-        if (!seatStatus.hasFreeSeat) {
+        if (!seatStatus.hasFreeStaffSeat) {
           return res.status(403).json({
             message:
               "This organization has reached its user limit. Please contact your admin to purchase more seats.",
-            seatsUsed: seatStatus.occupiedSeats,
-            totalSeats: seatStatus.totalSeats,
+            seatsUsed: seatStatus.occupiedStaffSeats,
+            totalSeats: seatStatus.totalStaffSeats,
             joinMethod: "code",
           });
         }

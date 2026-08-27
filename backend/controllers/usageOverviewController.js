@@ -67,16 +67,26 @@ exports.getUsageOverview = async (req, res) => {
     const catalogEntries = await getActiveCatalogEntries(activeAddons);
     const boost = (targetKey) => calculateAddonBoost(activeAddons, catalogEntries, targetKey);
 
-    // Seats
+    // Seats — admin (always exactly 1, the org creator) and staff
+    // (everyone invited or joined via company code) are tracked separately.
     const includedSeats = features.includedSeats ?? 1;
+    const staffSeatsIncluded = features.staffSeats ?? 0;
     const extraSeatsOwned = boost("seats");
-    const totalSeats = includedSeats + extraSeatsOwned;
-    const activeUsersCount = await User.countDocuments({ organization });
-    const pendingInvitesCount = await Invited.countDocuments({ organization });
-    const seats = {
-      label: "Team Seats",
-      used: activeUsersCount + pendingInvitesCount,
-      limit: totalSeats,
+    const totalStaffSeats = staffSeatsIncluded + extraSeatsOwned;
+    const occupiedAdminSeats = await User.countDocuments({ organization, role: "admin" });
+    const occupiedStaffSeats =
+      (await User.countDocuments({ organization, role: { $ne: "admin" } })) +
+      (await Invited.countDocuments({ organization }));
+    const adminSeats = {
+      label: "Admin",
+      used: occupiedAdminSeats,
+      limit: includedSeats,
+      unlimited: false,
+    };
+    const staffSeats = {
+      label: "Staff",
+      used: occupiedStaffSeats,
+      limit: totalStaffSeats,
       unlimited: false,
     };
 
@@ -128,7 +138,8 @@ exports.getUsageOverview = async (req, res) => {
 
     res.json({
       planName: subscription.planName,
-      seats,
+      adminSeats,
+      staffSeats,
       storage,
       emailTemplates,
       modules,

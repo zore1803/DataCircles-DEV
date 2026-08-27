@@ -231,23 +231,37 @@ async function getSeatStatus(organizationId) {
   const plan = await PlanConfig.findOne({ planId: subscription.planName, isActive: true });
   if (!plan) throw new Error(`Plan config not found for "${subscription.planName}"`);
 
+  // Admin seat: exactly 1, always the org creator — never invited or
+  // joined via company code, so it has no addon boost and nothing counts
+  // against it but the single admin user.
   const includedSeats = plan.features?.includedSeats ?? 1;
+  const occupiedAdminSeats = await User.countDocuments({ organization: organizationId, role: 'admin' });
 
+  // Staff seats: everyone invited or joined via company code. Extra-seat
+  // addons extend this bucket, not the admin one.
+  const staffSeatsIncluded = plan.features?.staffSeats ?? 0;
   const activeAddons = subscription.activeAddons || [];
   const catalogEntries = await getActiveCatalogEntries(activeAddons);
-
   const extraSeatsOwned = calculateAddonBoost(activeAddons, catalogEntries, 'seats');
+  const totalStaffSeats = staffSeatsIncluded + extraSeatsOwned;
+  const occupiedStaffSeats =
+    (await User.countDocuments({ organization: organizationId, role: { $ne: 'admin' } })) +
+    (await Invited.countDocuments({ organization: organizationId }));
 
-  // TEMPORARY HACK FOR TESTING: Grant 10 free seats
-  const totalSeats = includedSeats + extraSeatsOwned + 10;
-
-  const activeUsersCount = await User.countDocuments({ organization: organizationId });
-  const pendingInvitesCount = await Invited.countDocuments({ organization: organizationId });
-  const occupiedSeats = activeUsersCount + pendingInvitesCount;
+  // Legacy combined view — kept for any caller not yet updated to the
+  // admin/staff split.
+  const totalSeats = includedSeats + totalStaffSeats;
+  const occupiedSeats = occupiedAdminSeats + occupiedStaffSeats;
 
   return {
     includedSeats,
+    occupiedAdminSeats,
+    hasFreeAdminSeat: occupiedAdminSeats < includedSeats,
+    staffSeatsIncluded,
     extraSeatsOwned,
+    totalStaffSeats,
+    occupiedStaffSeats,
+    hasFreeStaffSeat: occupiedStaffSeats < totalStaffSeats,
     totalSeats,
     occupiedSeats,
     hasFreeSeat: occupiedSeats < totalSeats,
