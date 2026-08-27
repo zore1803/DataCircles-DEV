@@ -80,6 +80,35 @@ const updateKanbanBoard = async (req, res) => {
 
     let updateQuery = { statuses: req.body.statuses };
 
+    // Block removing a stage that still has deals sitting in it. Only a
+    // true deletion shrinks the array — a rename or reorder keeps the same
+    // length, so checking length here (rather than trusting editIndex,
+    // which the frontend never actually sends) avoids false-blocking a
+    // rename just because the old name string briefly disappears from the
+    // array.
+    if (Array.isArray(req.body.statuses) && req.body.statuses.length < (board.statuses || []).length) {
+      const removedStatuses = (board.statuses || []).filter(
+        (s) => !req.body.statuses.includes(s)
+      );
+      if (removedStatuses.length > 0) {
+        const counts = await Deal.aggregate([
+          {
+            $match: {
+              organization: board.organization,
+              status: { $in: removedStatuses },
+            },
+          },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]);
+        const blocked = counts.find((c) => c.count > 0);
+        if (blocked) {
+          return res.status(409).json({
+            error: `Cannot delete "${blocked._id}" — it still has ${blocked.count} deal${blocked.count === 1 ? "" : "s"} in it. Move or reassign those deals first.`,
+          });
+        }
+      }
+    }
+
     // Only run deal updates if we actually renamed a status
     if (req.body.editIndex !== undefined && req.body.oldStatuses && req.body.statuses) {
       const oldStatus = req.body.oldStatuses[req.body.editIndex];

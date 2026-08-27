@@ -611,10 +611,11 @@ const AllTasks = () => {
                         /* Add highlight for pinned rows */
                         className={`hover:bg-slate-50/50 transition-colors duration-200 cursor-pointer ${isPinned ? "bg-blue-50/40 border-l-2 border-blue-400" : ""
                           }`}
+                        style={{ height: 37, maxHeight: 37 }}
                         onClick={(e) => handleTaskClick(task, e)}
                       >
                         {/* 1. NEW Pin Cell */}
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-2 text-center overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           <button
                             onClick={(e) => togglePin(e, task._id)}
                             className={`p-1.5 rounded-lg transition-all ${isPinned
@@ -627,7 +628,7 @@ const AllTasks = () => {
                           </button>
                         </td>
 
-                        <td className="px-6 py-4 font-medium text-slate-900">
+                        <td className="px-6 py-2 font-medium text-slate-900 overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           <div className="flex items-center gap-1.5">
                             {task.isStarred && (
                               <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400 shrink-0" />
@@ -635,25 +636,25 @@ const AllTasks = () => {
                             <span>{task.title}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-slate-600 max-w-xs">
+                        <td className="px-6 py-2 text-slate-600 max-w-xs overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           <div className="truncate line-clamp-1" dangerouslySetInnerHTML={{ __html: task.description || 'No description' }}>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-blue-600 font-medium">
+                        <td className="px-6 py-2 text-blue-600 font-medium overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           {formatDateForDisplay(task.dueDate)}
                         </td>
-                        <td className="px-6 py-4 text-slate-600">
+                        <td className="px-6 py-2 text-slate-600 overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           {userMap[task.users[0]._id] || "-"}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-2 overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTaskStatusBadge(task.status)}`}>
                             {task.status === "Pending" ? "To Do" : task.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-slate-600">
+                        <td className="px-6 py-2 text-slate-600 overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           {formatDateForDisplay(task.createdAt)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-2 whitespace-nowrap overflow-hidden" style={{ height: "37px", maxHeight: "37px", overflow: "hidden", boxSizing: "border-box" }}>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => toggleStar(e, task._id)}

@@ -1267,7 +1267,7 @@ function Contacts() {
       if (err.response?.status === 402) {
         errorMessage = err.response?.data?.message || "An active subscription is required to make changes.";
       } else if (err.response?.status === 403) {
-        errorMessage = err.response.data.message || "Access denied";
+        errorMessage = err.response.data.message || err.response.data.error || "Access denied";
       }
       toast.error(errorMessage, { id: loadingToast });
     } finally {
@@ -3211,6 +3211,7 @@ function Contacts() {
                             <tr
                               key={row.id}
                               className={`bg-white hover:bg-blue-50 transition-colors cursor-pointer ${selectedContactsSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                              style={{ height: 37, maxHeight: 37 }}
                               onClick={(e) => {
                                 // While a row-actions (⋮) menu is open — for THIS row or
                                 // any other — a click anywhere on the table should only
@@ -3242,12 +3243,16 @@ function Contacts() {
                                     onClick={(e) => { if (colId === "selection") e.stopPropagation(); }}
                                     style={{
                                       width: cell.column.getSize(),
+                                      height: "37px",
+                                      maxHeight: "37px",
+                                      overflow: "hidden",
+                                      boxSizing: "border-box",
                                       position: isSticky ? "sticky" : "static",
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                     }}
-                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
                                   >
                                     <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
                                       {flexRender(

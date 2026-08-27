@@ -150,7 +150,7 @@ const UpdateContactModal = ({
       if (err.response?.status === 402) {
         setError(err.response?.data?.message || "An active subscription is required to make changes.");
       } else if (err.response?.status === 403) {
-        setError(err.response.data.message || "Access denied");
+        setError(err.response.data.message || err.response.data.error || "Access denied");
       } else {
         setError(err.response?.data?.error || "Failed to update contact");
       }

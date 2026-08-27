@@ -5782,7 +5782,13 @@ exports.getSeatStatusEndpoint = async (req, res) => {
     const status = await getSeatStatus(req.user.organization);
     res.json({
       includedSeats: status.includedSeats,
+      occupiedAdminSeats: status.occupiedAdminSeats,
+      hasFreeAdminSeat: status.hasFreeAdminSeat,
+      staffSeatsIncluded: status.staffSeatsIncluded,
       extraSeatsOwned: status.extraSeatsOwned,
+      totalStaffSeats: status.totalStaffSeats,
+      occupiedStaffSeats: status.occupiedStaffSeats,
+      hasFreeStaffSeat: status.hasFreeStaffSeat,
       totalSeats: status.totalSeats,
       occupiedSeats: status.occupiedSeats,
       hasFreeSeat: status.hasFreeSeat,

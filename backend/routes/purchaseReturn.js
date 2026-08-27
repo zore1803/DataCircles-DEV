@@ -16,6 +16,7 @@ const subscriptionGate = require("../middlewares/subscriptionGate");
 router.post("/", requireAuth, subscriptionGate, purchaseReturnController.createPurchaseReturn);
 router.get("/", requireAuth, subscriptionGate, purchaseReturnController.getAllPurchaseReturns);
 router.get("/pagination", requireAuth, subscriptionGate, purchaseReturnController.getAllPurchaseReturnsWithPagination);
+router.get("/download/:id", requireAuth, subscriptionGate, purchaseReturnController.downloadPurchaseReturn);
 router.post("/bulk-import", requireAuth, subscriptionGate, purchaseReturnController.bulkImportPurchaseReturns);
 router.get("/vendor/:vendorId", requireAuth, subscriptionGate, purchaseReturnController.getPurchaseReturnsByVendor);
 // Must come before /:id so "purchase" isn't swallowed as a return id.

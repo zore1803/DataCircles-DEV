@@ -66,6 +66,7 @@ import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import HighlightText from "../components/common/HighlightText";
 import { formatNumberFixed } from "../utils/numberFormatter";
+import { formatINR } from "../utils/clientExport";
 import InvoiceForm, { CreateInvoicePanel } from "../components/invoice/InvoiceForm";
 import PerformaInvoiceForm from "../components/PerformaInvoice/PerformaInvoiceForm";
 import { CreatePerformaPanel } from "../components/PerformaInvoice/PerformaInvoiceForm";
@@ -1538,7 +1539,7 @@ const Accounting = () => {
         d.deal?.title || "N/A",
         d.date ? new Date(d.date).toLocaleDateString() : "",
         d.dueDate ? new Date(d.dueDate).toLocaleDateString() : "",
-        d.amount ?? 0,
+        formatINR(d.amount),
         d.status || "",
       ]
         .map(esc)
@@ -1794,23 +1795,22 @@ const Accounting = () => {
     }
   };
 
-  // Clones an existing document into a brand-new Draft document with its own
-  // number via the backend's duplicate endpoint. Distinct from "Convert":
-  // duplicate stays on the same document type and never touches the source.
-  const handleDuplicate = async (id, type) => {
-    try {
-      setLoading((prev) => ({ ...prev, [type]: true }));
-      await API.post(`/${apiPathFor(type)}/${id}/duplicate`);
-      await fetchData(type);
-      toast.success(`${docNameFor(type)} duplicated successfully`);
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error || `Failed to duplicate ${type} document`
-      );
-      console.error(`Duplicate ${type} document error:`, err);
-    } finally {
-      setLoading((prev) => ({ ...prev, [type]: false }));
+  // Opens the create form pre-filled with the source document's data (same
+  // split/full-width view it was last shown in) instead of creating the
+  // duplicate directly against the backend — lets the user review/edit
+  // before saving, same flow as handleConvert/confirmConvert below. Distinct
+  // from "Convert": duplicate stays on the same document type and never
+  // touches the source.
+  const handleDuplicate = (id, type) => {
+    const sourceDoc = documents[type]?.find((d) => d._id === id);
+    if (!sourceDoc) {
+      toast.error("Source document not found. Please refresh.");
+      return;
     }
+    setConversionData(sourceDoc);
+    setActiveTab(type);
+    setShowCreatePanel(true);
+    setShowViewer(false);
   };
 
   const handleConvert = (id, sourceType, targetType) => {
@@ -2519,10 +2519,23 @@ const Accounting = () => {
           className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
+          {/* Mobile-only page title — fills the same left slot the tab pill
+              occupies on desktop, so justify-between actually has two
+              children to space apart (with only the icon group visible, a
+              single flex child sits at flex-start instead of the far right).
+              Collapses away when the mobile search is expanded, same as
+              Companies.jsx's title, so the search field gets the freed
+              width instead of staying pinned to a small fixed size. */}
+          <h1
+            className={`lg:hidden text-base font-bold text-[#0E121B] overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-auto opacity-100 flex-shrink-0"}`}
+          >
+            Accountings
+          </h1>
+
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
               mounted and clickable while the table loads. */}
-          <div className="relative flex-shrink-0 inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
+          <div className="relative flex-shrink-0 hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}
@@ -2551,11 +2564,14 @@ const Accounting = () => {
               <Skeleton width={140} height={40} shape="circle" className="ml-1" />
             </div>
           ) : (
-            <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
+            <div className="flex flex-row items-center gap-2 justify-end min-w-0 flex-1 lg:flex-initial lg:flex-shrink-0">
               {/* Search field — expands in place from the search icon,
-                  matching the Companies strip behaviour. */}
+                  matching the Companies strip behaviour: on mobile it grows
+                  to fill the space the title vacates (this wrapper becomes
+                  flex-1 above); on desktop it's the same fixed 380px as
+                  before. */}
               <div
-                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
+                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white min-w-0 max-w-full ${isSearchExpanded ? "flex-1 lg:flex-initial lg:w-[380px]" : "w-10 flex-shrink-0"}`}
               >
                 <SearchIcon
                   className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
@@ -2599,8 +2615,9 @@ const Accounting = () => {
                 )}
               </div>
 
-              {/* Filter Button — status filter */}
-              <div className="relative flex-shrink-0">
+              {/* Filter Button — status filter. Hidden on mobile; folded into
+                  the More menu below instead. */}
+              <div className="relative flex-shrink-0 hidden lg:block">
                 <button
                   title="Filter by status"
                   onClick={(e) => {
@@ -2664,6 +2681,49 @@ const Accounting = () => {
                     onClick={(e) => e.stopPropagation()}
                     className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-50"
                   >
+                    {/* Tab switcher — folded in here on mobile since the pill
+                        selector itself is hidden below lg. */}
+                    <div className="lg:hidden py-1 border-b border-[#E1E4EA]">
+                      {TABS.map((tab) => (
+                        <button
+                          key={tab.key}
+                          onClick={() => {
+                            setActiveTab(tab.key);
+                            setShowMoreMenu(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${activeTab === tab.key
+                            ? "text-[#0085FF] font-medium bg-blue-50"
+                            : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Filter by status — folded in here on mobile since the
+                        standalone filter button is hidden below lg. */}
+                    <div className="lg:hidden py-1 border-b border-[#E1E4EA] max-h-48 overflow-y-auto">
+                      {["", ...statusOptions].map((status) => (
+                        <button
+                          key={status || "all"}
+                          onClick={() => {
+                            setFilterStatuses((prev) => ({
+                              ...prev,
+                              [activeTab]: status,
+                            }));
+                            setShowMoreMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm ${filterStatuses[activeTab] === status
+                            ? "text-[#0085FF] font-medium bg-blue-50"
+                            : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                        >
+                          {status || "All Statuses"}
+                        </button>
+                      ))}
+                    </div>
+
                     <button
                       onClick={() => {
                         setShowMoreMenu(false);
@@ -2695,20 +2755,24 @@ const Accounting = () => {
                 /* Figma "Frame 1351649616": 146x44, padding 12, gap 6,
                    #0085FF, radius 96. The fixed 146px width is the spec for the
                    "Add Invoice" label; the longer labels on the other three tabs
-                   use it as a minimum so the text isn't clipped. */
+                   use it as a minimum so the text isn't clipped. Below lg it
+                   collapses to a plain circular + button, same treatment as
+                   Companies.jsx's "New Company" button on mobile. */
                 style={{
-                  width: activeTab === "tax" ? 146 : undefined,
-                  minWidth: 146,
+                  width: 40,
                   height: 40,
                   padding: 12,
                   gap: 6,
                   background: "#0085FF",
                   borderRadius: 96,
                 }}
-                className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1"
+                className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 lg:!w-auto"
               >
                 <Plus size={18} className="text-white flex-shrink-0" />
-                <span className="text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
+                <span
+                  className="hidden lg:inline text-white text-[14px] font-medium leading-[20px] whitespace-nowrap"
+                  style={{ minWidth: activeTab === "tax" ? 106 : undefined }}
+                >
                   Add {docNameFor(activeTab)}
                 </span>
               </button>
@@ -2831,6 +2895,7 @@ const Accounting = () => {
                   key={doc?._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(doc._id) ? "!bg-blue-50" : ""
                     }`}
+                  style={{ height: 37, maxHeight: 37 }}
                 >
                   <td
                     style={{
@@ -2839,7 +2904,7 @@ const Accounting = () => {
                       left: 0,
                       zIndex: 10,
                     }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
+                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] overflow-hidden bg-inherit"
                   >
                     <div className="flex justify-center items-center w-full">
                       <input
@@ -2860,7 +2925,7 @@ const Accounting = () => {
                           width: colWidths[col.id],
                           ...stickyStyleFor(col.id),
                         }}
-                        className="relative px-4 py-3 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                       >
                         {isLastCol ? (
                           <div className="flex items-center justify-between gap-2 w-full">
@@ -3084,6 +3149,27 @@ const Accounting = () => {
               filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
             }}
           >
+            {/* Mobile — same simple Previous/Next fallback as Companies.jsx,
+                instead of cramming the full desktop layout (Showing X of Y +
+                per-page dropdown + numbered pages) into a narrow viewport. */}
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => handlePageChange(activeTab, pagination.currentPage - 1)}
+                disabled={!pagination.hasPrevPage}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => handlePageChange(activeTab, pagination.currentPage + 1)}
+                disabled={!pagination.hasNextPage}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
             {showLoadingSkeleton ? (
               <div className="flex items-center gap-2">
                 <Skeleton width={190} height={14} />
@@ -3224,6 +3310,7 @@ const Accounting = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         )}
 
@@ -4018,7 +4105,7 @@ const Accounting = () => {
               {/* Same inset, rounded quick-drawer chrome as CompanyForm/ItemForm/CallLogForm
                   (dc-panel-card) — this panel just keeps its own wider, taller compose width
                   instead of the standard dc-panel-w. */}
-              <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+              <div className="fixed dc-panel-card w-[calc(100%-3rem)] max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
                   <div className="flex items-center gap-3">
                     <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">

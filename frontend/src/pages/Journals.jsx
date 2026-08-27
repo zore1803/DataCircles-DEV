@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { createPortal } from "react-dom";
 import {
   BookOpen, Plus, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, MoreVertical, Pin, PinOff,
-  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye,
+  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Download, Loader2, FileText
 } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
@@ -13,7 +13,10 @@ import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import QuickJournalForm from "../components/journal/QuickJournalForm";
 import JournalLedgerDrawer from "../components/journal/JournalLedgerDrawer";
 import PayInOutModal from "../components/journal/PayInOutModal";
+import BulkJournalUpdateModal from "../components/journal/BulkJournalUpdateModal";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import API from "../services/api";
+import * as XLSX from "xlsx";
 
 /*
  * Table UI parity pass — same pin/drag/search/row-menu infrastructure
@@ -83,6 +86,29 @@ export default function Journals() {
   const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("active"); // "active" | "cancelled"
+  const [selectedJournals, setSelectedJournals] = useState([]);
+  const [showBulkStrip, setShowBulkStrip] = useState(false);
+  const [bulkStripClosing, setBulkStripClosing] = useState(false);
+  
+  const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, target: null });
+
+  useEffect(() => {
+    const active = selectedJournals.length > 0;
+    if (active) {
+      setBulkStripClosing(false);
+      setShowBulkStrip(true);
+    } else if (showBulkStrip) {
+      setBulkStripClosing(true);
+      const t = setTimeout(() => {
+        setShowBulkStrip(false);
+        setBulkStripClosing(false);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [selectedJournals.length]);
 
   /* pagination — client-side over the already-loaded list (journals don't
      paginate server-side; the whole org's list is small enough to fetch in
@@ -107,6 +133,117 @@ export default function Journals() {
   useEffect(() => {
     fetchJournals();
   }, [fetchJournals]);
+
+  const handleBulkDelete = () => {
+    setDeleteConfirm({ open: true, type: "bulk", target: null });
+  };
+
+  const executeBulkDelete = async () => {
+    setIsDeleting(true);
+    let successCount = 0;
+    try {
+      await Promise.all(
+        selectedJournals.map(async (id) => {
+          await API.delete(`/journals/${id}`);
+          successCount++;
+        })
+      );
+      toast.success(`Successfully deleted ${successCount} journal(s).`);
+      setSelectedJournals([]);
+      fetchJournals();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error deleting some journals.");
+      fetchJournals(); // Refresh to see what succeeded
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm({ open: false, type: null, target: null });
+    }
+  };
+
+  const handleBulkUpdate = async (updates) => {
+    let successCount = 0;
+    try {
+      await Promise.all(
+        selectedJournals.map(async (id) => {
+          await API.put(`/journals/${id}`, updates);
+          successCount++;
+        })
+      );
+      toast.success(`Successfully updated ${successCount} journal(s).`);
+      setIsBulkUpdateModalOpen(false);
+      setSelectedJournals([]);
+      fetchJournals();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error updating some journals.");
+      fetchJournals();
+    }
+  };
+
+  const handleBulkExportNames = () => {
+    const selectedNames = journals
+      .filter((j) => selectedJournals.includes(j._id))
+      .map((j) => ({ "Journal Name": j.name }));
+    
+    if (selectedNames.length === 0) return;
+
+    const worksheet = XLSX.utils.json_to_sheet(selectedNames);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Journal Names");
+    XLSX.writeFile(workbook, "Selected_Journals.xlsx");
+    toast.success("Names exported successfully!");
+  };
+
+  const handleBulkExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const workbook = XLSX.utils.book_new();
+      
+      const selected = journals.filter((j) => selectedJournals.includes(j._id));
+      
+      for (const j of selected) {
+        // Fetch ledger for each journal
+        const res = await API.get(`/journals/${j._id}/ledger`);
+        const { rows, summary } = res.data;
+        const sortedRows = [...(rows || [])].reverse();
+        
+        const tableData = sortedRows.map(row => {
+          const isOpening = row._id === `${j._id}-opening`;
+          return {
+            "Date Time": formatDate(row.createdAt || row.date),
+            "Description": row.notes || row.description || "—",
+            "Party": row.partyName || "—",
+            "Mode": row.paymentType || "—",
+            "Amount (in Rupees)": isOpening ? "—" : row.amount,
+            "Payment Type": isOpening ? "—" : (row.type === "payin" ? "You Received" : "You Gave"),
+            "Closing Balance (in Rupees)": row.balance
+          };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(tableData);
+        
+        // Add net balance row at top or bottom if needed, but table format is fine.
+        // Make sure sheet name is valid and unique (max 31 chars)
+        let sheetName = j.name.replace(/[\\/?*\[\]]/g, '').substring(0, 31);
+        // Ensure unique sheet name in workbook
+        let counter = 1;
+        let finalSheetName = sheetName;
+        while (workbook.SheetNames.includes(finalSheetName)) {
+            finalSheetName = `${sheetName.substring(0, 27)}(${counter})`;
+            counter++;
+        }
+        
+        XLSX.utils.book_append_sheet(workbook, worksheet, finalSheetName || "Ledger");
+      }
+      
+      XLSX.writeFile(workbook, "Selected_Journal_Ledgers.xlsx");
+      toast.success("Ledgers exported successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to export some ledgers.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   /* columns — local pin/order/hide, same shape as PaymentsTimeline.jsx
      (no useColumnSettings persistence needed for a page with no real data
@@ -351,6 +488,7 @@ export default function Journals() {
   // otherwise a narrowed result set can strand the user on a now-empty page.
   useEffect(() => {
     setJournalsPagination((p) => ({ ...p, currentPage: 1 }));
+    setSelectedJournals([]);
   }, [activeTab, searchTerm, sortConfig]);
 
   const journalsTotalCount = filteredJournals.length;
@@ -369,13 +507,22 @@ export default function Journals() {
     setJournalsPagination({ currentPage: 1, limit });
   };
 
-  const handleDeleteJournal = async (j) => {
+  const handleDeleteJournal = (j) => {
+    setDeleteConfirm({ open: true, type: "single", target: j });
+  };
+
+  const executeSingleDelete = async (j) => {
+    setIsDeleting(true);
     try {
       await API.delete(`/journals/${j._id}`);
       setJournals((prev) => prev.filter((row) => row._id !== j._id));
+      setSelectedJournals((prev) => prev.filter((id) => id !== j._id));
       toast.success("Journal deleted");
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to delete journal");
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm({ open: false, type: null, target: null });
     }
   };
 
@@ -425,10 +572,10 @@ export default function Journals() {
                 <Pencil className="w-4 h-4 text-blue-600" /> Edit
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => openPay("payin")}>
-                <ArrowDownCircle className="w-4 h-4 text-green-600" /> Pay In
+                <ArrowDownCircle className="w-4 h-4 text-green-600" /> You Received
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => openPay("payout")}>
-                <ArrowUpCircle className="w-4 h-4 text-red-600" /> Pay Out
+                <ArrowUpCircle className="w-4 h-4 text-red-600" /> You Gave
               </button>
               <button
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -464,9 +611,13 @@ export default function Journals() {
         break;
       case "name":
         content = (
-          <span className="text-sm font-semibold text-gray-900 truncate">
+          <button 
+            type="button" 
+            onClick={() => setLedgerJournalId(j._id)}
+            className="text-sm font-semibold text-blue-600 hover:text-blue-800 text-left truncate transition-colors cursor-pointer"
+          >
             <HighlightText text={j.name} query={searchTerm} />
-          </span>
+          </button>
         );
         break;
       case "category":
@@ -638,6 +789,100 @@ export default function Journals() {
         }}
       />
 
+      <BulkJournalUpdateModal
+        isOpen={isBulkUpdateModalOpen}
+        onClose={() => setIsBulkUpdateModalOpen(false)}
+        selectedCount={selectedJournals.length}
+        onConfirm={handleBulkUpdate}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.open}
+        title={deleteConfirm.type === "bulk" ? "Delete Journals" : "Delete Journal"}
+        message={
+          deleteConfirm.type === "bulk"
+            ? `Are you sure you want to delete ${selectedJournals.length} selected journal(s)? This action cannot be undone.`
+            : `Are you sure you want to delete the journal "${deleteConfirm.target?.name}"? This action cannot be undone.`
+        }
+        confirmLabel={isDeleting ? "Deleting..." : "Delete"}
+        onCancel={() => setDeleteConfirm({ open: false, type: null, target: null })}
+        onConfirm={deleteConfirm.type === "bulk" ? executeBulkDelete : () => executeSingleDelete(deleteConfirm.target)}
+      />
+
+      {/* ── Bulk selection strip ─────────────────────────────────────── */}
+      {showBulkStrip && (
+        <div
+          className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+          style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
+        >
+          <div
+            className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
+          >
+            {/* Left: bulk action buttons */}
+            <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+              <button
+                onClick={handleBulkExportExcel}
+                disabled={isExporting}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+              >
+                {isExporting ? <Loader2 className="w-4 h-4 animate-spin text-green-600" /> : <Download className="w-4 h-4 text-green-600" />}
+                Export All (Excel)
+              </button>
+              <button
+                onClick={handleBulkExportNames}
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <FileText className="w-4 h-4 text-purple-600" />
+                Export Names
+              </button>
+              <button
+                onClick={() => setIsBulkUpdateModalOpen(true)}
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <Pencil className="w-4 h-4 text-blue-600" />
+                Bulk Update
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin text-red-600" /> : <Trash2 className="w-4 h-4 text-red-600" />}
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedJournals([])}
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+            {/* Right: selection count + select/deselect all */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter whitespace-nowrap">
+                {selectedJournals.length} selected
+              </span>
+              <button
+                onClick={() => setSelectedJournals(filteredJournals.map((j) => j._id))}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select All
+              </button>
+              <button
+                onClick={() => setSelectedJournals([])}
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+              >
+                <X className="w-4 h-4" />
+                Deselect All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Full-bleed table, edge to edge ───────────────────────────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
@@ -651,7 +896,18 @@ export default function Journals() {
                 className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#E1E4EA]"
               >
                 <div className="flex justify-center items-center">
-                  <input type="checkbox" disabled className="w-4 h-4 text-blue-600 border-gray-300 rounded opacity-40" />
+                  <input
+                    type="checkbox"
+                    checked={paginatedJournals.length > 0 && selectedJournals.length === paginatedJournals.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedJournals(paginatedJournals.map((j) => j._id));
+                      } else {
+                        setSelectedJournals([]);
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                  />
                 </div>
                 <ResizeHandle colId="selection" />
               </th>
@@ -666,7 +922,11 @@ export default function Journals() {
                     data-col-id={col.id}
                     onMouseDown={(e) => startColumnDrag(e, col.id)}
                     title="Drag to move this column"
-                    style={{ width: colWidths[col.id], opacity: isDragging ? 0.35 : 1, ...stickyStyleFor(col.id) }}
+                    style={{
+                      width: colWidths[col.id],
+                      opacity: isDragging ? 0.35 : 1,
+                      ...stickyStyleFor(col.id),
+                    }}
                     className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-gray-100"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
@@ -714,13 +974,24 @@ export default function Journals() {
               </tr>
             ) : (
               paginatedJournals.map((j) => (
-                <tr key={j._id} className="bg-white hover:bg-blue-50 transition-colors">
+                <tr key={j._id} className="bg-white hover:bg-blue-50 transition-colors" style={{ height: 37, maxHeight: 37 }}>
                   <td
                     style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
-                      <input type="checkbox" disabled className="w-4 h-4 text-blue-600 border-gray-300 rounded opacity-40" />
+                      <input
+                        type="checkbox"
+                        checked={selectedJournals.includes(j._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedJournals((prev) => [...prev, j._id]);
+                          } else {
+                            setSelectedJournals((prev) => prev.filter((id) => id !== j._id));
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                      />
                     </div>
                   </td>
 
@@ -731,7 +1002,7 @@ export default function Journals() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${
+                        className={`px-4 py-2 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${
                           cellBoundaryShadowSide ? "" : "overflow-hidden"
                         }`}
                       >

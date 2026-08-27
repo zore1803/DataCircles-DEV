@@ -120,6 +120,9 @@ app.use('/api/performa-invoices', performaInvoiceRoutes);
 const quotationRoutes = require('./routes/quotationRoutes');
 app.use('/api/quotations', quotationRoutes);
 
+const salesReturnRoutes = require('./routes/salesReturnRoutes');
+app.use('/api/sales-returns', salesReturnRoutes);
+
 const deliveryChallanRoutes = require('./routes/deliveryChallanRoutes');
 app.use('/api/delivery-challans', deliveryChallanRoutes);
 
@@ -158,6 +161,9 @@ app.use('/api/company-fields', companyFields);
 
 const folderRoutes = require('./routes/folders');
 app.use('/api/folders', folderRoutes);
+
+const usageOverviewRoutes = require('./routes/usageOverview');
+app.use('/api/usage-overview', usageOverviewRoutes);
 
 const noteRoutes = require('./routes/notes');
 app.use('/api/notes', noteRoutes);
@@ -200,6 +206,9 @@ app.use("/api/purchases", purchaseRoutes);
 
 const purchaseReturnRoutes = require("./routes/purchaseReturn");
 app.use("/api/purchase-returns", purchaseReturnRoutes);
+
+const eInvoiceRoutes = require("./routes/eInvoiceRoutes");
+app.use("/api/e-invoices", eInvoiceRoutes);
 
 const itemFieldsRoutes = require('./routes/itemFields');
 app.use('/api/item-fields', itemFieldsRoutes);

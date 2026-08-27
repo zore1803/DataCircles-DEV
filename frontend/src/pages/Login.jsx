@@ -465,8 +465,14 @@ function Login() {
       setShowSetupForm(false);
     } catch (err) {
       const data = err.response?.data;
-      setEmailError(data?.message || "Failed to complete setup");
-      setShowEmailInput(true);
+      if (err.response?.status === 403 && data?.joinMethod === "code") {
+        setEmailError(
+          data?.message ||
+            "This company already has the maximum number of users allowed. You cannot join this account. Please go back and join a different company, or create a new one."
+        );
+      } else {
+        setEmailError(data?.message || "Failed to complete setup");
+      }
     } finally {
       setIsSubmitting(false);
     }

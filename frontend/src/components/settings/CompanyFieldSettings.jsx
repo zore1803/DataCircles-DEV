@@ -22,6 +22,9 @@ import {
   FolderOpen,
   FolderPlus,
   GripVertical,
+  Clock,
+  Award,
+  Phone,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import CompanyIndustrySettings from "./CompanyIndustrySettings";
@@ -106,6 +109,26 @@ const CompanyFieldSettings = () => {
       value: "multiselect",
       label: "Multi-Select Checkbox",
       icon: <CheckSquare className="w-4 h-4" />,
+    },
+    {
+      value: "file",
+      label: "File",
+      icon: <Upload className="w-4 h-4" />,
+    },
+    {
+      value: "socialProof",
+      label: "Social Proof",
+      icon: <Award className="w-4 h-4" />,
+    },
+    {
+      value: "datetime",
+      label: "Date-Time",
+      icon: <Clock className="w-4 h-4" />,
+    },
+    {
+      value: "phone",
+      label: "Phone Number",
+      icon: <Phone className="w-4 h-4" />,
     },
   ];
 

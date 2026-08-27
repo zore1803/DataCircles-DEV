@@ -1,6 +1,8 @@
 const PurchaseReturn = require("../models/PurchaseReturn");
 const Vendor = require("../models/Vendor");
 const Purchase = require("../models/Purchase");
+const Branding = require("../models/Branding");
+const purchaseDocumentPdf = require("../utils/purchaseDocumentPdf");
 const { syncDocumentStock } = require("../utils/inventorySync");
 
 // Same math as purchaseController.js — kept in lockstep on purpose so the
@@ -640,6 +642,41 @@ exports.bulkImportPurchaseReturns = async (req, res) => {
     res.json({ imported, total: groups.size, errors: errors.length ? errors : undefined });
   } catch (err) {
     console.error("Bulk import purchase returns error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.downloadPurchaseReturn = async (req, res) => {
+  try {
+    const purchaseReturn = await PurchaseReturn.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    })
+      .populate("vendor")
+      .populate("items.itemId", "name description purchasePrice hsnSac gstRate");
+
+    if (!purchaseReturn) {
+      return res.status(404).json({ error: "Purchase Return not found" });
+    }
+
+    const orgDetails = await Branding.findOne({
+      organization: req.user.organization,
+    }).sort({ updatedAt: -1 });
+
+    const pdfBuffer = await purchaseDocumentPdf(
+      purchaseReturn,
+      orgDetails,
+      purchaseReturn.vendor,
+      "purchaseReturn"
+    );
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename=Purchase-Return-${purchaseReturn.returnNumber}.pdf`,
+    });
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error("Error downloading purchase return:", err);
     res.status(500).json({ error: err.message });
   }
 };

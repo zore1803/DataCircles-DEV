@@ -1,5 +1,11 @@
 import { autoTable } from "jspdf-autotable";
 
+export function formatINR(value) {
+  const n = Number(value);
+  if (value == null || isNaN(n)) return "—";
+  return `Rs.${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 // Client-side Excel/PDF export — same approach as Deals.jsx's ExcelExporter/
 // PDFExporter (window.XLSX / window.jspdf loaded from CDN on first use, no
 // backend round trip), generalized so Purchase, Purchase Order and
@@ -56,7 +62,7 @@ async function exportToExcel({ rows, columns, fileNamePrefix }) {
     forceQuotes: true,
     blankrows: false,
   });
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   downloadBlob(
     blob,
     `${fileNamePrefix}_${new Date().toISOString().split("T")[0]}.csv`,

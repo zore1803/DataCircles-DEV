@@ -6,6 +6,7 @@ import {
   TrendingDown, Boxes, IndianRupee, Wallet, History, ArrowRight, Check,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { formatINR } from "../utils/clientExport";
 import BulkActionBar from "../components/common/BulkActionBar";
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
@@ -66,6 +67,40 @@ const getItemStock = (item) =>
     ? item.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
     : Number(item.inventory?.currentStock) || 0;
 
+/* When an item has variants, its own purchasePrice/sellingPrice stay 0 —
+   pricing lives per-variant (mirrors ProductsServices.jsx:getVariantPriceDisplay).
+   Return {min, max} across variants, or {min: parent, max: parent} for non-variant items. */
+const getItemPriceRange = (item, field) => {
+  if (item.variants && item.variants.length > 0) {
+    const values = item.variants.map((v) => Number(v[field]) || 0);
+    return { min: Math.min(...values), max: Math.max(...values), hasVariants: true };
+  }
+  const v = Number(item[field]) || 0;
+  return { min: v, max: v, hasVariants: false };
+};
+
+/* Numeric value used for sorting/filtering/stock-value math: min variant price
+   (all-equal variants collapse to the single price). */
+const getEffectivePrice = (item, field) => getItemPriceRange(item, field).min;
+
+/* Display string for a price column: single value or "₹min – ₹max" range. */
+const formatItemPrice = (item, field) => {
+  const { min, max } = getItemPriceRange(item, field);
+  return min === max ? money(min) : `${money(min)} – ${money(max)}`;
+};
+
+/* Stock value: sum of variant stock × variant sellingPrice; falls back to
+   parent stock × parent sellingPrice for non-variant items. */
+const getItemStockValue = (item) => {
+  if (item.variants && item.variants.length > 0) {
+    return item.variants.reduce(
+      (sum, v) => sum + Math.max(Number(v.stock) || 0, 0) * (Number(v.sellingPrice) || 0),
+      0
+    );
+  }
+  return Math.max(getItemStock(item), 0) * (Number(item.sellingPrice) || 0);
+};
+
 /* Stock level → badge. Mirrors the backend's stockStatus filter exactly, so the badge a row
    shows and the status you can filter by can never disagree. */
 const stockStatusOf = (item) => {
@@ -107,9 +142,9 @@ const cellTextFor = (colId, item) => {
     case "category":      return item.category || "";
     case "currentStock":  return String(getItemStock(item));
     case "status":        return stockStatusOf(item).label;
-    case "purchasePrice": return money(item.purchasePrice);
-    case "sellingPrice":  return money(item.sellingPrice);
-    case "stockValue":    return money(getItemStock(item) * (item.sellingPrice || 0));
+    case "purchasePrice": return formatItemPrice(item, "purchasePrice");
+    case "sellingPrice":  return formatItemPrice(item, "sellingPrice");
+    case "stockValue":    return money(getItemStockValue(item));
     case "lastUpdated":   return relativeTime(item.inventory?.lastMovementAt);
     default:              return "";
   }
@@ -263,18 +298,32 @@ export default function Inventory() {
   }, []);
 
   /* ── client-side advanced filters, applied on top of the server page ── */
+  /* Server sorts by the parent item's own field, which is 0 for variant items —
+     re-sort the current page client-side when sorting by a variant-aware column
+     so variant items order by their effective (min) price / stock value. */
+  const sortedItems = useMemo(() => {
+    const k = sortConfig.key;
+    if (k !== "purchasePrice" && k !== "sellingPrice" && k !== "stockValue") return items;
+    const getVal = (row) =>
+      k === "stockValue" ? getItemStockValue(row) : getEffectivePrice(row, k);
+    const dir = sortConfig.direction === "desc" ? -1 : 1;
+    return [...items].sort((a, b) => (getVal(a) - getVal(b)) * dir);
+  }, [items, sortConfig]);
+
   const filteredItems = useMemo(() => {
-    if (!activeFilters || activeFilters.length === 0) return items;
+    if (!activeFilters || activeFilters.length === 0) return sortedItems;
     const valueOf = (row, key) => {
       switch (key) {
         case "item": return row.name;
         case "currentStock": return getItemStock(row);
         case "status": return stockStatusOf(row).label;
-        case "stockValue": return getItemStock(row) * (row.sellingPrice || 0);
+        case "stockValue": return getItemStockValue(row);
+        case "purchasePrice": return getEffectivePrice(row, "purchasePrice");
+        case "sellingPrice": return getEffectivePrice(row, "sellingPrice");
         default: return row[key];
       }
     };
-    return items.filter((row) =>
+    return sortedItems.filter((row) =>
       activeFilters.every((f) => {
         const raw = valueOf(row, f.column);
         const val = String(raw ?? "").toLowerCase().trim();
@@ -292,7 +341,7 @@ export default function Inventory() {
         }
       })
     );
-  }, [items, activeFilters]);
+  }, [sortedItems, activeFilters]);
 
   const filterColumns = useMemo(() => ([
     { key: "item", label: "Item" },
@@ -556,9 +605,9 @@ export default function Inventory() {
         "Current Stock": getItemStock(i),
         Unit: i.primaryUnit || "",
         Status: stockStatusOf(i).label,
-        "Purchase Price": Number(i.purchasePrice) || 0,
-        "Selling Price": Number(i.sellingPrice) || 0,
-        "Stock Value": Math.max(getItemStock(i), 0) * (Number(i.sellingPrice) || 0),
+        "Purchase Price": formatItemPrice(i, "purchasePrice").replace(/^₹/, ""),
+        "Selling Price": formatItemPrice(i, "sellingPrice").replace(/^₹/, ""),
+        "Stock Value": formatINR(getItemStockValue(i)),
       }))
     );
     sheet["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
@@ -683,22 +732,28 @@ export default function Inventory() {
         break;
       }
       case "purchasePrice":
-      case "sellingPrice":
+      case "sellingPrice": {
+        const { min, max, hasVariants } = getItemPriceRange(item, colId);
         content = (
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-800">{money(item[colId])}</span>
+            <span className="text-sm font-medium text-gray-800">
+              {min === max ? money(min) : `${money(min)} – ${money(max)}`}
+            </span>
             {item.gstRate ? (
               <span className="text-[10px] text-gray-400">
                 {item.gstRate}% {item.taxInclusive ? "incl." : "excl."} tax
               </span>
+            ) : hasVariants && min !== max ? (
+              <span className="text-[10px] text-gray-400">across {item.variants.length} variants</span>
             ) : null}
           </div>
         );
         break;
+      }
       case "stockValue":
         content = (
           <span className="text-sm font-semibold text-gray-900">
-            {money(Math.max(getItemStock(item), 0) * (Number(item.sellingPrice) || 0))}
+            {money(getItemStockValue(item))}
           </span>
         );
         break;

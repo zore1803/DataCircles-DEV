@@ -688,6 +688,8 @@ const CompanyMeetingForm = ({
                             });
                             if (res.data?.provider && res.data?.joinUrl) {
                               handleChange("location", res.data.joinUrl);
+                            } else if (res.data?.error) {
+                              toast.error(res.data.error);
                             } else if (googleStatus?.configured && !googleStatus?.connected) {
                               toast.error("Connect your Google account first (link above) to generate a Meet link");
                             } else {

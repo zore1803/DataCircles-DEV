@@ -110,7 +110,7 @@ class ExcelExporter {
   static export(deals) {
     const data = deals?.map((deal) => ({
       Title: deal.title || "",
-      Amount: deal.amount || "",
+      Amount: deal.amount ? `Rs.${formatNumberToIndian(parseFloat(String(deal.amount).replace(/,/g, '')) || 0)}` : "",
       Status: deal.status || "",
       Company: deal.company?.name || "N/A",
       Contact: deal.contact?.name || "N/A",
@@ -128,7 +128,7 @@ class ExcelExporter {
     });
 
     // Create a downloadable CSV file
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
@@ -165,7 +165,7 @@ class PDFExporter {
       const dealData = [
         index + 1,
         deal.title || "—",
-        `Rs. ${formatNumberToIndian(parseFloat(String(deal.amount || 0).replace(/,/g, '')) || 0)}`,
+        `Rs.${formatNumberToIndian(parseFloat(String(deal.amount || 0).replace(/,/g, '')) || 0)}`,
         deal.status || "—",
         deal.company?.name || "—",
         deal.contact?.name || "—",
@@ -1490,7 +1490,7 @@ function Deals() {
       if (error.response && error.response.status === 402) {
         errorMessage = error.response.data.message || "An active subscription is required to make changes.";
       } else if (error.response && error.response.status === 403) {
-        errorMessage = error.response.data.message || "Access denied";
+        errorMessage = error.response.data.message || error.response.data.error || "Access denied";
       }
       toast.error(errorMessage, {
         id: loadingToast,

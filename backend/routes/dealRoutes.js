@@ -69,12 +69,14 @@ router.post(
   dealController.updateDealStatus
 );
 
-// DELETE /api/deals/:id (Delete - requires write permission)
+// DELETE /api/deals/:id (Delete - requires write permission). skipLimit:
+// true — an org already at/over its limit must still be able to delete back
+// under it; the un-flagged limit check would otherwise block delete too.
 router.delete(
   "/:id",
   requireAuth,
   subscriptionGate,
-  restrictByPlan("deals", "write"),
+  restrictByPlan("deals", "write", { skipLimit: true }),
   checkPermission("deals", "read-write"),
   dealController.deleteDeal
 );

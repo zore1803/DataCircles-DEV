@@ -9,10 +9,13 @@ const Quotation = require('../models/quotation');
 const DeliveryChallan = require('../models/deliveryChallan');
 const Purchase = require('../models/Purchase');
 const PurchaseOrder = require('../models/PurchaseOrder');
+const PurchaseReturn = require('../models/PurchaseReturn');
+const SalesReturn = require('../models/SalesReturn');
 const Branding = require('../models/Branding');
 const getDefaultBankDetails = require('../utils/getDefaultBankDetails');
 const htmlDocumentPdf = require('../utils/htmlDocumentPdf');
 const purchaseDocumentPdf = require('../utils/purchaseDocumentPdf');
+const { toPrintableDoc: toPrintableSalesReturnDoc } = require('../controllers/salesReturnController');
 
 // canonical API path → model/meta
 // Also accepts Accounting.jsx tab keys (tax, performa, quotation, deliveryChallan)
@@ -24,12 +27,15 @@ const MODELS = {
   'delivery-challans': DeliveryChallan, deliveryChallan: DeliveryChallan,
   purchase: Purchase,
   purchaseOrder: PurchaseOrder,
+  purchaseReturn: PurchaseReturn,
+  salesReturn: SalesReturn,
 };
 
-// Purchase/PurchaseOrder are vendor-facing (not deal-based) and use their own
-// PDF template (utils/purchaseDocumentPdf.js) — every branch below checks
-// this set instead of hardcoding the two extra keys repeatedly.
-const VENDOR_DOC_TYPES = new Set(['purchase', 'purchaseOrder']);
+// Purchase/PurchaseOrder/PurchaseReturn are vendor-facing (not deal-based)
+// and use their own PDF template (utils/purchaseDocumentPdf.js) — every
+// branch below checks this set instead of hardcoding the extra keys
+// repeatedly.
+const VENDOR_DOC_TYPES = new Set(['purchase', 'purchaseOrder', 'purchaseReturn']);
 
 const NUMBER_KEYS = {
   invoices: 'invoiceNumber',          tax: 'invoiceNumber',
@@ -38,6 +44,8 @@ const NUMBER_KEYS = {
   'delivery-challans': 'deliveryChallanNumber', deliveryChallan: 'deliveryChallanNumber',
   purchase: 'purchaseNumber',
   purchaseOrder: 'poNumber',
+  purchaseReturn: 'returnNumber',
+  salesReturn: 'returnNumber',
 };
 
 const DOC_NAMES = {
@@ -47,6 +55,8 @@ const DOC_NAMES = {
   'delivery-challans': 'Delivery Challan', deliveryChallan: 'Delivery Challan',
   purchase: 'Purchase',
   purchaseOrder: 'Purchase Order',
+  purchaseReturn: 'Purchase Return',
+  salesReturn: 'Sales Return',
 };
 
 const DOC_TYPES = {
@@ -56,10 +66,13 @@ const DOC_TYPES = {
   'delivery-challans': 'deliveryChallan', deliveryChallan: 'deliveryChallan',
   purchase: 'purchase',
   purchaseOrder: 'purchaseOrder',
+  purchaseReturn: 'purchaseReturn',
+  salesReturn: 'salesReturn',
 };
 
 function resolveAmount(doc, type) {
   if (VENDOR_DOC_TYPES.has(type)) return doc.grandTotal ?? doc.totalAmount ?? 0;
+  if (type === 'salesReturn') return doc.grandTotal ?? 0;
   return doc.amount;
 }
 
@@ -134,6 +147,9 @@ router.get('/:type/:id/download', async (req, res) => {
     let pdfBuffer;
     if (isVendorDoc) {
       pdfBuffer = await purchaseDocumentPdf(doc, orgDetails, doc.vendor, DOC_TYPES[type]);
+    } else if (type === 'salesReturn') {
+      const bankDetails = await getDefaultBankDetails(doc.organization);
+      pdfBuffer = await htmlDocumentPdf(toPrintableSalesReturnDoc(doc), bankDetails, orgDetails, 'salesReturn');
     } else {
       const bankDetails = await getDefaultBankDetails(doc.organization);
       pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
@@ -180,6 +196,9 @@ router.post('/:type/:id/email', async (req, res) => {
     let pdfBuffer;
     if (isVendorDoc) {
       pdfBuffer = await purchaseDocumentPdf(doc, orgDetails, doc.vendor, DOC_TYPES[type]);
+    } else if (type === 'salesReturn') {
+      const bankDetails = await getDefaultBankDetails(doc.organization);
+      pdfBuffer = await htmlDocumentPdf(toPrintableSalesReturnDoc(doc), bankDetails, orgDetails, 'salesReturn');
     } else {
       const bankDetails = await getDefaultBankDetails(doc.organization);
       pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);

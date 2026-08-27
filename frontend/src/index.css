@@ -93,7 +93,12 @@
 }
 
 .dc-panel-w {
-  width: 100%;
+  /* Not 100%: dc-panel-card sets `right: 1.5rem` with no `left`, so a plain
+     100% width forces `left` to compute as -1.5rem to satisfy both,
+     overflowing every dc-panel-w consumer off-screen on mobile (confirmed
+     via VendorForm/CompanyForm/DealForm/etc. all clipping their left edge
+     by exactly 24px). This gives it a real, symmetric inset instead. */
+  width: calc(100% - 3rem);
 }
 
 .payment-panel {

@@ -310,7 +310,7 @@ const updateCompany = async (req, res) => {
     if (req.user.role !== "admin") {
       const hasEditPermission = req.user.permissions?.some(
         (p) =>
-          p.name.toLowerCase() === "company" && p.permission === "read-write",
+          p.name.toLowerCase() === "companies" && p.permission === "read-write",
       );
 
       if (!hasEditPermission) {

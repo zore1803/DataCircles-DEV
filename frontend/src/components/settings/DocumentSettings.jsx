@@ -88,8 +88,9 @@ const documentTypeMeta = [
 ];
 
 // Notes/Terms are stored server-side keyed by the document's own type string
-// (tax | performa | quotation | deliveryChallan — see backend DocumentSettings
-// model), not the numbering tab's keys above, so map between the two.
+// (tax | performa | quotation | deliveryChallan — see backend
+// DocumentSettings model), not the numbering tab's keys above, so map
+// between the two.
 const FOOTER_TYPE_KEY = {
   invoice: "tax",
   quote: "quotation",

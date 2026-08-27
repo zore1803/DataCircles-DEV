@@ -1,17 +1,24 @@
-require("dotenv").config({ path: "../.env" });
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+require("dotenv").config({ path: __dirname + "/../.env" });
 const mongoose = require("mongoose");
 const PurchaseReturn = require("../models/PurchaseReturn");
-const Vendor = require("../models/Vendor");
-const Item = require("../models/Item");
+const Purchase = require("../models/Purchase");
 const Organization = require("../models/Organization");
 const User = require("../models/User");
+const Vendor = require("../models/Vendor");
+const Item = require("../models/Item");
+
+const generateRandomNumber = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const randomDate = (start, end) => new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
 
 const seedPurchaseReturns = async () => {
   try {
-    console.log("Connecting to Database...");
-    await mongoose.connect(process.env.MONGO_URI, {
+    const mongoUri = process.env.MONGO_URI;
+    if (!mongoUri) {
+      throw new Error("MONGO_URI is missing in .env file");
+    }
+
+    await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
@@ -20,123 +27,117 @@ const seedPurchaseReturns = async () => {
     // Get an organization
     const org = await Organization.findOne();
     if (!org) {
-      console.error("No organization found. Please run the main seeder first.");
-      process.exit(1);
-    }
-    const orgId = org._id;
-
-    // Get a user
-    const user = await User.findOne({ organization: orgId }) || await User.findOne();
-    const userId = user ? user._id : null;
-
-    // Get vendors
-    const vendors = await Vendor.find({ organization: orgId });
-    if (vendors.length === 0) {
-      console.error("No vendors found. Please create some vendors first.");
-      process.exit(1);
+      throw new Error("No organization found. Please seed the basic data first.");
     }
 
-    // Get items
-    const items = await Item.find({ organization: orgId });
-    if (items.length === 0) {
-      console.error("No items found. Please create some items first.");
-      process.exit(1);
-    }
+    const user = await User.findOne({ organization: org._id });
+    const vendors = await Vendor.find({ organization: org._id });
+    const items = await Item.find({ organization: org._id });
+    const purchases = await Purchase.find({ organization: org._id });
 
-    console.log(`Found ${vendors.length} vendors and ${items.length} items. Clearing old data and generating 20 purchase returns...`);
+    if (!vendors.length) throw new Error("No vendors found.");
+    if (!items.length) throw new Error("No items found.");
 
-    await PurchaseReturn.deleteMany({ organization: orgId });
+    const purchaseReturnsToInsert = [];
+    const numReturns = generateRandomNumber(40, 50);
 
-    const statuses = ["Draft", "Pending", "Paid", "Cancelled"];
+    let prCounter = await PurchaseReturn.countDocuments({ organization: org._id }) + 1000;
+
+    const reasons = ["Defective", "Damaged", "Wrong Item", "Excess Quantity", "Other"];
     const modes = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Other"];
-    const gstRates = [0, 5, 12, 18, 28];
-    const transTypes = ["intra", "inter"];
-    const reasons = ["Defective", "Not required", "Wrong item", "Damaged in transit", "Quality issue"];
-    
-    let createdReturns = 0;
+    const statuses = ["Draft", "Pending", "Confirmed", "Paid", "Cancelled"];
+    const stockMovementStatuses = ["pending", "applied", "reversed"];
 
-    // Create 20 records
-    for (let i = 1; i <= 20; i++) {
-      // Pick random vendor
-      const vendor = vendors[Math.floor(Math.random() * vendors.length)];
+    for (let i = 0; i < numReturns; i++) {
+      prCounter++;
       
-      // Pick 1 to 3 random items
-      const numItems = Math.floor(Math.random() * 3) + 1;
-      const returnItems = [];
+      let purchase = null;
+      let vendor = null;
+      let returnItems = [];
       let subtotal = 0;
+      let gstRate = getRandomElement([0, 5, 12, 18, 28]);
 
-      for (let j = 0; j < numItems; j++) {
-        const item = items[Math.floor(Math.random() * items.length)];
+      // 80% chance to tie to an existing purchase if purchases exist
+      if (purchases.length > 0 && Math.random() > 0.2) {
+        purchase = getRandomElement(purchases);
+        vendor = purchase.vendor;
         
-        let variantId = undefined;
-        let itemName = item.name;
-        let itemPrice = item.purchasePrice || 100;
-        let itemSku = item.sku || "";
+        // Return some items from this purchase
+        const itemsToReturnCount = generateRandomNumber(1, purchase.items.length || 1);
+        for (let j = 0; j < itemsToReturnCount; j++) {
+          if (purchase.items[j]) {
+            const qty = generateRandomNumber(1, Math.max(1, Math.floor(purchase.items[j].quantity / 2) || 1));
+            const unitPrice = purchase.items[j].unitPrice;
+            const total = qty * unitPrice;
+            subtotal += total;
 
-        if (item.variants && item.variants.length > 0) {
-          const variant = item.variants[Math.floor(Math.random() * item.variants.length)];
-          variantId = variant._id;
-          itemName = `${item.name} - ${variant.name}`;
-          itemPrice = variant.purchasePrice || itemPrice;
-          itemSku = variant.sku || itemSku;
+            returnItems.push({
+              itemId: purchase.items[j].itemId,
+              name: purchase.items[j].name,
+              quantity: qty,
+              unitPrice: unitPrice,
+              total: total,
+              reason: getRandomElement(reasons)
+            });
+          }
         }
+      } else {
+        vendor = getRandomElement(vendors)._id;
+        // generate random items
+        const itemsToReturnCount = generateRandomNumber(1, 4);
+        for (let j = 0; j < itemsToReturnCount; j++) {
+          const item = getRandomElement(items);
+          const qty = generateRandomNumber(1, 10);
+          const unitPrice = item.purchasePrice || generateRandomNumber(100, 1000);
+          const total = qty * unitPrice;
+          subtotal += total;
 
-        const quantity = Math.floor(Math.random() * 5) + 1;
-        const total = quantity * itemPrice;
-        subtotal += total;
-
-        returnItems.push({
-          itemId: item._id,
-          variantId,
-          name: itemName,
-          quantity,
-          unitPrice: itemPrice,
-          total,
-          sku: itemSku,
-        });
+          returnItems.push({
+            itemId: item._id,
+            name: item.name,
+            quantity: qty,
+            unitPrice: unitPrice,
+            total: total,
+            reason: getRandomElement(reasons)
+          });
+        }
       }
 
-      // Calculate GST
-      const gstRate = gstRates[Math.floor(Math.random() * gstRates.length)];
-      const transactionType = transTypes[Math.floor(Math.random() * transTypes.length)];
+      if (returnItems.length === 0) continue;
+
       const totalTax = (subtotal * gstRate) / 100;
       const grandTotal = subtotal + totalTax;
-
-      // Generate Purchase Return
-      const returnNumber = `PR-${String(Math.floor(Math.random() * 90000) + 10000)}`;
-      const returnDate = new Date(Date.now() - Math.floor(Math.random() * 10000000000));
-      const status = statuses[Math.floor(Math.random() * statuses.length)];
-      const mode = status === "Paid" ? modes[Math.floor(Math.random() * modes.length)] : "";
-      const reason = reasons[Math.floor(Math.random() * reasons.length)];
       
-      const pr = new PurchaseReturn({
-        vendor: vendor._id,
-        returnNumber,
-        returnDate,
-        items: returnItems,
-        subtotal,
-        transactionType,
-        gstRate,
-        totalTax,
-        grandTotal,
-        status,
-        mode,
-        reason,
-        notes: "Automated seed data",
-        user: userId,
-        organization: orgId,
-      });
+      const status = getRandomElement(statuses);
 
-      await pr.save();
-      createdReturns++;
+      purchaseReturnsToInsert.push({
+        vendor: vendor,
+        purchase: purchase ? purchase._id : null,
+        returnNumber: `PR-${prCounter}`,
+        returnDate: randomDate(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), new Date()), // Last 90 days
+        items: returnItems,
+        subtotal: subtotal,
+        transactionType: Math.random() > 0.5 ? "intra" : "inter",
+        gstRate: gstRate,
+        totalTax: totalTax,
+        grandTotal: grandTotal,
+        status: status,
+        mode: status === "Paid" ? getRandomElement(modes) : "",
+        reason: getRandomElement(reasons),
+        notes: "Autoseeded purchase return record.",
+        stockMovementStatus: status === "Confirmed" ? "applied" : getRandomElement(["pending", "reversed"]),
+        user: user ? user._id : null,
+        organization: org._id
+      });
     }
 
-    console.log(`\nSuccess! Seeded ${createdReturns} Purchase Returns.`);
-    process.exit(0);
+    await PurchaseReturn.insertMany(purchaseReturnsToInsert);
+    console.log(`Successfully seeded ${purchaseReturnsToInsert.length} Purchase Returns.`);
 
-  } catch (error) {
-    console.error("Error seeding data:", error);
-    process.exit(1);
+  } catch (err) {
+    console.error("Error seeding data:", err);
+  } finally {
+    mongoose.connection.close();
   }
 };
 

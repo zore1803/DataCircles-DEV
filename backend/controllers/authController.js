@@ -555,7 +555,7 @@ exports.inviteUser = async (req, res) => {
     // Seat check via addonManagement utility
     const seatStatus = await getSeatStatus(req.user.organization);
 
-    if (seatStatus.hasFreeSeat) {
+    if (seatStatus.hasFreeStaffSeat) {
       // Seats available — proceed immediately
       await logUserAction({
         organization: req.user.organization,
@@ -563,7 +563,7 @@ exports.inviteUser = async (req, res) => {
         action: "invite_sent",
         targetEmail: email,
         targetPermissions: permissions || [],
-        details: { seatsAvailable: true, totalSeats: seatStatus.totalSeats },
+        details: { seatsAvailable: true, totalSeats: seatStatus.totalStaffSeats },
         req,
       });
 
@@ -582,8 +582,8 @@ exports.inviteUser = async (req, res) => {
 
       return res.json({
         message: "User invited successfully",
-        seatsUsed: seatStatus.occupiedSeats + 1,
-        totalSeats: seatStatus.totalSeats,
+        seatsUsed: seatStatus.occupiedStaffSeats + 1,
+        totalSeats: seatStatus.totalStaffSeats,
       });
     }
 
@@ -1094,15 +1094,15 @@ exports.completeRegistration = async (req, res) => {
         const seatStatus = await getSeatStatus(org._id);
 
         console.log(
-          `Code join attempt - Organization: ${org.name}, Occupied: ${seatStatus.occupiedSeats}, Total seats: ${seatStatus.totalSeats} (${seatStatus.includedSeats} included + ${seatStatus.extraSeatsOwned} extra)`,
+          `Code join attempt - Organization: ${org.name}, Staff occupied: ${seatStatus.occupiedStaffSeats}, Total staff seats: ${seatStatus.totalStaffSeats} (${seatStatus.staffSeatsIncluded} included + ${seatStatus.extraSeatsOwned} extra)`,
         );
 
-        if (!seatStatus.hasFreeSeat) {
+        if (!seatStatus.hasFreeStaffSeat) {
           return res.status(403).json({
             message:
               "This organization has reached its user limit. Please contact your admin to purchase more seats.",
-            seatsUsed: seatStatus.occupiedSeats,
-            totalSeats: seatStatus.totalSeats,
+            seatsUsed: seatStatus.occupiedStaffSeats,
+            totalSeats: seatStatus.totalStaffSeats,
             joinMethod: "code",
           });
         }
@@ -1111,20 +1111,20 @@ exports.completeRegistration = async (req, res) => {
       organization = org._id;
       joinMethod = "code";
       permissions = [
-        { name: "Companies", permission: "readonly" },
-        { name: "Deals", permission: "readonly" },
-        { name: "Contacts", permission: "readonly" },
-        { name: "Invoices", permission: "readonly" },
-        { name: "Tasks", permission: "readonly" },
-        { name: "Vendors", permission: "readonly" },
-        { name: "purchases", permission: "readonly" },
-        { name: "purchase-orders", permission: "readonly" },
-        { name: "Items", permission: "readonly" },
-        { name: "Meetings", permission: "readonly" },
-        { name: "Emails", permission: "readonly" },
-        { name: "quotations", permission: "readonly" },
-        { name: "delivery-challans", permission: "readonly" },
-        { name: "Forms", permission: "readonly" },
+        { name: "Companies", permission: "read-write" },
+        { name: "Deals", permission: "read-write" },
+        { name: "Contacts", permission: "read-write" },
+        { name: "Invoices", permission: "read-write" },
+        { name: "Tasks", permission: "read-write" },
+        { name: "Vendors", permission: "read-write" },
+        { name: "purchases", permission: "read-write" },
+        { name: "purchase-orders", permission: "read-write" },
+        { name: "Items", permission: "read-write" },
+        { name: "Meetings", permission: "read-write" },
+        { name: "Emails", permission: "read-write" },
+        { name: "quotations", permission: "read-write" },
+        { name: "delivery-challans", permission: "read-write" },
+        { name: "Forms", permission: "read-write" },
       ];
 
       // Generate new code for security
@@ -1201,9 +1201,6 @@ exports.completeRegistration = async (req, res) => {
         }
       }
 
-      // Seed sample data for new organization
-      const seedSampleData = require("../scripts/seedSampleData");
-      // await seedSampleData(organization, user._id);  // Note: user is created later, so move this after user.save()
     } else {
       return res.status(400).json({
         message: "Provide company code or organization name",
@@ -1282,11 +1279,7 @@ exports.completeRegistration = async (req, res) => {
       user: user._id, // null for org default
     });
 
-    // If new organization, seed sample data here (after user is created)
-    if (joinMethod === "create") {
-      const seedSampleData = require("../scripts/seedSampleData");
-      await seedSampleData(organization, user._id);
-    }
+    // Note: new organizations start empty — no sample/demo data is seeded.
 
     console.log(
       `User registered successfully - Method: ${joinMethod}, Email: ${email || phone

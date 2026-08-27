@@ -112,30 +112,8 @@ function GoogleIntegration() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border-2 border-gray-200 shadow-xl rounded-2xl overflow-hidden">
-        {/* Header */}
-        <div className="p-8 border-b-2 border-gray-100 flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-50 p-2.5 rounded-xl">
-              <GoogleGIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Google Calendar & Meet</h2>
-              <p className="text-sm text-gray-600">
-                Connect your Google account to create Google Calendar events and Google Meet links from your CRM.
-              </p>
-            </div>
-          </div>
-          {connected && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-semibold whitespace-nowrap">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              Connected
-            </div>
-          )}
-        </div>
-
-        <div className="p-8">
-          {/* Not configured on the server at all */}
+      <div>
+        {/* Not configured on the server at all */}
           {!configured && (
             <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
               <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center border-2 border-gray-100 mb-2">
@@ -215,7 +193,6 @@ function GoogleIntegration() {
               )}
             </div>
           )}
-        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">

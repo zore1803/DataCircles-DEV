@@ -1,149 +1,171 @@
 import React, { useEffect, useState } from "react";
-import { X, Pencil, Trash2, RotateCcw } from "lucide-react";
+import { Pencil, Printer, Trash2, X } from "lucide-react";
+import API from "../../services/api";
 
-const money = (n) =>
-  `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const formatDate = (d) => {
-  if (!d) return "—";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-};
-
-const getStatusBadgeColor = (status) => {
-  switch (status?.toLowerCase()) {
-    case "confirmed": return "bg-green-100 text-green-800";
-    case "paid": return "bg-emerald-100 text-emerald-800";
-    case "pending": return "bg-yellow-100 text-yellow-800";
-    case "cancelled": return "bg-red-100 text-red-800";
-    case "draft": return "bg-blue-100 text-blue-800";
-    default: return "bg-gray-100 text-gray-800";
-  }
-};
-
-/*
- * Read-only right-drawer for one Purchase Return. Unlike PurchasePreview
- * (which renders a server-generated PDF in an iframe via a download
- * endpoint), this renders the fields directly — there's no PDF template for
- * this document type yet, and a return is an internal record rather than
- * something handed to the vendor, so a plain detail view covers the need.
- */
+// Same server-rendered-PDF approach as PurchasePreview.tsx/PurchaseOrderPreview.jsx:
+// fetch the actual PDF (backend/utils/purchaseDocumentPdf.js, type "purchaseReturn")
+// and show it in an iframe, instead of re-rendering the document as plain JSX in
+// the panel — what you see here is exactly what downloads/prints/gets shared.
 const PurchaseReturnPreview = ({ purchaseReturn, isOpen, onClose, onEdit, onDelete }) => {
-  const [isSliding, setIsSliding] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  // Local mount-in/out state, same pattern as PurchasePreview.tsx: the parent
+  // unmounts this component the instant `isOpen` goes false, which would
+  // otherwise skip the close transition entirely — so `open` lags `isOpen`
+  // by one tick on the way in, and `handleClose` delays telling the parent
+  // to unmount until the slide-out animation has actually played.
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (isOpen) setTimeout(() => setIsSliding(true), 10);
+    if (isOpen) setTimeout(() => setOpen(true), 10);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && purchaseReturn?._id) {
+      fetchPdf();
+    }
+    return () => {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, purchaseReturn?._id]);
+
+  const fetchPdf = async () => {
+    setLoadError(false);
+    setPdfUrl(null);
+    try {
+      const response = await API.get(`/purchase-returns/download/${purchaseReturn._id}`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      setPdfUrl(URL.createObjectURL(blob));
+    } catch (error) {
+      console.error("Purchase return PDF fetch error:", error);
+      setLoadError(true);
+    }
+  };
+
   const handleClose = () => {
-    setIsSliding(false);
-    setTimeout(() => onClose(), 300);
+    setOpen(false);
+    setTimeout(onClose, 300);
   };
 
   if (!isOpen || !purchaseReturn) return null;
-  const p = purchaseReturn;
+
+  const handlePrint = () => {
+    const frame = document.getElementById("purchase-return-pdf-frame");
+    if (frame?.contentWindow) frame.contentWindow.print();
+  };
 
   return (
     <>
+      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300"
-        style={{ opacity: isSliding ? 1 : 0 }}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+        style={{ opacity: open ? 1 : 0 }}
         onClick={handleClose}
       />
+
+      {/* Wide centered modal, matching PurchasePreview.tsx/PurchaseOrderPreview.jsx
+          rather than the narrow right-hand drawer the *forms* use. Chrome ignores
+          the #view=FitH / #zoom=... PDF open params for blob: URLs (they only
+          apply to real network requests), so a PDF's page width can't be forced
+          to shrink into a 600px panel — the page just gets cropped. Giving it
+          the room instead is the only reliable fix. */}
       <div
-        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
+        className={`
+          fixed inset-0 z-[10001] flex items-center justify-center p-2
+          transition-opacity duration-300 ease-in-out
+          ${open ? "opacity-100" : "opacity-0"}
+        `}
+        onClick={handleClose}
+      >
+      <div
+        className={`
+          bg-white rounded-xl w-full h-[97vh] max-w-[1400px]
+          shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out
+          ${open ? "scale-100" : "scale-95"}
+        `}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
-              <RotateCcw className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base font-bold text-gray-900 truncate">{p.returnNumber}</h2>
-              <p className="text-xs text-gray-400 truncate">{formatDate(p.returnDate)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={onEdit} title="Edit" className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">
-              <Pencil className="w-4 h-4" />
+        {/* Header — icon-only actions (edit / print / delete / close), same
+            as Purchase/Purchase Order's preview. */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-500">
+            Purchase Return Preview
+          </h2>
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <button
+                onClick={onEdit}
+                title="Edit"
+                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={handlePrint}
+              title="Print"
+              disabled={!pdfUrl}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-4 h-4" />
             </button>
-            <button onClick={onDelete} title="Delete" className="p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button onClick={handleClose} title="Close" className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                title="Delete"
+                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            <div className="w-px h-5 bg-gray-200 mx-1" />
+            <button
+              onClick={handleClose}
+              title="Close"
+              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400 mb-1">Vendor</p>
-              <p className="text-sm font-semibold text-gray-900">{p.vendor?.name || "—"}</p>
-              {p.vendor?.phone && <p className="text-xs text-gray-400">{p.vendor.phone}</p>}
+        {/* PDF */}
+        <div className="flex-1 p-2 overflow-auto bg-gray-100">
+          {pdfUrl ? (
+            <iframe
+              id="purchase-return-pdf-frame"
+              // navpanes=0 hides Chrome's left thumbnail rail — one of the few
+              // fragment params Chrome honors for blob: URLs (view=/zoom= are
+              // silently ignored for them), so full-width rendering comes from
+              // this plus the widened modal above.
+              src={`${pdfUrl}#navpanes=0`}
+              title="Purchase Return PDF"
+              className="w-full h-full border-0 rounded-lg"
+            />
+          ) : loadError ? (
+            <div className="flex flex-col items-center justify-center h-full text-center px-6">
+              <p className="text-sm text-red-600 font-medium mb-2">
+                Couldn't load this purchase return's PDF.
+              </p>
+              <button
+                onClick={fetchPdf}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Try again
+              </button>
             </div>
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(p.status)}`}>
-              {p.status}
-            </span>
-          </div>
-
-          {p.purchase?.purchaseNumber && (
-            <div className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-xs text-gray-600">
-              Returned against <span className="font-semibold text-gray-800">{p.purchase.purchaseNumber}</span>
-            </div>
-          )}
-
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Items</p>
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase">Item</th>
-                    <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase">Reason</th>
-                    <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase text-right">Qty</th>
-                    <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase text-right">Rate</th>
-                    <th className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(p.items || []).map((it, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2 text-sm text-gray-900">{it.name}</td>
-                      <td className="px-3 py-2 text-sm text-gray-500">{it.reason || "—"}</td>
-                      <td className="px-3 py-2 text-sm text-gray-600 text-right">{it.quantity}</td>
-                      <td className="px-3 py-2 text-sm text-gray-600 text-right">{money(it.unitPrice)}</td>
-                      <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right">{money(it.total ?? it.quantity * it.unitPrice)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="text-gray-900">{money(p.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Tax</span><span className="text-gray-900">{money(p.totalTax)}</span></div>
-            <div className="flex justify-between text-base font-bold pt-1.5 border-t border-gray-100"><span className="text-gray-900">Total</span><span className="text-gray-900">{money(p.grandTotal)}</span></div>
-          </div>
-
-          {(p.mode || p.reason) && (
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {p.mode && <div><p className="text-xs text-gray-400 mb-0.5">Refund Mode</p><p className="text-gray-900">{p.mode}</p></div>}
-              {p.reason && <div><p className="text-xs text-gray-400 mb-0.5">Reason</p><p className="text-gray-900">{p.reason}</p></div>}
-            </div>
-          )}
-
-          {p.notes && (
-            <div>
-              <p className="text-xs text-gray-400 mb-1">Notes</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{p.notes}</p>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-3"></div>
+              <p className="text-gray-600">Loading PDF...</p>
             </div>
           )}
         </div>
+      </div>
       </div>
     </>
   );

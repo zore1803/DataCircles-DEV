@@ -964,7 +964,6 @@ export default function DealsTable({
                         width: header.getSize(),
                         minWidth: header.getSize(),
                         maxWidth: header.getSize(),
-                        height: "56px",
                         position: isSticky ? "sticky" : "relative",
                         left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                         right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
@@ -1050,6 +1049,7 @@ export default function DealsTable({
                       handleRowTouchEnd();
                     }}
                     className={`bg-white hover:bg-blue-50 transition-colors ${stale ? "bg-red-50" : ""} cursor-pointer ${isSelected ? "!bg-blue-50" : ""}`}
+                    style={{ height: 37, maxHeight: 37 }}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const colId = cell.column.id;
@@ -1065,13 +1065,16 @@ export default function DealsTable({
                             width: cell.column.getSize(),
                             minWidth: cell.column.getSize(),
                             maxWidth: cell.column.getSize(),
-                            height: "54px",
+                            height: "37px",
+                            maxHeight: "37px",
+                            overflow: "hidden",
+                            boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className={`px-3 py-3 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
+                          className={`px-3 py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] overflow-hidden ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
