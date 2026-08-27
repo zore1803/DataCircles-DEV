@@ -259,6 +259,17 @@ const CompanyProfilePage = () => {
 
   const [showSubsidiaryModal, setShowSubsidiaryModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [parentCompany, setParentCompany] = useState(null);
+  const [childCompanies, setChildCompanies] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      setIsAdmin(storedUser?.role === "admin");
+    } catch {
+      setIsAdmin(false);
+    }
+  }, []);
 
   const [showForm, setShowForm] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
@@ -640,6 +651,10 @@ const CompanyProfilePage = () => {
         await fetchCompanyDetails();
         const resSubsidiaries = await API.get(`/companies/${id}/subsidiaries`);
         const subsidiaryIds = resSubsidiaries.data.map((sub) => sub._id);
+        setChildCompanies(resSubsidiaries.data || []);
+        API.get(`/companies/${id}/parent`)
+          .then((res) => setParentCompany(res.data || null))
+          .catch(() => setParentCompany(null));
         const resContacts = await API.get("/contacts");
         const resDeals = await API.get("/deals");
         const resMeetings = await API.get("/meetings", { params: { companyId: id } });
@@ -804,9 +819,20 @@ const CompanyProfilePage = () => {
             {/* Title + Address */}
             <div className="min-w-0">
               {company ? (
-                <h1 className="text-base font-semibold text-gray-900 truncate">
-                  {company.name}
-                </h1>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="text-base font-semibold text-gray-900 truncate">
+                    {company.name}
+                  </h1>
+                  {parentCompany && (
+                    <Link
+                      to={`/companies/${parentCompany._id}`}
+                      className="flex-shrink-0 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 hover:bg-blue-100 transition-colors truncate max-w-[160px]"
+                      title={`Child company of ${parentCompany.name}`}
+                    >
+                      Child company of {parentCompany.name}
+                    </Link>
+                  )}
+                </div>
               ) : (
                 <Skeleton width={140} height={16} className="mb-1" />
               )}
@@ -996,6 +1022,19 @@ const CompanyProfilePage = () => {
                     <Edit2 size={12} className="text-gray-400" />
                     Edit
                   </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setShowSubsidiaryModal(true);
+                        setShowActionsMenu(false);
+                      }}
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <Building2 size={12} className="text-gray-400 lg:hidden" />
+                      <Building2 size={14} className="text-gray-400 hidden lg:block" />
+                      Add Child Company
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1393,6 +1432,35 @@ const CompanyProfilePage = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Child Companies (subsidiaries) — only shown when this
+                      company actually has any linked. */}
+                  {childCompanies.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-5">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                        Child Companies ({childCompanies.length})
+                      </h3>
+                      <div className="flex flex-col gap-2">
+                        {childCompanies.map((child) => (
+                          <Link
+                            key={child._id}
+                            to={`/companies/${child._id}`}
+                            className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                              {(child.name || "?").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{child.name}</p>
+                              {child.industry && (
+                                <p className="text-xs text-gray-500 truncate">{child.industry}</p>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Sidebar: Activity Timeline + Calendar */}
@@ -1966,6 +2034,9 @@ const CompanyProfilePage = () => {
         onClose={() => setShowSubsidiaryModal(false)}
         onSuccess={() => {
           fetchCompanyDetails();
+          API.get(`/companies/${id}/subsidiaries`)
+            .then((res) => setChildCompanies(res.data || []))
+            .catch(() => {});
         }}
       />
       <MergeCompanyModal
