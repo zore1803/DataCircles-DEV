@@ -1111,20 +1111,20 @@ exports.completeRegistration = async (req, res) => {
       organization = org._id;
       joinMethod = "code";
       permissions = [
-        { name: "Companies", permission: "readonly" },
-        { name: "Deals", permission: "readonly" },
-        { name: "Contacts", permission: "readonly" },
-        { name: "Invoices", permission: "readonly" },
-        { name: "Tasks", permission: "readonly" },
-        { name: "Vendors", permission: "readonly" },
-        { name: "purchases", permission: "readonly" },
-        { name: "purchase-orders", permission: "readonly" },
-        { name: "Items", permission: "readonly" },
-        { name: "Meetings", permission: "readonly" },
-        { name: "Emails", permission: "readonly" },
-        { name: "quotations", permission: "readonly" },
-        { name: "delivery-challans", permission: "readonly" },
-        { name: "Forms", permission: "readonly" },
+        { name: "Companies", permission: "read-write" },
+        { name: "Deals", permission: "read-write" },
+        { name: "Contacts", permission: "read-write" },
+        { name: "Invoices", permission: "read-write" },
+        { name: "Tasks", permission: "read-write" },
+        { name: "Vendors", permission: "read-write" },
+        { name: "purchases", permission: "read-write" },
+        { name: "purchase-orders", permission: "read-write" },
+        { name: "Items", permission: "read-write" },
+        { name: "Meetings", permission: "read-write" },
+        { name: "Emails", permission: "read-write" },
+        { name: "quotations", permission: "read-write" },
+        { name: "delivery-challans", permission: "read-write" },
+        { name: "Forms", permission: "read-write" },
       ];
 
       // Generate new code for security
