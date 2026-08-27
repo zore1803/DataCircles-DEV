@@ -7,6 +7,17 @@ const NotificationSettings = require("../models/NotificationSettings");
 const EmailTemplate = require("../models/EmailTemplate");
 const User = require("../models/User");
 
+// Mirrors companyController's isOwnedByUser, using the same `user`/`createdBy` fields
+// getAllDeals' req.ownOnly filter already uses.
+const isOwnedByUser = (deal, userId) => {
+  const uid = userId.toString();
+  // .populate("user"/"createdBy") turns these into subdocuments — normalize
+  // via ._id first so this works whether the field is populated or raw.
+  const ownerUid = (deal.user?._id ?? deal.user)?.toString();
+  const createdByUid = (deal.createdBy?._id ?? deal.createdBy)?.toString();
+  return ownerUid === uid || createdByUid === uid;
+};
+
 const createDeal = async (req, res) => {
   try {
     const dealData = {
@@ -174,6 +185,10 @@ const getDealById = async (req, res) => {
       return res.status(404).json({ error: "Deal not found" });
     }
 
+    if (req.ownOnly && !isOwnedByUser(deal, req.user._id)) {
+      return res.status(403).json({ error: "You can only view deals you own" });
+    }
+
     res.json(deal);
   } catch (err) {
     res.status(404).json({ error: "Deal not found" });
@@ -183,17 +198,26 @@ const getDealById = async (req, res) => {
 const updateDeal = async (req, res) => {
   try {
     // 1. Authorization Check
+    // Manual fallback: checkPermission is commented out on the PUT /:id route, so
+    // req.ownOnly is never set here — mirrors companyController.updateCompany's fallback.
     if (req.user.role !== "admin") {
-      const hasEditPermission = req.user.permissions?.some(
-        (p) =>
-          p.name.toLowerCase() === "deals" && p.permission === "read-write",
-      );
+      const dealPerm = req.user.permissions?.find(
+        (p) => p.name.toLowerCase() === "deals",
+      )?.permission;
 
-      if (!hasEditPermission) {
+      if (dealPerm !== "read-write" && dealPerm !== "own-only") {
         return res.status(403).json({
           error:
             "Access denied. You do not have read-write permissions for deals.",
         });
+      }
+
+      if (dealPerm === "own-only") {
+        const existing = await Deal.findOne({ _id: req.params.id, organization: req.user.organization });
+        if (!existing) return res.status(404).json({ error: "Deal not found" });
+        if (!isOwnedByUser(existing, req.user._id)) {
+          return res.status(403).json({ error: "You can only edit deals you own" });
+        }
       }
     }
 
@@ -504,6 +528,10 @@ const deleteDeal = async (req, res) => {
 
     if (!deal) {
       return res.status(404).json({ error: "Deal not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(deal, req.user._id)) {
+      return res.status(403).json({ error: "You can only delete deals you own" });
     }
 
     const invoices = await Invoice.find({

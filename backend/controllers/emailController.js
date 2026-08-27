@@ -105,6 +105,16 @@ const getAllEmailLogs = async (req, res) => {
       query.status = status;
     }
 
+    // own-only: restrict to email logs this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const logs = await EmailLog.find(query)
       .populate('company contact vendor user')
       .sort({ createdAt: -1 });
@@ -123,7 +133,7 @@ const getAllEmailLogsPaginated = async (req, res) => {
 
     const { search, recipientType, status, sortBy = "createdAt", sortOrder = "desc" } = req.query;
 
-    const query = { organization: req.user.organization };
+    let query = { organization: req.user.organization };
 
     if (search) {
       query.$or = [
@@ -139,6 +149,18 @@ const getAllEmailLogsPaginated = async (req, res) => {
 
     if (status) {
       query.status = status;
+    }
+
+    // own-only: restrict to email logs this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        const orClause = query.$or;
+        delete query.$or;
+        query.$and = [{ $or: orClause }, ownFilter];
+      } else {
+        Object.assign(query, ownFilter);
+      }
     }
 
     const sortObj = {};
@@ -192,6 +214,13 @@ const getEmailLogById = async (req, res) => {
       return res.status(404).json({ error: "Email log not found" });
     }
 
+    // log.user may be a raw ObjectId or, since it's populated above, a User
+    // subdocument — handle both so the populated lookup doesn't false-negative.
+    const logUserId = log.user?._id ?? log.user;
+    if (req.ownOnly && logUserId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: "You can only view email logs you own" });
+    }
+
     res.json(log);
   } catch (err) {
     res.status(404).json({ error: "Email log not found" });
@@ -211,6 +240,11 @@ const getEmailLogsByRecipient = async (req, res) => {
       [type]: id,
       organization: req.user.organization,
     };
+
+    // own-only: restrict to email logs this user owns.
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
 
     const logs = await EmailLog.find(query)
       .populate('company contact vendor user')

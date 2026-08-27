@@ -236,6 +236,16 @@ const getAllItems = async (req, res) => {
       query.gstRate = parseFloat(gstRate);
     }
 
+    // own-only: restrict to items this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const items = await Item.find(query)
       .populate("user", "name email")
       .sort({ createdAt: -1 });
@@ -292,6 +302,16 @@ const getAllItemsPaginated = async (req, res) => {
       query.gstRate = parseFloat(gstRate);
     }
 
+    // own-only: restrict to items this user owns.
+    if (req.ownOnly) {
+      const ownFilter = { user: req.user._id };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     // Build sort object
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -342,6 +362,16 @@ const getAllItemsPaginated = async (req, res) => {
   }
 };
 
+// A user with own-only permission may only touch items they own — shared
+// here since getItemById/updateItem/deleteItem all need the same check.
+// record.user may be a raw ObjectId or, when populated (e.g. getItemById),
+// a User subdocument — handle both so populated lookups don't false-negative.
+const isOwnedByUser = (record, userId) => {
+  const uid = userId.toString();
+  const recordUserId = record.user?._id ?? record.user;
+  return recordUserId?.toString() === uid;
+};
+
 const getItemById = async (req, res) => {
   try {
     const item = await Item.findOne({
@@ -351,6 +381,10 @@ const getItemById = async (req, res) => {
 
     if (!item) {
       return res.status(404).json({ error: "Item not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(item, req.user._id)) {
+      return res.status(403).json({ error: "You can only view items you own" });
     }
 
     res.json(item);
@@ -446,6 +480,19 @@ const updateItem = async (req, res) => {
       });
     }
 
+    if (req.ownOnly) {
+      const existing = await Item.findOne({
+        _id: req.params.id,
+        organization: req.user.organization,
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      if (!isOwnedByUser(existing, req.user._id)) {
+        return res.status(403).json({ error: "You can only edit items you own" });
+      }
+    }
+
     const item = await Item.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -484,6 +531,19 @@ const updateItem = async (req, res) => {
 
 const deleteItem = async (req, res) => {
   try {
+    if (req.ownOnly) {
+      const existing = await Item.findOne({
+        _id: req.params.id,
+        organization: req.user.organization,
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      if (!isOwnedByUser(existing, req.user._id)) {
+        return res.status(403).json({ error: "You can only delete items you own" });
+      }
+    }
+
     const item = await Item.findOneAndDelete({
       _id: req.params.id,
       organization: req.user.organization,

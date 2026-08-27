@@ -341,6 +341,18 @@ const generateMeetingCancellationEmail = (meetingDetails) => {
   return { html, text };
 };
 
+// A user with own-only permission may only touch meetings they created —
+// shared by getMeetingsPaginated/getAllMeetings/getMeetingById/updateMeeting/
+// deleteMeeting/completeMeeting. (The schema has a commented-out/unused
+// `owner` field; `createdBy` is the real ownership field.)
+const isMeetingOwnedByUser = (meeting, userId) => {
+  const uid = userId.toString();
+  // createdBy may be a raw ObjectId or a populated User doc, depending on
+  // where this is called from.
+  const createdById = meeting.createdBy?._id || meeting.createdBy;
+  return createdById?.toString() === uid;
+};
+
 // Create a new meeting
 exports.createMeeting = async (req, res) => {
   try {
@@ -999,6 +1011,10 @@ exports.updateMeeting = async (req, res) => {
       return res.status(404).json({ error: "Meeting not found" });
     }
 
+    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
+      return res.status(403).json({ error: "You can only edit meetings you own" });
+    }
+
     // Store original values for comparison
     const originalScheduledAt = meeting.scheduledAt;
     const originalTitle = meeting.title;
@@ -1158,6 +1174,10 @@ exports.deleteMeeting = async (req, res) => {
       return res.status(404).json({ error: "Meeting not found" });
     }
 
+    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
+      return res.status(403).json({ error: "You can only delete meetings you own" });
+    }
+
     // Gather participant IDs for notification settings check
     const participantIds = [];
     if (meeting.createdBy && meeting.createdBy._id)
@@ -1224,6 +1244,10 @@ exports.completeMeeting = async (req, res) => {
 
     if (!meeting) {
       return res.status(404).json({ error: "Meeting not found" });
+    }
+
+    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
+      return res.status(403).json({ error: "You can only edit meetings you own" });
     }
 
     meeting.status = "completed";
@@ -1535,6 +1559,16 @@ exports.getAllMeetings = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to meetings this user created.
+    if (req.ownOnly) {
+      const ownFilter = { createdBy: req.user._id };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const meetings = await Meeting.find(query)
       .populate([
         { path: "contact", select: "name email phone" },
@@ -1671,6 +1705,12 @@ exports.getMeetingsPaginated = async (req, res) => {
       };
     }
 
+    // own-only: restrict to meetings this user created.
+    if (req.ownOnly) {
+      const ownFilter = { createdBy: req.user._id };
+      query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
+    }
+
     // Pagination calculations
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -1742,6 +1782,10 @@ exports.getMeetingById = async (req, res) => {
 
     if (!meeting) {
       return res.status(404).json({ error: "Meeting not found" });
+    }
+
+    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
+      return res.status(403).json({ error: "You can only view meetings you own" });
     }
 
     res.json(meeting);

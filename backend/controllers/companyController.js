@@ -36,6 +36,17 @@ const getAllCompanies = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to companies this user created/owns, combined with
+    // the search $or above via $and so neither condition clobbers the other.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }] };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const companies = await Company.find(query)
       .populate("user", "name")
       .populate("createdBy", "name")
@@ -152,6 +163,12 @@ const getAllCompaniesPaginated = async (req, res) => {
           ? [...query.$and, ...andConditions]
           : andConditions;
       }
+    }
+
+    // own-only: restrict to companies this user created/owns.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }] };
+      query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
     }
 
     const sortObj = {};
@@ -273,6 +290,19 @@ const getMyCompanies = async (req, res) => {
   }
 };
 
+// A user with own-only permission may only touch companies they created or
+// own — shared here since getCompanyById/updateCompany/deleteCompany all
+// need the same check.
+const isOwnedByUser = (company, userId) => {
+  const uid = userId.toString();
+  // .populate("user"/"createdBy") turns these into subdocuments — normalize
+  // via ._id first so this still works whether the field is populated or a
+  // raw ObjectId (getCompanyById populates both before this check runs).
+  const ownerUid = (company.user?._id ?? company.user)?.toString();
+  const createdByUid = (company.createdBy?._id ?? company.createdBy)?.toString();
+  return ownerUid === uid || createdByUid === uid;
+};
+
 const getCompanyById = async (req, res) => {
   try {
     const company = await Company.findOne({
@@ -286,6 +316,9 @@ const getCompanyById = async (req, res) => {
 
     if (!company) {
       return res.status(404).json({ error: "Company not found" });
+    }
+    if (req.ownOnly && !isOwnedByUser(company, req.user._id)) {
+      return res.status(403).json({ error: "You can only view companies you own" });
     }
     res.json(company);
   } catch (err) {
@@ -301,6 +334,9 @@ const deleteCompany = async (req, res) => {
     });
     if (!company) {
       return res.status(404).json({ error: "Company not found" });
+    }
+    if (req.ownOnly && !isOwnedByUser(company, req.user._id)) {
+      return res.status(403).json({ error: "You can only delete companies you own" });
     }
 
     const contacts = await Contact.find({
@@ -321,16 +357,28 @@ const deleteCompany = async (req, res) => {
 const updateCompany = async (req, res) => {
   try {
     if (req.user.role !== "admin") {
-      const hasEditPermission = req.user.permissions?.some(
-        (p) =>
-          p.name.toLowerCase() === "companies" && p.permission === "read-write",
-      );
+      const companyPerm = req.user.permissions?.find(
+        (p) => p.name.toLowerCase() === "companies",
+      )?.permission;
 
-      if (!hasEditPermission) {
+      if (companyPerm !== "read-write" && companyPerm !== "own-only") {
         return res.status(403).json({
           error:
             "Access denied. You do not have read-write permissions for companies.",
         });
+      }
+
+      if (companyPerm === "own-only") {
+        const existing = await Company.findOne({
+          _id: req.params.id,
+          organization: req.user.organization,
+        });
+        if (!existing) {
+          return res.status(404).json({ error: "Company not found" });
+        }
+        if (!isOwnedByUser(existing, req.user._id)) {
+          return res.status(403).json({ error: "You can only edit companies you own" });
+        }
       }
     }
 
