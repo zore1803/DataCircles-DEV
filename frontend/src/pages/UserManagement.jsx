@@ -382,6 +382,10 @@ function UserManagement() {
 
   const renderSeatInfo = () => {
     if (!subscription?.subscription) return null;
+    // Wait for real data instead of flashing a misleading "0 of 1" while
+    // seatStatus hasn't loaded yet and the users list (this function's
+    // fallback source) is still its initial empty array.
+    if (!seatStatus && (loading || users.length === 0)) return null;
 
     // Admin seats (always exactly 1, the org creator) and staff seats
     // (everyone invited or joined via code) are tracked separately —

@@ -85,13 +85,14 @@ exports.createOrUpdateBranding = async (req, res) => {
     const logoUrlFile = logoFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${logoFile.key}` : undefined;
     const signatureUrlFile = signatureFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${signatureFile.key}` : undefined;
 
-    // Validate required fields
-    if (!companyName || !gstin || !address || !email || !mobile || !colors) {
-      return res.status(400).json({ error: 'Company name, GSTIN, address, email, mobile, and colors are required' });
+    // Validate required fields — GSTIN is optional (not every business is
+    // GST-registered), matching the frontend's own validation.
+    if (!companyName || !address || !email || !mobile || !colors) {
+      return res.status(400).json({ error: 'Company name, address, email, mobile, and colors are required' });
     }
 
-    // Validate GSTIN format
-    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)) {
+    // Validate GSTIN format only if provided
+    if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)) {
       return res.status(400).json({ error: 'Invalid GSTIN format (e.g., 22AAAAA0000A1Z5)' });
     }
 
@@ -171,13 +172,14 @@ exports.updateBrandingById = async (req, res) => {
     const logoUrlFile = logoFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${logoFile.key}` : undefined;
     const signatureUrlFile = signatureFile ? `https://${process.env.CLOUDFRONT_DOMAIN}/${signatureFile.key}` : undefined;
 
-    // Validate required fields
-    if (!companyName || !gstin || !address || !email || !mobile || !colors) {
-      return res.status(400).json({ error: 'Company name, GSTIN, address, email, mobile, and colors are required' });
+    // Validate required fields — GSTIN is optional (not every business is
+    // GST-registered), matching the frontend's own validation.
+    if (!companyName || !address || !email || !mobile || !colors) {
+      return res.status(400).json({ error: 'Company name, address, email, mobile, and colors are required' });
     }
 
-    // Validate GSTIN format
-    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)) {
+    // Validate GSTIN format only if provided
+    if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)) {
       return res.status(400).json({ error: 'Invalid GSTIN format (e.g., 22AAAAA0000A1Z5)' });
     }
 
