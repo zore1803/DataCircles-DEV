@@ -88,22 +88,34 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       setSelectedSignature("");
 
       // Load saved signatures from Document Settings
-      API.get("/document-settings/signatures").then((res) => {
-        const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
-        const mapped = sigs.map((s) => ({
-          label: s.name || "Signature",
-          // `id` is the custom String field; `_id` is the Mongoose ObjectId.
-          // Always coerce to string so the <select> value comparison works.
-          value: (s.id && s.id.toString().trim()) || (s._id && s._id.toString()) || s.name,
-          url: s.dataUrl || "",
-          isDefault: !!s.isDefault,
-        }));
-        setSignatures(mapped);
-        const defaultSig = mapped.find((s) => s.isDefault);
-        if (defaultSig) setSelectedSignature(defaultSig.value);
-      }).catch(() => setSignatures([]));
+      fetchSignatures();
     }
   }, [isOpen, invoice]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchSignatures = () => {
+    API.get("/document-settings/signatures").then((res) => {
+      const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
+      const mapped = sigs.map((s) => ({
+        label: s.name || "Signature",
+        // `id` is the custom String field; `_id` is the Mongoose ObjectId.
+        // Always coerce to string so the <select> value comparison works.
+        value: (s.id && s.id.toString().trim()) || (s._id && s._id.toString()) || s.name,
+        url: s.dataUrl || "",
+        isDefault: !!s.isDefault,
+      }));
+      setSignatures(mapped);
+      
+      if (mapped.length > 0) {
+        setSelectedSignature(currentSig => {
+          if (!currentSig) {
+            const defaultSig = mapped.find((s) => s.isDefault) || mapped[0];
+            return defaultSig ? defaultSig.value : "";
+          }
+          return currentSig;
+        });
+      }
+    }).catch(() => setSignatures([]));
+  };
 
   // Derive customer name from invoice
   const customerName =
@@ -561,6 +573,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     <select
                       value={selectedSignature}
                       onChange={(e) => setSelectedSignature(e.target.value)}
+                      onFocus={fetchSignatures}
                       className={`${fieldClass} appearance-none bg-white cursor-pointer`}
                     >
                       <option value="">No Signature</option>
