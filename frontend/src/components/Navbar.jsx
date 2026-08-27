@@ -168,13 +168,9 @@ const Navbar = () => {
       } else {
         document.documentElement.style.setProperty("--sidebar-width", "0px");
       }
-      // Edge-to-edge list content when the sidebar is collapsed to its
-      // narrow icon-only strip (plenty of width to spare); only add a
-      // gutter once the sidebar expands and eats into that space.
-      document.documentElement.style.setProperty(
-        "--content-inset",
-        isExpanded ? "16px" : "0px"
-      );
+      // List/table content stays edge-to-edge against the sidebar in every
+      // state (collapsed or expanded/pinned) — no gutter.
+      document.documentElement.style.setProperty("--content-inset", "0px");
     };
     applyWidth();
     window.addEventListener("resize", applyWidth);
