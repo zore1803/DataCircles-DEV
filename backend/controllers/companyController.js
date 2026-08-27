@@ -593,6 +593,14 @@ const addSubsidiary = async (req, res) => {
       return res.status(404).json({ message: "Company not found" });
     }
 
+    if (parent.parentCompany) {
+      return res.status(400).json({ message: "A child company cannot have its own child companies" });
+    }
+
+    if (child.parentCompany) {
+      return res.status(400).json({ message: "That company is already a child of another company" });
+    }
+
     if (parent.organization.toString() !== child.organization.toString()) {
       return res.status(403).json({ message: "Companies must belong to the same organization" });
     }

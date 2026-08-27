@@ -1022,7 +1022,7 @@ const CompanyProfilePage = () => {
                     <Edit2 size={12} className="text-gray-400" />
                     Edit
                   </button>
-                  {isAdmin && (
+                  {isAdmin && !parentCompany && (
                     <button
                       onClick={() => {
                         setShowSubsidiaryModal(true);
