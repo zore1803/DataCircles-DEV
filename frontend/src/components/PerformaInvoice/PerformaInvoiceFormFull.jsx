@@ -1430,6 +1430,7 @@ const PerformaInvoiceFormFull = ({
                       type="date"
                       className="w-full pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       value={form.dueDate}
+                      min={new Date().toISOString().split("T")[0]}
                       onChange={(e) => {
                         setForm((prev) => ({ ...prev, dueDate: e.target.value }));
                         setHasUnsavedChanges(true);

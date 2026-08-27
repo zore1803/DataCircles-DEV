@@ -466,7 +466,7 @@ const VendorMeetingForm = ({
                       <input
                         type="date"
                         value={form.date}
-                        min="2000-01-01"
+                        min={new Date().toISOString().split("T")[0]}
                         max="2099-12-31"
                         onChange={(e) => handleChange("date", e.target.value)}
                         className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 ${

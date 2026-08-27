@@ -470,7 +470,7 @@ const ReferralProgramAdmin = () => {
                 <input type="number" value={grantDraft.maxRewardAmount} onChange={(e) => setGrantDraft({ ...grantDraft, maxRewardAmount: e.target.value })} className={inputCls} />
               </Field>
               <Field label="Expires at (blank = never)">
-                <input type="date" value={grantDraft.expiresAt} onChange={(e) => setGrantDraft({ ...grantDraft, expiresAt: e.target.value })} className={inputCls} />
+                <input type="date" value={grantDraft.expiresAt} min={new Date().toISOString().split("T")[0]} onChange={(e) => setGrantDraft({ ...grantDraft, expiresAt: e.target.value })} className={inputCls} />
               </Field>
             </div>
             <div className="flex justify-end gap-2 mt-6">

@@ -758,6 +758,7 @@ const CompanyMeetingForm = ({
                       <input
                         type="date"
                         value={form.date || calendarDate || ""}
+                        min={new Date().toISOString().split("T")[0]}
                         onChange={(e) => handleChange("date", e.target.value)}
                         disabled={!isEditMode && mode === "view"}
                         className={`text-xs font-medium border-none bg-transparent p-0 focus:ring-0 text-right cursor-pointer ${errors.date ? 'text-red-600' : 'text-gray-900'}`}

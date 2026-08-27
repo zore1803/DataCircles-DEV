@@ -1217,6 +1217,7 @@ const AdminMeetingForm = ({
                     <input
                       type="date"
                       value={form.date || calendarDate || ""}
+                      min={new Date().toISOString().split("T")[0]}
                       onChange={(e) => handleChange("date", e.target.value)}
                       disabled={readOnly}
                       className={`w-full border rounded-full px-3 h-8 text-[12px] focus:outline-none focus:ring-1 transition-all cursor-pointer disabled:opacity-50 ${errors.date ? "border-red-500 focus:ring-red-500 text-red-600" : "border-[#1F2937]/10 focus:ring-blue-500 text-[#1F2937]"}`}
