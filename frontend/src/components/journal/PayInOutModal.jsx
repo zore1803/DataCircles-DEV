@@ -181,7 +181,8 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
       const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
       const mapped = sigs.map((s) => ({
         label: s.name || "Signature",
-        value: s.id || s._id || s.name,
+        // Always coerce to string so the <select> value comparison works.
+        value: (s.id && s.id.toString().trim()) || (s._id && s._id.toString()) || s.name,
         url: s.dataUrl || "",
         isDefault: !!s.isDefault,
       }));

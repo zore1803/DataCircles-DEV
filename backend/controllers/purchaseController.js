@@ -450,6 +450,37 @@ exports.updatePurchaseStatus = async (req, res) => {
       return res.status(400).json({ message: "A Paid purchase can't be changed to another status." });
     }
 
+    // When a purchase is marked Paid via the status dropdown, record the exact
+    // remaining unpaid balance as a payment entry so the Payment Timeline
+    // reflects the actual cash movement. Method is "Other" because the
+    // status-only UI has no payment-method field — neutral label is more
+    // honest than silently inventing a method. Skipped if already fully paid.
+    if (status === "Paid" && oldPurchase.status !== "Paid") {
+      const alreadyPaid = (oldPurchase.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const totalAmount = Number(oldPurchase.grandTotal || oldPurchase.subtotal) || 0;
+      const remaining = totalAmount - alreadyPaid;
+      if (remaining > 0) {
+        oldPurchase.payments.push({
+          amount: remaining,
+          paymentDate: new Date(),
+          paymentMethod: 'Other',
+          reference: '',
+          notes: 'Auto-recorded when status set to Paid',
+          recordedBy: req.user._id,
+          recordedAt: new Date(),
+        });
+      }
+      oldPurchase.status = status;
+      await oldPurchase.save({ validateModifiedOnly: true });
+
+      const purchase = await Purchase.findById(oldPurchase._id)
+        .populate('vendor', 'name email phone')
+        .populate('purchaseOrder', 'poNumber vendor')
+        .populate('items.itemId', 'name description purchasePrice hsnSac gstRate');
+
+      return res.json(purchase);
+    }
+
     const purchase = await Purchase.findOneAndUpdate(
       {
         _id: req.params.id,

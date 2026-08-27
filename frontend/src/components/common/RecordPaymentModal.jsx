@@ -90,7 +90,9 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
         const mapped = sigs.map((s) => ({
           label: s.name || "Signature",
-          value: s.id || s._id || s.name,
+          // `id` is the custom String field; `_id` is the Mongoose ObjectId.
+          // Always coerce to string so the <select> value comparison works.
+          value: (s.id && s.id.toString().trim()) || (s._id && s._id.toString()) || s.name,
           url: s.dataUrl || "",
           isDefault: !!s.isDefault,
         }));

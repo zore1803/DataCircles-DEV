@@ -867,6 +867,28 @@ const updateStatus = async (req, res) => {
     const oldStatus = invoice.status;
     invoice.status = status;
 
+    // When an invoice is marked Paid via the status dropdown, record the exact
+    // remaining unpaid balance as a payment entry so the Payment Timeline
+    // reflects the actual cash movement. Method is "Other" because the
+    // status-only UI has no payment-method field — using a neutral label is
+    // more honest than silently inventing "UPI".
+    // Skipped when the invoice is already fully paid (remaining ≤ 0).
+    if (status === 'Paid' && oldStatus !== 'Paid') {
+      const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const remaining = (Number(invoice.amount) || 0) - alreadyPaid;
+      if (remaining > 0) {
+        invoice.payments.push({
+          amount: remaining,
+          paymentDate: new Date(),
+          paymentMethod: 'Other',
+          reference: '',
+          notes: 'Auto-recorded when status set to Paid',
+          recordedBy: req.user._id,
+          recordedAt: new Date(),
+        });
+      }
+    }
+
     if (status === 'Cancelled' && invoice.stockMovementStatus === 'applied') {
       await syncDocumentStock({
         organization: req.user.organization,
@@ -909,10 +931,41 @@ const bulkUpdateStatus = async (req, res) => {
     if (!ids || !ids.length || !status) {
       return res.status(400).json({ error: "ids and status are required" });
     }
-    await Invoice.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { status }
-    );
+
+    // For non-Paid bulk updates, the fast updateMany path is fine.
+    // For Paid, fetch each invoice so we can compute the remaining balance
+    // and push one payment record — same logic as the single updateStatus.
+    if (status === 'Paid') {
+      const invoices = await Invoice.find({
+        _id: { $in: ids },
+        organization: req.user.organization,
+      });
+      const now = new Date();
+      await Promise.all(invoices.map(async (invoice) => {
+        if (invoice.status === 'Paid') return; // already paid — skip
+        const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const remaining = (Number(invoice.amount) || 0) - alreadyPaid;
+        invoice.status = 'Paid';
+        if (remaining > 0) {
+          invoice.payments.push({
+            amount: remaining,
+            paymentDate: now,
+            paymentMethod: 'Other',
+            reference: '',
+            notes: 'Auto-recorded when status set to Paid',
+            recordedBy: req.user._id,
+            recordedAt: now,
+          });
+        }
+        await invoice.save({ validateModifiedOnly: true });
+      }));
+    } else {
+      await Invoice.updateMany(
+        { _id: { $in: ids }, organization: req.user.organization },
+        { status }
+      );
+    }
+
     res.json({ message: `Updated ${ids.length} invoices to status: ${status}` });
   } catch (error) {
     res.status(500).json({ error: error.message });

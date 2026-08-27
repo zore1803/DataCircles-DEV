@@ -41,6 +41,20 @@ exports.getPaymentsTimeline = async (req, res) => {
       Wallet.findOne({ organization: orgId })
     ]);
 
+    // Maps a payment method string to a `bank` tag for account-card bucketing.
+    // "Cash" → goes into the Cash card (paymentTimelineController filters on
+    // t.type === "Cash" for that card). All electronic methods leave bank blank
+    // so they appear as general IN/OUT without inflating a specific bank card
+    // (the user's bank cards are matched by bank *name*, not payment method).
+    const methodToBank = (method) => {
+      if (!method) return "";
+      if (method === "Cash") return "Cash";
+      // UPI, NEFT, RTGS, IMPS, Cheque, Card, Net Banking, EMI, TDS, Other
+      // → generic electronic; leave blank so it counts in the aggregate
+      // Credit/Debit/Net totals but not inside any named bank card.
+      return "";
+    };
+
     const formattedPayments = payments.map((p) => ({
       _id: p._id,
       "payment-id": p._id.toString().substring(0, 8).toUpperCase(),
@@ -55,40 +69,68 @@ exports.getPaymentsTimeline = async (req, res) => {
       status: "Paid"
     }));
 
-    const formattedInvoices = invoices.map((inv) => {
+    // STRICTLY ACTUAL PAYMENTS ONLY — iterate each Invoice's payments[]
+    // sub-array instead of mapping the whole invoice as a single cash-in.
+    // Unpaid invoices produce ZERO rows here; partially-paid invoices produce
+    // one row per payment, each at the real paymentDate/amount/method.
+    const formattedInvoices = invoices.flatMap((inv) => {
+      if (!inv.payments || inv.payments.length === 0) return [];
+
       let party = "Unknown Client";
       if (inv.deal) {
         if (inv.deal.company && inv.deal.company.name) party = inv.deal.company.name;
         else if (inv.deal.contact && inv.deal.contact.name) party = inv.deal.contact.name;
       }
-      return {
-        _id: inv._id,
-        "payment-id": inv.invoiceNumber || inv._id.toString().substring(0, 8).toUpperCase(),
+
+      return inv.payments.map((pmt) => ({
+        _id: pmt._id,
+        "payment-id": inv.invoiceNumber
+          ? `${inv.invoiceNumber}-P${pmt._id.toString().substring(0, 4).toUpperCase()}`
+          : pmt._id.toString().substring(0, 8).toUpperCase(),
         party,
-        amount: inv.amount,
+        amount: pmt.amount,
         direction: "IN",
-        type: "Invoice",
-        date: inv.date || inv.createdAt,
-        bank: "",
-        notes: inv.notes || "",
+        type: pmt.paymentMethod || "Invoice Payment",
+        date: pmt.paymentDate || inv.date || inv.createdAt,
+        bank: methodToBank(pmt.paymentMethod),
+        notes: pmt.notes || inv.notes || "",
+        reference: pmt.reference || inv.invoiceNumber || "",
         source: "Invoice",
-        status: inv.status
-      };
+        status: "Paid",
+        parentId: inv._id,
+        parentNumber: inv.invoiceNumber,
+      }));
     });
 
-    const formattedPurchases = purchases.map((pur) => ({
-      _id: pur._id,
-      "payment-id": pur.purchaseNumber || pur._id.toString().substring(0, 8).toUpperCase(),
-      party: pur.vendor ? pur.vendor.companyName || pur.vendor.name : "Unknown Vendor",
-      amount: pur.grandTotal || pur.subtotal,
-      direction: "OUT",
-      type: "Purchase",
-      date: pur.purchaseDate || pur.createdAt,
-      bank: "",
-      notes: pur.notes || "",
-      source: "Purchase",
-      status: pur.status
-    }));
+    // STRICTLY ACTUAL PAYMENTS ONLY — iterate each Purchase's payments[]
+    // sub-array instead of mapping the whole purchase as a single cash-out.
+    // Unpaid purchases produce ZERO rows here.
+    const formattedPurchases = purchases.flatMap((pur) => {
+      if (!pur.payments || pur.payments.length === 0) return [];
+
+      const vendorName = pur.vendor
+        ? pur.vendor.companyName || pur.vendor.name
+        : "Unknown Vendor";
+
+      return pur.payments.map((pmt) => ({
+        _id: pmt._id,
+        "payment-id": pur.purchaseNumber
+          ? `${pur.purchaseNumber}-P${pmt._id.toString().substring(0, 4).toUpperCase()}`
+          : pmt._id.toString().substring(0, 8).toUpperCase(),
+        party: vendorName,
+        amount: pmt.amount,
+        direction: "OUT",
+        type: pmt.paymentMethod || "Purchase Payment",
+        date: pmt.paymentDate || pur.purchaseDate || pur.createdAt,
+        bank: methodToBank(pmt.paymentMethod),
+        notes: pmt.notes || pur.notes || "",
+        reference: pmt.reference || pur.purchaseNumber || "",
+        source: "Purchase",
+        status: "Paid",
+        parentId: pur._id,
+        parentNumber: pur.purchaseNumber,
+      }));
+    });
 
     const formattedSubs = subPayments.map((sub) => ({
       _id: sub._id,
@@ -252,10 +294,12 @@ exports.getPaymentsTimeline = async (req, res) => {
       credits: wallet ? wallet.credits || 0 : 0
     };
 
-    // 3. Cash balance: all Payment records with paymentType === "Cash"
-    const cashTx = payments.filter((p) => p.paymentType === "Cash");
-    const cashIn  = cashTx.filter((p) => p.direction === "IN" ).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-    const cashOut = cashTx.filter((p) => p.direction === "OUT").reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    // 3. Cash balance: all transactions across every source where the bank
+    // tag is "Cash" — this now includes invoice payments and purchase payments
+    // made by Cash method, not just standalone Payment records.
+    const cashTxAll = allTransactions.filter((t) => t.bank === "Cash" || t.type === "Cash");
+    const cashIn  = cashTxAll.filter((t) => t.direction === "IN" ).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const cashOut = cashTxAll.filter((t) => t.direction === "OUT").reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     const cashSummary = {
       id: "cash-card",
       type: "cash",
