@@ -39,7 +39,7 @@ const getAllCompanies = async (req, res) => {
     // own-only: restrict to companies this user created/owns, combined with
     // the search $or above via $and so neither condition clobbers the other.
     if (req.ownOnly) {
-      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }] };
+      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }, { owner: req.user._id }] };
       if (query.$or) {
         query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
       } else {
@@ -167,7 +167,7 @@ const getAllCompaniesPaginated = async (req, res) => {
 
     // own-only: restrict to companies this user created/owns.
     if (req.ownOnly) {
-      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }] };
+      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }, { owner: req.user._id }] };
       query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
     }
 
@@ -290,17 +290,20 @@ const getMyCompanies = async (req, res) => {
   }
 };
 
-// A user with own-only permission may only touch companies they created or
-// own — shared here since getCompanyById/updateCompany/deleteCompany all
-// need the same check.
+// A user with own-only permission may only touch companies they created,
+// or that are explicitly designated theirs via the `owner` field (set from
+// the Companies list's "Set/Change Owner" menu) — shared here since
+// getCompanyById/updateCompany/deleteCompany all need the same check.
 const isOwnedByUser = (company, userId) => {
   const uid = userId.toString();
-  // .populate("user"/"createdBy") turns these into subdocuments — normalize
-  // via ._id first so this still works whether the field is populated or a
-  // raw ObjectId (getCompanyById populates both before this check runs).
-  const ownerUid = (company.user?._id ?? company.user)?.toString();
+  // .populate("user"/"createdBy"/"owner") turns these into subdocuments —
+  // normalize via ._id first so this still works whether the field is
+  // populated or a raw ObjectId (getCompanyById populates all three before
+  // this check runs).
+  const recordUserUid = (company.user?._id ?? company.user)?.toString();
   const createdByUid = (company.createdBy?._id ?? company.createdBy)?.toString();
-  return ownerUid === uid || createdByUid === uid;
+  const ownerUid = (company.owner?._id ?? company.owner)?.toString();
+  return recordUserUid === uid || createdByUid === uid || ownerUid === uid;
 };
 
 const getCompanyById = async (req, res) => {
