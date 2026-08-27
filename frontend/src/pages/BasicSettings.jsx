@@ -19,6 +19,8 @@ import {
   Shield,
   Globe,
   ExternalLink,
+  ListChecks,
+  CalendarClock,
 } from "lucide-react";
 import KanbanSettings from "../components/settings/KanbanSettings";
 import CompanyFieldSettings from "../components/settings/CompanyFieldSettings";
@@ -26,6 +28,8 @@ import ContactFieldSettings from "../components/settings/ContactFieldSettings";
 import DealFieldSettings from "../components/settings/DealFieldSettings";
 import HelpCenter from "../components/settings/HelpCenter";
 import VendorFieldSettings from "../components/settings/VendorFieldSettings";
+import TaskFieldSettings from "../components/settings/TaskFieldSettings";
+import MeetingFieldSettings from "../components/settings/MeetingFieldSettings";
 import EmailNotifications from "../components/settings/EmailNotifications";
 import logo from "/DataCircles.png";
 
@@ -148,6 +152,30 @@ const BasicSettings = () => {
       borderColor: "border-pink-200",
       hoverBg: "hover:bg-pink-50",
       component: <VendorFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "task-fields",
+      icon: <ListChecks className="w-5 h-5" />,
+      label: "Task Fields",
+      description: "Customize task data fields",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <TaskFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "meeting-fields",
+      icon: <CalendarClock className="w-5 h-5" />,
+      label: "Meeting Fields",
+      description: "Customize meeting data fields",
+      color: "text-violet-600",
+      bgColor: "bg-violet-50",
+      borderColor: "border-violet-200",
+      hoverBg: "hover:bg-violet-50",
+      component: <MeetingFieldSettings />,
       category: "Customization",
     },
     {

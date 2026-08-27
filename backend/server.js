@@ -16,6 +16,8 @@ const startReminderJob = require('./utils/reminderJob');
 require('./jobs/subscriptionLifecycleJobs');
 require('./jobs/referralLifecycleJobs');
 require('./jobs/renewalLifecycleJobs');
+// Turns Active Sales Subscriptions into Invoices when their billing date arrives.
+require('./jobs/salesSubscriptionBillingJob');
 const swaggerUi = require('swagger-ui-express');
 const fs = require('fs');
 const YAML = require('yaml');
@@ -197,6 +199,12 @@ app.use('/api/meetings', meetingRoutes);
 
 const vendorFieldsRoutes = require('./routes/vendorFields');
 app.use('/api/vendor-fields', vendorFieldsRoutes);
+
+const taskFieldsRoutes = require('./routes/taskFields');
+app.use('/api/task-fields', taskFieldsRoutes);
+
+const meetingFieldsRoutes = require('./routes/meetingFields');
+app.use('/api/meeting-fields', meetingFieldsRoutes);
 
 const purchaseOrderRoutes = require("./routes/purchaseOrderRoutes");
 app.use("/api/purchase-orders", purchaseOrderRoutes);

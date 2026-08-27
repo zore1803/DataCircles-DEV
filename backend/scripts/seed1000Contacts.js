@@ -23,8 +23,12 @@ const LAST_NAMES = [
   "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller",
   "Davis", "Rodriguez", "Martinez", "Wilson", "Anderson", "Taylor",
 ];
-const LIFECYCLE = ["Lead", "Sales Qualified Lead", "Customer"];
-const STATUSES = ["New", "Contacted", "Interested", "Qualified", "Won", "Lost", "Unqualified"];
+// Stage and status were picked from two independent lists, which produced
+// impossible pairs like Lead/Won — exactly the combinations the model's
+// pre-save hook rejects (and that insertMany, used below, would slip past).
+// Both now come from the one authoritative map, status chosen WITHIN the
+// stage that was picked.
+const { LIFECYCLE_STAGES, STAGE_STATUS_MAP } = require("../constants/contactLifecycle");
 const DOMAINS = ["gmail.com", "outlook.com", "company.com", "corp.in", "business.co", "example.org"];
 
 const pick = (arr, i) => arr[i % arr.length];
@@ -56,8 +60,8 @@ async function seed() {
       const last = pick(LAST_NAMES, Math.floor(i / FIRST_NAMES.length) + i);
       const name = `${first} ${last} ${i + 1}`;
       const emailUser = `${first}.${last}${i + 1}`.toLowerCase();
-      const lifecycleStage = pick(LIFECYCLE, i);
-      const stageStatus = pick(STATUSES, i);
+      const lifecycleStage = pick(LIFECYCLE_STAGES, i);
+      const stageStatus = pick(STAGE_STATUS_MAP[lifecycleStage], i);
       const company = companies.length ? companies[i % companies.length]._id : undefined;
 
       data.push({

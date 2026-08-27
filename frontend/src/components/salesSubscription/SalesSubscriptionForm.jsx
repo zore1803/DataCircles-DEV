@@ -15,12 +15,25 @@ const STATUS_OPTIONS = ["Draft", "Active", "Expired", "Error", "Cancelled"];
 const money = (n) =>
   `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const calcItemAmount = (it) => {
+// Taxable value of one line BEFORE its own GST — a tax-inclusive rate
+// already contains GST, so it's extracted first rather than taxed twice.
+const calcItemTaxable = (it) => {
   const rate = parseFloat(it.rate) || 0;
   const qty = parseInt(it.quantity) || 0;
-  const subtotal = rate * qty;
+  const gstRate = parseFloat(it.gstRate) || 0;
+  const unitTaxable = it.taxInclusive ? rate / (1 + gstRate / 100) : rate;
+  const subtotal = unitTaxable * qty;
   const disc = parseFloat(it.discount) || 0;
   return it.discountType === "percentage" ? subtotal * (1 - disc / 100) : subtotal - disc;
+};
+// Line total INCLUDING that line's own GST — every line is taxed at its own
+// rate (never a single overall rate applied to the whole document), same
+// engine shared/documentTemplates.js's computeDocument() uses for the real
+// invoice PDF, so this preview never disagrees with what gets billed.
+const calcItemAmount = (it) => {
+  const taxable = calcItemTaxable(it);
+  const gstRate = parseFloat(it.gstRate) || 0;
+  return taxable + taxable * (gstRate / 100);
 };
 
 /*
@@ -39,6 +52,11 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
 
   const [deals, setDeals] = useState([]);
   const [dealId, setDealId] = useState("");
+  // Org's own registered state — compared against the selected customer's
+  // billing state to auto-decide intra vs inter-state, same pattern
+  // InvoiceForm.jsx uses (GET /branding). The transactionType field stays a
+  // manual dropdown too, so this is just a sensible default, not a lock.
+  const [sellerState, setSellerState] = useState("");
 
   const [catalog, setCatalog] = useState([]);
   const [itemSearch, setItemSearch] = useState("");
@@ -50,7 +68,6 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [endDate, setEndDate] = useState("");
   const [transactionType, setTransactionType] = useState("intra");
-  const [gstRate, setGstRate] = useState(0);
   const [discountType, setDiscountType] = useState("fixed");
   const [discountValue, setDiscountValue] = useState(0);
   const [notes, setNotes] = useState("");
@@ -75,7 +92,22 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
         setCatalog(Array.isArray(list) ? list.filter((it) => it.type !== "service" || true) : []);
       })
       .catch(() => setCatalog([]));
+    API.get("/branding")
+      .then((res) => setSellerState((res.data?.state || "").trim().toLowerCase()))
+      .catch(() => {});
   }, []);
+
+  // Picking a customer auto-decides intra/inter-state by comparing the org's
+  // own state to that deal's linked Company billing state — the dropdown
+  // below still lets the user override it manually afterward.
+  const handleDealChange = (id) => {
+    setDealId(id);
+    const selected = deals.find((d) => d._id === id);
+    const customerState = (selected?.company?.billingAddress?.state || "").trim().toLowerCase();
+    if (sellerState && customerState) {
+      setTransactionType(sellerState !== customerState ? "inter" : "intra");
+    }
+  };
 
   useEffect(() => {
     if (!editingSubscription) return;
@@ -103,7 +135,6 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
     setStartDate(editingSubscription.startDate ? new Date(editingSubscription.startDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
     setEndDate(editingSubscription.endDate ? new Date(editingSubscription.endDate).toISOString().split("T")[0] : "");
     setTransactionType(editingSubscription.transactionType || "intra");
-    setGstRate(editingSubscription.gstRate || 0);
     setDiscountType(editingSubscription.discount?.type || "fixed");
     setDiscountValue(editingSubscription.discount?.value || 0);
     setNotes(editingSubscription.notes || "");
@@ -151,20 +182,46 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
   };
   const removeLine = (key) => setLines((prev) => prev.filter((l) => l._key !== key));
 
-  const subtotal = lines.reduce((sum, l) => sum + calcItemAmount(l), 0);
-  const afterDiscount = discountValue > 0
-    ? (discountType === "percentage" ? subtotal * (1 - discountValue / 100) : subtotal - discountValue)
-    : subtotal;
-  const totalWithGst = gstRate > 0 ? afterDiscount * (1 + gstRate / 100) : afterDiscount;
+  // Same math as the backend's calculateAmountFromItems — a flat document
+  // discount spreads proportionally across every line BEFORE each line's own
+  // GST is applied, so this preview never disagrees with what gets saved.
+  const grossTaxable = lines.reduce((sum, l) => sum + calcItemTaxable(l), 0);
+  const documentDiscount = discountValue > 0
+    ? (discountType === "percentage" ? grossTaxable * (discountValue / 100) : Math.min(discountValue, grossTaxable))
+    : 0;
+  const netFactor = grossTaxable > 0 ? (grossTaxable - documentDiscount) / grossTaxable : 1;
+  const afterDiscount = grossTaxable - documentDiscount;
+  const totalWithGst = lines.reduce((sum, l) => {
+    const taxable = calcItemTaxable(l) * netFactor;
+    const gst = parseFloat(l.gstRate) || 0;
+    return sum + taxable + taxable * (gst / 100);
+  }, 0);
 
-  const dealOptions = deals.map((d) => ({
+  // Only Won deals are eligible customers. An Open deal is still being
+  // negotiated and a Lost one never converted — neither should be put on a
+  // recurring billing agreement. Deal statuses are org-configurable, so this
+  // matches the value case-insensitively, the same rule the backend enforces
+  // on create. When editing, the deal already on the subscription is kept in
+  // the list even if its status has since moved off Won, so the dropdown can
+  // still render its own current value instead of showing blank.
+  const wonDeals = useMemo(() => {
+    const eligible = deals.filter((d) => String(d.status || "").trim().toLowerCase() === "won");
+    const currentId = editingSubscription?.deal?._id || editingSubscription?.deal;
+    if (currentId && !eligible.some((d) => d._id === currentId)) {
+      const current = deals.find((d) => d._id === currentId);
+      if (current) return [current, ...eligible];
+    }
+    return eligible;
+  }, [deals, editingSubscription]);
+
+  const dealOptions = wonDeals.map((d) => ({
     _id: d._id,
     label: `${d.contact?.name || d.company?.name || d.title || "Untitled deal"}`,
   }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!dealId) return toast.error("Select a customer");
+    if (!dealId) return toast.error("Select a customer — only Won deals can be subscribed");
     if (lines.length === 0) return toast.error("Add at least one product or service");
     if (!startDate) return toast.error("Select a start date");
     if (endDate && new Date(endDate) < new Date(startDate)) return toast.error("End date can't be before the start date");
@@ -190,7 +247,6 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
         })),
         discount: { type: discountType, value: parseFloat(discountValue) || 0 },
         transactionType,
-        gstRate: parseFloat(gstRate) || 0,
         billingInterval: { value: parseInt(intervalValue, 10) || 1, unit: intervalUnit },
         startDate,
         endDate: endDate || null,
@@ -245,13 +301,21 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
         ) : (
           <div className="p-6 space-y-6">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Customer *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Customer / Won Deal *</label>
               <SearchableDropdown
                 options={dealOptions}
                 value={dealId}
-                onChange={setDealId}
-                placeholder="Select a customer"
+                onChange={handleDealChange}
+                placeholder="Search customer or deal…"
+                displayKey="label"
               />
+              {dealOptions.length === 0 ? (
+                <p className="text-[11px] text-amber-600 mt-1">
+                  No eligible customers found. A subscription can only be created for a Won deal.
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1">Only deals marked Won are billable.</p>
+              )}
             </div>
 
             <div>
@@ -296,7 +360,7 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
                       <th className="px-3 py-2 text-left">Item</th>
                       <th className="px-3 py-2 text-right w-20">Qty</th>
                       <th className="px-3 py-2 text-right w-28">Rate</th>
-                      <th className="px-3 py-2 text-right w-20">GST %</th>
+                      <th className="px-3 py-2 text-right w-20" title="Each item is taxed at its own GST rate — there's no single overall rate for the document.">GST %</th>
                       <th className="px-3 py-2 text-right">Amount</th>
                       <th className="px-3 py-2 w-10" />
                     </tr>
@@ -413,17 +477,7 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
                   <option value="intra">Intra-state</option>
                   <option value="inter">Inter-state</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Overall GST Rate %</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={gstRate}
-                  onChange={(e) => setGstRate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                />
+                <p className="text-[11px] text-gray-400 mt-1">Auto-set from your business state vs. the customer's — change it here if that doesn't apply.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Discount Type</label>
@@ -471,10 +525,10 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
 
             <div className="flex justify-end">
               <div className="w-64 space-y-1 text-sm text-gray-700">
-                <div className="flex justify-between"><span>Subtotal</span><span className="font-medium">{money(subtotal)}</span></div>
+                <div className="flex justify-between"><span>Subtotal (taxable)</span><span className="font-medium">{money(grossTaxable)}</span></div>
                 <div className="flex justify-between"><span>After discount</span><span className="font-medium">{money(afterDiscount)}</span></div>
                 <div className="flex justify-between text-base font-semibold text-gray-900 pt-1 border-t">
-                  <span>Per-cycle amount</span><span>{money(totalWithGst)}</span>
+                  <span>Per-cycle amount (incl. GST)</span><span>{money(totalWithGst)}</span>
                 </div>
               </div>
             </div>

@@ -13,6 +13,7 @@ const Task = require("../models/Task"); // for follow-up task
 const { google } = require("googleapis");
 const axios = require("axios");
 const { isZoomConfigured, createZoomMeeting } = require("../services/zoomService");
+const { processAdditionalFields } = require("../services/fieldCoercionService");
 const { isGoogleConfigured, createGoogleMeetEvent } = require("../services/googleMeetService");
 
 // Parses a search term as a calendar date so free-text search can match the
@@ -362,6 +363,7 @@ exports.createMeeting = async (req, res) => {
       linkedContactId,
       linkedDealId,
       linkedInvoiceId,
+      additionalFields,
     } = req.body;
 
     // Add the normalizeDate function (same as in createTask)
@@ -505,6 +507,16 @@ exports.createMeeting = async (req, res) => {
       meetingData.participants = participants;
     } else if (linkedTo === "vendor") {
       meetingData.vendor = vendorId;
+    }
+
+    // Coerce against the org's MeetingFields definitions, same treatment
+    // Task/Contact/Company/Vendor give their additionalFields on write.
+    if (additionalFields) {
+      meetingData.additionalFields = await processAdditionalFields(
+        "meeting",
+        additionalFields,
+        req.user.organization
+      );
     }
 
     const meeting = new Meeting(meetingData);
@@ -988,6 +1000,7 @@ exports.updateMeeting = async (req, res) => {
       linkedContactId,
       linkedDealId,
       linkedInvoiceId,
+      additionalFields,
     } = req.body;
 
     const meeting = await Meeting.findOne({
@@ -1064,6 +1077,13 @@ exports.updateMeeting = async (req, res) => {
     if (linkedContactId !== undefined) meeting.linkedContactId = linkedContactId || null;
     if (linkedDealId !== undefined) meeting.linkedDealId = linkedDealId || null;
     if (linkedInvoiceId !== undefined) meeting.linkedInvoiceId = linkedInvoiceId || null;
+    if (additionalFields !== undefined) {
+      meeting.additionalFields = await processAdditionalFields(
+        "meeting",
+        additionalFields,
+        req.user.organization
+      );
+    }
 
     meeting.updatedBy = req.user.id;
     await meeting.save();

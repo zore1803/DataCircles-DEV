@@ -5,6 +5,8 @@ const CompanyFields = require('../models/CompanyFields');
 const DealFields = require('../models/DealFields');
 const VendorFields = require('../models/VendorFields');
 const ItemFields = require('../models/ItemFields');
+const TaskFields = require('../models/TaskFields');
+const MeetingFields = require('../models/MeetingFields');
 
 const checkCustomFieldLimit = async (moduleName, newFields, userId, organizationId) => {
   try {
@@ -26,6 +28,8 @@ const checkCustomFieldLimit = async (moduleName, newFields, userId, organization
       dealFields: DealFields,
       vendorFields: VendorFields,
       itemFields: ItemFields,
+      taskFields: TaskFields,
+      meetingFields: MeetingFields,
     };
 
     const FieldModel = modelMap[moduleName];

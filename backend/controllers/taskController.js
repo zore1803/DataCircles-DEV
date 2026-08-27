@@ -6,6 +6,7 @@ const Deal = require("../models/Deal");
 const Vendor = require("../models/Vendor");
 const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
+const { processAdditionalFields } = require("../services/fieldCoercionService");
 
 // Parses a search term as a calendar date so free-text search can match the
 // "Due Date" column, which the UI renders as D/M/YYYY (toLocaleDateString).
@@ -142,6 +143,17 @@ const createTask = async (req, res) => {
       createdBy: req.user.id,
       organization: req.user.organization,
     };
+
+    // Coerce against the org's TaskFields definitions (number -> Number,
+    // dropdown/text -> String, etc) — same treatment Contact/Company/Vendor
+    // give their additionalFields on write.
+    if (req.body.additionalFields) {
+      taskData.additionalFields = await processAdditionalFields(
+        "task",
+        req.body.additionalFields,
+        req.user.organization
+      );
+    }
 
     const task = await Task.create(taskData);
 
@@ -654,7 +666,17 @@ const updateTask = async (req, res) => {
     }
 
     const prevUsers = task.users.map((u) => u.toString());
-    await task.updateOne(req.body);
+
+    const updatePayload = { ...req.body };
+    if (updatePayload.additionalFields) {
+      updatePayload.additionalFields = await processAdditionalFields(
+        "task",
+        updatePayload.additionalFields,
+        req.user.organization
+      );
+    }
+
+    await task.updateOne(updatePayload);
 
     // Get updated task with populated fields
     const updatedTask = await Task.findById(req.params.id)

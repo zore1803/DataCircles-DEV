@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
+import CustomFieldsSection from "../common/CustomFieldsSection";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -214,6 +215,7 @@ const initialState = {
   contactId: null,
   companyId: null,
   vendorId: null,
+  additionalFields: [],
 };
 
 const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
@@ -569,6 +571,8 @@ const AdminMeetingForm = ({
   companyName = "",
 }) => {
   const [form, setForm] = useState(initialState);
+  // Org's MeetingFields definitions — drives the Custom Fields section below.
+  const [meetingFieldDefs, setMeetingFieldDefs] = useState([]);
   const { meetingTypes } = useSystemSettings();
   // Which of the Entity Type/Related To/Duration/Meeting Type/Priority
   // dropdowns is open, if any — shared so opening one closes the others
@@ -701,6 +705,9 @@ const AdminMeetingForm = ({
       API.get("/invoices")
         .then((res) => setLinkableInvoices(res.data || []))
         .catch(() => setLinkableInvoices([]));
+      API.get("/meeting-fields")
+        .then((res) => setMeetingFieldDefs(res.data?.fields || []))
+        .catch(() => setMeetingFieldDefs([]));
 
       if (meetingData && mode === "view") {
         const initialFormData = {
@@ -880,6 +887,7 @@ const AdminMeetingForm = ({
         scheduledAt: getScheduledAt(),
         participants: form.participants || [],
         internalParticipants: form.internalParticipants || [],
+        additionalFields: form.additionalFields || [],
       };
 
       if (form.linkedTo === "contact") {
@@ -1330,6 +1338,26 @@ const AdminMeetingForm = ({
                     onOpenChange={(open) => setOpenDropdown(open ? "linkedInvoice" : null)}
                   />
                 </div>
+
+                {meetingFieldDefs.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <span className="flex-1 h-px bg-[#D9D9D9]" />
+                      <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                        Custom Fields
+                      </h3>
+                      <span className="flex-1 h-px bg-[#D9D9D9]" />
+                    </div>
+                    <fieldset disabled={readOnly}>
+                      <CustomFieldsSection
+                        fieldDefs={meetingFieldDefs}
+                        values={form.additionalFields}
+                        onChange={(next) => handleChange("additionalFields", next)}
+                        title=""
+                      />
+                    </fieldset>
+                  </>
+                )}
 
                 {/* Conflict Alert */}
                 {timeConflict && (

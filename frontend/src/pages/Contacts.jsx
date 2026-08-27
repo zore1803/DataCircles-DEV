@@ -19,6 +19,7 @@ import {
   Phone,
   User,
   MoreVertical,
+  RefreshCw,
   Trash2,
   Edit2,
   CheckSquare,
@@ -63,14 +64,14 @@ import { Settings } from "lucide-react"; // Add this to your lucide-react import
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import {
-  lifecycleStageOptions, // Added
-  allLifecycleStages, // Added
-  allStageStatuses, // Added
-  getLifecycleStageForStatus, // Added
-  getColumnColor,
+  lifecycleStageOptions,
+  allLifecycleStages,
+  allStageStatuses,
+  getLifecycleStageForStatus,
   getBadgeColor,
 } from "../utils/contactConstants";
 import StatusDropdown from "../components/contact/StatusDropdown";
+import ContactStatusModal from "../components/contact/ContactStatusModal";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useContactStore from "../store/useContactStore";
 import AddToContactHotlistModal from "../components/contact/AddToContactHotlistModal";
@@ -188,6 +189,8 @@ function Contacts() {
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
+  // Contact whose lifecycle is being edited via the row menu's Change Status.
+  const [statusModalContact, setStatusModalContact] = useState(null);
   const rowActionsRef = useRef(null);
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
@@ -799,9 +802,9 @@ function Contacts() {
             // menu portals to document.body, which paints inside the zoom),
             // flip upward when there isn't room below, clamp on both axes.
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 130;
+            const MENU_W = 150;
             const MARGIN = 8;
-            const MENU_H = 180; // Quick View + Edit + Add to Folder + Star + divider + Delete
+            const MENU_H = 210; // Quick View + Edit + Change Status + Add to Folder + Star + divider + Delete
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -832,7 +835,7 @@ function Contacts() {
               ref={rowActionsRef}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               onMouseDown={(e) => e.stopPropagation()}
-              className="w-[130px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-[150px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               <button
                 onClick={(e) => {
@@ -855,6 +858,17 @@ function Contacts() {
               >
                 <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMenu();
+                  setStatusModalContact(contact);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Change Status
               </button>
               <button
                 onClick={(e) => {
@@ -1220,30 +1234,47 @@ function Contacts() {
     enableColumnResizing: true,
   });
 
-  const handleStatusUpdate = async (contact, newStatus) => {
+  // The single write path for a lifecycle change, used by the inline status
+  // dropdown, the row menu's Change Status modal, and the Kanban drop.
+  //
+  // It takes a contact ID and BOTH lifecycle fields. It used to take a contact
+  // OBJECT and a status alone, while its only caller (StatusDropdown) passed
+  // an ID — so `contact._id` was undefined and every inline status change sent
+  // PUT /contacts/undefined. It also sent stageStatus without lifecycleStage,
+  // which the API accepts per-field, leaving the two contradicting each other.
+  // Both are fixed: ID in, pair out, against the endpoint that validates the
+  // combination.
+  const handleStatusUpdate = async (contactId, lifecycleStage, stageStatus) => {
+    const previousContact = contacts.find((c) => c._id === contactId);
+    const loadingToast = toast.loading("Updating status...");
+
+    // Optimistic — rolled back below if the API rejects the combination.
+    setContacts((prev) =>
+      prev.map((c) => (c._id === contactId ? { ...c, lifecycleStage, stageStatus } : c)),
+    );
+
     try {
-      const loadingToast = toast.loading("Updating status...");
-      await API.put(`/contacts/${contact._id}`, {
-        stageStatus: newStatus,
+      await API.put(`/contacts/${contactId}/lifecycle-stage`, {
+        lifecycleStage,
+        stageStatus,
       });
       toast.success("Status updated", { id: loadingToast });
-
-      // Optimistic update
-      setContacts((prev) =>
-        prev.map((c) =>
-          c._id === contact._id ? { ...c, stageStatus: newStatus } : c,
-        ),
-      );
-
-      // No need to fetch data immediately if we update optimistically, but let's do it to be safe
-      // fetchData();
     } catch (error) {
       console.error("Failed to update status", error);
-      if (error.response?.status === 402) {
-        toast.error(error.response?.data?.message || "An active subscription is required to make changes.");
-      } else {
-        toast.error(error.response?.data?.error || "Failed to update status");
+      if (previousContact) {
+        setContacts((prev) =>
+          prev.map((c) => (c._id === contactId ? previousContact : c)),
+        );
       }
+      if (error.response?.status === 402) {
+        toast.error(error.response?.data?.message || "An active subscription is required to make changes.", { id: loadingToast });
+      } else {
+        toast.error(
+          error.response?.data?.error || error.response?.data?.message || "Failed to update status",
+          { id: loadingToast },
+        );
+      }
+      throw error;
     }
   };
 
@@ -1452,260 +1483,12 @@ function Contacts() {
     );
   };
 
-  // Component for the hierarchical status dropdown with logical coloring (Mobile Responsive)
-  const LifecycleStageDropdown = ({ contact, onUpdate }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedStage, setSelectedStage] = useState(
-      contact.lifecycleStage || "Lead",
-    );
-    const [selectedStatus, setSelectedStatus] = useState(
-      contact.stageStatus || "New",
-    );
-
-    // Lifecycle stage options with logical colors
-    const lifecycleStageOptions = {
-      Lead: [
-        { name: "New", color: "bg-red-100 text-red-800 border-red-200" },
-        {
-          name: "Contacted",
-          color: "bg-yellow-100 text-yellow-800 border-yellow-200",
-        },
-        {
-          name: "Interested",
-          color: "bg-blue-100 text-blue-800 border-blue-200",
-        },
-        {
-          name: "Unqualified",
-          color: "bg-red-200 text-red-900 border-red-300",
-        },
-      ],
-      "Sales Qualified Lead": [
-        {
-          name: "Qualified",
-          color: "bg-blue-100 text-blue-800 border-blue-200",
-        },
-        { name: "Lost", color: "bg-red-300 text-red-900 border-red-400" },
-      ],
-      Customer: [
-        { name: "Won", color: "bg-green-100 text-green-800 border-green-200" },
-        { name: "Churned", color: "bg-gray-200 text-gray-800 border-gray-300" },
-      ],
-    };
-
-    const allLifecycleStages = Object.keys(lifecycleStageOptions);
-
-    const handleSave = async () => {
-      try {
-        await onUpdate(contact._id, selectedStage, selectedStatus);
-        setIsOpen(false);
-        toast.success("Contact lifecycle stage updated successfully!");
-      } catch (error) {
-        console.error("Failed to update lifecycle stage:", error);
-        toast.error(
-          error.response?.data?.message || "Failed to update lifecycle stage",
-        );
-      }
-    };
-
-    const handleCancel = () => {
-      setSelectedStage(contact.lifecycleStage || "Lead");
-      setSelectedStatus(contact.stageStatus || "New");
-      setIsOpen(false);
-    };
-
-    const handleStageChange = (newStage) => {
-      setSelectedStage(newStage);
-      setSelectedStatus(lifecycleStageOptions[newStage][0].name);
-    };
-
-    if (!isOpen) {
-      const currentStatusOptions =
-        lifecycleStageOptions[contact.lifecycleStage || "Lead"] || [];
-      const currentStatusObj = currentStatusOptions.find(
-        (s) => s.name === (contact.stageStatus || "New"),
-      );
-      const displayColor = currentStatusObj
-        ? currentStatusObj.color
-        : "bg-gray-100 text-gray-700 border-gray-200";
-
-      return (
-        <div
-          className={`cursor-pointer hover:opacity-80 rounded-lg px-3 py-1.5 text-xs border transition-all duration-200 font-semibold ${displayColor}`}
-          onClick={() => setIsOpen(true)}
-        >
-          {contact.stageStatus || "New"}
-        </div>
-      );
-    }
-
-    if (isMobile) {
-      return (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md mx-4 rounded-xl shadow-2xl">
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Update Status</h3>
-                <button
-                  onClick={handleCancel}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <div className="p-4 space-y-4 max-h-80 overflow-y-auto">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Lifecycle stage
-                </label>
-                <select
-                  value={selectedStage}
-                  onChange={(e) => handleStageChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {allLifecycleStages.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Status
-                </label>
-                <div className="grid grid-cols-1 gap-2">
-                  {lifecycleStageOptions[selectedStage]?.map((statusObj) => (
-                    <button
-                      key={statusObj.name}
-                      onClick={() => setSelectedStatus(statusObj.name)}
-                      className={`
-                        w-full px-4 py-3 rounded-lg border text-center font-semibold transition-all duration-200
-                        ${selectedStatus === statusObj.name
-                          ? statusObj.color +
-                          " ring-2 ring-blue-400 ring-offset-1"
-                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                        }
-                      `}
-                    >
-                      {statusObj.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-t bg-white border-gray-200">
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCancel}
-                  className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[9999]"
-        onClick={handleCancel} // Close on backdrop click
-      >
-        <div
-          className="bg-white rounded-xl shadow-2xl p-6 min-w-[320px] max-w-md mx-4"
-          onClick={(e) => e.stopPropagation()} // Prevent backdrop click from closing when clicking inside modal
-        >
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Update Status</h3>
-              <button
-                onClick={handleCancel}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Lifecycle stage
-              </label>
-              <select
-                value={selectedStage}
-                onChange={(e) => handleStageChange(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {allLifecycleStages.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Status
-              </label>
-              <div className="space-y-2">
-                {lifecycleStageOptions[selectedStage]?.map((statusObj) => (
-                  <label
-                    key={statusObj.name}
-                    className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors"
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value={statusObj.name}
-                      checked={selectedStatus === statusObj.name}
-                      onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="sr-only"
-                    />
-                    <div
-                      className={`
-                    flex-1 px-3 py-2 rounded-lg border text-center font-semibold transition-all duration-200
-                    ${selectedStatus === statusObj.name
-                          ? statusObj.color +
-                          " ring-2 ring-blue-400 ring-offset-1"
-                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                        }
-                  `}
-                    >
-                      {statusObj.name}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex space-x-2 pt-2 border-t border-gray-200 mt-4">
-              <button
-                onClick={handleCancel}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // The hierarchical LifecycleStageDropdown that lived here was the THIRD
+  // definition of the lifecycle map (after backend/constants/contactLifecycle.js
+  // and utils/contactConstants.js) — and it was never rendered. It has been
+  // replaced by components/contact/ContactStatusModal.jsx, which is the same
+  // stage-then-status UI reading the shared constants, and is now actually
+  // wired up: the row menu's "Change Status" action opens it.
 
   // Pagination lives in the Zustand store, so it OUTLIVES this component —
   // leaving the page on 3 and coming back would otherwise remount still on 3.
@@ -2304,24 +2087,10 @@ function Contacts() {
     }
   };
 
-  const handleLifecycleStageUpdate = async (
-    contactId,
-    lifecycleStage,
-    stageStatus,
-  ) => {
-    try {
-      await API.put(`/contacts/${contactId}/lifecycle-stage`, {
-        lifecycleStage,
-        stageStatus,
-      });
-      await fetchData();
-      toast.success("Contact lifecycle stage updated successfully!");
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error || "Failed to update lifecycle stage",
-      );
-    }
-  };
+  // handleLifecycleStageUpdate lived here — a second, unused copy of the same
+  // PUT that handleStatusUpdate already does. Every lifecycle write now goes
+  // through handleStatusUpdate (inline dropdown, Change Status modal) or
+  // handleKanbanItemMove (drag), both sending lifecycleStage + stageStatus.
 
   const handleKanbanItemMove = async (contactId, newStatus) => {
     const newLifecycleStage = getLifecycleStageForStatus(newStatus);
@@ -2972,7 +2741,12 @@ function Contacts() {
           {/* Content Area */}
           {showKanban ? (
             <div className="flex gap-4 px-6 pt-6 pb-2 h-full">
-              {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
+              {/* The board is the LEAD pipeline, so its columns are exactly the
+                  Lead stage's statuses — bound to the shared map rather than
+                  re-typed, so adding a Lead status can't leave a column out.
+                  Moving a card across all three lifecycle stages is done from
+                  the row menu's Change Status, not by drag. */}
+              {lifecycleStageOptions.Lead.map((col) => {
                 const count = sortedContacts.filter(
                   (c) => (c.stageStatus || "New") === col
                 ).length;
@@ -3436,6 +3210,15 @@ function Contacts() {
         module="contacts"
       />
       {/* Add to Folder Modal */}
+      {/* Change Status — the row menu's lifecycle editor. Sends BOTH
+          lifecycleStage and stageStatus through handleStatusUpdate, the same
+          path the inline dropdown and the Kanban drop use. */}
+      <ContactStatusModal
+        contact={statusModalContact}
+        isOpen={!!statusModalContact}
+        onClose={() => setStatusModalContact(null)}
+        onSave={handleStatusUpdate}
+      />
       <AddToContactHotlistModal
         isOpen={showAddToHotlistModal}
         onClose={() => setShowAddToHotlistModal(false)}

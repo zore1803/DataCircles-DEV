@@ -27,6 +27,12 @@ import {
   EyeOff
 } from "lucide-react";
 import AppToaster from "../AppToaster";
+import {
+  lifecycleStageOptions,
+  allLifecycleStages,
+  defaultStatusForStage,
+  getLifecycleStageForStatus,
+} from "../../utils/contactConstants";
 
 // Lifecycle Stage Modal Component  
 const LifecycleStageModal = ({ isOpen, onClose, contact, onUpdate }) => {
@@ -34,17 +40,14 @@ const LifecycleStageModal = ({ isOpen, onClose, contact, onUpdate }) => {
   const [selectedStatus, setSelectedStatus] = useState(contact.stageStatus || "New");
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const lifecycleStageOptions = {
-    "Lead": ["New", "Contacted", "Interested", "Unqualified"],
-    "Sales Qualified Lead": ["Qualified", "Lost"],
-    "Customer": ["Won", "Churned"]
-  };
-
-  const allLifecycleStages = Object.keys(lifecycleStageOptions);
+  // Stages and statuses come from utils/contactConstants.js — this component
+  // used to hold its own copy, which is how the lifecycle ended up defined in
+  // four places (backend, contactConstants, Contacts.jsx, here) with two of
+  // them disagreeing.
 
   const handleStageChange = (newStage) => {
     setSelectedStage(newStage);
-    setSelectedStatus(lifecycleStageOptions[newStage][0]);
+    setSelectedStatus(defaultStatusForStage(newStage));
   };
 
   const handleSave = async () => {
@@ -252,14 +255,11 @@ const LifecycleStages = ({ contact, onContactUpdate }) => {
     try {
       setIsUpdating(true);
 
-      let lifecycleStage = contact.lifecycleStage;
-      if (['New', 'Contacted', 'Interested', 'Unqualified'].includes(targetStatus)) {
-        lifecycleStage = 'Lead';
-      } else if (['Qualified', 'Lost'].includes(targetStatus)) {
-        lifecycleStage = 'Sales Qualified Lead';
-      } else if (['Won', 'Churned'].includes(targetStatus)) {
-        lifecycleStage = 'Customer';
-      }
+      // Was a hand-written status -> stage chain that silently fell back to
+      // the contact's CURRENT stage when a status didn't match any branch,
+      // which would send a contradicting pair. The shared helper resolves
+      // every status to its one stage.
+      const lifecycleStage = getLifecycleStageForStatus(targetStatus);
 
       await API.put(`/contacts/${contact._id}/lifecycle-stage`, {
         lifecycleStage,

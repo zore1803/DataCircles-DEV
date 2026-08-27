@@ -1,11 +1,15 @@
 const ContactFields = require("../models/ContactFields");
 const CompanyFields = require("../models/CompanyFields");
 const VendorFields = require("../models/VendorFields");
+const TaskFields = require("../models/TaskFields");
+const MeetingFields = require("../models/MeetingFields");
 
 const FIELD_MODEL_BY_MODULE = {
   contact: ContactFields,
   company: CompanyFields,
   vendor: VendorFields,
+  task: TaskFields,
+  meeting: MeetingFields,
 };
 
 /**

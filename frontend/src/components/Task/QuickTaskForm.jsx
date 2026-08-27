@@ -26,6 +26,7 @@ import QuickContactForm from "../contact/QuickContactForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import CustomFieldsSection from "../common/CustomFieldsSection";
 
 // isOpen/onOpenChange are controlled by the parent form (a single shared
 // "which dropdown is open" key) rather than each instance owning its own
@@ -179,10 +180,13 @@ const QuickTaskForm = ({
     relationModel: "Company",
     relatedTo: "",
     users: [],
+    additionalFields: [],
   });
   const [deals, setDeals] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [users, setUsers] = useState([]);
+  // Org's TaskFields definitions — drives the Custom Fields section below.
+  const [taskFieldDefs, setTaskFieldDefs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
@@ -253,6 +257,7 @@ const QuickTaskForm = ({
       relationModel: rel.entityModel || "Company",
       relatedTo: rel.entityId?._id || rel.entityId || "",
       users: (editTask.users || []).map((u) => u._id || u),
+      additionalFields: editTask.additionalFields || [],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTask]);
@@ -270,6 +275,12 @@ const QuickTaskForm = ({
     } catch (err) {
       console.error("Failed to fetch data:", err);
       toast.error("Failed to fetch task-related data");
+    }
+    try {
+      const fieldsRes = await API.get("/task-fields");
+      setTaskFieldDefs(fieldsRes.data?.fields || []);
+    } catch {
+      setTaskFieldDefs([]);
     }
   };
 
@@ -447,6 +458,7 @@ const QuickTaskForm = ({
         // relationModel/relatedTo pair the form tracks internally gets
         // rejected by createTask's "at least one related entity" check.
         relatedEntities: [{ entityModel: form.relationModel, entityId: form.relatedTo }],
+        additionalFields: form.additionalFields,
       };
 
       const res = isEditing
@@ -805,6 +817,16 @@ const QuickTaskForm = ({
                       )}
                     </div>
                   </div>
+
+                  {taskFieldDefs.length > 0 && (
+                    <div className="pt-2 border-t border-gray-100">
+                      <CustomFieldsSection
+                        fieldDefs={taskFieldDefs}
+                        values={form.additionalFields}
+                        onChange={(next) => setForm((prev) => ({ ...prev, additionalFields: next }))}
+                      />
+                    </div>
+                  )}
               </div>
             </form>
           </div>

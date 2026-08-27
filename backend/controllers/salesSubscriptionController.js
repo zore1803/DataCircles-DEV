@@ -1,32 +1,72 @@
 const SalesSubscription = require("../models/SalesSubscription");
 const Invoice = require("../models/Invoice");
 const Deal = require("../models/Deal");
+const Contact = require("../models/Contact");
+const Company = require("../models/Company");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 const { syncDocumentStock } = require("../utils/inventorySync");
 
-// Same math shape as invoiceController.calculateItemAmount/calculateTotalAmount
-// — kept parallel so a subscription's `amount` always matches what its next
-// generated Invoice will actually bill.
-const calculateItemAmount = (item) => {
-  const rate = parseFloat(item.rate) || 0;
-  const quantity = parseInt(item.quantity) || 0;
-  const subtotal = rate * quantity;
-  const discount = parseFloat(item.discount) || 0;
-  if (item.discountType === "percentage") return subtotal * (1 - discount / 100);
-  return subtotal - discount;
-};
+// GST is decided PER LINE ITEM, never by one flat rate over the whole
+// document — a subscription billing both an 18%-GST product and a 5%-GST
+// product must tax each independently, then sum. This mirrors
+// shared/documentTemplates.js's computeDocument()/splitGst() exactly (the
+// actual engine that renders every generated Invoice's real PDF total), so
+// a subscription's stored `amount` never drifts from what that invoice will
+// actually show. `discount.type/value` at the document level still applies
+// proportionally across every line (a document-wide "10% off everything" is
+// legitimately document-level — GST rate is not).
+//
+// transactionType (intra/inter) deliberately does NOT enter this math: CGST
+// 9% + SGST 9% and IGST 18% are the same total either way — that flag only
+// changes which tax buckets the printed invoice reports under, decided once
+// for the whole document because a document has exactly one buyer/seller
+// pair (see the frontend's seller-state vs customer-state comparison).
+function calculateAmountFromItems(items, discount) {
+  const lines = (items || []).map((item) => {
+    const rate = parseFloat(item.rate) || 0;
+    const quantity = parseInt(item.quantity, 10) || 0;
+    const gstRate = parseFloat(item.gstRate) || 0;
+    // A tax-inclusive rate already contains its own GST — extract the
+    // taxable value first so it isn't taxed a second time.
+    const unitTaxable = item.taxInclusive ? rate / (1 + gstRate / 100) : rate;
+    const subtotal = unitTaxable * quantity;
+    const lineDiscount = parseFloat(item.discount) || 0;
+    const discountedSubtotal =
+      item.discountType === "percentage" ? subtotal * (1 - lineDiscount / 100) : subtotal - lineDiscount;
+    return { taxable: discountedSubtotal, gstRate };
+  });
 
-const calculateTotalAmount = (items, discount, gstRate = 0, transactionType = "intra") => {
-  const subtotal = items.reduce((total, item) => total + calculateItemAmount(item), 0);
-  let netAmount = subtotal;
-  if (discount && discount.value > 0) {
-    netAmount = discount.type === "percentage" ? subtotal * (1 - discount.value / 100) : subtotal - discount.value;
-  }
-  if (gstRate > 0) {
-    netAmount += netAmount * (gstRate / 100);
-  }
-  return netAmount;
-};
+  const grossTaxable = lines.reduce((sum, l) => sum + l.taxable, 0);
+  const discountValue = parseFloat(discount?.value) || 0;
+  const documentDiscount =
+    discountValue > 0
+      ? discount.type === "percentage"
+        ? grossTaxable * (discountValue / 100)
+        : Math.min(discountValue, grossTaxable)
+      : 0;
+  // Spreads the flat document-level discount proportionally across every
+  // line before taxing, same as computeDocument's netFactor.
+  const netFactor = grossTaxable > 0 ? (grossTaxable - documentDiscount) / grossTaxable : 1;
+
+  return lines.reduce((total, l) => {
+    const taxable = l.taxable * netFactor;
+    const tax = taxable * (l.gstRate / 100);
+    return total + taxable + tax;
+  }, 0);
+}
+
+// A subscription is a recurring-billing agreement with a CUSTOMER, and a Deal
+// only becomes a customer once it's Won — an Open deal is still being
+// negotiated and a Lost one never converted, so neither may be billed. Deal
+// statuses are org-configurable (see authController's default
+// ["Open","Won","Lost"] and KanbanBoard.statuses), so this matches on the
+// value case-insensitively rather than against a hardcoded enum. The
+// frontend's customer dropdown filters by the same rule — this is the
+// server-side enforcement of it, since the client list can be stale.
+const WON_STATUS = "won";
+function isWonDeal(dealDoc) {
+  return String(dealDoc?.status || "").trim().toLowerCase() === WON_STATUS;
+}
 
 // Count-based "SUB-00001" — mirrors SalesReturn/PurchaseReturn's own scheme.
 async function generateSubscriptionNumber(organizationId) {
@@ -60,6 +100,11 @@ exports.createSalesSubscription = async (req, res) => {
     if (!deal) return res.status(400).json({ message: "A customer (Deal) is required" });
     const dealDoc = await Deal.findOne({ _id: deal, organization: req.user.organization });
     if (!dealDoc) return res.status(404).json({ message: "Deal not found" });
+    if (!isWonDeal(dealDoc)) {
+      return res.status(400).json({
+        message: "A subscription can only be created for a Won deal — this deal is still " + (dealDoc.status || "Open") + ".",
+      });
+    }
 
     if (!items || items.length === 0) return res.status(400).json({ message: "At least one item is required" });
     if (!startDate) return res.status(400).json({ message: "A start date is required" });
@@ -67,9 +112,11 @@ exports.createSalesSubscription = async (req, res) => {
     const finalDiscount = discount && ["fixed", "percentage"].includes(discount.type)
       ? discount
       : { type: "fixed", value: 0 };
+    // gstRate stored on the document is informational only now (each item
+    // already carries its own real rate) — never multiplied into the total.
     const finalGstRate = parseFloat(gstRate) || 0;
     const finalTxnType = transactionType || "intra";
-    const amount = calculateTotalAmount(items, finalDiscount, finalGstRate, finalTxnType);
+    const amount = calculateAmountFromItems(items, finalDiscount);
 
     const subscriptionNumber = await generateSubscriptionNumber(req.user.organization);
 
@@ -113,11 +160,34 @@ exports.getAllSalesSubscriptionsWithPagination = async (req, res) => {
 
     const query = { organization: req.user.organization };
     if (search) {
+      // The list's Name column renders the customer off the populated deal
+      // (deal.contact.name / deal.company.name — see the frontend's
+      // customerOf()), which lives in another collection, so a plain $regex
+      // on this collection can never match it. Resolve the matching deals
+      // first and fold their ids into the $or, otherwise searching a customer
+      // name returns nothing even though the search box advertises it.
+      const nameRe = { $regex: search, $options: "i" };
+      const [matchingContacts, matchingCompanies] = await Promise.all([
+        Contact.find({ organization: req.user.organization, name: nameRe }).select("_id").lean(),
+        Company.find({ organization: req.user.organization, name: nameRe }).select("_id").lean(),
+      ]);
+      const matchingDeals = await Deal.find({
+        organization: req.user.organization,
+        $or: [
+          { contact: { $in: matchingContacts.map((c) => c._id) } },
+          { company: { $in: matchingCompanies.map((c) => c._id) } },
+          { title: nameRe },
+        ],
+      })
+        .select("_id")
+        .lean();
+
       query.$or = [
-        { subscriptionNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-        { notes: { $regex: search, $options: "i" } },
-        { "items.name": { $regex: search, $options: "i" } },
+        { subscriptionNumber: nameRe },
+        { status: nameRe },
+        { notes: nameRe },
+        { "items.name": nameRe },
+        { deal: { $in: matchingDeals.map((d) => d._id) } },
       ];
     }
     if (status) query.status = status;
@@ -190,16 +260,24 @@ exports.updateSalesSubscription = async (req, res) => {
         unit: ["day", "week", "month", "year"].includes(billingInterval.unit) ? billingInterval.unit : "month",
       };
     }
-    if (startDate !== undefined) subscription.startDate = startDate;
+    if (startDate !== undefined) {
+      subscription.startDate = startDate;
+      // Moving the start date only re-aims the schedule while nothing has
+      // been billed yet. Once invoices exist, the cycle is already running
+      // and nextInvoiceDate belongs to that running cycle — rewriting it
+      // would silently re-bill or skip a period the customer already has an
+      // invoice for.
+      if (subscription.invoiceCount === 0) subscription.nextInvoiceDate = startDate;
+    }
     if (endDate !== undefined) subscription.endDate = endDate || null;
     if (notes !== undefined) subscription.notes = notes;
     if (terms !== undefined) subscription.terms = terms;
     if (status !== undefined) subscription.status = status;
 
-    // Amount always recomputed from the current items/discount/gst — never
-    // trusted from the client, so it can't drift from what a generated
-    // invoice would actually total.
-    subscription.amount = calculateTotalAmount(subscription.items, subscription.discount, subscription.gstRate, subscription.transactionType);
+    // Amount always recomputed from the current items (each taxed at its own
+    // GST rate) + document-level discount — never trusted from the client,
+    // so it can't drift from what a generated invoice would actually total.
+    subscription.amount = calculateAmountFromItems(subscription.items, subscription.discount);
 
     await subscription.save();
     await subscription.populate(POPULATE);
@@ -250,6 +328,11 @@ exports.updateSalesSubscriptionStatus = async (req, res) => {
 async function generateInvoiceForSubscription(subscription, userId, organizationId) {
   const dealDoc = await Deal.findById(subscription.deal).populate("company");
   if (!dealDoc) throw new Error("Deal for this subscription no longer exists");
+  // Invoice.user is required. On the manual path this is always the caller;
+  // on the scheduled path it's the subscription's own owner, which older rows
+  // may not have — fail with something readable instead of a raw mongoose
+  // validation error landing in the subscription's lastError.
+  if (!userId) throw new Error("This subscription has no owner to bill under — reassign it and try again");
 
   const documentSettings = await getDocumentSettingsForOrganization(organizationId);
   const effectivePrefix = documentSettings.documentTypeSettings?.invoice?.prefix || documentSettings.invoicePrefix || "INV-";
@@ -273,20 +356,35 @@ async function generateInvoiceForSubscription(subscription, userId, organization
     receiverGSTIN = dealDoc.company.gstin || "";
   }
 
+  // The invoice recalculates its own total from the item lines rather than
+  // trusting the subscription's stored `amount` — a stale/hand-edited stored
+  // total must never become what a customer is actually billed. Same
+  // function the subscription itself uses, so in the normal case they agree.
+  const invoiceAmount = calculateAmountFromItems(subscription.items, subscription.discount);
+  // A tax invoice is one that actually charges GST — decided by whether any
+  // line carries a rate, NOT by the document-level `gstRate` field (which is
+  // informational only now that GST is per line item; see
+  // calculateAmountFromItems). Reading it from the old field made every
+  // subscription a non-tax invoice as soon as the form stopped sending it.
+  const chargesGst = (subscription.items || []).some((it) => (parseFloat(it.gstRate) || 0) > 0);
+
   const invoice = new Invoice({
     deal: subscription.deal,
     invoiceNumber,
     date: new Date(),
-    amount: subscription.amount,
+    amount: invoiceAmount,
     discount: subscription.discount,
     status: "Draft",
     items: subscription.items,
     notes: `Generated from Subscription ${subscription.subscriptionNumber}${subscription.notes ? `\n${subscription.notes}` : ""}`,
     terms: subscription.terms || "",
-    isTaxInvoice: (subscription.gstRate || 0) > 0,
+    isTaxInvoice: chargesGst,
     receiverGSTIN,
     billingAddress,
     shippingAddress,
+    // intra/inter only decides the CGST+SGST vs IGST split the printed
+    // invoice reports under — the total is identical either way, so it's
+    // copied straight through and never multiplied into the math above.
     transactionType: subscription.transactionType,
     gstRate: subscription.gstRate,
     user: userId,

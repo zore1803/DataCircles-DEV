@@ -26,6 +26,8 @@ import {
   Gift,
   FileText,
   Wallet as WalletIcon,
+  ListChecks,
+  CalendarClock,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -37,6 +39,8 @@ import DealFieldSettings from "../components/settings/DealFieldSettings";
 import HelpCenter from "../components/settings/HelpCenter";
 import VendorFieldSettings from "../components/settings/VendorFieldSettings";
 import ItemFieldSettings from "../components/settings/ItemFieldSettings";
+import TaskFieldSettings from "../components/settings/TaskFieldSettings";
+import MeetingFieldSettings from "../components/settings/MeetingFieldSettings";
 import FormsList from "../components/settings/FormsList";
 import EmailNotifications from "../components/settings/EmailNotifications";
 import SubscriptionPlans from "../components/settings/SubscriptionPlans";
@@ -314,6 +318,30 @@ const Settings = () => {
       borderColor: "border-teal-200",
       hoverBg: "hover:bg-amber-50",
       component: <ItemFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "task-fields",
+      icon: <ListChecks className="w-5 h-5" />,
+      label: "Task Fields",
+      description: "Customize task data fields",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <TaskFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "meeting-fields",
+      icon: <CalendarClock className="w-5 h-5" />,
+      label: "Meeting Fields",
+      description: "Customize meeting data fields",
+      color: "text-violet-600",
+      bgColor: "bg-violet-50",
+      borderColor: "border-violet-200",
+      hoverBg: "hover:bg-violet-50",
+      component: <MeetingFieldSettings />,
       category: "Customization",
     },
     {

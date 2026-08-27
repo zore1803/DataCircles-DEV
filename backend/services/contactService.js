@@ -1,5 +1,11 @@
 const Contact = require("../models/Contact");
 const { processAdditionalFields } = require("./fieldCoercionService");
+const {
+  isValidCombination,
+  stageForStatus,
+  defaultStatusForStage,
+  invalidCombinationMessage,
+} = require("../constants/contactLifecycle");
 
 function normalizeSocialMedia(socialMedia) {
   return {
@@ -9,12 +15,6 @@ function normalizeSocialMedia(socialMedia) {
     whatsapp: socialMedia.whatsapp || "",
   };
 }
-
-const DEFAULT_STAGE_STATUSES = {
-  Lead: "New",
-  "Sales Qualified Lead": "Qualified",
-  Customer: "Won",
-};
 
 /**
  * Purpose: Create a Contact document from raw submitted data. Orchestration
@@ -63,7 +63,16 @@ async function createContact(
   }
 
   if (!contactData.stageStatus) {
-    contactData.stageStatus = DEFAULT_STAGE_STATUSES[contactData.lifecycleStage];
+    contactData.stageStatus = defaultStatusForStage(contactData.lifecycleStage);
+  }
+
+  // new Contact(...).save() below runs the model's pre-save pair check, so an
+  // invalid combination is already rejected — this only makes the message the
+  // caller sees identical to the one the update path produces.
+  if (!isValidCombination(contactData.lifecycleStage, contactData.stageStatus)) {
+    throw new Error(
+      invalidCombinationMessage(contactData.lifecycleStage, contactData.stageStatus)
+    );
   }
 
   if (rawData.additionalFields) {
@@ -123,8 +132,30 @@ async function updateContact(
     updateData.socialMedia = normalizeSocialMedia(rawData.socialMedia);
   }
 
+  // Lifecycle pair integrity. findOneAndUpdate below does NOT run the model's
+  // pre-save hook, so without this a partial update could persist a genuinely
+  // impossible contact — e.g. a status dropdown that sends only
+  // { stageStatus: "Won" } would leave lifecycleStage on "Lead" and mongoose's
+  // per-field enums would happily allow it, because each field is valid in
+  // isolation. Whichever half the caller sends, the other is filled in or
+  // checked here so the two can never disagree in the database.
   if (updateData.lifecycleStage && !updateData.stageStatus) {
-    updateData.stageStatus = DEFAULT_STAGE_STATUSES[updateData.lifecycleStage];
+    updateData.stageStatus = defaultStatusForStage(updateData.lifecycleStage);
+  } else if (updateData.stageStatus && !updateData.lifecycleStage) {
+    // Every status belongs to exactly one stage, so the stage is recoverable.
+    const derivedStage = stageForStatus(updateData.stageStatus);
+    if (!derivedStage) {
+      throw new Error(`Invalid stageStatus '${updateData.stageStatus}'`);
+    }
+    updateData.lifecycleStage = derivedStage;
+  }
+
+  if (updateData.lifecycleStage || updateData.stageStatus) {
+    if (!isValidCombination(updateData.lifecycleStage, updateData.stageStatus)) {
+      throw new Error(
+        invalidCombinationMessage(updateData.lifecycleStage, updateData.stageStatus)
+      );
+    }
   }
 
   if (rawData.additionalFields) {

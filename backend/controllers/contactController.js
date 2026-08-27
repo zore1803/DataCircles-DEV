@@ -5,6 +5,13 @@ const Deal = require("../models/Deal");
 const Meeting = require("../models/Meeting");
 const Task = require("../models/Task");
 const contactService = require("../services/contactService");
+const {
+  isValidStage,
+  isValidCombination,
+  stageForStatus,
+  defaultStatusForStage,
+  invalidCombinationMessage,
+} = require("../constants/contactLifecycle");
 
 const createContact = async (req, res) => {
   try {
@@ -424,30 +431,25 @@ const updateLifecycleStage = async (req, res) => {
       return res.status(404).json({ error: "Contact not found" });
     }
 
-    // Validate the combination
-    const stageStatusMap = {
-      Lead: ["New", "Contacted", "Interested", "Unqualified"],
-      "Sales Qualified Lead": ["Qualified", "Lost"],
-      Customer: ["Won", "Churned"],
-    };
+    // Resolve whichever half the caller omitted, then validate the pair —
+    // same rules as services/contactService.js's update path, both reading
+    // constants/contactLifecycle.js. A caller sending only a status (a Kanban
+    // drop, a status dropdown) gets its stage derived rather than silently
+    // leaving the two fields contradicting each other.
+    const nextStage =
+      lifecycleStage || (stageStatus ? stageForStatus(stageStatus) : contact.lifecycleStage);
+    const nextStatus =
+      stageStatus ||
+      (lifecycleStage ? defaultStatusForStage(lifecycleStage) : contact.stageStatus);
 
-    if (lifecycleStage && !stageStatusMap[lifecycleStage]) {
-      return res.status(400).json({ error: "Invalid lifecycle stage" });
+    if (!isValidStage(nextStage)) {
+      return res.status(400).json({ error: invalidCombinationMessage(nextStage, nextStatus) });
+    }
+    if (!isValidCombination(nextStage, nextStatus)) {
+      return res.status(400).json({ error: invalidCombinationMessage(nextStage, nextStatus) });
     }
 
-    if (
-      stageStatus &&
-      lifecycleStage &&
-      !stageStatusMap[lifecycleStage].includes(stageStatus)
-    ) {
-      return res.status(400).json({
-        error: `Invalid status '${stageStatus}' for lifecycle stage '${lifecycleStage}'`,
-      });
-    }
-
-    const updateData = {};
-    if (lifecycleStage) updateData.lifecycleStage = lifecycleStage;
-    if (stageStatus) updateData.stageStatus = stageStatus;
+    const updateData = { lifecycleStage: nextStage, stageStatus: nextStatus };
 
     await contact.updateOne(updateData);
     res.json({ message: "Contact lifecycle stage updated successfully" });

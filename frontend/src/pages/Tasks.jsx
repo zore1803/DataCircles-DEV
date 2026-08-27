@@ -482,6 +482,12 @@ function Tasks() {
   const [deals, setDeals] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [users, setUsers] = useState([]);
+  // Org's custom-field DEFINITIONS for tasks/meetings (see
+  // components/settings/TaskFieldSettings.jsx / MeetingFieldSettings.jsx) —
+  // drives the dynamic "Custom" columns appended below, same pattern
+  // Deals.jsx uses for dealFields.
+  const [taskFields, setTaskFields] = useState([]);
+  const [meetingFields, setMeetingFields] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -659,12 +665,42 @@ function Tasks() {
     { id: "url", label: "URL" },
   ];
 
-  const DEFAULT_TASK_COLUMNS = useMemo(() => TASK_TOGGLE_COLUMNS.map((col, i) => ({
-    key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
-  })), []);
-  const DEFAULT_MEETING_COLUMNS = useMemo(() => MEETING_TOGGLE_COLUMNS.map((col, i) => ({
-    key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
-  })), []);
+  // Custom-field columns are hidden by default (like Deals.jsx's dealFields
+  // columns) — an org that hasn't defined any sees the same 6/5 columns as
+  // before; one that has can turn them on from Column Settings, where they
+  // carry the "Custom" badge (see ColumnSettingsPanel's isCustomField check).
+  const DEFAULT_TASK_COLUMNS = useMemo(() => {
+    const base = TASK_TOGGLE_COLUMNS.map((col, i) => ({
+      key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
+    }));
+    const custom = (taskFields || []).map((field, i) => ({
+      key: `custom:${field.name}`,
+      label: field.name,
+      visible: false,
+      order: base.length + i,
+      isCustomField: true,
+      type: field.type || "text",
+      options: field.options,
+      description: `Custom field: ${field.name}`,
+    }));
+    return [...base, ...custom];
+  }, [taskFields]);
+  const DEFAULT_MEETING_COLUMNS = useMemo(() => {
+    const base = MEETING_TOGGLE_COLUMNS.map((col, i) => ({
+      key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
+    }));
+    const custom = (meetingFields || []).map((field, i) => ({
+      key: `custom:${field.name}`,
+      label: field.name,
+      visible: false,
+      order: base.length + i,
+      isCustomField: true,
+      type: field.type || "text",
+      options: field.options,
+      description: `Custom field: ${field.name}`,
+    }));
+    return [...base, ...custom];
+  }, [meetingFields]);
   const { columns: taskColumnSettings, saveColumns: saveTaskColumns } = useColumnSettings("tasks", DEFAULT_TASK_COLUMNS);
   const { columns: meetingColumnSettings, saveColumns: saveMeetingColumns } = useColumnSettings("meetings", DEFAULT_MEETING_COLUMNS);
 
@@ -912,6 +948,19 @@ function Tasks() {
       setUsers(usr.data?.allUsers || []);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to load related data");
+    }
+    // Custom field definitions fail silently — an org with none defined is
+    // the normal case, not an error worth a toast.
+    try {
+      const [tf, mf] = await Promise.all([
+        API.get("/task-fields"),
+        API.get("/meeting-fields"),
+      ]);
+      setTaskFields(tf.data?.fields || []);
+      setMeetingFields(mf.data?.fields || []);
+    } catch {
+      setTaskFields([]);
+      setMeetingFields([]);
     }
   };
 
@@ -2218,6 +2267,27 @@ function Tasks() {
           );
         },
       }),
+      // One react-table column per org-defined TaskFields entry, keyed
+      // "custom:<name>" to match DEFAULT_TASK_COLUMNS above. Hidden unless
+      // the user turns it on via Column Settings; value read straight off
+      // Task.additionalFields (see models/Task.js), no lookup needed since
+      // the key IS the field name.
+      ...(taskFields || []).map((field) =>
+        taskColumnHelper.accessor((row) => row.additionalFields?.find((f) => f.key === field.name)?.value, {
+          id: `custom:${field.name}`,
+          size: 180,
+          header: () => renderHeaderMenu(`custom:${field.name}`, field.name, { sortable: false }),
+          cell: ({ getValue }) => {
+            const val = getValue();
+            const text = val === undefined || val === null || val === "" ? "—" : String(val);
+            return (
+              <div className="truncate text-gray-700" title={text}>
+                <HighlightText text={text} query={searchTerm} />
+              </div>
+            );
+          },
+        })
+      ),
     ],
     [
       tasks,
@@ -2235,6 +2305,7 @@ function Tasks() {
       rowActionsPos,
       searchTerm,
       taskStatuses,
+      taskFields,
     ],
   );
 
@@ -2509,6 +2580,24 @@ function Tasks() {
           );
         },
       }),
+      // One react-table column per org-defined MeetingFields entry, same
+      // pattern as the task table's custom columns above.
+      ...(meetingFields || []).map((field) =>
+        meetingColumnHelper.accessor((row) => row.additionalFields?.find((f) => f.key === field.name)?.value, {
+          id: `custom:${field.name}`,
+          size: 180,
+          header: () => renderHeaderMenu(`custom:${field.name}`, field.name, { sortable: false }),
+          cell: ({ getValue }) => {
+            const val = getValue();
+            const text = val === undefined || val === null || val === "" ? "—" : String(val);
+            return (
+              <div className="truncate text-gray-700" title={text}>
+                <HighlightText text={text} query={searchTerm} />
+              </div>
+            );
+          },
+        })
+      ),
     ],
     [
       meetings,
@@ -2524,6 +2613,7 @@ function Tasks() {
       openRowActionsId,
       rowActionsPos,
       searchTerm,
+      meetingFields,
     ],
   );
 
