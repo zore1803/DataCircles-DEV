@@ -708,69 +708,71 @@ const QuickTaskForm = ({
                   )}
                 </div>
 
-                {/* Selected Date (Start Date) */}
-                <div ref={selectedDateRef}>
-                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Selected Date <span className="text-[#FF4935]">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={form.selectedDate}
-                    onChange={(e) => handleFormChange("selectedDate", e.target.value)}
-                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.selectedDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
-                      }`}
-                  />
-                  {validationErrors.selectedDate && (
-                    <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.selectedDate}</p>
-                  )}
+                {/* Selected Date + Due Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div ref={selectedDateRef}>
+                    <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Selected Date <span className="text-[#FF4935]">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.selectedDate}
+                      onChange={(e) => handleFormChange("selectedDate", e.target.value)}
+                      className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.selectedDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                        }`}
+                    />
+                    {validationErrors.selectedDate && (
+                      <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.selectedDate}</p>
+                    )}
+                  </div>
+
+                  <div ref={dueDateRef}>
+                    <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Due Date <span className="text-[#FF4935]">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.dueDate}
+                      min={form.selectedDate || ""}
+                      onChange={(e) => handleFormChange("dueDate", e.target.value)}
+                      className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.dueDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                        }`}
+                    />
+                    {validationErrors.dueDate && (
+                      <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.dueDate}</p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Due Date */}
-                <div ref={dueDateRef}>
-                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Due Date <span className="text-[#FF4935]">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={form.dueDate}
-                    min={form.selectedDate || ""}
-                    onChange={(e) => handleFormChange("dueDate", e.target.value)}
-                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.dueDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
-                      }`}
-                  />
-                  {validationErrors.dueDate && (
-                    <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.dueDate}</p>
-                  )}
-                </div>
+                {/* Status + Priority */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Status
+                    </label>
+                    <SingleSelectDropdown
+                      options={statusOptions}
+                      value={form.status}
+                      onChange={(val) => handleFormChange("status", val)}
+                      isOpen={openDropdown === "status"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
+                      dropUp={true}
+                    />
+                  </div>
 
-                {/* Status */}
-                <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Status
-                  </label>
-                  <SingleSelectDropdown
-                    options={statusOptions}
-                    value={form.status}
-                    onChange={(val) => handleFormChange("status", val)}
-                    isOpen={openDropdown === "status"}
-                    onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
-                    dropUp={true}
-                  />
-                </div>
-
-                {/* Priority */}
-                <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Priority
-                  </label>
-                  <SingleSelectDropdown
-                    options={priorityOptions}
-                    value={form.priority}
-                    onChange={(val) => handleFormChange("priority", val)}
-                    isOpen={openDropdown === "priority"}
-                    onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
-                    dropUp={true}
-                  />
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Priority
+                    </label>
+                    <SingleSelectDropdown
+                      options={priorityOptions}
+                      value={form.priority}
+                      onChange={(val) => handleFormChange("priority", val)}
+                      isOpen={openDropdown === "priority"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
+                      dropUp={true}
+                    />
+                  </div>
                 </div>
 
                 {/* Assignees */}
