@@ -1029,7 +1029,7 @@ function Login() {
 
   if (showSetupForm) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen w-full -my-6 -mx-8 flex items-center justify-center bg-white">
         <div className="max-w-md w-full space-y-8 p-8">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl overflow-hidden  mb-4">
