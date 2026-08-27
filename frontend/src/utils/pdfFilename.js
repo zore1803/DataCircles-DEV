@@ -130,6 +130,9 @@ export const extractDocData = (doc, docType, orgName = '') => {
     doc?.client?.name ||
     doc?.customer?.name ||
     doc?.vendor?.name ||
+    doc?.deal?.contact?.name ||
+    doc?.deal?.company?.name ||
+    doc?.deal?.title ||
     '';
 
   const rawDate =

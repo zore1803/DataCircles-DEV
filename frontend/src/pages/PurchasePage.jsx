@@ -48,7 +48,7 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AppToaster from "../components/AppToaster";
 import ExportModal from "../components/common/ExportModal";
-import { exportClientSide } from "../utils/clientExport";
+import { exportClientSide, formatINR } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -494,7 +494,7 @@ const PurchasePage = () => {
     { label: "Purchase Number", value: (p) => p.purchaseNumber },
     { label: "Vendor", value: (p) => p.vendor?.name },
     { label: "Purchase Date", value: (p) => new Date(p.createdAt).toLocaleDateString() },
-    { label: "Grand Total", value: (p) => p.grandTotal },
+    { label: "Grand Total", value: (p) => formatINR(p.grandTotal) },
     { label: "Status", value: (p) => p.status },
   ];
 
@@ -938,10 +938,10 @@ const PurchasePage = () => {
                   )}
                   <div className="border-t border-gray-100 my-1" />
                   <button
-                    disabled={p.status === "Cancelled"}
+                    disabled={p.status === "Cancelled" || p.status === "Paid"}
                     onClick={() => { closeRowMenu(); handleRecordPayment(p); }}
                     className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-                      p.status === "Cancelled" ? "text-gray-400 cursor-not-allowed" : "text-blue-600 hover:bg-blue-50"
+                      p.status === "Cancelled" || p.status === "Paid" ? "text-gray-400 cursor-not-allowed" : "text-blue-600 hover:bg-blue-50"
                     }`}
                   >
                     Record Payment
@@ -1671,7 +1671,7 @@ const PurchasePage = () => {
                     {/* Advanced filter button — opens AdvancedFilterPanel slide-in panel */}
                 <button
                   onClick={() => setShowAdvancedFilters(true)}
-                  className={`flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                  className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                     activeFilters.length > 0
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
@@ -1697,6 +1697,21 @@ const PurchasePage = () => {
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                      <button
+                        onClick={() => {
+                          setShowAdvancedFilters(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <FilterIcon size={14} className="text-gray-400" />
+                        Filters
+                        {activeFilters.length > 0 && (
+                          <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            {activeFilters.length}
+                          </span>
+                        )}
+                      </button>
                       <button
                         onClick={() => {
                           setShowImport(true);

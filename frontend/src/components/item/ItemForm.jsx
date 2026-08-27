@@ -703,6 +703,7 @@ const ItemForm = ({
                       <input
                         type="text"
                         name="sku"
+                        autoComplete="off"
                         value={currentVariant.sku}
                         onChange={handleVariantChange}
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"

@@ -509,7 +509,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                       <div>
                         <label className={lbl}>SKU</label>
                         <div className="flex gap-2">
-                          <input type="text" name="sku" value={currentVariant.sku} onChange={handleVariantChange} placeholder="Enter or Generate SKU" className={inp} />
+                          <input type="text" name="sku" autoComplete="off" value={currentVariant.sku} onChange={handleVariantChange} placeholder="Enter or Generate SKU" className={inp} />
                           <button type="button" onClick={generateVariantSku} className="flex-shrink-0 bg-[#158FFF] hover:opacity-90 text-white text-xs font-bold px-5 h-11 rounded-full transition-colors whitespace-nowrap font-inter">Generate</button>
                         </div>
                       </div>

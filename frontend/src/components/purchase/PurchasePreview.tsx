@@ -97,7 +97,7 @@ const PurchasePreview = ({ purchase, isOpen, onClose, onEdit, onDelete, onRecord
             Purchase Preview
           </h2>
           <div className="flex items-center gap-1">
-            {onRecordPayment && purchase.status !== "Cancelled" && (
+            {onRecordPayment && purchase.status !== "Cancelled" && purchase.status !== "Paid" && (
               <button
                 onClick={onRecordPayment}
                 title="Record Payment"

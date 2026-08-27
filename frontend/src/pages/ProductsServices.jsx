@@ -29,7 +29,7 @@ import ItemForm from "../components/item/ItemForm";
 import QuickItemDrawer from "../components/item/QuickItemDrawer";
 import ImportItems from "../components/item/ImportItems";
 import ExportModal from "../components/common/ExportModal";
-import { exportClientSide } from "../utils/clientExport";
+import { exportClientSide, formatINR } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -74,6 +74,7 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [imagePreviews, setImagePreviews] = useState([]);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(null);
 
   useEffect(() => {
     setShouldRender(true);
@@ -320,7 +321,8 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
                       key={index}
                       src={preview}
                       alt={`Image ${index + 1}`}
-                      className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                      className="w-full h-24 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                      onClick={() => setSelectedImageIndex(index)}
                     />
                   ))}
                 </div>
@@ -329,6 +331,27 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
           </div>
         </div>
       </div>
+
+      {/* Fullscreen Image Preview */}
+      {selectedImageIndex !== null && (
+        <div 
+          className="fixed inset-0 z-[10005] bg-black/90 flex items-center justify-center"
+          onClick={() => setSelectedImageIndex(null)}
+        >
+          <button 
+            className="absolute top-4 right-4 text-white hover:text-gray-300 p-2"
+            onClick={() => setSelectedImageIndex(null)}
+          >
+            <X size={24} />
+          </button>
+          <img 
+              src={imagePreviews[selectedImageIndex]} 
+              alt="Zoomed product preview" 
+              className="max-w-full max-h-[90vh] object-contain"
+              onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   );
 };
@@ -651,8 +674,8 @@ function ProductsServices() {
   const EXPORT_COLUMNS = [
     { label: "Name", value: (item) => item.name },
     { label: "Category", value: (item) => item.category },
-    { label: "Purchase Price", value: (item) => item.purchasePrice },
-    { label: "Selling Price", value: (item) => item.sellingPrice },
+    { label: "Purchase Price", value: (item) => getVariantPriceDisplay(item, "purchasePrice") || formatINR(item.purchasePrice) },
+    { label: "Selling Price", value: (item) => getVariantPriceDisplay(item, "sellingPrice") || formatINR(item.sellingPrice) },
     { label: "Status", value: (item) => (item.isActive ? "Active" : "Inactive") },
   ];
 
@@ -858,12 +881,27 @@ function ProductsServices() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const visibleColumns = useMemo(() => getVisibleColumns(), [columns]);
 
+  // An item's own purchasePrice/sellingPrice stay 0 once it has variants —
+  // pricing lives on each variant instead (see models/Item.js). Show the
+  // variant's price(s) in the list instead of the parent's zeroed fields:
+  // a single number when every variant shares one price (the common case,
+  // e.g. one variant per item), a min–max range when they differ.
+  const getVariantPriceDisplay = (item, field) => {
+    if (!item.variants || item.variants.length === 0) return null;
+    const values = item.variants.map((v) => Number(v[field]) || 0);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    return min === max
+      ? `₹${formatNumberFixed(min)}`
+      : `₹${formatNumberFixed(min)} - ₹${formatNumberFixed(max)}`;
+  };
+
   const getFieldValue = (item, key) => {
     if (key === "name") return item.name || "";
     if (key === "type") return item.type || "";
     if (key === "category") return item.category || "";
-    if (key === "purchasePrice") return `₹${formatNumberFixed(item.purchasePrice ?? 0)}`;
-    if (key === "sellingPrice") return `₹${formatNumberFixed(item.sellingPrice ?? 0)}`;
+    if (key === "purchasePrice") return getVariantPriceDisplay(item, "purchasePrice") || `₹${formatNumberFixed(item.purchasePrice ?? 0)}`;
+    if (key === "sellingPrice") return getVariantPriceDisplay(item, "sellingPrice") || `₹${formatNumberFixed(item.sellingPrice ?? 0)}`;
     if (key === "hsnSac") return item.hsnSac || "";
     if (key === "variants") return item.variants?.length ? `${item.variants.length} Variant${item.variants.length > 1 ? "s" : ""}` : "0 Variants";
     if (key === "isActive") return item.isActive ? "Active" : "In-Active";
@@ -1297,16 +1335,32 @@ function ProductsServices() {
                 </div>
               );
             } else if (vc.key === "purchasePrice") {
-              baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{formatNumberFixed(item.purchasePrice ?? 0)}</div>;
+              baseContent = (
+                <div className="truncate text-sm text-gray-700 font-mono">
+                  {getVariantPriceDisplay(item, "purchasePrice") || `₹${formatNumberFixed(item.purchasePrice ?? 0)}`}
+                </div>
+              );
             } else if (vc.key === "sellingPrice") {
-              baseContent = <div className="truncate text-sm text-gray-700 font-mono">₹{formatNumberFixed(item.sellingPrice ?? 0)}</div>;
+              baseContent = (
+                <div className="truncate text-sm text-gray-700 font-mono">
+                  {getVariantPriceDisplay(item, "sellingPrice") || `₹${formatNumberFixed(item.sellingPrice ?? 0)}`}
+                </div>
+              );
             } else if (vc.key === "hsnSac") {
               baseContent = <div className="truncate text-sm text-gray-700">{item.hsnSac ? <HighlightText text={item.hsnSac} query={searchTerm} /> : "—"}</div>;
             } else if (vc.key === "variants") {
               baseContent = item.variants && item.variants.length > 0 ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedItem(item);
+                    setShowDetails(true);
+                  }}
+                  title="View variant details (SKU, price, stock)"
+                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors cursor-pointer"
+                >
                   {item.variants.length} Variant{item.variants.length > 1 ? "s" : ""}
-                </span>
+                </button>
               ) : (
                 <span className="text-xs text-gray-400">0 Variants</span>
               );

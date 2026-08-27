@@ -55,7 +55,7 @@ import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AppToaster from "../components/AppToaster";
 import ExportModal from "../components/common/ExportModal";
-import { exportClientSide } from "../utils/clientExport";
+import { exportClientSide, formatINR } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -574,7 +574,7 @@ const PurchaseOrderPage = () => {
     { label: "PO Number", value: (po) => po.poNumber },
     { label: "Vendor", value: (po) => po.vendor?.name },
     { label: "Order Date", value: (po) => new Date(po.createdAt).toLocaleDateString() },
-    { label: "Total Amount", value: (po) => po.totalAmount },
+    { label: "Total Amount", value: (po) => formatINR(po.totalAmount) },
     { label: "Payment Terms", value: (po) => po.paymentTerms },
     { label: "Status", value: (po) => po.status },
   ];
@@ -1021,30 +1021,16 @@ const PurchaseOrderPage = () => {
                     </>
                   )}
                   <div className="border-t border-gray-100 my-1" />
-                  {po.convertedPurchase ? (
-                    <button
-                      onClick={() => {
-                        closeRowMenu();
-                        // Route is "/purchase" (singular) — App.jsx. "/purchases"
-                        // matches nothing and renders a blank page.
-                        window.location.href = "/purchase?view=" + po.convertedPurchase._id;
-                      }}
-                      title={`Already converted to ${po.convertedPurchase.purchaseNumber}`}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      View {po.convertedPurchase.purchaseNumber}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => { closeRowMenu(); handleConvertToPurchase(po); }}
-                      disabled={convertingPOId === po._id}
-                      className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-                        po.status === "Approved" || po.status === "Delivered" ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
-                      } disabled:opacity-50`}
-                    >
-                      {convertingPOId === po._id ? "Converting…" : "Convert to Purchase"}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => { closeRowMenu(); handleConvertToPurchase(po); }}
+                    disabled={convertingPOId === po._id || !!po.convertedPurchase}
+                    title={po.convertedPurchase ? `Already converted to ${po.convertedPurchase.purchaseNumber}` : undefined}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+                      !po.convertedPurchase && (po.status === "Approved" || po.status === "Delivered") ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
+                    } disabled:opacity-50`}
+                  >
+                    {convertingPOId === po._id ? "Converting…" : "Convert to Purchase"}
+                  </button>
                 </>
               )}
             </div>
@@ -1749,7 +1735,7 @@ const PurchaseOrderPage = () => {
                 {/* Advanced filter button — opens AdvancedFilterPanel slide-in panel */}
                 <button
                   onClick={() => setShowAdvancedFilters(true)}
-                  className={`flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                  className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                     activeFilters.length > 0
                       ? "border-[#0085FF] text-[#0085FF]"
                       : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
@@ -1776,6 +1762,21 @@ const PurchaseOrderPage = () => {
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                      <button
+                        onClick={() => {
+                          setShowAdvancedFilters(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <FilterIcon size={14} className="text-gray-400" />
+                        Filters
+                        {activeFilters.length > 0 && (
+                          <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            {activeFilters.length}
+                          </span>
+                        )}
+                      </button>
                       <button
                         onClick={() => {
                           setShowImport(true);

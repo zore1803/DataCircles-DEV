@@ -46,7 +46,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import AppToaster from "../components/AppToaster";
-import { exportClientSide } from "../utils/clientExport";
+import { exportClientSide, formatINR } from "../utils/clientExport";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
@@ -403,7 +403,7 @@ const PurchaseReturn = () => {
     { label: "Return Number", value: (p) => p.returnNumber },
     { label: "Vendor", value: (p) => p.vendor?.name },
     { label: "Return Date", value: (p) => new Date(p.returnDate || p.createdAt).toLocaleDateString() },
-    { label: "Grand Total", value: (p) => p.grandTotal },
+    { label: "Grand Total", value: (p) => formatINR(p.grandTotal) },
     { label: "Mode", value: (p) => p.mode },
     { label: "Status", value: (p) => p.status },
   ];
@@ -707,7 +707,7 @@ const PurchaseReturn = () => {
                     <ChevronLeft className="w-4 h-4" />
                     Back
                   </button>
-                  {statusOptions.map((st) => (
+                  {(p.status === "Confirmed" ? ["Confirmed", "Paid"] : p.status === "Paid" ? ["Paid"] : statusOptions).map((st) => (
                     <button
                       key={st}
                       onClick={(e) => { e.stopPropagation(); updateSingleStatus(p._id, st); }}
@@ -766,6 +766,17 @@ const PurchaseReturn = () => {
                     <Trash2 className="w-4 h-4" />
                     Delete
                   </button>
+                  {p.status !== "Paid" && (
+                    <>
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        Change Status
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -1827,7 +1838,7 @@ const PurchaseReturn = () => {
                   <div className="relative flex items-center gap-2 lg:gap-4 flex-shrink-0">
                     <button
                       onClick={() => setShowAdvancedFilters(true)}
-                      className={`flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
+                      className={`hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border transition-colors bg-white ${
                         activeFilters.length > 0 ? "border-[#0085FF] text-[#0085FF]" : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                       }`}
                       title="Filters"
@@ -1850,6 +1861,18 @@ const PurchaseReturn = () => {
                       </button>
                       {isMoreMenuOpen && (
                         <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                          <button
+                            onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
+                            className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <FilterIcon size={14} className="text-gray-400" />
+                            Filters
+                            {activeFilters.length > 0 && (
+                              <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                                {activeFilters.length}
+                              </span>
+                            )}
+                          </button>
                           <button
                             onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"

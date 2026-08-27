@@ -50,6 +50,9 @@ import { getVideoTutorial } from "../utils/videoTutorials";
 import VideoTutorialButton from "../components/VideoTutorialButton";
 import TaskKanbanBoard from "../components/Task/TaskKanbanBoard";
 import TaskMeetingCalendarView from "../components/Task/TaskMeetingCalendarView";
+import MeetingDetailsModal from "../components/company/MeetingDetailsModal";
+import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
+import { useColumnSettings } from "../hooks/useColumnSettings";
 
 import {
   useReactTable,
@@ -529,6 +532,11 @@ function Tasks() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [showVideoTutorial, setShowVideoTutorial] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false);
+  const [meetingDetailData, setMeetingDetailData] = useState(null);
+  const [isMeetingDetailOpen, setIsMeetingDetailOpen] = useState(false);
+  const [taskImportBusy, setTaskImportBusy] = useState(false);
+  const taskImportInputRef = useRef(null);
   const moreMenuRef = useRef(null);
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -630,6 +638,41 @@ function Tasks() {
   };
   const getColumnPinSide = (colKey) => pinnedColumns.find((p) => p.key === colKey)?.side || null;
   const hideColumn = (colKey) => setHiddenColumns((prev) => [...prev, colKey]);
+  const toggleColumnVisibility = (colKey) =>
+    setHiddenColumns((prev) => (prev.includes(colKey) ? prev.filter((k) => k !== colKey) : [...prev, colKey]));
+
+  // Toggleable columns per tab (mirrors each column's id/label above); "selection"
+  // is excluded since it's not a real data column and shouldn't be hideable.
+  const TASK_TOGGLE_COLUMNS = [
+    { id: "title", label: "Task" },
+    { id: "relatedTo", label: "Related To" },
+    { id: "company", label: "Company" },
+    { id: "status", label: "Status" },
+    { id: "users", label: "Assigned Users" },
+    { id: "dueDate", label: "Due Date" },
+  ];
+  const MEETING_TOGGLE_COLUMNS = [
+    { id: "title", label: "Meeting" },
+    { id: "scheduledAt", label: "Date & Time" },
+    { id: "status", label: "Status" },
+    { id: "participants", label: "Contact" },
+    { id: "url", label: "URL" },
+  ];
+
+  const DEFAULT_TASK_COLUMNS = useMemo(() => TASK_TOGGLE_COLUMNS.map((col, i) => ({
+    key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
+  })), []);
+  const DEFAULT_MEETING_COLUMNS = useMemo(() => MEETING_TOGGLE_COLUMNS.map((col, i) => ({
+    key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
+  })), []);
+  const { columns: taskColumnSettings, saveColumns: saveTaskColumns } = useColumnSettings("tasks", DEFAULT_TASK_COLUMNS);
+  const { columns: meetingColumnSettings, saveColumns: saveMeetingColumns } = useColumnSettings("meetings", DEFAULT_MEETING_COLUMNS);
+
+  useEffect(() => {
+    const settings = activeTab === "tasks" ? taskColumnSettings : meetingColumnSettings;
+    setHiddenColumns(settings.filter((c) => !c.visible).map((c) => c.key));
+    setColumnOrder(settings.map((c) => c.key));
+  }, [activeTab, taskColumnSettings, meetingColumnSettings]);
 
   const reorderColumns = (draggedKey, targetKey, fallbackOrder) => {
     if (!draggedKey || !targetKey || draggedKey === targetKey) return;
@@ -1131,6 +1174,11 @@ function Tasks() {
     setShowMeetingForm(true);
   };
 
+  const handleMeetingView = (meeting) => {
+    setMeetingDetailData(meeting);
+    setIsMeetingDetailOpen(true);
+  };
+
   const handleMeetingEdit = (meeting) => {
     setSelectedMeeting(meeting);
     setMeetingModalMode("view");
@@ -1368,6 +1416,61 @@ function Tasks() {
     toast.success(
       `${activeTab === "tasks" ? "Tasks" : "Meetings"} exported successfully`,
     );
+  };
+
+  // Tasks-only for now: Meeting import isn't wired because the Meeting schema
+  // requires a linked company/contact/vendor id per row (see backend
+  // models/Meeting.js), which a plain spreadsheet can't safely resolve.
+  // Round-trips against handleExport's own column names (title/description/
+  // dueDate/status) so exporting then re-importing just works.
+  const handleTaskImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setTaskImportBusy(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (!rows.length) {
+        toast.error("No rows found in that file");
+        return;
+      }
+
+      let created = 0;
+      let failed = 0;
+      for (const row of rows) {
+        const title = String(row.title || row.Task || "").trim();
+        if (!title) {
+          failed++;
+          continue;
+        }
+        const dueDateRaw = row.dueDate || row["Due Date"];
+        const parsedDueDate = dueDateRaw ? new Date(dueDateRaw) : null;
+        try {
+          await API.post("/tasks", {
+            title,
+            description: String(row.description || "").trim(),
+            dueDate: parsedDueDate && !Number.isNaN(parsedDueDate.getTime()) ? parsedDueDate.toISOString() : "",
+            status: String(row.status || "Pending").trim() || "Pending",
+          });
+          created++;
+        } catch {
+          failed++;
+        }
+      }
+
+      await fetchTasks();
+      if (created > 0) toast.success(`Imported ${created} task${created === 1 ? "" : "s"}${failed ? `, ${failed} skipped` : ""}`);
+      else toast.error("No tasks were imported — check the file has a Task/title column");
+    } catch (err) {
+      toast.error("Failed to read the file — expected an .xlsx or .csv export");
+    } finally {
+      setTaskImportBusy(false);
+    }
   };
 
   const handleSelectTask = (taskId) => {
@@ -1897,7 +2000,7 @@ function Tasks() {
                   e.stopPropagation();
                   setOpenRowActionsId(null);
                   setRowActionsPos(null);
-                  type === "task" ? handleTaskView(item) : handleMeetingEdit(item);
+                  type === "task" ? handleTaskView(item) : handleMeetingView(item);
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
@@ -2415,6 +2518,11 @@ function Tasks() {
       companies,
       contacts,
       vendors,
+      pinnedColumns,
+      openColMenuKey,
+      colMenuPos,
+      openRowActionsId,
+      rowActionsPos,
       searchTerm,
     ],
   );
@@ -3005,7 +3113,7 @@ function Tasks() {
             </button>
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
-                {/* Filters + Switcher: mobile-only entries, folded in here instead of their own controls */}
+                {/* Filters + View switcher: mobile-only (desktop has its own toolbar controls) */}
                 <button
                   onClick={() => {
                     setShowMobileFilters(true);
@@ -3024,10 +3132,7 @@ function Tasks() {
                 {activeTab === "tasks" ? (
                   <>
                     <button
-                      onClick={() => {
-                        setShowKanban(false);
-                        setIsMoreMenuOpen(false);
-                      }}
+                      onClick={() => { setShowKanban(false); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
@@ -3035,10 +3140,7 @@ function Tasks() {
                       {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
                     <button
-                      onClick={() => {
-                        setShowKanban(true);
-                        setIsMoreMenuOpen(false);
-                      }}
+                      onClick={() => { setShowKanban(true); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       <CustomKanbanIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
@@ -3049,10 +3151,7 @@ function Tasks() {
                 ) : (
                   <>
                     <button
-                      onClick={() => {
-                        setShowMeetingCalendar(false);
-                        setIsMoreMenuOpen(false);
-                      }}
+                      onClick={() => { setShowMeetingCalendar(false); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
@@ -3060,10 +3159,7 @@ function Tasks() {
                       {!showMeetingCalendar && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
                     <button
-                      onClick={() => {
-                        setShowMeetingCalendar(true);
-                        setIsMoreMenuOpen(false);
-                      }}
+                      onClick={() => { setShowMeetingCalendar(true); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       <Calendar className="w-3.5 h-3.5 text-gray-400" />
@@ -3072,7 +3168,47 @@ function Tasks() {
                     </button>
                   </>
                 )}
-                
+                <div className="border-t border-gray-100 my-1" />
+                <input
+                  ref={taskImportInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleTaskImportFile}
+                />
+                <button
+                  onClick={() => {
+                    if (activeTab !== "tasks") return;
+                    setIsMoreMenuOpen(false);
+                    taskImportInputRef.current?.click();
+                  }}
+                  disabled={activeTab !== "tasks" || taskImportBusy}
+                  title={activeTab !== "tasks" ? "Meeting import isn't available yet — each meeting needs a linked company/contact/vendor" : undefined}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${activeTab !== "tasks" ? "text-gray-300 cursor-not-allowed" : "text-gray-700 hover:bg-gray-50"}`}
+                >
+                  <Upload className="w-4 h-4 text-gray-400" />
+                  {taskImportBusy ? "Importing…" : "Import"}
+                </button>
+                <button
+                  onClick={() => {
+                    handleExport();
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Download className="w-4 h-4 text-gray-400" />
+                  Export
+                </button>
+                <button
+                  onClick={() => {
+                    setShowColumnsPanel(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Settings className="w-4 h-4 text-gray-400" />
+                  Columns
+                </button>
               </div>
             )}
           </div>
@@ -3373,7 +3509,7 @@ function Tasks() {
                     onClick={(e) => {
                       if (openRowActionsId) return;
                       if (e.target.closest("button") || e.target.closest("a") || e.target.closest("input")) return;
-                      handleMeetingEdit(row.original);
+                      handleMeetingView(row.original);
                     }}
                     className={`group cursor-pointer hover:bg-blue-50 transition-colors ${selectedMeetings.includes(row.original._id) ? "bg-blue-50" : "bg-white"}`}
                     style={{ height: 37, maxHeight: 37 }}
@@ -3445,7 +3581,7 @@ function Tasks() {
             meetings={allMeetingsForCalendar}
             tasksList={allTasksForCalendar}
             isLoading={calendarDataLoading}
-            onMeetingClick={handleMeetingEdit}
+            onMeetingClick={handleMeetingView}
             onTaskClick={handleTaskView}
             onQuickAddMeeting={openMeetingFormForDate}
             onQuickAddTask={openTaskFormForDate}
@@ -3721,6 +3857,45 @@ function Tasks() {
         onClose={() => setShowUpgradeModal(false)}
         minPlan="growth"
         feature="Selecting multiple rows"
+      />
+
+      <ColumnSettingsPanel
+        isOpen={showColumnsPanel}
+        onClose={() => setShowColumnsPanel(false)}
+        columns={activeTab === "tasks" ? taskColumnSettings : meetingColumnSettings}
+        onSave={activeTab === "tasks" ? saveTaskColumns : saveMeetingColumns}
+        moduleName={activeTab === "tasks" ? "Tasks" : "Meetings"}
+      />
+
+      <MeetingDetailsModal
+        open={isMeetingDetailOpen}
+        meetingData={meetingDetailData}
+        users={users}
+        onDelete={async (id) => {
+          await API.delete(`/meetings/${id}`);
+          await fetchMeetings();
+          if (showMeetingCalendar) fetchCalendarData();
+        }}
+        onClose={() => { setIsMeetingDetailOpen(false); setMeetingDetailData(null); }}
+        onEdit={(meeting) => {
+          setIsMeetingDetailOpen(false);
+          setMeetingDetailData(null);
+          setSelectedMeeting(meeting);
+          setMeetingModalMode("view");
+          setShowMeetingForm(true);
+        }}
+        onComplete={async (id) => {
+          try {
+            await API.put(`/meetings/${id}`, { status: "completed" });
+            toast.success("Meeting marked as completed");
+            await fetchMeetings();
+            if (showMeetingCalendar) fetchCalendarData();
+            setIsMeetingDetailOpen(false);
+            setMeetingDetailData(null);
+          } catch (err) {
+            toast.error(err.response?.data?.error || "Failed to update meeting");
+          }
+        }}
       />
     </div>
   );
