@@ -179,6 +179,10 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
     setCustomerPhone("");
     setSelectedSignature("");
 
+    fetchSignatures();
+  }, [isOpen, type, journal?._id]);
+
+  const fetchSignatures = () => {
     API.get("/document-settings/signatures").then((res) => {
       const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
       const mapped = sigs.map((s) => ({
@@ -189,10 +193,24 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
         isDefault: !!s.isDefault,
       }));
       setSignatures(mapped);
-      const defaultSig = mapped.find((s) => s.isDefault);
-      if (defaultSig) setSelectedSignature(defaultSig.value);
+      
+      // We don't have selectedSignature in scope for the default check here easily if we
+      // use the state asynchronously, so we only set default if it's empty.
+      setForm(curr => curr); // Just triggering a safe state update callback to keep block clean
+      
+      // If we don't have a signature selected yet and there are signatures
+      if (mapped.length > 0) {
+         // Using the setState callback form ensures we have the latest value of selectedSignature
+         setSelectedSignature(currentSig => {
+             if (!currentSig) {
+                 const defaultSig = mapped.find((s) => s.isDefault) || mapped[0];
+                 return defaultSig ? defaultSig.value : "";
+             }
+             return currentSig;
+         });
+      }
     }).catch(() => setSignatures([]));
-  }, [isOpen, type, journal?._id]);
+  };
 
   const handleClose = () => {
     setIsSliding(false);
@@ -541,6 +559,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                   <select
                     value={selectedSignature}
                     onChange={(e) => setSelectedSignature(e.target.value)}
+                    onFocus={fetchSignatures}
                     className={`${fieldClass} appearance-none bg-white cursor-pointer`}
                   >
                     <option value="">No Signature</option>
