@@ -204,7 +204,7 @@ function GoogleIntegration() {
 
       {/* Disconnect confirmation modal */}
       {showDisconnectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center space-y-4">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center border-2 border-red-100 mx-auto">

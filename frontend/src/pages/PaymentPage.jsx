@@ -761,7 +761,7 @@ const PaymentPage = () => {
 
         {/* Delete Confirmation */}
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="bg-red-100 p-2 rounded-lg">

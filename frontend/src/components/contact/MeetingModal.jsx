@@ -59,7 +59,7 @@ const MeetingModal = ({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/20 z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/20 z-[10000]">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
         <div className="flex items-center justify-between px-8 py-6 border-b">
           <h2 className="text-2xl font-bold text-gray-900">

@@ -102,7 +102,7 @@ const EditPaymentModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 flex items-center justify-center pt-20 z-50">
+    <div className="fixed inset-0 bg-black/20 flex items-center justify-center pt-20 z-[10000]">
       <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">

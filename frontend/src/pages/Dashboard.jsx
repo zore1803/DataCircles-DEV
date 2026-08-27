@@ -1223,7 +1223,7 @@ function Dashboard() {
   // ------------------- Loading UI -------------------
   // if (loading) {
   //   return (
-  //     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 z-50">
+  //     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 z-[10000]">
   //       <img
   //         src={logo}
   //         alt="Loading..."

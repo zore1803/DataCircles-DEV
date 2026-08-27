@@ -14,6 +14,7 @@ const { google } = require("googleapis");
 const axios = require("axios");
 const { isZoomConfigured, createZoomMeeting } = require("../services/zoomService");
 const { isGoogleConfigured, createGoogleMeetEvent } = require("../services/googleMeetService");
+const { getOwnedCompanyIds } = require("../utils/ownedCompanies");
 
 // Parses a search term as a calendar date so free-text search can match the
 // "Date & Time" column, which the UI renders as D/M/YYYY (toLocaleDateString).
@@ -344,13 +345,19 @@ const generateMeetingCancellationEmail = (meetingDetails) => {
 // A user with own-only permission may only touch meetings they created —
 // shared by getMeetingsPaginated/getAllMeetings/getMeetingById/updateMeeting/
 // deleteMeeting/completeMeeting. (The schema has a commented-out/unused
-// `owner` field; `createdBy` is the real ownership field.)
-const isMeetingOwnedByUser = (meeting, userId) => {
+// `owner` field; `createdBy` is the real ownership field.) Plus: a meeting
+// under a company this user OWNS (Company.owner) counts as owned too, same
+// widening as contactController's isOwnedByUser — pass `ownedCompanyIds`
+// (from getOwnedCompanyIds) when that broader check should apply.
+const isMeetingOwnedByUser = (meeting, userId, ownedCompanyIds = []) => {
   const uid = userId.toString();
   // createdBy may be a raw ObjectId or a populated User doc, depending on
   // where this is called from.
   const createdById = meeting.createdBy?._id || meeting.createdBy;
-  return createdById?.toString() === uid;
+  if (createdById?.toString() === uid) return true;
+
+  const companyId = (meeting.company?._id ?? meeting.company)?.toString();
+  return !!companyId && ownedCompanyIds.some((id) => id.toString() === companyId);
 };
 
 // Create a new meeting
@@ -1011,8 +1018,11 @@ exports.updateMeeting = async (req, res) => {
       return res.status(404).json({ error: "Meeting not found" });
     }
 
-    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
-      return res.status(403).json({ error: "You can only edit meetings you own" });
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isMeetingOwnedByUser(meeting, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only edit meetings you own" });
+      }
     }
 
     // Store original values for comparison
@@ -1174,8 +1184,11 @@ exports.deleteMeeting = async (req, res) => {
       return res.status(404).json({ error: "Meeting not found" });
     }
 
-    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
-      return res.status(403).json({ error: "You can only delete meetings you own" });
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isMeetingOwnedByUser(meeting, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only delete meetings you own" });
+      }
     }
 
     // Gather participant IDs for notification settings check
@@ -1246,8 +1259,11 @@ exports.completeMeeting = async (req, res) => {
       return res.status(404).json({ error: "Meeting not found" });
     }
 
-    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
-      return res.status(403).json({ error: "You can only edit meetings you own" });
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isMeetingOwnedByUser(meeting, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only edit meetings you own" });
+      }
     }
 
     meeting.status = "completed";
@@ -1559,9 +1575,17 @@ exports.getAllMeetings = async (req, res) => {
       ];
     }
 
-    // own-only: restrict to meetings this user created.
+    // own-only: restrict to meetings this user created, or meetings under a
+    // company this user owns (Company.owner) — same widening as
+    // contactController's list endpoints.
     if (req.ownOnly) {
-      const ownFilter = { createdBy: req.user._id };
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      const ownFilter = {
+        $or: [
+          { createdBy: req.user._id },
+          { company: { $in: ownedCompanyIds } },
+        ],
+      };
       if (query.$or) {
         query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
       } else {
@@ -1705,9 +1729,17 @@ exports.getMeetingsPaginated = async (req, res) => {
       };
     }
 
-    // own-only: restrict to meetings this user created.
+    // own-only: restrict to meetings this user created, or meetings under a
+    // company this user owns (Company.owner) — same widening as
+    // contactController's list endpoints.
     if (req.ownOnly) {
-      const ownFilter = { createdBy: req.user._id };
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      const ownFilter = {
+        $or: [
+          { createdBy: req.user._id },
+          { company: { $in: ownedCompanyIds } },
+        ],
+      };
       query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
     }
 
@@ -1784,8 +1816,11 @@ exports.getMeetingById = async (req, res) => {
       return res.status(404).json({ error: "Meeting not found" });
     }
 
-    if (req.ownOnly && !isMeetingOwnedByUser(meeting, req.user._id)) {
-      return res.status(403).json({ error: "You can only view meetings you own" });
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isMeetingOwnedByUser(meeting, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only view meetings you own" });
+      }
     }
 
     res.json(meeting);
