@@ -448,6 +448,19 @@ function UserManagement() {
     );
   };
 
+  // The Quick Preset dropdown is a shortcut for setting every resource to
+  // the same permission — but it also needs to REFLECT the actual current
+  // state when the modal (re)opens, or it always shows "Custom" even right
+  // after saving a preset, making it look like the save didn't take even
+  // though the per-resource rows below are correct.
+  const derivePreset = (perms) => {
+    const values = resources.map((res) => perms[res] || "no");
+    if (values.every((v) => v === "readonly")) return "view-only";
+    if (values.every((v) => v === "read-write")) return "full-access";
+    if (values.every((v) => v === "own-only")) return "own-only";
+    return "";
+  };
+
   const handleInvitePresetChange = (e) => {
     const value = e.target.value;
     let newPerms = {};
@@ -601,6 +614,7 @@ function UserManagement() {
                   Quick Preset
                 </label>
                 <select
+                  value={derivePreset(form.permissions)}
                   onChange={handleInvitePresetChange}
                   className="w-full border-2 border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
@@ -944,6 +958,7 @@ function UserManagement() {
                   Quick Preset
                 </label>
                 <select
+                  value={derivePreset(permissions)}
                   onChange={handleModalPresetChange}
                   className="w-full border-2 border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
