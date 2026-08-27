@@ -1340,7 +1340,7 @@ function Deals() {
   const fetchStatuses = async () => {
     try {
       const res = await API.get("/kanban");
-      setStatuses(res.data?.statuses);
+      setStatuses(res.data?.statuses || []);
     } catch (error) {
       console.error("Error fetching statuses:", error);
       toast.error("Failed to fetch statuses", {
