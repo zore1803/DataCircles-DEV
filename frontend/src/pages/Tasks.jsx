@@ -158,17 +158,31 @@ const CustomKanbanIcon = (props) => (
 // Task Status Dropdown Component
 const StatusSelect = ({ task, onUpdate, query, statuses }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isOpen]);
 
   const getBadgeColor = (status) => {
     if (status === "Completed")
@@ -180,12 +194,19 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
     return "bg-gray-100 text-gray-800 border-gray-200";
   };
 
+  const openMenu = () => {
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+    setIsOpen(true);
+  };
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          isOpen ? setIsOpen(false) : openMenu();
         }}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${getBadgeColor(
           task.status,
@@ -198,8 +219,12 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 left-0 max-h-60 overflow-y-auto">
+      {isOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[10000] bg-white rounded-lg shadow-xl border border-gray-100 py-1 max-h-60 overflow-y-auto"
+        >
           {statuses.map((status) => (
             <button
               key={status}
@@ -222,7 +247,8 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -231,18 +257,32 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
 // Meeting Priority Dropdown Component
 const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
   const statuses = ["scheduled", "completed", "cancelled", "no-show"];
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isOpen]);
 
   const getBadgeColor = (status) => {
     if (status === "completed")
@@ -258,12 +298,19 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
 
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace("-", " ") : "");
 
+  const openMenu = () => {
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+    setIsOpen(true);
+  };
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          isOpen ? setIsOpen(false) : openMenu();
         }}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${getBadgeColor(
           meeting.status,
@@ -276,8 +323,12 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 left-0 max-h-60 overflow-y-auto">
+      {isOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[10000] bg-white rounded-lg shadow-xl border border-gray-100 py-1 max-h-60 overflow-y-auto"
+        >
           {statuses.map((status) => (
             <button
               key={status}
@@ -300,7 +351,8 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
