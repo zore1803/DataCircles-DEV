@@ -10,6 +10,9 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+// See diagBankOrgMismatch.js for why this is needed on some Windows setups.
+require("dns").setServers(["8.8.8.8", "1.1.1.1"]);
+
 async function main() {
   const shouldDelete = process.argv.includes("--delete");
 

@@ -14,6 +14,13 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+// Node's built-in DNS resolver can fail SRV lookups against an IPv6
+// link-local resolver (fe80::...) on some Windows machines even though the
+// OS's own nslookup succeeds fine through a different path. Force Node to
+// use public DNS directly so mongodb+srv:// resolution doesn't depend on
+// the system resolver.
+require("dns").setServers(["8.8.8.8", "1.1.1.1"]);
+
 async function main() {
   await mongoose.connect(process.env.MONGO_URI);
   const Organization = require("../models/Organization");
