@@ -13,6 +13,16 @@ function PrivateRoute({ children }) {
   const [retryCount, setRetryCount] = useState(0);
   const isCheckingRef = useRef(false); // Prevent duplicate checks
 
+  // The auth check can resolve faster than the splash's one CSS animation
+  // cycle (1.8s), making the logo flash and vanish before it's noticeable.
+  // Hold the splash up for at least one full cycle regardless of how fast
+  // the real check finishes.
+  const [minSplashElapsed, setMinSplashElapsed] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashElapsed(true), 1800);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Array of cool loading messages
   const loadingMessages = [
     // "Connecting your business dots — contacts, deals, and more!",
@@ -126,6 +136,7 @@ function PrivateRoute({ children }) {
 
   // Show loading state
   if (
+    !minSplashElapsed ||
     isLoading ||
     ((isAuthenticated || localStorage.getItem("token")) &&
       isAuthorized === null)

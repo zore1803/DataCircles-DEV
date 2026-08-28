@@ -101,15 +101,16 @@
 }
 
 /* App-boot splash (PrivateRoute's initial auth check, once per hard
-   refresh) — logo grows while spinning in a full circle, on loop for as
-   long as loading takes, then just unmounts ("vanishes") once ready. */
-@keyframes dc-splash-spin-grow {
-  0% { transform: scale(0.8) rotate(0deg); }
-  50% { transform: scale(1.2) rotate(180deg); }
-  100% { transform: scale(0.8) rotate(360deg); }
+   refresh) — logo starts small, rotates once while zooming out to fill
+   the screen, then holds at full size until the real check finishes and
+   the whole overlay unmounts. One shot, not a loop. */
+@keyframes dc-splash-zoom-rotate {
+  0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: scale(14) rotate(360deg); opacity: 1; }
 }
 .dc-splash-logo {
-  animation: dc-splash-spin-grow 1.8s ease-in-out infinite;
+  animation: dc-splash-zoom-rotate 1.8s ease-in forwards;
 }
 
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via

@@ -6,7 +6,7 @@ import logo from "/DataCircles.png";
 // unmounts once the app is ready.
 export default function SplashLoader() {
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden pointer-events-none">
       <img
         src={logo}
         alt="DataCircles"
