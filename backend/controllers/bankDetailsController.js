@@ -25,6 +25,9 @@ const sanitizeBankPayload = (body = {}) => {
 
 exports.createBankDetails = async (req, res) => {
   try {
+    if (!req.user.organization) {
+      return res.status(403).json({ error: "No organization on this account" });
+    }
     const payload = sanitizeBankPayload(req.body);
 
     if (payload.isDefault) {
@@ -55,6 +58,9 @@ exports.getLatestBankDetails = async (req, res) => {
 exports.getAllBankDetails = async (req, res) => {
   try {
     const orgId = req.user.organization;
+    if (!orgId) {
+      return res.status(403).json({ error: "No organization on this account" });
+    }
     const { search } = req.query;
     let query = { organization: orgId };
 
@@ -139,6 +145,9 @@ exports.getAllBankDetails = async (req, res) => {
 
 exports.getBankDetailsById = async (req, res) => {
   try {
+    if (!req.user.organization) {
+      return res.status(403).json({ error: "No organization on this account" });
+    }
     const bank = await BankDetails.findOne({
       _id: req.params.id,
       organization: req.user.organization,
@@ -156,6 +165,9 @@ exports.getBankDetailsById = async (req, res) => {
 
 exports.updateBankDetails = async (req, res) => {
   try {
+    if (!req.user.organization) {
+      return res.status(403).json({ error: "No organization on this account" });
+    }
     if (req.params.id === "undefined") {
       const payload = sanitizeBankPayload(req.body);
       if (payload.isDefault) {
@@ -198,6 +210,9 @@ exports.updateBankDetails = async (req, res) => {
 
 exports.setDefaultBankDetails = async (req, res) => {
   try {
+    if (!req.user.organization) {
+      return res.status(403).json({ error: "No organization on this account" });
+    }
     const bank = await BankDetails.findOne({
       _id: req.params.id,
       organization: req.user.organization,
@@ -219,6 +234,9 @@ exports.setDefaultBankDetails = async (req, res) => {
 
 exports.deleteBankDetails = async (req, res) => {
   try {
+    if (!req.user.organization) {
+      return res.status(403).json({ error: "No organization on this account" });
+    }
     const deleted = await BankDetails.findOneAndDelete({
       _id: req.params.id,
       organization: req.user.organization,
