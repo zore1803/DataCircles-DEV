@@ -74,7 +74,8 @@
    chart colors) are deliberately left untouched. */
 .bg-blue-600,
 .bg-\[\#0C4FCD\],
-.bg-\[\#158FFF\] {
+.bg-\[\#158FFF\],
+.bg-\[\#0085FF\] {
   background-color: var(--btn-primary) !important;
 }
 .hover\:bg-blue-700:hover,
@@ -82,12 +83,16 @@
   background-color: var(--btn-primary-hover) !important;
 }
 .border-\[\#0C4FCD\],
-.border-\[\#158FFF\] {
+.border-\[\#158FFF\],
+.border-\[\#0085FF\] {
   border-color: var(--btn-primary) !important;
 }
 
-/* Same blanket re-theme, for hover TEXT colour — every hover:text-blue-*
-   shade used across the app now turns --btn-primary on hover too. */
+/* Same blanket re-theme, for TEXT colour — every hardcoded brand-blue
+   shade (hover or not) used across the app now pulls from --btn-primary
+   too, including the literal #0085FF default itself — it's a picked
+   colour now (Brand Settings), not a hardcoded constant, so nothing
+   should stay stuck on the old hex once an org changes it. */
 .hover\:text-blue-600:hover,
 .hover\:text-blue-700:hover,
 .hover\:text-blue-800:hover,
@@ -96,7 +101,8 @@
 .hover\:text-sky-700:hover,
 .text-blue-600,
 .text-blue-700,
-.text-blue-800 {
+.text-blue-800,
+.text-\[\#0085FF\] {
   color: var(--btn-primary) !important;
 }
 

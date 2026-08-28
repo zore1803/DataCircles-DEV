@@ -114,6 +114,8 @@ function BrandSettings() {
 
     if (!form.colors.primary) {
       newErrors.primary = "Primary color is required";
+    } else if (!/^#[0-9A-Fa-f]{6}$/.test(form.colors.primary)) {
+      newErrors.primary = "Enter exactly 6 hex characters after # (e.g. 0085FF)";
     }
 
     if (!form.colors.secondary) {
@@ -661,18 +663,32 @@ function BrandSettings() {
                     }
                     className="w-14 h-14 border-2 border-gray-300 rounded-xl cursor-pointer"
                   />
-                  <input
-                    type="text"
-                    value={form.colors.primary}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        colors: { ...form.colors, primary: e.target.value },
-                      })
-                    }
-                    className="flex-1 px-4 py-3 border-2 rounded-xl text-sm border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder="#000000"
-                  />
+                  <div className="relative flex-1">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-mono text-gray-500 pointer-events-none">
+                      #
+                    </span>
+                    <input
+                      type="text"
+                      value={form.colors.primary.replace(/^#/, "")}
+                      onChange={(e) => {
+                        // "#" is a fixed, non-editable prefix — only the 6
+                        // hex characters after it are ever stored, so the
+                        // saved value can never be a partial/invalid hex.
+                        const hex = e.target.value
+                          .replace(/[^0-9a-fA-F]/g, "")
+                          .slice(0, 6);
+                        setForm({
+                          ...form,
+                          colors: { ...form.colors, primary: `#${hex}` },
+                        });
+                      }}
+                      maxLength={6}
+                      className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
+                        errors.primary ? "border-red-400 bg-red-50" : "border-gray-300"
+                      }`}
+                      placeholder="0085FF"
+                    />
+                  </div>
                 </div>
                 <div
                   className="mt-4 h-12 rounded-lg"

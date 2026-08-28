@@ -257,7 +257,10 @@ function App() {
     API.get("/branding")
       .then((res) => {
         const primary = res.data?.colors?.primary;
-        if (!primary) return;
+        // Only apply a real 6-digit hex — a malformed/legacy value saved
+        // before this field had validation must never silently break every
+        // button's colour by setting an invalid CSS custom property.
+        if (!primary || !/^#[0-9a-f]{6}$/i.test(primary)) return;
         document.documentElement.style.setProperty("--btn-primary", primary);
         document.documentElement.style.setProperty("--btn-primary-hover", darken(primary, 0.15));
       })
@@ -367,53 +370,14 @@ function App() {
     getAccessTokenSilently,
   ]);
 
-  // Scale the whole desktop layout to the viewport instead of letting fixed
-  // pixel widths (built for a ~1440px design) reflow/crop on other screen
-  // sizes. CSS `zoom` (not `transform: scale`) is used deliberately: it keeps
-  // position:fixed/portaled elements (headers, modals, dropdown menus)
-  // aligned automatically, since it behaves like the browser's native zoom
-  // rather than creating a new containing block.
+  // The dynamic viewport-scaling zoom (shrinking the whole desktop layout
+  // down to fit more content, ~0.85x baseline) has been removed — it made
+  // the app look zoomed in. Layout now renders at native 100% browser zoom.
+  // --dynamic-zoom is kept at a fixed "1" (no-op) since a number of calc()
+  // formulas elsewhere still divide by it defensively.
   useEffect(() => {
-    const DESIGN_WIDTH = 1440;
-    const MIN_ZOOM = 0.6;
-    const MAX_ZOOM = 1.3;
-    // Baseline shrink so the default (100% browser zoom) view matches the
-    // more compact density users previously got by manually zooming the
-    // browser out to ~85%.
-    const BASE_SCALE = 0.85;
-
-    // Both innerWidth and outerWidth are measured in CSS pixels, which
-    // shrink/grow as the user zooms with +/- — so neither is safe to feed
-    // back into this calc without fighting manual zoom. devicePixelRatio
-    // scales proportionally with zoom too (e.g. 1 -> 1.1 -> 1.2 as zoom goes
-    // 100% -> 110% -> 120%), so dividing by how much it moved since mount
-    // cancels the zoom's contribution to innerWidth, leaving a value that
-    // only changes on a real window resize.
-    const baselineDPR = window.devicePixelRatio || 1;
-
-    const applyZoom = () => {
-      const currentDPR = window.devicePixelRatio || 1;
-      const zoomFactor = currentDPR / baselineDPR;
-      const referenceWidth = window.innerWidth * zoomFactor;
-      if (referenceWidth < 1024) {
-        document.documentElement.style.zoom = "";
-        document.documentElement.style.setProperty("--dynamic-zoom", "1");
-        return;
-      }
-      const zoom = Math.min(
-        MAX_ZOOM,
-        Math.max(MIN_ZOOM, referenceWidth / DESIGN_WIDTH),
-      ) * BASE_SCALE;
-      document.documentElement.style.zoom = zoom;
-      // Exposed as a CSS custom property so layout that needs to compensate
-      // for this zoom (e.g. calc()-based full-height panels) can react to it
-      // purely in CSS — no JS measurement/timing races.
-      document.documentElement.style.setProperty("--dynamic-zoom", zoom);
-    };
-
-    applyZoom();
-    window.addEventListener("resize", applyZoom);
-    return () => window.removeEventListener("resize", applyZoom);
+    document.documentElement.style.zoom = "";
+    document.documentElement.style.setProperty("--dynamic-zoom", "1");
   }, []);
 
   // Handle history cleanup on mount to prevent back button access

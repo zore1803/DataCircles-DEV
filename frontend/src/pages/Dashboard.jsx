@@ -142,7 +142,7 @@ function Dashboard() {
             className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
               isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
             }`}
-            style={isActive ? { color: "var(--btn-primary)" } : undefined}
+            style={isActive ? { color: "var(--btn-primary, #0085FF)" } : undefined}
           >
             {name}
           </button>
@@ -2187,12 +2187,12 @@ function Dashboard() {
                   </div>
                 </>
               )}
-              <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: 4 }}>
+              <div className="flex flex-col items-start min-w-0 flex-1 lg:pr-14" style={{ gap: 4 }}>
                 {loading ? (
                   <Skeleton width={90} height={10} />
                 ) : (
                   <span
-                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-xs"
+                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-[11px]"
                     style={{ fontFamily: "'Inter Tight', Inter, sans-serif", lineHeight: "120%", color: "#525866" }}
                   >
                     {label}
@@ -2202,7 +2202,7 @@ function Dashboard() {
                   <Skeleton width={70} height={16} />
                 ) : (
                   <span
-                    className="truncate w-full text-base sm:text-lg"
+                    className="truncate w-full text-base sm:text-lg lg:text-base"
                     style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
                   >
                     {value}
