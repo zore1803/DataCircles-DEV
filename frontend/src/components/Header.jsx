@@ -743,7 +743,7 @@
 // export default Header;
 
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
 import {
   Search,
@@ -842,11 +842,6 @@ const CallLogAddIcon = ({ className, style }) => (
 );
 
 const Header = () => {
-  const [dashboardSearchParams, setDashboardSearchParams] = useSearchParams();
-  const activeDashboardTab = dashboardSearchParams.get("tab") || "Overview";
-  const setActiveDashboardTab = (tab) => {
-    setDashboardSearchParams(tab === "Overview" ? {} : { tab });
-  };
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1397,29 +1392,9 @@ const Header = () => {
         {/* Left Section: Breadcrumb / Dashboard tabs */}
         <div className="flex items-center gap-4 h-full">
           {location.pathname === "/" ? (
-            <div className="inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full">
-              {[
-                { name: "Overview" },
-                { name: "CRM" },
-                { name: "Invoices" },
-              ].map((tab) => {
-                const isActive = activeDashboardTab === tab.name;
-                return (
-                  <button
-                    key={tab.name}
-                    onClick={() => setActiveDashboardTab(tab.name)}
-                    className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                      isActive
-                        ? "bg-white shadow-sm"
-                        : "text-gray-700 hover:text-gray-900"
-                    }`}
-                    style={isActive ? { color: "var(--btn-primary)" } : undefined}
-                  >
-                    {tab.name}
-                  </button>
-                );
-              })}
-            </div>
+            <span className="text-base font-semibold text-gray-900">
+              Dashboard
+            </span>
           ) : location.pathname.startsWith("/tasks") ? (
             <span className="text-base font-semibold text-gray-900">
               Tasks & Meetings

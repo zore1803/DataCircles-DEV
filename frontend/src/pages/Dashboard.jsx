@@ -125,8 +125,31 @@ const RevenueGeneratedIcon = ({ size = 24, style }) => (
 
 function Dashboard() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeDashboardTab = searchParams.get("tab") || "Overview";
+  const setActiveDashboardTab = (tab) => {
+    setSearchParams(tab === "Overview" ? {} : { tab });
+  };
+  const DASHBOARD_TABS = ["Overview", "CRM", "Invoices"];
+  const DashboardTabSwitcher = () => (
+    <div className="inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full">
+      {DASHBOARD_TABS.map((name) => {
+        const isActive = activeDashboardTab === name;
+        return (
+          <button
+            key={name}
+            onClick={() => setActiveDashboardTab(name)}
+            className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
+            }`}
+            style={isActive ? { color: "var(--btn-primary)" } : undefined}
+          >
+            {name}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1315,6 +1338,7 @@ function Dashboard() {
               A consolidated view of your CRM activity
             </span>
           </div>
+          <DashboardTabSwitcher />
         </div>
         {/* Spacer to offset the fixed header bar */}
         <div className="h-[72px] lg:h-16" />
@@ -1457,6 +1481,7 @@ function Dashboard() {
               Visual summary of key lead performance metrics and your data
             </span>
           </div>
+          <DashboardTabSwitcher />
         </div>
         {/* Spacer to offset the fixed header bar */}
         <div style={{ height: 64 }} />
@@ -2167,7 +2192,9 @@ function Dashboard() {
           borderBottom: "1px solid #E1E4EA",
           boxSizing: "border-box",
         }}
-      />
+      >
+        <DashboardTabSwitcher />
+      </div>
       {/* Spacer to offset the fixed header bar */}
       <div className="h-[72px] lg:h-16" />
 
