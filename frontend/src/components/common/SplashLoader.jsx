@@ -10,7 +10,7 @@ export default function SplashLoader() {
       <img
         src={logo}
         alt="DataCircles"
-        className="dc-splash-logo w-16 h-16 object-contain"
+        className="dc-splash-logo w-24 h-24 object-contain"
       />
     </div>
   );
