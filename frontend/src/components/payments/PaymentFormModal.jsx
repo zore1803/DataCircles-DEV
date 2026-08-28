@@ -385,7 +385,10 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                 }}
                 contentEditable
                 suppressContentEditableWarning
-                onInput={(e) => setFormData((p) => ({ ...p, notes: e.currentTarget.innerHTML }))}
+                onInput={(e) => {
+                  const html = e.currentTarget.innerHTML;
+                  setFormData((p) => ({ ...p, notes: html }));
+                }}
                 data-placeholder="Optional payment notes..."
                 className="w-full min-h-[72px] px-3 py-2 border border-[#1F2937]/10 rounded-b-2xl text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all empty:before:content-[attr(data-placeholder)] empty:before:text-[#1F2937] empty:before:opacity-50 [&_a]:text-blue-600 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
               />
