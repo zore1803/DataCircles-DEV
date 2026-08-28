@@ -35,7 +35,6 @@ import {
   PinOff,
 } from "lucide-react";
 import API from "../services/api";
-import dataCirclesLogo from "../assets/Datacircles logo.png";
 /*
  * Clicking the nav entry for the page you're already on is a no-op as far as
  * the router is concerned — the path doesn't change, so nothing re-renders and
@@ -364,14 +363,6 @@ const Navbar = () => {
     setProfile(res.data);
   };
 
-  const renderCompanyLogo = () => (
-    <img
-      src={dataCirclesLogo}
-      alt="DataCircles Logo"
-      className="h-8 w-8 rounded-md object-cover flex-shrink-0"
-    />
-  );
-
   const renderProfileImage = () => {
     if (profile && !isSuperAdmin) {
       const src =
@@ -631,17 +622,79 @@ const Navbar = () => {
         }}
       >
         <div className="h-16 flex-shrink-0 flex items-center justify-between gap-2 px-4 border-b border-gray-100 bg-white">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Product wordmark, not the customer's company — that moved to
-                the switcher below. The only logo asset in the repo is the
-                icon-only mark, so the name is set alongside it in type.
-                Collapsed, just the mark shows. */}
-            {renderCompanyLogo()}
-            {(isHovered || isMobileOpen) && (
-              <span className="font-normal text-lg whitespace-nowrap text-[#0A0A0A] tracking-tight">
-                DataCircles
-                <sup className="text-[9px] align-super ml-px">®</sup>
+          {/* Company switcher — moved here in place of the old logo mark.
+              id is a measurement anchor: pages with a `position: fixed`
+              header strip (e.g. VendorDetailsPageNew.jsx) read this
+              element's real bottom edge at runtime to line their own
+              border up with it, instead of hardcoding a top offset. */}
+          <div id="sidebar-switcher-anchor" className="relative flex items-center gap-3 min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={() => setIsCompanyMenuOpen((v) => !v)}
+              title={branding?.companyName || "Company"}
+              className={`box-border flex flex-row items-center h-10 bg-white border border-[#E5E5E5] rounded-md hover:bg-gray-50 transition-colors ${isHovered || isMobileOpen
+                ? "self-stretch gap-2.5 pl-1.5 pr-2.5 py-1.5 flex-1"
+                // Collapsed: a 40px square framing a 32px avatar, per the design.
+                : "w-10 justify-center p-1 mx-auto"
+                }`}
+            >
+              <span
+                className={`flex flex-row items-center gap-1.5 min-w-0 ${isHovered || isMobileOpen ? "flex-1" : "w-8 h-8"
+                  }`}
+              >
+                <span
+                  className={`flex items-center justify-center flex-shrink-0 rounded text-white text-[14px] font-medium leading-[102%] ${isHovered || isMobileOpen ? "w-7 h-7" : "w-8 h-8"
+                    }`}
+                  style={{ background: "var(--btn-primary)" }}
+                >
+                  {getInitials(branding?.companyName)}
+                </span>
+                {(isHovered || isMobileOpen) && (
+                  <span className="text-[14px] font-medium leading-[120%] text-[#0A0A0A] truncate">
+                    {branding?.companyName || "Company"}
+                  </span>
+                )}
               </span>
+              {(isHovered || isMobileOpen) && (
+                <ChevronDown className="w-4 h-4 flex-shrink-0 text-[#0A0A0A]" />
+              )}
+            </button>
+
+            {/* There's no multi-organization API yet, so the menu shows the
+                current workspace and a way to edit it rather than inventing
+                companies to switch between. Anchored to the switcher button
+                itself (top-full), not the strip around it, so it always opens
+                flush below the button regardless of the strip's height. */}
+            {isCompanyMenuOpen && (isHovered || isMobileOpen) && (
+              <>
+                <div
+                  className="fixed inset-0 z-[9996]"
+                  onClick={() => setIsCompanyMenuOpen(false)}
+                />
+                <div className="absolute left-0 right-0 top-full mt-1 z-[9997] bg-white border border-[#E5E5E5] rounded-md shadow-lg py-1">
+                  <div className="flex items-center gap-1.5 px-2 py-2 bg-[#F5FAFF]">
+                    <span
+                      className="flex items-center justify-center w-7 h-7 flex-shrink-0 rounded text-white text-[14px] font-medium leading-[102%]"
+                      style={{ background: "var(--btn-primary)" }}
+                    >
+                      {getInitials(branding?.companyName)}
+                    </span>
+                    <span className="text-[14px] font-medium text-[#0A0A0A] truncate">
+                      {branding?.companyName || "Company"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCompanyMenuOpen(false);
+                      navigate("/settings");
+                    }}
+                    className="w-full text-left px-3 py-2 text-[13px] text-[#525866] hover:bg-gray-50"
+                  >
+                    Company settings
+                  </button>
+                </div>
+              </>
             )}
           </div>
 
@@ -699,88 +752,6 @@ const Navbar = () => {
                 </svg>
               </button>
             </div>
-          )}
-        </div>
-        {/* Company switcher. Sits in the strip that carries the page toolbar's
-            rule across the sidebar, so that line reads as one unbroken border
-            and the nav starts below it. Collapsed, only the avatar shows.
-            id is a measurement anchor: pages with a `position: fixed` header
-            strip (e.g. VendorDetailsPageNew.jsx) read this element's real
-            bottom edge at runtime to line their own border up with it,
-            instead of hardcoding a top offset that silently drifts out of
-            sync with this value or with the app's dynamic zoom. */}
-        <div
-          id="sidebar-switcher-anchor"
-          className={`relative h-16 flex-shrink-0 flex flex-col items-start justify-center border-b border-[#ECECEC] bg-white ${isHovered || isMobileOpen ? "p-3" : "px-3"
-            }`}
-        >
-          <button
-            type="button"
-            onClick={() => setIsCompanyMenuOpen((v) => !v)}
-            title={branding?.companyName || "Company"}
-            className={`box-border flex flex-row items-center h-10 bg-white border border-[#E5E5E5] rounded-md hover:bg-gray-50 transition-colors ${isHovered || isMobileOpen
-              ? "self-stretch gap-2.5 pl-1.5 pr-2.5 py-1.5"
-              // Collapsed: a 40px square framing a 32px avatar, per the design.
-              : "w-10 justify-center p-1"
-              }`}
-          >
-            <span
-              className={`flex flex-row items-center gap-1.5 min-w-0 ${isHovered || isMobileOpen ? "flex-1" : "w-8 h-8"
-                }`}
-            >
-              <span
-                className={`flex items-center justify-center flex-shrink-0 rounded text-white text-[14px] font-medium leading-[102%] ${isHovered || isMobileOpen ? "w-7 h-7" : "w-8 h-8"
-                  }`}
-                style={{ background: "var(--btn-primary)" }}
-              >
-                {getInitials(branding?.companyName)}
-              </span>
-              {(isHovered || isMobileOpen) && (
-                <span className="text-[14px] font-medium leading-[120%] text-[#0A0A0A] truncate">
-                  {branding?.companyName || "Company"}
-                </span>
-              )}
-            </span>
-            {(isHovered || isMobileOpen) && (
-              <ChevronDown className="w-4 h-4 flex-shrink-0 text-[#0A0A0A]" />
-            )}
-          </button>
-
-          {/* There's no multi-organization API yet, so the menu shows the
-              current workspace and a way to edit it rather than inventing
-              companies to switch between. Anchored to the switcher button
-              itself (top-full), not the strip around it, so it always opens
-              flush below the button regardless of the strip's height. */}
-          {isCompanyMenuOpen && (isHovered || isMobileOpen) && (
-            <>
-              <div
-                className="fixed inset-0 z-[9996]"
-                onClick={() => setIsCompanyMenuOpen(false)}
-              />
-              <div className="absolute left-3 right-3 top-full mt-1 z-[9997] bg-white border border-[#E5E5E5] rounded-md shadow-lg py-1">
-                <div className="flex items-center gap-1.5 px-2 py-2 bg-[#F5FAFF]">
-                  <span
-                    className="flex items-center justify-center w-7 h-7 flex-shrink-0 rounded text-white text-[14px] font-medium leading-[102%]"
-                    style={{ background: "var(--btn-primary)" }}
-                  >
-                    {getInitials(branding?.companyName)}
-                  </span>
-                  <span className="text-[14px] font-medium text-[#0A0A0A] truncate">
-                    {branding?.companyName || "Company"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCompanyMenuOpen(false);
-                    navigate("/settings");
-                  }}
-                  className="w-full text-left px-3 py-2 text-[13px] text-[#525866] hover:bg-gray-50"
-                >
-                  Company settings
-                </button>
-              </div>
-            </>
           )}
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto pt-1 pb-2 bg-white flex flex-col">
