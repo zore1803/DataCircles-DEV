@@ -1521,7 +1521,7 @@ const Header = () => {
                     >
                       {buttonText}
                     </button>
-                    {!isLoadingData && !isTrialActive && (
+                    {!isLoadingData && (
                       <button
                         className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
                         style={{
