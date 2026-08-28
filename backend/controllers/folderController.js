@@ -1,5 +1,6 @@
 // controllers/folderController.js
 const Folder = require('../models/Folder');
+const Company = require('../models/Company');
 const StorageUsage = require('../models/StorageUsage');
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
@@ -21,7 +22,7 @@ const deleteFromS3 = async (fileUrl) => {
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key
     }));
-    
+
     console.log(`Deleted from S3: ${key}`);
     return true;
   } catch (error) {
@@ -30,11 +31,33 @@ const deleteFromS3 = async (fileUrl) => {
   }
 };
 
+// The Folder model has no `organization` field of its own — it only stores
+// `company`/`user`. Every folder's `company` is required and DOES have an
+// organization, so cross-tenant access is blocked by fetching the folder
+// with its company populated and checking that company's organization
+// matches the caller's, instead of trusting the folder ID alone.
+const getOwnedFolder = async (folderId, organizationId) => {
+  const folder = await Folder.findById(folderId).populate('company');
+  if (!folder || !folder.company || folder.company.organization?.toString() !== organizationId?.toString()) {
+    return null;
+  }
+  return folder;
+};
+
 // Create folder
 exports.createFolder = async (req, res) => {
   try {
     const { name, company } = req.body;
     const trimmedName = (name || "").trim();
+
+    const companyDoc = await Company.findOne({
+      _id: company,
+      organization: req.user.organization,
+    });
+    if (!companyDoc) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
     const existing = await Folder.findOne({
       company,
       name: { $regex: `^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
@@ -67,6 +90,11 @@ exports.addLink = async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
+    const owned = await getOwnedFolder(folderId, req.user.organization);
+    if (!owned) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
     const linkFile = {
       fileName,
       fileUrl,
@@ -80,10 +108,6 @@ exports.addLink = async (req, res) => {
       { $push: { files: linkFile } },
       { new: true }
     );
-
-    if (!updatedFolder) {
-      return res.status(404).json({ error: 'Folder not found' });
-    }
 
     res.status(200).json({ message: 'Link added successfully', folder: updatedFolder });
   } catch (err) {
@@ -108,10 +132,7 @@ exports.updateLink = async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
-    // Notice we use the same query logic as deleteFile, ensuring it belongs to the user's organization
-    // However, folder model doesn't store organization, it stores user/company. 
-    // We will just find by _id.
-    const folder = await Folder.findById(folderId);
+    const folder = await getOwnedFolder(folderId, req.user.organization);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -142,7 +163,7 @@ exports.renameFile = async (req, res) => {
       return res.status(400).json({ error: 'fileName is required' });
     }
 
-    const folder = await Folder.findById(folderId);
+    const folder = await getOwnedFolder(folderId, req.user.organization);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -168,13 +189,25 @@ exports.renameFile = async (req, res) => {
 
 
 
-// GET all folders (optionally by company)
+// GET all folders (optionally by company) — always scoped to the caller's org
 exports.getAllFolders = async (req, res) => {
   try {
     const { companyId } = req.query;
-    const folders = companyId
-      ? await Folder.find({ company: companyId }).populate('company user')
-      : await Folder.find().populate('company user');
+
+    if (companyId) {
+      const companyDoc = await Company.findOne({
+        _id: companyId,
+        organization: req.user.organization,
+      });
+      if (!companyDoc) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+      const folders = await Folder.find({ company: companyId }).populate('company user');
+      return res.json(folders);
+    }
+
+    const orgCompanyIds = await Company.find({ organization: req.user.organization }).distinct('_id');
+    const folders = await Folder.find({ company: { $in: orgCompanyIds } }).populate('company user');
     res.json(folders);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch folders' });
@@ -184,7 +217,11 @@ exports.getAllFolders = async (req, res) => {
 // GET single folder
 exports.getFolderById = async (req, res) => {
   try {
-    const folder = await Folder.findById(req.params.id).populate('company user');
+    const folder = await getOwnedFolder(req.params.id, req.user.organization);
+    if (!folder) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+    await folder.populate('user');
     res.json(folder);
   } catch (err) {
     res.status(404).json({ error: 'Folder not found' });
@@ -194,15 +231,16 @@ exports.getFolderById = async (req, res) => {
 // UPDATE folder (e.g., name or files)
 exports.updateFolder = async (req, res) => {
   try {
+    const current = await getOwnedFolder(req.params.id, req.user.organization);
+    if (!current) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
     if (req.body.name != null) {
       const trimmedName = req.body.name.trim();
-      const current = await Folder.findById(req.params.id);
-      if (!current) {
-        return res.status(404).json({ error: 'Folder not found' });
-      }
       const existing = await Folder.findOne({
         _id: { $ne: req.params.id },
-        company: current.company,
+        company: current.company._id,
         name: { $regex: `^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
       });
       if (existing) {
@@ -210,6 +248,8 @@ exports.updateFolder = async (req, res) => {
       }
       req.body.name = trimmedName;
     }
+    // company is org-derived and must not be reassignable via this endpoint
+    delete req.body.company;
     const updated = await Folder.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(updated);
   } catch (err) {
@@ -234,6 +274,11 @@ exports.uploadFiles = async (req, res) => {
   try {
     const { folderId } = req.body;
 
+    const owned = await getOwnedFolder(folderId, req.user.organization);
+    if (!owned) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
     const files = req.files.map(file => ({
       fileName: file.originalname,
       fileType: file.mimetype,
@@ -254,18 +299,18 @@ exports.uploadFiles = async (req, res) => {
     // Update storage usage
     await StorageUsage.findOneAndUpdate(
       { organization: req.user.organization },
-      { 
+      {
         $inc: { currentUsage: uploadedSize },
         lastUpdated: new Date()
       }
     );
 
-    const storageInfo = await StorageUsage.findOne({ 
-      organization: req.user.organization 
+    const storageInfo = await StorageUsage.findOne({
+      organization: req.user.organization
     });
 
-    res.status(200).json({ 
-      message: 'Files uploaded successfully', 
+    res.status(200).json({
+      message: 'Files uploaded successfully',
       folder: updatedFolder,
       storage: {
         currentUsage: `${(storageInfo.currentUsage / (1024 * 1024 * 1024)).toFixed(2)} GB`,
@@ -285,7 +330,7 @@ exports.deleteFile = async (req, res) => {
     const { id } = req.params;
     const { fileName, fileUrl, isLink } = req.body;
 
-    const folder = await Folder.findById(id);
+    const folder = await getOwnedFolder(id, req.user.organization);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -322,10 +367,10 @@ exports.deleteFile = async (req, res) => {
       if (storageUsage) {
         // Calculate new usage, ensure it's not negative
         const newUsage = Math.max(0, (storageUsage.currentUsage || 0) - fileSize);
-        
+
         await StorageUsage.findOneAndUpdate(
           { organization: req.user.organization, user: req.user._id },
-          { 
+          {
             currentUsage: newUsage,
             lastUpdated: new Date()
           }
@@ -335,9 +380,9 @@ exports.deleteFile = async (req, res) => {
       }
     }
 
-    res.json({ 
-      message: 'File deleted successfully', 
-      folder: updatedFolder 
+    res.json({
+      message: 'File deleted successfully',
+      folder: updatedFolder
     });
   } catch (err) {
     console.error('Delete file error:', err);
@@ -348,7 +393,7 @@ exports.deleteFile = async (req, res) => {
 // Delete entire folder with S3 cleanup
 exports.deleteFolder = async (req, res) => {
   try {
-    const folder = await Folder.findById(req.params.id);
+    const folder = await getOwnedFolder(req.params.id, req.user.organization);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -375,10 +420,10 @@ exports.deleteFolder = async (req, res) => {
       if (storageUsage) {
         // Calculate new usage, ensure it's not negative
         const newUsage = Math.max(0, (storageUsage.currentUsage || 0) - totalSize);
-        
+
         await StorageUsage.findOneAndUpdate(
           { organization: req.user.organization, user: req.user._id },
-          { 
+          {
             currentUsage: newUsage,
             lastUpdated: new Date()
           }
@@ -434,8 +479,11 @@ exports.getOrgStorageInfo = async (req, res) => {
 // Get storage usage info
 exports.getStorageInfo = async (req, res) => {
   try {
-    const storageInfo = await StorageUsage.findOne({ user: req.user._id });
-    
+    const storageInfo = await StorageUsage.findOne({
+      user: req.user._id,
+      organization: req.user.organization,
+    });
+
     if (!storageInfo) {
       return res.status(404).json({ error: 'Storage info not found' });
     }

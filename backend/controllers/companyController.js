@@ -653,7 +653,7 @@ const removeSubsidiary = async (req, res) => {
   const { id, subsidiaryId } = req.params;
 
   try {
-    const parent = await Company.findById(id);
+    const parent = await Company.findOne({ _id: id, organization: req.user.organization });
     if (!parent) return res.status(404).json({ message: "Parent company not found" });
 
     const isOwner = parent.owner && parent.owner.toString() === req.user._id.toString();
@@ -684,7 +684,7 @@ const getSubsidiaries = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const company = await Company.findById(id)
+    const company = await Company.findOne({ _id: id, organization: req.user.organization })
       .populate('subsidiaries', 'name industry website address profilePicture');
 
     if (!company) return res.status(404).json({ message: "Company not found" });
@@ -699,7 +699,7 @@ const getParentCompany = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const company = await Company.findById(id)
+    const company = await Company.findOne({ _id: id, organization: req.user.organization })
       .populate('parentCompany', 'name industry website');
 
     if (!company) return res.status(404).json({ message: "Company not found" });
