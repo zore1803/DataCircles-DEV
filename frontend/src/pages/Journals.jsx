@@ -892,8 +892,14 @@ export default function Journals() {
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">
             <tr>
               <th
-                style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 20 }}
-                className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#E1E4EA]"
+                style={{
+                  width: colWidths.selection,
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 20,
+                  boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                }}
+                className="relative px-4 py-3 bg-[#F5F7FA]"
               >
                 <div className="flex justify-center items-center">
                   <input
@@ -925,9 +931,10 @@ export default function Journals() {
                     style={{
                       width: colWidths[col.id],
                       opacity: isDragging ? 0.35 : 1,
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
                       ...stickyStyleFor(col.id),
                     }}
-                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
+                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap transition-colors ${
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-gray-100"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
@@ -976,8 +983,14 @@ export default function Journals() {
               paginatedJournals.map((j) => (
                 <tr key={j._id} className="bg-white hover:bg-blue-50 transition-colors" style={{ height: 37, maxHeight: 37 }}>
                   <td
-                    style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
+                    style={{
+                      width: colWidths.selection,
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 10,
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                    }}
+                    className="px-4 py-2 align-middle bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
                       <input
@@ -1001,8 +1014,14 @@ export default function Journals() {
                     return (
                       <td
                         key={col.id}
-                        style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-2 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${
+                        style={{
+                          width: colWidths[col.id],
+                          boxShadow: isRightmost
+                            ? "inset 0 -1px 0 0 #E1E4EA"
+                            : "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                          ...stickyStyleFor(col.id),
+                        }}
+                        className={`px-4 py-2 text-sm text-gray-900 bg-inherit whitespace-nowrap ${
                           cellBoundaryShadowSide ? "" : "overflow-hidden"
                         }`}
                       >
