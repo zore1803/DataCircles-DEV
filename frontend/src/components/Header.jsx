@@ -1390,7 +1390,7 @@ const Header = () => {
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
         <img
-          src="/DATACIRCLES MAIN LOGO.png"
+          src="/DC Logo Export.png"
           alt="DataCircles"
           className="h-9 w-auto object-contain"
         />
