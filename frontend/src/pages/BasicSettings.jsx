@@ -296,7 +296,7 @@ const BasicSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6">
       <div>
         {/* Enhanced Page Header */}
         <div className="mb-6">

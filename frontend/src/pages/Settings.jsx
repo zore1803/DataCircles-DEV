@@ -526,7 +526,7 @@ const Settings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
       {/* Fixed page-header strip */}
       <div
         className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
