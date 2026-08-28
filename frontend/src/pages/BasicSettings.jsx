@@ -242,70 +242,54 @@ const BasicSettings = () => {
   }
 
   if (activeSection) {
+    // Matches the admin Settings page's fixed toolbar-strip pattern (Settings.jsx)
+    // — flat white background, no outer gutters, title strip aligned with the
+    // sidebar switcher — instead of the old gray-gradient/breadcrumb-card layout.
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4">
-        {/* Strip below navbar — matches the toolbar strip other pages
-            (Companies, Contacts, etc.) render flush under the navbar. */}
-        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-3">
-          <button
-            onClick={goBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2 transition-all"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="font-medium">Back to Settings</span>
-          </button>
-
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <SettingsIcon className="w-4 h-4" />
-            <a
-              href="/settings"
-              className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
+      <div
+        className="min-h-screen bg-white"
+        style={{
+          marginTop: -24,
+          marginLeft: -32,
+          marginRight: -32,
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            zIndex: 40,
+            minHeight: "64px",
+            maxHeight: "64px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div className="flex items-center gap-4 w-full">
+            <button
+              onClick={goBack}
+              className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium flex-shrink-0"
             >
-              Settings
-            </a>
-            <ChevronRight className="w-4 h-4" />
-            <span className="text-gray-900 font-semibold">
-              {activeSection.label}
-            </span>
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
+            <div className={`p-2 rounded-lg ${activeSection.bgColor} ${activeSection.color} flex-shrink-0`}>
+              {activeSection.icon}
+            </div>
+            <div className="min-w-0">
+              <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">
+                {activeSection.label}
+              </h1>
+              <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 truncate">
+                {activeSection.description}
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="px-4 sm:px-6 lg:px-8 py-6">
-          {/* Active Section Header */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
-            <div className="flex items-start gap-4">
-              <div
-                className={`p-4 rounded-xl ${activeSection.bgColor} ${activeSection.color} shadow-md`}
-              >
-                {activeSection.icon}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-                    {activeSection.label}
-                  </h2>
-                  {activeSection.badge && (
-                    <span
-                      className={`px-3 py-1 ${
-                        activeSection.badgeColor ||
-                        "bg-yellow-100 text-yellow-800"
-                      } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      {activeSection.badge}
-                    </span>
-                  )}
-                </div>
-                <p className="text-gray-600 text-sm md:text-base">
-                  {activeSection.description}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Component Content */}
-          <div>{activeSection.component}</div>
+        <div className="pt-[118px] lg:pt-[128px] px-4 sm:px-6 lg:px-8 pb-8">
+          {activeSection.component}
         </div>
       </div>
     );
