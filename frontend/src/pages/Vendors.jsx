@@ -1282,7 +1282,7 @@ function Vendors() {
                 <>
                   <div className="flex items-center gap-2">
                     <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
-                    
+                    <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   </div>
                   <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your vendors.
@@ -1645,18 +1645,20 @@ function Vendors() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
                       >
-                        {col.id === lastColumnId ? (
-                          <div className="flex items-center justify-between w-full gap-2">
-                            <div className="min-w-0 flex-1">
-                              {renderCellContent(vendor, col.id)}
+                        <div style={{ overflow: "hidden" }}>
+                          {col.id === lastColumnId ? (
+                            <div className="flex items-center justify-between w-full gap-2">
+                              <div className="min-w-0 flex-1">
+                                {renderCellContent(vendor, col.id)}
+                              </div>
+                              {renderRowActionsMenu(vendor)}
                             </div>
-                            {renderRowActionsMenu(vendor)}
-                          </div>
-                        ) : (
-                          renderCellContent(vendor, col.id)
-                        )}
+                          ) : (
+                            renderCellContent(vendor, col.id)
+                          )}
+                        </div>
                         {boundaryShadowSideFor(col.id) && (
                           <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
                         )}

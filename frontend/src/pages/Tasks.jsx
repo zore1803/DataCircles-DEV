@@ -3512,16 +3512,17 @@ function Tasks() {
                             width: cell.column.getSize(),
                             height: "37px",
                             maxHeight: "37px",
-                            overflow: "hidden",
                             boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                          className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                         >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          <div style={{ overflow: "hidden" }}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </div>
                           {cellBoundaryShadowSide && (
                             <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                           )}
@@ -3669,16 +3670,17 @@ function Tasks() {
                           width: cell.column.getSize(),
                           height: "37px",
                           maxHeight: "37px",
-                          overflow: "hidden",
                           boxSizing: "border-box",
                           position: isSticky ? "sticky" : "static",
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isSticky ? 10 : 1,
                         }}
-                        className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                        className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        <div style={{ overflow: "hidden" }}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
                         {cellBoundaryShadowSide && (
                           <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                         )}

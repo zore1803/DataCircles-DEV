@@ -1923,7 +1923,7 @@ function Companies() {
                   <>
                     <div className="flex items-center gap-2">
                       <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
-                      
+                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                       Manage your accounts & company directory

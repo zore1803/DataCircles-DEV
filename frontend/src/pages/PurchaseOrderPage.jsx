@@ -2002,16 +2002,15 @@ const PurchaseOrderPage = () => {
                                     width: cell.column.getSize(),
                                     height: "37px",
                                     maxHeight: "37px",
-                                    overflow: "hidden",
                                     boxSizing: "border-box",
                                     position: isSticky ? "sticky" : "static",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 10 : 1,
                                   }}
-                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                 >
-                                  <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                  <div style={{ opacity: isColDragging ? 0.35 : 1, overflow: "hidden" }}>
                                     {flexRender(
                                       cell.column.columnDef.cell,
                                       cell.getContext(),

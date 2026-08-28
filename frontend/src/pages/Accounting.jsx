@@ -52,6 +52,7 @@ import {
   ListOrdered,
   List as ListIcon,
   Link as LinkIcon,
+  Video,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { PDFDocument } from "pdf-lib";
@@ -2526,11 +2527,14 @@ const Accounting = () => {
               Collapses away when the mobile search is expanded, same as
               Companies.jsx's title, so the search field gets the freed
               width instead of staying pinned to a small fixed size. */}
-          <h1
-            className={`lg:hidden text-base font-bold text-[#0E121B] overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-auto opacity-100 flex-shrink-0"}`}
+          <div
+            className={`lg:hidden flex items-center gap-2 overflow-hidden transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-auto opacity-100 flex-shrink-0"}`}
           >
-            Accountings
-          </h1>
+            <h1 className="m-0 text-base font-bold text-[#0E121B] whitespace-nowrap">
+              Accountings
+            </h1>
+            <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          </div>
 
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
@@ -2925,16 +2929,18 @@ const Accounting = () => {
                           width: colWidths[col.id],
                           ...stickyStyleFor(col.id),
                         }}
-                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
                       >
-                        {isLastCol ? (
-                          <div className="flex items-center justify-between gap-2 w-full">
-                            {renderCell(col.id, doc)}
-                            {renderRowActions(doc)}
-                          </div>
-                        ) : (
-                          renderCell(col.id, doc)
-                        )}
+                        <div style={{ overflow: "hidden" }}>
+                          {isLastCol ? (
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              {renderCell(col.id, doc)}
+                              {renderRowActions(doc)}
+                            </div>
+                          ) : (
+                            renderCell(col.id, doc)
+                          )}
+                        </div>
                         {boundaryShadowSideFor(col.id) && (
                           <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
                         )}

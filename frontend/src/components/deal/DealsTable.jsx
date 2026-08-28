@@ -1067,19 +1067,20 @@ export default function DealsTable({
                             maxWidth: cell.column.getSize(),
                             height: "37px",
                             maxHeight: "37px",
-                            overflow: "hidden",
                             boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className={`${colId === "selection" ? "px-0" : "px-3"} py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] overflow-hidden ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
+                          className={`${colId === "selection" ? "px-0" : "px-3"} py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
+                          <div style={{ overflow: "hidden" }}>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </div>
                           {cellBoundaryShadowSide && (
                             <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                           )}

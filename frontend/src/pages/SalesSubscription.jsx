@@ -22,6 +22,7 @@ import {
   CheckSquare,
   Repeat,
   Zap,
+  Video,
 } from "lucide-react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -1066,7 +1067,10 @@ const SalesSubscription = () => {
                   </>
                 ) : (
                   <>
-                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Subscriptions</h1>
+                    <div className="flex items-center gap-2">
+                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Subscriptions</h1>
+                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 truncate">
                       Recurring billing agreements with your customers
                     </p>

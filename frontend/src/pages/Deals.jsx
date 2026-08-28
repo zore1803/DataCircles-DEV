@@ -2376,7 +2376,7 @@ function Deals() {
                 >
                   Deals
                 </h2>
-                
+                <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
               </div>
               <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
                 Manage Your Sales Pipeline
