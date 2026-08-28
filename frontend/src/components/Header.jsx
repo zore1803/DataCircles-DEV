@@ -842,12 +842,6 @@ const CallLogAddIcon = ({ className, style }) => (
 );
 
 const Header = () => {
-  const [orgName, setOrgName] = useState("");
-  useEffect(() => {
-    API.get("/branding")
-      .then((res) => setOrgName(res.data?.companyName || ""))
-      .catch(() => {});
-  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1395,11 +1389,11 @@ const Header = () => {
         className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 sm:px-6 lg:px-8 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
-        {orgName && (
-          <span className="text-base font-semibold text-gray-900 truncate">
-            {orgName}
-          </span>
-        )}
+        <img
+          src="/DATACIRCLES MAIN LOGO.png"
+          alt="DataCircles"
+          className="h-9 w-auto object-contain"
+        />
 
         {/* Right Section: Promo Buttons, Search & Actions */}
         <div className="flex items-center gap-2 lg:gap-4 ml-auto">
