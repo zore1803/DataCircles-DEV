@@ -10,6 +10,21 @@ import {
 } from "react-router-dom";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import API, { configureAxios } from "./services/api";
+
+// Darkens a hex colour by `amount` (0..1) for a computed hover shade —
+// used so a custom org button colour gets a matching hover state instead
+// of staying stuck on the old hardcoded blue-derived one.
+function darken(hex, amount) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const num = parseInt(m[1], 16);
+  const channel = (shift) => {
+    const v = (num >> shift) & 0xff;
+    return Math.max(0, Math.round(v * (1 - amount)));
+  };
+  const toHex = (v) => v.toString(16).padStart(2, "0");
+  return `#${toHex(channel(16))}${toHex(channel(8))}${toHex(channel(0))}`;
+}
 import Dashboard from "./pages/Dashboard";
 import Companies from "./pages/Companies";
 import Contacts from "./pages/Contacts";
@@ -70,6 +85,7 @@ import PaymentsTimeline from "./pages/PaymentsTimeline";
 import Journals from "./pages/Journals";
 import Expenses from "./pages/Expenses";
 import IndirectIncome from "./pages/IndirectIncome";
+import Intercom from "./components/common/Intercom";
 
 function ChecklistModal({ showChecklist, setShowChecklist }) {
   const location = useLocation();
@@ -228,6 +244,25 @@ function App() {
   const userIsAuthenticated =
     isAuthenticated || isPhoneAuthenticated || isSuperAdminAuthenticated;
   const { adminNotice, dismissAdminNotice } = useSubscription();
+
+  // Personalized button colour — each organization can pick its own via
+  // Settings > Brand Settings (Branding.colors.primary). Applied as the
+  // --btn-primary CSS variable every button already reads from (index.css),
+  // so it only ever affects this org's own session, never anyone else's —
+  // the API call itself is scoped to the logged-in user's organization.
+  // Falls back to the #0085FF default (already the var's value in
+  // index.css) if nothing's been saved yet.
+  useEffect(() => {
+    if (!userIsAuthenticated) return;
+    API.get("/branding")
+      .then((res) => {
+        const primary = res.data?.colors?.primary;
+        if (!primary) return;
+        document.documentElement.style.setProperty("--btn-primary", primary);
+        document.documentElement.style.setProperty("--btn-primary-hover", darken(primary, 0.15));
+      })
+      .catch(() => {});
+  }, [userIsAuthenticated]);
 
   // Define routes where navbar and header should be hidden
   const authRoutes = [
@@ -842,6 +877,10 @@ function App() {
         <ChecklistModal
           showChecklist={showChecklist}
           setShowChecklist={setShowChecklist}
+        />
+        <Intercom
+          isAuthenticated={userIsAuthenticated}
+          isSetupComplete={isSetupComplete}
         />
       </div>
       </TopLoadingBarProvider>

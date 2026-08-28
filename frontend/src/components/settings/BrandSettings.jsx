@@ -33,7 +33,7 @@ function BrandSettings() {
     logoUrl: "",
     signatureUrl: "",
     colors: {
-      primary: "#3B82F6",
+      primary: "#0085FF",
       secondary: "#8B5CF6",
     },
   });
@@ -55,7 +55,14 @@ function BrandSettings() {
     API.get("/branding")
       .then((res) => {
         if (res.data) {
-          setForm(res.data);
+          setForm((prev) => ({
+            ...prev,
+            ...res.data,
+            colors: {
+              primary: res.data.colors?.primary || prev.colors.primary,
+              secondary: res.data.colors?.secondary || prev.colors.secondary,
+            },
+          }));
           if (res.data.logoUrl) {
             setLogoPreview(res.data.logoUrl);
           }
@@ -630,12 +637,18 @@ function BrandSettings() {
             </div>
 
             <div className="grid md:grid-cols-1 gap-6">
-              {/* Primary Color */}
-              {/* <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
+              {/* Primary Color — drives every button's fill app-wide (the
+                  --btn-primary CSS variable). Whatever's picked here
+                  replaces the #0085FF default everywhere it's used, for
+                  this organization only. */}
+              <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-4">
                   <Palette className="w-4 h-4" />
-                  Primary Color
+                  Button Colour
                 </label>
+                <p className="text-xs text-gray-500 -mt-3 mb-4">
+                  Sets the fill colour for every button across your CRM.
+                </p>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -671,7 +684,7 @@ function BrandSettings() {
                     {errors.primary}
                   </p>
                 )}
-              </div> */}
+              </div>
 
               {/* Secondary Color */}
               <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
