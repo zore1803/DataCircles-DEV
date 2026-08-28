@@ -731,7 +731,7 @@ const Navbar = () => {
               <span
                 className={`flex items-center justify-center flex-shrink-0 rounded text-white text-[14px] font-medium leading-[102%] ${isHovered || isMobileOpen ? "w-7 h-7" : "w-8 h-8"
                   }`}
-                style={{ background: "#0085FF" }}
+                style={{ background: "var(--btn-primary)" }}
               >
                 {getInitials(branding?.companyName)}
               </span>
@@ -761,7 +761,7 @@ const Navbar = () => {
                 <div className="flex items-center gap-1.5 px-2 py-2 bg-[#F5FAFF]">
                   <span
                     className="flex items-center justify-center w-7 h-7 flex-shrink-0 rounded text-white text-[14px] font-medium leading-[102%]"
-                    style={{ background: "#0085FF" }}
+                    style={{ background: "var(--btn-primary)" }}
                   >
                     {getInitials(branding?.companyName)}
                   </span>

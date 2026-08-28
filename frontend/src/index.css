@@ -86,6 +86,20 @@
   border-color: var(--btn-primary) !important;
 }
 
+/* Same blanket re-theme, for hover TEXT colour — every hover:text-blue-*
+   shade used across the app now turns --btn-primary on hover too. */
+.hover\:text-blue-600:hover,
+.hover\:text-blue-700:hover,
+.hover\:text-blue-800:hover,
+.hover\:text-blue-900:hover,
+.hover\:text-sky-600:hover,
+.hover\:text-sky-700:hover,
+.text-blue-600,
+.text-blue-700,
+.text-blue-800 {
+  color: var(--btn-primary) !important;
+}
+
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via
    `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
    whenever the sidebar expands/collapses/pins. Most of those inline styles

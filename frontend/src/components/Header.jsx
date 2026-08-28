@@ -1412,7 +1412,7 @@ const Header = () => {
                     style={{
                       padding: "0px 16px",
                       gap: 10,
-                      borderBottom: isActive ? "3px solid #0A5AFE" : "3px solid transparent",
+                      borderBottom: isActive ? "3px solid var(--btn-primary)" : "3px solid transparent",
                     }}
                   >
                     <tab.icon size={20} style={{ color: isActive ? "#1B66FE" : "#1C1B1F" }} />
@@ -1424,7 +1424,7 @@ const Header = () => {
                         fontSize: 14,
                         lineHeight: "150%",
                         letterSpacing: isActive ? "-0.04em" : "-0.02em",
-                        color: isActive ? "#0A5AFE" : "#1D1E22",
+                        color: isActive ? "var(--btn-primary)" : "#1D1E22",
                       }}
                     >
                       {tab.name}
