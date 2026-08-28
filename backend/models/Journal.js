@@ -34,8 +34,9 @@ const journalSchema = new mongoose.Schema(
     openingBalance: { type: Number, default: 0, min: 0 },
     balanceType: { type: String, enum: ["Debit", "Credit"], default: "Debit" },
     currentBalance: { type: Number, default: 0 },
+    closingBalance: { type: Number, default: null },
 
-    status: { type: String, enum: ["active", "cancelled"], default: "active" },
+    status: { type: String, enum: ["active", "cancelled", "settled"], default: "active" },
   },
   { timestamps: true }
 );

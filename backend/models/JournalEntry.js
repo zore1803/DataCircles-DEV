@@ -39,6 +39,8 @@ const journalEntrySchema = new mongoose.Schema(
     // stored (not recomputed) so the Ledger can render instantly without
     // replaying every prior entry.
     balanceAfter: { type: Number, required: true },
+
+    isClosingEntry: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

@@ -18,6 +18,9 @@ router.get("/:id", requireAuth, subscriptionGate, journalController.getJournalBy
 router.get("/:id/ledger", requireAuth, subscriptionGate, journalController.getJournalLedger);
 router.post("/:id/entries", requireAuth, subscriptionGate, journalController.addJournalEntry);
 router.delete("/:id/entries/:entryId", requireAuth, subscriptionGate, journalController.deleteJournalEntry);
+router.post("/:id/close", requireAuth, subscriptionGate, journalController.closeJournal);
+router.post("/:id/cancel", requireAuth, subscriptionGate, journalController.cancelJournal);
+router.post("/:id/reopen", requireAuth, subscriptionGate, journalController.reopenJournal);
 router.put("/:id", requireAuth, subscriptionGate, journalController.updateJournal);
 router.delete("/:id", requireAuth, subscriptionGate, journalController.deleteJournal);
 

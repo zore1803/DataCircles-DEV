@@ -241,6 +241,12 @@ exports.deleteJournalEntry = async (req, res) => {
       return res.status(404).json({ error: "Journal not found or access denied" });
     }
 
+    if (journal.status === "cancelled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Cannot delete entries from a cancelled journal" });
+    }
+
     const target = await JournalEntry.findOne({
       _id: req.params.entryId,
       journal: journal._id,
@@ -251,6 +257,12 @@ exports.deleteJournalEntry = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
       return res.status(404).json({ error: "Entry not found" });
+    }
+
+    if (target.isClosingEntry) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Cannot manually delete a closing settlement entry" });
     }
 
     await JournalEntry.deleteOne({ _id: target._id }).session(session);
@@ -324,6 +336,7 @@ exports.getJournalLedger = async (req, res) => {
         payIn: e.type === "payin" ? e.amount : null,
         payOut: e.type === "payout" ? e.amount : null,
         balance: e.balanceAfter,
+        isClosingEntry: e.isClosingEntry || false,
       })),
     ];
 
@@ -341,6 +354,174 @@ exports.getJournalLedger = async (req, res) => {
       },
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Close Journal — Injects a closing settlement entry to zero the balance,
+// saves that state to `closingBalance`, and marks it `settled`.
+exports.closeJournal = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const journal = await Journal.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!journal) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Journal not found or access denied" });
+    }
+
+    if (journal.status === "settled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Journal is already settled" });
+    }
+    if (journal.status === "cancelled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Cannot close a cancelled journal" });
+    }
+
+    const currentBalance = journal.currentBalance;
+    journal.closingBalance = currentBalance;
+
+    if (currentBalance !== 0) {
+      // If we are in profit (balance > 0), the settlement is taking money out -> payout
+      // If we are in debt (balance < 0), the settlement is putting money in -> payin
+      const settlementType = currentBalance > 0 ? "payout" : "payin";
+      const settlementAmount = Math.abs(currentBalance);
+
+      await JournalEntry.create(
+        [
+          {
+            organization: req.user.organization,
+            journal: journal._id,
+            user: req.user._id,
+            type: settlementType,
+            date: new Date(),
+            amount: settlementAmount,
+            notes: "Account Closed - Final Settlement",
+            isClosingEntry: true,
+            balanceAfter: 0,
+          },
+        ],
+        { session }
+      );
+
+      journal.currentBalance = 0;
+    }
+
+    journal.status = "settled";
+    await journal.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+    res.json(journal);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Cancel Journal — simply marks it `cancelled` without a settlement entry.
+exports.cancelJournal = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const journal = await Journal.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!journal) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Journal not found or access denied" });
+    }
+
+    if (journal.status === "cancelled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Journal is already cancelled" });
+    }
+    if (journal.status === "settled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Cannot cancel a settled journal" });
+    }
+
+    journal.status = "cancelled";
+    await journal.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+    res.json(journal);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.reopenJournal = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const journal = await Journal.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    }).session(session);
+
+    if (!journal) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: "Journal not found or access denied" });
+    }
+
+    if (journal.status !== "cancelled" && journal.status !== "settled") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: "Only cancelled or settled journals can be reopened" });
+    }
+
+    // Find and delete the closing entry if it exists
+    await JournalEntry.deleteOne({
+      journal: journal._id,
+      isClosingEntry: true
+    }).session(session);
+
+    // Recalculate balance
+    const remaining = await JournalEntry.find({ journal: journal._id })
+      .sort({ date: 1, createdAt: 1 })
+      .session(session);
+
+    let runningBalance = toSignedBalance(journal.openingBalance, journal.balanceType);
+    for (const entry of remaining) {
+      runningBalance += entry.type === "payin" ? entry.amount : -entry.amount;
+      entry.balanceAfter = runningBalance;
+      await entry.save({ session });
+    }
+
+    journal.currentBalance = runningBalance;
+    journal.closingBalance = null;
+    journal.status = "active";
+    await journal.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ message: "Journal reopened successfully", journal });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ error: err.message });
   }
 };
