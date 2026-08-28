@@ -1389,53 +1389,9 @@ const Header = () => {
         className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 sm:px-6 lg:px-8 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
-        {/* Left Section: Breadcrumb / Dashboard tabs */}
-        <div className="flex items-center gap-4 h-full">
-          {location.pathname === "/" ? (
-            <span className="text-base font-semibold text-gray-900">
-              Dashboard
-            </span>
-          ) : location.pathname.startsWith("/tasks") ? (
-            <span className="text-base font-semibold text-gray-900">
-              Tasks & Meetings
-            </span>
-          ) : location.pathname.startsWith("/accounting") ? (
-            <div className="flex flex-col justify-center gap-[6px]">
-              <h1 className="m-0 leading-[120%] font-medium text-[16px] text-[#0E121B] tracking-[-0.5px]">
-                Accounting
-              </h1>
-              <p className="m-0 leading-[14px] text-[12px] text-[#525866] font-inter">
-                Create, manage, and track all your documents
-              </p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {getBreadcrumb().map((crumb, idx, arr) => {
-                const isLast = idx === arr.length - 1;
-                return (
-                  <span key={idx} className="flex items-center gap-2">
-                    {isLast ? (
-                      <span className="text-base font-semibold text-gray-900">
-                        {crumb.label}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => navigate(crumb.path)}
-                        className="text-base font-semibold text-gray-500 hover:text-gray-700 hover:underline transition-colors"
-                      >
-                        {crumb.label}
-                      </button>
-                    )}
-                    {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
         {/* Right Section: Promo Buttons, Search & Actions */}
-        <div className="flex items-center gap-2 lg:gap-4">
+        <div className="flex items-center gap-2 lg:gap-4 ml-auto">
           {/* Promo Buttons */}
           <div className="hidden md:flex items-center gap-4">
             {(() => {

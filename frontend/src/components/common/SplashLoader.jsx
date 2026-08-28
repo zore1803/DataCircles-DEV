@@ -1,4 +1,4 @@
-import logo from "/DataCircles.png";
+import logo from "/DC Circle Logo.png";
 
 // Shown during PrivateRoute's initial auth check (once per hard refresh /
 // fresh login) instead of a generic skeleton — the logo grows while
