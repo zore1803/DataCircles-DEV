@@ -132,7 +132,7 @@ function Dashboard() {
   };
   const DASHBOARD_TABS = ["Overview", "CRM", "Invoices"];
   const DashboardTabSwitcher = () => (
-    <div className="inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full">
+    <div className="inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full flex-shrink-0">
       {DASHBOARD_TABS.map((name) => {
         const isActive = activeDashboardTab === name;
         return (
@@ -1310,34 +1310,6 @@ function Dashboard() {
             boxSizing: "border-box",
           }}
         >
-          <div
-            className="flex flex-col items-start flex-shrink-0"
-            style={{ gap: 6, width: 614, height: 39 }}
-          >
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "120%",
-                letterSpacing: "-0.5px",
-                color: "#0E121B",
-              }}
-            >
-              CRM
-            </span>
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "120%",
-                color: "#525866",
-              }}
-            >
-              A consolidated view of your CRM activity
-            </span>
-          </div>
           <DashboardTabSwitcher />
         </div>
         {/* Spacer to offset the fixed header bar */}
@@ -1453,34 +1425,6 @@ function Dashboard() {
             boxSizing: "border-box",
           }}
         >
-          <div
-            className="flex flex-col items-start flex-shrink-0"
-            style={{ gap: 6, width: 614, height: 39 }}
-          >
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "120%",
-                letterSpacing: "-0.5px",
-                color: "#0E121B",
-              }}
-            >
-              Invoices
-            </span>
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "120%",
-                color: "#525866",
-              }}
-            >
-              Visual summary of key lead performance metrics and your data
-            </span>
-          </div>
           <DashboardTabSwitcher />
         </div>
         {/* Spacer to offset the fixed header bar */}
