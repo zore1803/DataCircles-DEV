@@ -1277,11 +1277,18 @@ exports.getCurrentSubscription = async (req, res) => {
 // Start free trial
 exports.startFreeTrial = async (req, res) => {
   try {
-    const existingSubscription = await Subscription.findOne({
+    // Check trialUsed across every Subscription document this org has ever
+    // had (not just findOne's arbitrary pick) — an org can accumulate more
+    // than one historical document (cancelled/expired ones are allowed to
+    // coexist with a new current one, see the BUG-002 partial unique index
+    // below), and trialUsed is a permanent per-organization flag: if any of
+    // them ever started a trial, this org has used its one free trial.
+    const trialAlreadyUsed = await Subscription.exists({
       organization: req.user.organization,
+      trialUsed: true,
     });
 
-    if (existingSubscription && existingSubscription.trialUsed) {
+    if (trialAlreadyUsed) {
       return res.status(400).json({
         error: "Free trial already used for this organization",
       });

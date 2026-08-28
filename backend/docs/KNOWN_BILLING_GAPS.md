@@ -194,37 +194,26 @@ reading the component; the "used to be there" claim itself is unverified.
 same header slot specifically when there is no subscription at all, distinct
 from the trial-countdown/upgrade CTA shown once one exists.
 
-### Trial can create a SECOND `Subscription` document for an organization
+### Trial could create a SECOND `Subscription` document for an organization
 
-**Status: confirmed by code trace, NOT yet reproduced against a live org.**
+**Status: FIXED.** `startFreeTrial`'s precondition was
+`existingSubscription?.trialUsed`, where `existingSubscription` came from
+`Subscription.findOne({organization})` — an arbitrary single document, not
+"has this org ever trialed." An org with a prior paid subscription that was
+later cancelled without ever trialing (so `trialUsed` stayed `false` on that
+document) could call `POST /subscription/trial` again, pass the guard, and
+get a second free trial via a second inserted document.
 
-`startFreeTrial`'s only precondition is `existingSubscription?.trialUsed`
-(`subscriptionController.js:406`). There is no unique index on
-`Subscription.organization` (confirmed absent — grepped `models/Subscription.js`).
-`trialUsed` defaults to `false` and its only setter in the entire codebase is
-inside `startFreeTrial` itself (`models/Subscription.js:59`,
-`subscriptionController.js:429`).
+Fixed by checking `trialUsed` across every Subscription document the org has
+ever had (`Subscription.exists({organization, trialUsed: true})`) instead of
+trusting whichever single document `findOne` happened to return —
+`trialUsed` is a permanent, org-wide, one-time flag, not a per-document one.
 
-**Concrete reproduction path:** an organization with a prior **paid**
-subscription that was later cancelled, and which never actually started a
-trial (so `trialUsed` stayed `false` on that document), calls
-`POST /subscription/trial` again. The `trialUsed` guard passes (it's false).
-`startFreeTrial` does `new Subscription({...})` — an INSERT, not an update —
-creating a second document for the same organization.
-
-**Why this matters:** violates the system invariant "every Organization owns
-at most one Subscription" (`BillingArchitecture.md`). Every controller in the
-codebase does `Subscription.findOne({organization})`, which would then return
-an arbitrary one of the two documents (whichever Mongo's natural order
-surfaces first) — meaning behavior would become non-deterministic per-query,
-not just wrong once.
-
-**Fix direction (not yet implemented):** either add a unique index on
-`Subscription.organization` (forces an explicit decision about what happens
-to the old document — archive? reuse?), or change `startFreeTrial`'s
-precondition to `if (existingSubscription)` (any existing subscription blocks
-a new trial, not just a used one) and route cancelled/lapsed orgs through a
-dedicated "reactivate" path instead of trial creation.
+The pre-existing BUG-002 partial unique index on `{organization: 1}`
+(filtered to `appStatus: trial/active/past_due`) already prevents two
+*current* subscriptions from coexisting and was left as-is — the bug here
+was specifically the trial-eligibility check reading the wrong scope, not
+the index.
 
 ### Duplicate access-control implementation (`middlewares/subscriptionCheck.js`)
 
