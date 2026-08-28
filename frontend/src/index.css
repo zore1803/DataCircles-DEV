@@ -45,6 +45,45 @@
    and matches the sidebar's default collapsed state. */
 :root {
   --content-inset: 0px;
+  /* Single source of truth for every primary/action button's fill colour
+     across the whole app. Change this one value to re-theme every button
+     at once instead of editing files one by one. Never applied to icons —
+     only backgrounds/borders via .btn-primary-* below or the var() itself
+     where a component needs it inline (e.g. gradient buttons). */
+  --btn-primary: #0085FF;
+  --btn-primary-hover: #0070d9;
+}
+
+/* Solid primary button fill. Use instead of bg-blue-600 / bg-[#158FFF] /
+   bg-[#0C4FCD] / etc. so every "main action" button re-colors from the one
+   --btn-primary variable above. */
+.btn-primary-bg {
+  background-color: var(--btn-primary);
+}
+.btn-primary-bg:hover {
+  background-color: var(--btn-primary-hover);
+}
+.btn-primary-border {
+  border-color: var(--btn-primary);
+}
+
+/* Blanket re-theme: every button across the app that used one of these
+   hardcoded brand-blue shades now pulls from --btn-primary instead, so
+   changing that one variable above re-colors all of them at once. Scoped to
+   background/border utilities only — text-*/fill-*/stroke-* (icons, links,
+   chart colors) are deliberately left untouched. */
+.bg-blue-600,
+.bg-\[\#0C4FCD\],
+.bg-\[\#158FFF\] {
+  background-color: var(--btn-primary) !important;
+}
+.hover\:bg-blue-700:hover,
+.hover\:bg-blue-600:hover {
+  background-color: var(--btn-primary-hover) !important;
+}
+.border-\[\#0C4FCD\],
+.border-\[\#158FFF\] {
+  border-color: var(--btn-primary) !important;
 }
 
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via

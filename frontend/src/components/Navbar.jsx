@@ -106,7 +106,7 @@ const CTA_PILL =
 
 const CTA_PILL_STYLE = {
   background:
-    "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
+    "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), var(--btn-primary)",
   boxShadow: "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
 };
 

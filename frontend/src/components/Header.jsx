@@ -1514,7 +1514,7 @@ const Header = () => {
                       className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
                       style={{
                         background:
-                          "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
+                          "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), var(--btn-primary)",
                         boxShadow:
                           "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
                       }}
@@ -1526,7 +1526,7 @@ const Header = () => {
                         className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
                         style={{
                           background:
-                            "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
+                            "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), var(--btn-primary)",
                           boxShadow:
                             "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
                         }}
