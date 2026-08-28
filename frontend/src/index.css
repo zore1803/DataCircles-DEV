@@ -100,6 +100,18 @@
   color: var(--btn-primary) !important;
 }
 
+/* App-boot splash (PrivateRoute's initial auth check, once per hard
+   refresh) — logo grows while spinning in a full circle, on loop for as
+   long as loading takes, then just unmounts ("vanishes") once ready. */
+@keyframes dc-splash-spin-grow {
+  0% { transform: scale(0.8) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(180deg); }
+  100% { transform: scale(0.8) rotate(360deg); }
+}
+.dc-splash-logo {
+  animation: dc-splash-spin-grow 1.8s ease-in-out infinite;
+}
+
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via
    `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
    whenever the sidebar expands/collapses/pins. Most of those inline styles

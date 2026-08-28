@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useEffect, useState, useRef } from "react";
 import API, { configureAxios } from "../services/api";
-import logo from "/DataCircles.png";
+import SplashLoader from "./common/SplashLoader";
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, isLoading, getAccessTokenSilently, logout } =
@@ -132,11 +132,11 @@ function PrivateRoute({ children }) {
   ) {
     return (
       <>
-        <PageSkeleton variant="generic" />
+        <SplashLoader />
         {retryCount > 0 && (
           <div
-            className="fixed z-30 flex justify-center"
-            style={{ top: 80, left: "var(--sidebar-width, 0px)", right: 0 }}
+            className="fixed z-[10000] flex justify-center"
+            style={{ top: 80, left: 0, right: 0 }}
           >
             <p className="rounded-full bg-white px-4 py-1.5 text-sm text-gray-500 shadow">
               Retrying connection... ({retryCount}/2)
@@ -209,4 +209,3 @@ function PrivateRoute({ children }) {
 }
 
 export default PrivateRoute;
-import PageSkeleton from "./common/PageSkeleton";
