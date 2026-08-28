@@ -2167,40 +2167,7 @@ function Dashboard() {
           borderBottom: "1px solid #E1E4EA",
           boxSizing: "border-box",
         }}
-      >
-        <div
-          className="flex flex-col items-start flex-shrink-0"
-          style={{ gap: 6, width: 614, height: 39 }}
-        >
-          <span
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "120%",
-              letterSpacing: "-0.5px",
-              color: "#0E121B",
-            }}
-          >
-            Overview
-          </span>
-          {loading ? (
-            <Skeleton width={260} height={12} />
-          ) : (
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "120%",
-                color: "#525866",
-              }}
-            >
-              Visual summary of key lead performance metrics and your data
-            </span>
-          )}
-        </div>
-      </div>
+      />
       {/* Spacer to offset the fixed header bar */}
       <div className="h-[72px] lg:h-16" />
 

@@ -1397,38 +1397,25 @@ const Header = () => {
         {/* Left Section: Breadcrumb / Dashboard tabs */}
         <div className="flex items-center gap-4 h-full">
           {location.pathname === "/" ? (
-            <div className="flex flex-row items-center h-full">
+            <div className="inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full">
               {[
-                { name: "Overview", icon: LayoutDashboard },
-                { name: "CRM", icon: CRMIcon },
-                { name: "Invoices", icon: InvoicesIcon },
+                { name: "Overview" },
+                { name: "CRM" },
+                { name: "Invoices" },
               ].map((tab) => {
                 const isActive = activeDashboardTab === tab.name;
                 return (
                   <button
                     key={tab.name}
                     onClick={() => setActiveDashboardTab(tab.name)}
-                    className="box-border flex flex-row justify-center items-center flex-shrink-0 h-full"
-                    style={{
-                      padding: "0px 16px",
-                      gap: 10,
-                      borderBottom: isActive ? "3px solid var(--btn-primary)" : "3px solid transparent",
-                    }}
+                    className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      isActive
+                        ? "bg-white shadow-sm"
+                        : "text-gray-700 hover:text-gray-900"
+                    }`}
+                    style={isActive ? { color: "var(--btn-primary)" } : undefined}
                   >
-                    <tab.icon size={20} style={{ color: isActive ? "#1B66FE" : "#1C1B1F" }} />
-                    <span
-                      className="whitespace-nowrap"
-                      style={{
-                        fontFamily: "Inter",
-                        fontWeight: 600,
-                        fontSize: 14,
-                        lineHeight: "150%",
-                        letterSpacing: isActive ? "-0.04em" : "-0.02em",
-                        color: isActive ? "var(--btn-primary)" : "#1D1E22",
-                      }}
-                    >
-                      {tab.name}
-                    </span>
+                    {tab.name}
                   </button>
                 );
               })}
