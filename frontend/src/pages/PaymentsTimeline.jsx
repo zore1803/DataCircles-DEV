@@ -1540,7 +1540,7 @@ export default function PaymentsTimeline() {
               {/* Selection column */}
               <th
                 style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 20 }}
-                className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#C7CCD6]"
+                className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r-2 border-[#C7CCD6]"
               >
                 <div className="flex justify-center items-center">
                   <input
@@ -1570,7 +1570,7 @@ export default function PaymentsTimeline() {
                       opacity: isDragging ? 0.35 : 1,
                       ...stickyStyleFor(col.id),
                     }}
-                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] border-b border-r border-[#C7CCD6] transition-colors ${
+                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] border-b border-r-2 border-[#C7CCD6] transition-colors ${
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
