@@ -33,6 +33,7 @@ import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 import TableSkeletonRows from "../common/TableSkeletonRows";
 import Skeleton from "../common/Skeleton";
+import StatTile from "../common/StatTile";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import BulkActionBar from "../common/BulkActionBar";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
@@ -605,23 +606,7 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
               Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
             ) : (
               kpiTiles.map((tile) => (
-                <div key={tile.label} className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl">
-                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                    <tile.icon size={18} />
-                  </div>
-                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                    <tile.icon size={20} />
-                  </div>
-                  <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                      <p className={`font-semibold text-gray-900 ${tile.valueSmall ? "text-sm" : "text-base"}`}>{tile.value}</p>
-                    </div>
-                    {tile.subtitle && (
-                      <span className={`text-[11px] flex-shrink-0 whitespace-nowrap ${tile.subtitleClass}`}>{tile.subtitle}</span>
-                    )}
-                  </div>
-                </div>
+                <StatTile key={tile.label} tile={tile} />
               ))
             )}
           </div>

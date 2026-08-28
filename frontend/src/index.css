@@ -52,6 +52,10 @@
      where a component needs it inline (e.g. gradient buttons). */
   --btn-primary: #0085FF;
   --btn-primary-hover: #0070d9;
+  /* Sidebar + header background. Navbar.jsx overwrites this at runtime with a
+     pale wash of the org's Brand Settings button colour; this default is the
+     wash of the #0085FF default above. */
+  --chrome-bg: #EBF6FF;
 }
 
 /* Solid primary button fill. Use instead of bg-blue-600 / bg-[#158FFF] /

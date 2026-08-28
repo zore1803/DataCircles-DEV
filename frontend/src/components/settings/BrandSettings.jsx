@@ -274,6 +274,11 @@ function BrandSettings() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      // The sidebar/header tint derives from the button colour, and the
+      // Navbar only fetches branding on mount - tell it to refetch so the
+      // chrome retints on save instead of on the next full page load.
+      window.dispatchEvent(new CustomEvent("branding-updated"));
+
       setSaveSuccess(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -646,7 +651,8 @@ function BrandSettings() {
                   Button Colour
                 </label>
                 <p className="text-xs text-gray-500 -mt-3 mb-4">
-                  Sets the fill colour for every button across your CRM.
+                  Sets the fill colour for every button across your CRM, and
+                  tints the sidebar and header with a pale wash of it.
                 </p>
                 <div className="flex items-center gap-3">
                   <input

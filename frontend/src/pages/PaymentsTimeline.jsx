@@ -31,6 +31,7 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import PaymentReceiptModal from "../components/vendor/PaymentReceiptModal";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
+import StatTile from "../components/common/StatTile";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -43,9 +44,9 @@ const DEFAULT_COL_WIDTHS = {
   date: 180,
 };
 const MIN_COL_WIDTH = 60;
-// Matches Deals.jsx's KPI band desktop height (h-[120px]) so the two pages'
+// Matches Deals.jsx's KPI band desktop height (h-[104px]) so the two pages'
 // header/stats layout lines up the same way.
-const KPI_BAND_HEIGHT = 120;
+const KPI_BAND_HEIGHT = 104;
 // Bottom edge of the fixed toolbar (top-16 = 64px offset + header height).
 // The KPI band and the table both hang off this, so they sit flush against the
 // toolbar and against each other — hardcoding 126/130 here left a 2px overlap
@@ -1496,29 +1497,14 @@ export default function PaymentsTimeline() {
               { label: "Total Debit", value: `₹${paymentStats.totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingDown, iconClass: "text-red-600" },
               { label: "Net", value: `₹${paymentStats.net.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: Wallet, iconClass: paymentStats.net >= 0 ? "text-green-600" : "text-red-600" },
               { label: "Transactions", value: paymentStats.count, icon: ListChecks, iconClass: "text-[#0085FF]" },
-            ].map(({ label, value, icon: Icon, iconClass }) => (
-              <div
-                key={label}
-                className="box-border flex flex-row items-center justify-between min-w-0 lg:min-w-[200px] lg:w-[280px] lg:flex-1 bg-white"
-                style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
-              >
-                <div className="flex flex-row items-center min-w-0" style={{ gap: "14px" }}>
-                  <div
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: "40px", height: "40px", padding: "8px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
-                  >
-                    <Icon className={`w-5 h-5 ${iconClass}`} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: "4px" }}>
-                    <span className="truncate text-xs" style={{ color: "#525866" }}>
-                      {label}{paymentStats.isFiltered ? " (selected)" : ""}
-                    </span>
-                    <span className="truncate text-lg font-semibold" style={{ color: "#0E121B" }}>
-                      {value}
-                    </span>
-                  </div>
-                </div>
-              </div>
+            ].map((kpi) => (
+              <StatTile
+                key={kpi.label}
+                tile={{
+                  ...kpi,
+                  label: `${kpi.label}${paymentStats.isFiltered ? " (selected)" : ""}`,
+                }}
+              />
             ))}
           </div>
         </div>

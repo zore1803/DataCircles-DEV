@@ -60,6 +60,7 @@ import CompanyForm from "../components/company/CompanyForm";
 import QuickCompanyForm from "../components/company/QuickCompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
+import StatTile from "../components/common/StatTile";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
 
 const tabs = [
@@ -330,7 +331,7 @@ const CompanyProfilePage = () => {
   // Deal stages: the data model only tracks Open/Won/Lost (no Lead/Qualified/
   // Negotiation sub-stages), so the pipeline funnel reflects that.
   const pipelineStages = [
-    { key: "Open", label: "Open", color: "bg-gray-100 text-gray-700" },
+    { key: "Open", label: "Open", color: "bg-yellow-50 text-yellow-700" },
     { key: "Won", label: "Won", color: "bg-green-100 text-green-700" },
     { key: "Lost", label: "Lost", color: "bg-red-50 text-red-600" },
   ];
@@ -1197,25 +1198,7 @@ const CompanyProfilePage = () => {
             {showOverviewSkeleton
               ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
               : statTiles.map((tile) => (
-                <div
-                  key={tile.label}
-                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                >
-                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                    <tile.icon size={18} />
-                  </div>
-                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                    <tile.icon size={20} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
-                      {tile.label}
-                    </p>
-                    <p className="truncate w-full text-xs sm:text-sm font-semibold text-gray-900">
-                      {tile.value}
-                    </p>
-                  </div>
-                </div>
+                <StatTile key={tile.label} tile={tile} />
               ))}
           </div>
         )}

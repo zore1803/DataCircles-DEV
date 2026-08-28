@@ -109,6 +109,32 @@ const CTA_PILL_STYLE = {
   boxShadow: "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
 };
 
+// Shared chrome background for the sidebar + header, which are one continuous
+// surface. The live value is the --chrome-bg variable, derived below from the
+// organization's Brand Settings button colour; the literal here is only the
+// fallback for the moment before branding loads (and for logged-out shells).
+const CHROME_BG = "var(--chrome-bg, #FFF3E8)";
+
+// The chrome is a wash of the brand colour, not the brand colour itself: at
+// full saturation a picked hue makes an unreadable sidebar. This mixes the hex
+// toward white so any colour lands at the same pale weight the design expects.
+const CHROME_TINT_STRENGTH = 0.92;
+
+const toChromeTint = (hex) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
+  if (!m) return null;
+  const int = parseInt(m[1], 16);
+  const mix = (channel) =>
+    Math.round(channel + (255 - channel) * CHROME_TINT_STRENGTH);
+  return `rgb(${mix((int >> 16) & 255)}, ${mix((int >> 8) & 255)}, ${mix(int & 255)})`;
+};
+
+// Cuts the quarter-disc out of the corner patch: opaque (chrome) outside the
+// 16px radius, fully transparent inside it, so whatever the page paints under
+// the corner shows through instead of a hardcoded page colour.
+const CORNER_MASK =
+  "radial-gradient(circle 16px at 100% 100%, transparent 0 16px, #000 16px)";
+
 const primary = {
   darknavy: "#16153C",
   indigo: "#3C38BD",
@@ -155,14 +181,14 @@ const Navbar = () => {
   // that content using the var (the <main> margin, and the many fixed-position
   // toolbars/headers across pages) shifts in step with the hover expand/collapse
   // instead of staying pinned at the collapsed 64px and letting the expanded
-  // 280px panel overlay the page.
+  // 240px panel overlay the page.
   useEffect(() => {
     const applyWidth = () => {
       const isExpanded = isHovered || isPinned;
       if (window.innerWidth >= 1024) {
         document.documentElement.style.setProperty(
           "--sidebar-width",
-          isExpanded ? "280px" : "64px"
+          isExpanded ? "240px" : "64px"
         );
       } else {
         document.documentElement.style.setProperty("--sidebar-width", "0px");
@@ -175,17 +201,6 @@ const Navbar = () => {
     window.addEventListener("resize", applyWidth);
     return () => window.removeEventListener("resize", applyWidth);
   }, [isHovered, isPinned]);
-
-  // Keep --sidebar-width in sync with hover/mobile state so the main content
-  // area shifts correctly and never gets covered by the expanded sidebar.
-  useEffect(() => {
-    if (window.innerWidth >= 1024) {
-      document.documentElement.style.setProperty(
-        "--sidebar-width",
-        isHovered ? "256px" : "64px"
-      );
-    }
-  }, [isHovered]);
 
   useEffect(() => {
     const toggle = () => setIsMobileOpen((prev) => !prev);
@@ -207,7 +222,23 @@ const Navbar = () => {
 
   useEffect(() => {
     fetchBranding();
+    // Brand Settings fires this on save so the chrome retints immediately.
+    const refetch = () => fetchBranding();
+    window.addEventListener("branding-updated", refetch);
+    return () => window.removeEventListener("branding-updated", refetch);
   }, []);
+
+  // Chrome tint follows the org's Brand Settings button colour. Set on <html>
+  // rather than passed down as a prop because the header, and the per-page
+  // fixed toolbars, need it too - same pattern as --sidebar-width above.
+  useEffect(() => {
+    const tint = toChromeTint(branding?.colors?.primary);
+    if (tint) {
+      document.documentElement.style.setProperty("--chrome-bg", tint);
+    } else {
+      document.documentElement.style.removeProperty("--chrome-bg");
+    }
+  }, [branding?.colors?.primary]);
 
   const getInitials = (name) => {
     if (!name || !name.trim()) return "?";
@@ -578,7 +609,7 @@ const Navbar = () => {
           : "w-72 -translate-x-full lg:translate-x-0"
           } ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
         style={{
-          background: primary.white,
+          background: CHROME_BG,
           // Dims in step with the overlay's own backdrop instead of relying
           // on that backdrop to visually cover this element — the two are
           // unrelated fixed-position layers, and z-index alone wasn't
@@ -599,7 +630,7 @@ const Navbar = () => {
           transition: "width 300ms ease-in-out, transform 300ms ease-in-out",
           width:
             window.innerWidth >= 1024
-              ? (isHovered || isPinned ? "280px" : "64px")
+              ? (isHovered || isPinned ? "240px" : "64px")
               : undefined,
         }}
         onMouseEnter={() => {
@@ -621,7 +652,7 @@ const Navbar = () => {
           }
         }}
       >
-        <div className={`h-16 flex-shrink-0 flex items-center justify-between gap-2 border-b border-gray-100 bg-white ${isHovered || isMobileOpen ? "px-4" : "px-2"}`}>
+        <div style={{ background: CHROME_BG }} className={`relative -mr-px h-16 flex-shrink-0 flex items-center justify-between gap-2 ${isHovered || isMobileOpen ? "px-4" : "px-2"}`}>
           {/* Company switcher — moved here in place of the old logo mark.
               id is a measurement anchor: pages with a `position: fixed`
               header strip (e.g. VendorDetailsPageNew.jsx) read this
@@ -632,10 +663,16 @@ const Navbar = () => {
               type="button"
               onClick={() => setIsCompanyMenuOpen((v) => !v)}
               title={branding?.companyName || "Company"}
-              className={`box-border flex flex-row items-center h-10 bg-white border border-[#E5E5E5] rounded-md hover:bg-gray-50 transition-colors ${isHovered || isMobileOpen
-                ? "self-stretch gap-2.5 pl-1.5 pr-2.5 py-1.5 flex-1"
-                // Collapsed: a 40px square framing a 32px avatar, per the design.
-                : "w-10 justify-center p-1 mx-auto"
+              // min-w-0 so the company name truncates instead of pushing the pin
+              // and collapse buttons out past the panel's right edge - at
+              // 280px the natural width happened to fit, at 240px it doesn't.
+              className={`box-border flex flex-row items-center min-w-0 bg-white border border-[#E5E5E5] rounded-md hover:bg-gray-50 transition-colors ${isHovered || isMobileOpen
+                ? "h-10 self-stretch gap-2.5 pl-1.5 pr-2.5 py-1.5 flex-1"
+                // Collapsed: a 40px square framing a 32px avatar, per the
+                // design. No padding, so justify-center splits the 38px of
+                // inner width (40 less the 1px borders) evenly around the
+                // avatar; any padding here squeezes it off-centre.
+                : "w-10 h-10 justify-center p-0 mx-auto"
                 }`}
             >
               <span
@@ -754,7 +791,7 @@ const Navbar = () => {
             </div>
           )}
         </div>
-        <nav className="flex-1 min-h-0 overflow-y-auto pt-1 pb-2 bg-white flex flex-col">
+        <nav style={{ background: CHROME_BG }} className="flex-1 min-h-0 overflow-y-auto pt-1 pb-2 flex flex-col">
           <ul className="flex-1 flex flex-col justify-evenly px-2  text-black">
             {(isSuperAdmin ? superAdminNavigation : navigation).map(
               (item, index) =>
@@ -920,7 +957,8 @@ const Navbar = () => {
 
         {/* Profile + Logout */}
         <div
-          className="h-16 flex-shrink-0 flex items-center px-4 border-t border-gray-100 bg-white"
+          style={{ background: CHROME_BG }}
+          className="h-16 flex-shrink-0 flex items-center px-4 border-t border-[#E1E4EA]"
         >
           <div
             className={`flex items-center gap-3 cursor-pointer p-2 rounded transition-all duration-300 w-full ${isHovered || isMobileOpen ? "" : "lg:justify-center"
@@ -962,6 +1000,70 @@ const Navbar = () => {
           </div>
         </div>
       </div>
+
+      {/*
+        Concave corner joining the sidebar to the header.
+
+        The sidebar and the header are one continuous CHROME_BG surface; where
+        the content area begins, their two borders used to meet at a hard right
+        angle. Three pieces make that a curve:
+
+        1. A 1px CHROME_BG strip hiding the sidebar's right border above the
+           header's bottom line, so the logo block and the header read as one
+           panel rather than two.
+        2. A CHROME_BG square on the junction, masked to a quarter-disc: the
+           radial-gradient mask paints chrome everywhere *outside* the arc -
+           erasing the last 16px of both borders, which the arc replaces - and
+           leaves everything inside it fully transparent. Transparent, not a
+           content-coloured fill: the surface under this corner isn't always
+           white (the Companies list shows a tinted bulk-action strip there),
+           and a white patch showed up as a notch over it.
+        3. The arc itself, drawn with a box-shadow so nothing but the rounded
+           outline paints - a bordered box would render its square outer
+           corner alongside the curve.
+
+        Desktop only: the mobile header is a different height and the sidebar
+        is an overlay there.
+      */}
+      <div
+        aria-hidden="true"
+        className="hidden lg:block fixed z-[9996] pointer-events-none"
+        style={{
+          left: "calc(var(--sidebar-width, 64px) - 1px)",
+          top: "0px",
+          width: "1px",
+          height: "64px",
+          background: CHROME_BG,
+          transition: "left 300ms ease-in-out",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="hidden lg:block fixed z-[9996] pointer-events-none"
+        style={{
+          left: "calc(var(--sidebar-width, 64px) - 1px)",
+          top: "63px",
+          width: "17px",
+          height: "17px",
+          background: CHROME_BG,
+          WebkitMaskImage: CORNER_MASK,
+          maskImage: CORNER_MASK,
+          transition: "left 300ms ease-in-out",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="hidden lg:block fixed z-[9996] pointer-events-none"
+        style={{
+          left: "var(--sidebar-width, 64px)",
+          top: "64px",
+          width: "16px",
+          height: "16px",
+          borderTopLeftRadius: "16px",
+          boxShadow: "-1px -1px 0 0 #E1E4EA",
+          transition: "left 300ms ease-in-out",
+        }}
+      />
     </>
   );
 };

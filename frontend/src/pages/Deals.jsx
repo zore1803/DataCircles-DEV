@@ -84,6 +84,7 @@ import AppToaster from "../components/AppToaster";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
+import StatTile from "../components/common/StatTile";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -2615,7 +2616,7 @@ function Deals() {
 
       {showStats && (
         <div
-          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
+          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[156px] lg:h-[104px] px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 39,
@@ -2629,73 +2630,16 @@ function Deals() {
               { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
               { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: ClipboardList, iconClassName: "w-7 h-7", trend: `${Math.abs(dealStatistics.trends.avgSize)}% this week`, trendUp: dealStatistics.trends.avgSize >= 0 },
               { label: "Deals Lost", value: dealStatistics.lostCount, icon: DealsLostIcon, trend: `${Math.abs(dealStatistics.trends.lost)}% this week`, trendUp: dealStatistics.trends.lost >= 0 },
-            ].map(({ label, value, icon: Icon, iconClassName, trend, trendUp }) => (
-              <div
-                key={label}
-                className="box-border flex flex-row justify-start items-center relative w-full h-[89px] lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0 bg-white"
-                style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
-              >
-                <div className="flex flex-row items-center w-full min-w-0" style={{ gap: "14px" }}>
-                  {/* Mobile: plain icon, no badge/border */}
-                  <Icon className={`flex lg:hidden flex-shrink-0 ${iconClassName || "w-5 h-5"}`} style={{ color: "#0085FF" }} />
-                  {/* Desktop: original bordered icon box */}
-                  <div
-                    className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                    style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
-                  >
-                    <Icon className={iconClassName || "w-6 h-6"} style={{ color: "#0085FF" }} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: "4px" }}>
-                    <span
-                      className="truncate w-full text-[10px] sm:text-xs"
-                      style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, lineHeight: "120%", color: "#525866" }}
-                    >
-                      {label}
-                    </span>
-                    <span
-                      className="truncate w-full text-base sm:text-lg"
-                      style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                    >
-                      {value}
-                    </span>
-                    {/* Trend, inline under the value on mobile */}
-                    {trend && (
-                      <div className="flex lg:hidden flex-row items-center" style={{ gap: 4 }}>
-                        {trendUp ? (
-                          <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                        ) : (
-                          <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                        )}
-                        <span
-                          className="truncate min-w-0 text-[9px]"
-                          style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                        >
-                          {trend}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {/* Trend, absolute bottom-right on desktop */}
-                {trend && (
-                  <div
-                    className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-                    style={{ gap: 4, right: 16, bottom: 16 }}
-                  >
-                    {trendUp ? (
-                      <TrendingUp size={14} style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={14} style={{ color: "#E82222" }} />
-                    )}
-                    <span
-                      className="whitespace-nowrap"
-                      style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                    >
-                      {trend}
-                    </span>
-                  </div>
-                )}
-              </div>
+            ].map((kpi) => (
+              <StatTile
+                key={kpi.label}
+                tile={{
+                  ...kpi,
+                  subtitle: kpi.trend,
+                  subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                  subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
+                }}
+              />
             ))}
           </div>
         </div>

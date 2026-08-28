@@ -7,6 +7,8 @@ import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
 import Skeleton from "../components/common/Skeleton";
+import StatTile from "../components/common/StatTile";
+import StatTileSkeleton from "../components/common/StatTileSkeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
@@ -1322,82 +1324,16 @@ function Dashboard() {
           className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ marginTop: 24 }}
         >
-          {crmKpis.map(({ icon: Icon, label, value, trend, trendUp }, i) => (
-            <div
+          {crmKpis.map((kpi, i) => (
+            <StatTile
               key={i}
-              className="box-border flex flex-row justify-start items-center relative w-full h-[89px] rounded-2xl shadow-sm lg:shadow-none lg:rounded-xl lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0"
-              style={{
-                padding: 16,
-                background: "#FFFFFF",
-                border: "1px solid #E1E4EA",
+              tile={{
+                ...kpi,
+                subtitle: kpi.trend,
+                subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
               }}
-            >
-              <div className="flex flex-row items-center w-full min-w-0" style={{ gap: 14 }}>
-                {/* Mobile: plain icon, no badge/border */}
-                <div className="flex lg:hidden flex-shrink-0">
-                  <Icon size={20} style={{ color: "#0085FF" }} />
-                </div>
-                {/* Desktop: original icon style */}
-                <div
-                  className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    padding: 8,
-                    background: "rgba(255, 255, 255, 0.1)",
-                    border: "1px solid #E1E4EA",
-                    borderRadius: 6,
-                  }}
-                >
-                  <Icon size={24} style={{ color: "#0085FF" }} />
-                </div>
-                <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: 4 }}>
-                  <span
-                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-xs"
-                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", lineHeight: "120%", color: "#525866" }}
-                  >
-                    {label}
-                  </span>
-                  <span
-                    className="truncate w-full text-base sm:text-lg"
-                    style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                  >
-                    {value}
-                  </span>
-                  {/* Trend, inline under the value on mobile */}
-                  <div className="flex lg:hidden flex-row items-center w-full min-w-0" style={{ gap: 4 }}>
-                    {trendUp ? (
-                      <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                    )}
-                    <span
-                      className="truncate min-w-0 text-[9px]"
-                      style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                    >
-                      {trend}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              {/* Trend, absolute bottom-right on desktop */}
-              <div
-                className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-                style={{ gap: 4, right: 16, bottom: 16 }}
-              >
-                {trendUp ? (
-                  <TrendingUp size={14} style={{ color: "#00C950" }} />
-                ) : (
-                  <TrendingDown size={14} style={{ color: "#E82222" }} />
-                )}
-                <span
-                  className="whitespace-nowrap"
-                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                >
-                  {trend}
-                </span>
-              </div>
-            </div>
+            />
           ))}
         </div>
       </div>
@@ -1440,49 +1376,20 @@ function Dashboard() {
             { icon: RevenueGeneratedIcon, label: "Paid Invoices", value: `₹${Math.round(invoiceStats.accepted).toLocaleString("en-IN")}`, trend: `${invoiceKpiTrends.paid.pct}% this month`, trendUp: invoiceKpiTrends.paid.up },
             { icon: TotalDealsClosedIcon, label: "Pending Invoices", value: `₹${Math.round(invoiceStats.sent).toLocaleString("en-IN")}`, trend: `${invoiceKpiTrends.pending.pct}% this month`, trendUp: invoiceKpiTrends.pending.up },
             { icon: DealValueOvertimeIcon, label: "Due Invoices", value: `₹${Math.round(invoiceStats.due).toLocaleString("en-IN")}`, trend: `${invoiceKpiTrends.due.pct}% this month`, trendUp: invoiceKpiTrends.due.up },
-          ].map(({ icon: Icon, label, value, trend, trendUp }, i) => (
-            <div
-              key={i}
-              className="box-border flex flex-col justify-center items-start relative min-w-0"
-              style={{ padding: 16, height: 72, background: "#FFFFFF", border: "1px solid #E1E4EA", borderRadius: 12, flex: "1 1 0" }}
-            >
-              <div className="flex flex-row items-end w-full" style={{ gap: 14, height: 40 }}>
-                <div
-                  className="box-border flex items-center justify-center flex-shrink-0"
-                  style={{ width: 40, height: 40, padding: 8, background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: 6 }}
-                >
-                  <Icon size={24} style={{ color: "#0085FF" }} />
-                </div>
-                <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: 4, height: 40 }}>
-                  <span className="whitespace-nowrap" style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}>
-                    {label}
-                  </span>
-                  {loading ? (
-                    <Skeleton width={70} height={18} />
-                  ) : (
-                    <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}>
-                      {value}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-row items-center flex-shrink-0 absolute" style={{ gap: 4, right: 16, bottom: 16 }}>
-                {loading ? (
-                  <Skeleton width={60} height={12} />
-                ) : (
-                  <>
-                    {trendUp ? (
-                      <TrendingUp size={14} style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={14} style={{ color: "#E82222" }} />
-                    )}
-                    <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}>
-                      {trend}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
+          ].map((kpi, i) => (
+            loading ? (
+              <StatTileSkeleton key={i} subtitle />
+            ) : (
+              <StatTile
+                key={i}
+                tile={{
+                  ...kpi,
+                  subtitle: kpi.trend,
+                  subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                  subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
+                }}
+              />
+            )
           ))}
         </div>
 
@@ -2152,104 +2059,20 @@ function Dashboard() {
           { icon: RevenueGeneratedIcon, label: "Revenue Generated", value: `₹${Math.round(overviewKpis.revenueGenerated).toLocaleString("en-IN")}`, trend: `${overviewKpis.revenueGeneratedTrend.pct}% this month`, trendUp: overviewKpis.revenueGeneratedTrend.up },
           { icon: TotalDealsClosedIcon, label: "Total Deals Closed", value: `${overviewKpis.dealsClosedCount}`, trend: `${overviewKpis.dealsClosedTrend.pct}% this month`, trendUp: overviewKpis.dealsClosedTrend.up },
           { icon: DealValueOvertimeIcon, label: "Deal Value Overtime", value: `₹${Math.round(overviewKpis.dealValue).toLocaleString("en-IN")}`, trend: `${overviewKpis.dealValueTrend.pct}% this month`, trendUp: overviewKpis.dealValueTrend.up },
-        ].map(({ icon: Icon, label, value, trend, trendUp }, i) => (
-          <div
-            key={i}
-            className="box-border flex flex-row justify-start items-center relative w-full h-[89px] rounded-2xl shadow-sm lg:shadow-none lg:rounded-xl lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0"
-            style={{
-              padding: 16,
-              background: "#FFFFFF",
-              border: "1px solid #E1E4EA",
-            }}
-          >
-            <div className="flex flex-row items-center w-full min-w-0" style={{ gap: 14 }}>
-              {loading ? (
-                <Skeleton width={40} height={40} />
-              ) : (
-                <>
-                  {/* Mobile: plain icon, no badge/border */}
-                  <div className="flex lg:hidden flex-shrink-0">
-                    <Icon size={20} style={{ color: "#0085FF" }} />
-                  </div>
-                  {/* Desktop: original icon style */}
-                  <div
-                    className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                    style={{
-                      width: 40,
-                      height: 40,
-                      padding: 8,
-                      background: "rgba(255, 255, 255, 0.1)",
-                      border: "1px solid #E1E4EA",
-                      borderRadius: 6,
-                    }}
-                  >
-                    <Icon size={24} style={{ color: "#0085FF" }} />
-                  </div>
-                </>
-              )}
-              <div className="flex flex-col items-start min-w-0 flex-1 lg:pr-14" style={{ gap: 4 }}>
-                {loading ? (
-                  <Skeleton width={90} height={10} />
-                ) : (
-                  <span
-                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-[11px]"
-                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", lineHeight: "120%", color: "#525866" }}
-                  >
-                    {label}
-                  </span>
-                )}
-                {loading ? (
-                  <Skeleton width={70} height={16} />
-                ) : (
-                  <span
-                    className="truncate w-full text-base sm:text-lg lg:text-base"
-                    style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                  >
-                    {value}
-                  </span>
-                )}
-                {/* Trend, inline under the value on mobile (matches Figma mobile card) */}
-                {!loading && (
-                  <div className="flex lg:hidden flex-row items-center w-full min-w-0" style={{ gap: 4 }}>
-                    {trendUp ? (
-                      <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                    )}
-                    <span
-                      className="truncate min-w-0 text-[9px]"
-                      style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                    >
-                      {trend}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Trend, absolute bottom-right on desktop */}
-            <div
-              className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-              style={{ gap: 4, right: 16, bottom: 16 }}
-            >
-              {loading ? (
-                <Skeleton width={60} height={11} />
-              ) : (
-                <>
-                  {trendUp ? (
-                    <TrendingUp size={14} style={{ color: "#00C950" }} />
-                  ) : (
-                    <TrendingDown size={14} style={{ color: "#E82222" }} />
-                  )}
-                  <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                  >
-                    {trend}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
+        ].map((kpi, i) => (
+          loading ? (
+            <StatTileSkeleton key={i} subtitle />
+          ) : (
+            <StatTile
+              key={i}
+              tile={{
+                ...kpi,
+                subtitle: kpi.trend,
+                subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
+              }}
+            />
+          )
         ))}
       </div>
 
