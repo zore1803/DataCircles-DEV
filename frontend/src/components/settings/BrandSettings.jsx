@@ -269,6 +269,7 @@ function BrandSettings() {
       });
 
       setSaveSuccess(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("Failed to update branding:", error);
