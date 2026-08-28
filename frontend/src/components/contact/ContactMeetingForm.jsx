@@ -402,8 +402,8 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
       onClick={onClose}
     >
       <div
- className="fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
-        style={{ transform: isSliding ? 'translateX(0)' : 'translateX(100%)' }}
+        className="fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
+        style={{ transform: isSliding ? 'translateX(0)' : 'translateX(calc(100% + 2rem))' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-full flex flex-col">
