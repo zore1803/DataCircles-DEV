@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -494,20 +494,6 @@ function Contacts() {
     setSortConfig,
     setCurrentContactIds,
   } = useContactStore();
-
-  // Sliding underline indicator for the tab bar
-  const tabRefs = useRef({});
-  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
-  useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab];
-    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
-    const onResize = () => {
-      const cur = tabRefs.current[activeTab];
-      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [activeTab]);
 
   const fetchFolders = async () => {
     try {
@@ -2369,33 +2355,27 @@ function Contacts() {
               </p>
             </div>
 
-            <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
+            <nav className="hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar flex-shrink-0">
               {[
                 { id: "All", label: "All Contacts" },
                 { id: "Leads", label: "Leads" },
                 { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
                 { id: "Customers", label: "Customers" },
-              ].map(({ id, label }) => (
-                <button
-                  key={id}
-                  ref={(el) => (tabRefs.current[id] = el)}
-                  onClick={() => handleTabChange(id)}
-                  className="flex items-center justify-center px-4 h-full whitespace-nowrap"
-                  style={{
-                    fontFamily: "Inter",
-                    fontWeight: 600,
-                    fontSize: "14px",
-                    letterSpacing: "-0.04em",
-                    color: activeTab === id ? "#0085FF" : "#44444A",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-              <span
-                className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
-                style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
-              />
+              ].map(({ id, label }) => {
+                const isActive = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleTabChange(id)}
+                    className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
+                    }`}
+                    style={isActive ? { color: "var(--btn-primary)" } : undefined}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </nav>
 
             {activeTab !== "Hotlist" && (
