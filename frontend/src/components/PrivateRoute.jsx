@@ -14,20 +14,15 @@ function PrivateRoute({ children }) {
   const isCheckingRef = useRef(false); // Prevent duplicate checks
 
   // The auth check can resolve faster than the splash's one CSS animation
-  // cycle (1.8s), making the logo flash and vanish before it's noticeable.
-  // Hold the splash up for at least one full cycle regardless of how fast
-  // the real check finishes.
+  // cycle (1.8s — the zoom/rotate keyframes fade the logo to opacity 0 in
+  // their own final stretch, see index.css), making it flash and vanish
+  // before it's noticeable. Hold the splash up for the full cycle so the
+  // fade-out is always the animation's own doing, never a hard cut.
   const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setMinSplashElapsed(true), 1800);
     return () => clearTimeout(timer);
   }, []);
-
-  // Once the real check finishes, don't unmount the splash instantly — hold
-  // it a moment longer while it fades out (opacity transition), instead of
-  // the zoom animation ending and the whole overlay vanishing in one frame.
-  const [splashDismissed, setSplashDismissed] = useState(false);
-  const [splashFadingOut, setSplashFadingOut] = useState(false);
 
   // Array of cool loading messages
   const loadingMessages = [
@@ -141,24 +136,15 @@ function PrivateRoute({ children }) {
   };
 
   // Show loading state
-  const isStillLoading =
+  if (
     !minSplashElapsed ||
     isLoading ||
     ((isAuthenticated || localStorage.getItem("token")) &&
-      isAuthorized === null);
-
-  useEffect(() => {
-    if (!isStillLoading && !splashDismissed && !splashFadingOut) {
-      setSplashFadingOut(true);
-      const timer = setTimeout(() => setSplashDismissed(true), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isStillLoading, splashDismissed, splashFadingOut]);
-
-  if (isStillLoading || !splashDismissed) {
+      isAuthorized === null)
+  ) {
     return (
       <>
-        <SplashLoader fadeOut={splashFadingOut} />
+        <SplashLoader />
         {retryCount > 0 && (
           <div
             className="fixed z-[10000] flex justify-center"

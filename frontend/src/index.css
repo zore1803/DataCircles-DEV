@@ -102,12 +102,14 @@
 
 /* App-boot splash (PrivateRoute's initial auth check, once per hard
    refresh) — logo starts small, rotates once while zooming out to fill
-   the screen, then holds at full size until the real check finishes and
-   the whole overlay unmounts. One shot, not a loop. */
+   the screen, and fades itself out in that same final stretch (opacity
+   ramps to 0 while still scaling/rotating, not a separate step after it
+   stops) — one continuous motion, not a loop. */
 @keyframes dc-splash-zoom-rotate {
   0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
   15% { opacity: 1; }
-  100% { transform: scale(9) rotate(360deg); opacity: 1; }
+  75% { transform: scale(8) rotate(300deg); opacity: 1; }
+  100% { transform: scale(11) rotate(360deg); opacity: 0; }
 }
 .dc-splash-logo {
   animation: dc-splash-zoom-rotate 1.8s ease-in forwards;

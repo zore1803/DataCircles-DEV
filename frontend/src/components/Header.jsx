@@ -1389,6 +1389,11 @@ const Header = () => {
         className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 sm:px-6 lg:px-8 transition-all duration-300 ease-in-out"
         style={{ left: "var(--sidebar-width, 0px)" }}
       >
+        <img
+          src="/DATACIRCLES MAIN LOGO.png"
+          alt="DataCircles"
+          className="h-6 w-auto object-contain"
+        />
 
         {/* Right Section: Promo Buttons, Search & Actions */}
         <div className="flex items-center gap-2 lg:gap-4 ml-auto">
