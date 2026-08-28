@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Invited = require('../models/Invited');
 const Organization = require('../models/Organization');
 const generateUniqueCode = require('../utils/generateUniqueCode');
+const { notifyAdminsOfNewStaff } = require('../controllers/authController');
 
 module.exports = async (req, res, next) => {
   if (req.auth && req.auth._id && !req.auth.sub) {
@@ -96,6 +97,9 @@ module.exports = async (req, res, next) => {
       });
       await user.save();
       await Invited.deleteOne({ _id: invited._id });
+      notifyAdminsOfNewStaff({ organization: invited.organization, staffUser: user }).catch((err) =>
+        console.error('Failed to notify admins of new staff:', err.message)
+      );
       req.user = user;
       return next();
     }
@@ -148,6 +152,9 @@ module.exports = async (req, res, next) => {
     });
     await user.save();
     await Invited.deleteOne({ _id: invited._id });
+    notifyAdminsOfNewStaff({ organization: invited.organization, staffUser: user }).catch((err) =>
+      console.error('Failed to notify admins of new staff:', err.message)
+    );
     req.user = user;
     return next();
   }
