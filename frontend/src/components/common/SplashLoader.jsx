@@ -6,7 +6,10 @@ import logo from "/DC Circle Logo.png";
 // unmounts once the app is ready.
 export default function SplashLoader() {
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden pointer-events-none">
+    <div
+      className="fixed inset-0 flex items-center justify-center overflow-hidden bg-white"
+      style={{ zIndex: 2147483647 }}
+    >
       <img
         src={logo}
         alt="DataCircles"
