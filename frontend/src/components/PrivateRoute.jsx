@@ -14,13 +14,13 @@ function PrivateRoute({ children }) {
   const isCheckingRef = useRef(false); // Prevent duplicate checks
 
   // The auth check can resolve faster than the splash's one CSS animation
-  // cycle (1.8s — the zoom/rotate keyframes fade the logo to opacity 0 in
+  // cycle (1.1s — the zoom/rotate keyframes fade the logo to opacity 0 in
   // their own final stretch, see index.css), making it flash and vanish
   // before it's noticeable. Hold the splash up for the full cycle so the
   // fade-out is always the animation's own doing, never a hard cut.
   const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setMinSplashElapsed(true), 1800);
+    const timer = setTimeout(() => setMinSplashElapsed(true), 1100);
     return () => clearTimeout(timer);
   }, []);
 
