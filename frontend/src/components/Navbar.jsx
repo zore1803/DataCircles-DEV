@@ -621,7 +621,7 @@ const Navbar = () => {
           }
         }}
       >
-        <div className="h-16 flex-shrink-0 flex items-center justify-between gap-2 px-4 border-b border-gray-100 bg-white">
+        <div className={`h-16 flex-shrink-0 flex items-center justify-between gap-2 border-b border-gray-100 bg-white ${isHovered || isMobileOpen ? "px-4" : "px-2"}`}>
           {/* Company switcher — moved here in place of the old logo mark.
               id is a measurement anchor: pages with a `position: fixed`
               header strip (e.g. VendorDetailsPageNew.jsx) read this
