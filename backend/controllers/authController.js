@@ -6,7 +6,6 @@ const Subscription = require("../models/Subscription");
 const PlanConfig = require("../models/PlanConfig");
 const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 const KanbanBoard = require("../models/KanbanBoard");
-const BankDetails = require("../models/BankDetails");
 const generateUniqueCode = require("../utils/generateUniqueCode");
 const { logUserAction } = require("../utils/logger");
 const razorpay = require("../config/razorpay");
@@ -1264,22 +1263,11 @@ exports.completeRegistration = async (req, res) => {
 
     await user.save();
 
-    await BankDetails.create({
-      contact: {
-        email: "contact@organization.com",
-        phone: "9999999999",
-      },
-      bank: "HDFC Bank",
-      accountHolder: "Organization Pvt Ltd",
-      accountNumber: "1234567890",
-      ifscCode: "HDFC0001234",
-      branch: "Mumbai",
-      isDefault: true,
-      organization: organization,
-      user: user._id, // null for org default
-    });
-
     // Note: new organizations start empty — no sample/demo data is seeded.
+    // (Previously auto-created a placeholder "HDFC Bank / Organization Pvt
+    // Ltd / 1234567890" BankDetails record here, contradicting this very
+    // comment — every org got an identical dummy account, which looked like
+    // leaked cross-org data since the fields were indistinguishable.)
 
     console.log(
       `User registered successfully - Method: ${joinMethod}, Email: ${email || phone
