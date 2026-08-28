@@ -243,7 +243,7 @@ const BasicSettings = () => {
 
   if (activeSection) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4">
         <div>
           {/* Enhanced Header with back button */}
           <div className="mb-8">
