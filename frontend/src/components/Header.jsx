@@ -1476,7 +1476,7 @@ const Header = () => {
         <div className="flex items-center gap-2 lg:gap-4">
           {/* Promo Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            {!isTrialActive && (
+            {!isLoadingData && !isTrialActive && (
               <button
                 className="box-border flex flex-row items-center justify-center gap-2 w-[160px] h-[42px] flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
                 style={{
