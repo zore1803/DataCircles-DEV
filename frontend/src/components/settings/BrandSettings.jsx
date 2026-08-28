@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { useNavigate } from "react-router-dom";
 import { INDIA_STATES } from "../../constants/addressOptions";
+import PageSkeleton from "../common/PageSkeleton";
 import {
   Save,
   Upload,
@@ -43,6 +44,11 @@ function BrandSettings() {
   const [logoPreview, setLogoPreview] = useState(null);
   const [signaturePreview, setSignaturePreview] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const companyNameRef = useRef(null);
+  const gstinRef = useRef(null);
+  const addressRef = useRef(null);
+  const emailRef = useRef(null);
+  const mobileRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -108,7 +114,7 @@ function BrandSettings() {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleLogoChange = (e) => {
@@ -205,7 +211,25 @@ function BrandSettings() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      toast.error("Please fix the errors before submitting");
+
+      const candidates = [
+        validationErrors.companyName ? companyNameRef.current : null,
+        validationErrors.gstin ? gstinRef.current : null,
+        validationErrors.address ? addressRef.current : null,
+        validationErrors.email ? emailRef.current : null,
+        validationErrors.mobile ? mobileRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -245,9 +269,7 @@ function BrandSettings() {
       });
 
       setSaveSuccess(true);
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1500);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("Failed to update branding:", error);
       if (error.response?.status === 402) {
@@ -276,7 +298,7 @@ function BrandSettings() {
             <p className="text-green-900 font-semibold">
               Brand settings saved successfully!
             </p>
-            <p className="text-green-700 text-sm">Redirecting to dashboard...</p>
+            <p className="text-green-700 text-sm">Your changes have been saved.</p>
           </div>
         </div>
       )}
@@ -302,10 +324,10 @@ function BrandSettings() {
  
             <div className="grid md:grid-cols-2 gap-6">
               {/* Company Name */}
-              <div>
+              <div ref={companyNameRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Building2 className="w-4 h-4" />
-                  Company Name
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -331,7 +353,7 @@ function BrandSettings() {
               </div>
 
               {/* GSTIN */}
-              <div>
+              <div ref={gstinRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   GSTIN Number
                 </label>
@@ -358,10 +380,10 @@ function BrandSettings() {
               </div>
 
               {/* Email */}
-              <div>
+              <div ref={emailRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Mail className="w-4 h-4" />
-                  Email Address
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -386,10 +408,10 @@ function BrandSettings() {
               </div>
 
               {/* Mobile */}
-              <div>
+              <div ref={mobileRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Phone className="w-4 h-4" />
-                  Mobile Number
+                  Mobile Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -415,10 +437,10 @@ function BrandSettings() {
             </div>
 
             {/* Address */}
-            <div className="mt-6">
+            <div className="mt-6" ref={addressRef}>
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                 <MapPin className="w-4 h-4" />
-                Company Address
+                Company Address <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={form.address}
@@ -736,4 +758,3 @@ function BrandSettings() {
 }
 
 export default BrandSettings;
-import PageSkeleton from "../common/PageSkeleton";
