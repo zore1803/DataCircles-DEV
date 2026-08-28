@@ -23,6 +23,12 @@ function PrivateRoute({ children }) {
     return () => clearTimeout(timer);
   }, []);
 
+  // Once the real check finishes, don't unmount the splash instantly — hold
+  // it a moment longer while it fades out (opacity transition), instead of
+  // the zoom animation ending and the whole overlay vanishing in one frame.
+  const [splashDismissed, setSplashDismissed] = useState(false);
+  const [splashFadingOut, setSplashFadingOut] = useState(false);
+
   // Array of cool loading messages
   const loadingMessages = [
     // "Connecting your business dots — contacts, deals, and more!",
@@ -135,15 +141,24 @@ function PrivateRoute({ children }) {
   };
 
   // Show loading state
-  if (
+  const isStillLoading =
     !minSplashElapsed ||
     isLoading ||
     ((isAuthenticated || localStorage.getItem("token")) &&
-      isAuthorized === null)
-  ) {
+      isAuthorized === null);
+
+  useEffect(() => {
+    if (!isStillLoading && !splashDismissed && !splashFadingOut) {
+      setSplashFadingOut(true);
+      const timer = setTimeout(() => setSplashDismissed(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isStillLoading, splashDismissed, splashFadingOut]);
+
+  if (isStillLoading || !splashDismissed) {
     return (
       <>
-        <SplashLoader />
+        <SplashLoader fadeOut={splashFadingOut} />
         {retryCount > 0 && (
           <div
             className="fixed z-[10000] flex justify-center"
