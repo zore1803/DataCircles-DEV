@@ -2371,7 +2371,7 @@ function Contacts() {
 
             <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
               {[
-                { id: "All", label: "All" },
+                { id: "All", label: "All Contacts" },
                 { id: "Leads", label: "Leads" },
                 { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
                 { id: "Customers", label: "Customers" },
