@@ -118,9 +118,6 @@ function BrandSettings() {
       newErrors.primary = "Enter exactly 6 hex characters after # (e.g. 0085FF)";
     }
 
-    if (!form.colors.secondary) {
-      newErrors.secondary = "Secondary color is required";
-    }
 
     setErrors(newErrors);
     return newErrors;
@@ -698,49 +695,6 @@ function BrandSettings() {
                   <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     {errors.primary}
-                  </p>
-                )}
-              </div>
-
-              {/* Secondary Color */}
-              <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-4">
-                  <Palette className="w-4 h-4" />
-                  Secondary Color
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={form.colors.secondary}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        colors: { ...form.colors, secondary: e.target.value },
-                      })
-                    }
-                    className="w-14 h-14 border-2 border-gray-300 rounded-xl cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={form.colors.secondary}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        colors: { ...form.colors, secondary: e.target.value },
-                      })
-                    }
-                    className="flex-1 px-4 py-3 border-2 rounded-xl text-sm border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder="#FFFFFF"
-                  />
-                </div>
-                <div
-                  className="mt-4 h-12 rounded-lg"
-                  style={{ backgroundColor: form.colors.secondary }}
-                ></div>
-                {errors.secondary && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.secondary}
                   </p>
                 )}
               </div>
