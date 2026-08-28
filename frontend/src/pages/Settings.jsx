@@ -556,7 +556,7 @@ const Settings = () => {
         </div>
       </div>
 
-      <div className="pt-[118px] lg:pt-[128px]">
+      <div className="pt-[118px] lg:pt-[128px] px-4 sm:px-6 lg:px-8 pb-8">
         {/* Settings by Category */}
         <div className="space-y-8">
           {categoryOrder.map((category) => {

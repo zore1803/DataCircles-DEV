@@ -296,32 +296,37 @@ const BasicSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6">
-      <div>
-        {/* Enhanced Page Header */}
-        <div className="mb-6">
-          <div className="">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                    Settings
-                  </h1>
-                  <p className="text-gray-600 text-sm md:text-base mt-2">
-                    Customize and configure your CRM system
-                  </p>
-                </div>
-              </div>
-              <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-                <Users className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-700">
-                  Staff Panel
-                </span>
-              </div>
-            </div>
+    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
+      {/* Fixed page-header strip — matches the sub-page strip pattern */}
+      <div
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          zIndex: 40,
+          minHeight: "64px",
+          maxHeight: "64px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="flex items-center justify-between w-full">
+          <div className="flex flex-col justify-center gap-1.5">
+            <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">
+              Settings
+            </h1>
+            <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
+              Customize and configure your CRM system
+            </p>
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+            <Users className="w-4 h-4 text-blue-600" />
+            <span className="text-sm font-semibold text-blue-700">
+              Staff Panel
+            </span>
           </div>
         </div>
+      </div>
 
+      <div className="pt-[118px] lg:pt-[128px] px-4 sm:px-6 lg:px-8 pb-8">
         {/* Settings by Category */}
         <div className="space-y-8">
           {categoryOrder.map((category) => {
