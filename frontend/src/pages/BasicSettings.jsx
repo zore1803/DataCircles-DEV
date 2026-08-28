@@ -244,67 +244,68 @@ const BasicSettings = () => {
   if (activeSection) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4">
-        <div>
-          {/* Enhanced Header with back button */}
-          <div className="mb-8">
-            <button
-              onClick={goBack}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-all"
+        {/* Strip below navbar — matches the toolbar strip other pages
+            (Companies, Contacts, etc.) render flush under the navbar. */}
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-3">
+          <button
+            onClick={goBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2 transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="font-medium">Back to Settings</span>
+          </button>
+
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <SettingsIcon className="w-4 h-4" />
+            <a
+              href="/settings"
+              className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="font-medium">Back to Settings</span>
-            </button>
+              Settings
+            </a>
+            <ChevronRight className="w-4 h-4" />
+            <span className="text-gray-900 font-semibold">
+              {activeSection.label}
+            </span>
+          </div>
+        </div>
 
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-              <SettingsIcon className="w-4 h-4" />
-              <a
-                href="/settings"
-                className="text-blue-600 hover:text-blue-700 font-medium hover:underline"
+        <div className="px-4 sm:px-6 lg:px-8 py-6">
+          {/* Active Section Header */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+            <div className="flex items-start gap-4">
+              <div
+                className={`p-4 rounded-xl ${activeSection.bgColor} ${activeSection.color} shadow-md`}
               >
-                Settings
-              </a>
-              <ChevronRight className="w-4 h-4" />
-              <span className="text-gray-900 font-semibold">
-                {activeSection.label}
-              </span>
-            </div>
-
-            {/* Active Section Header */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-start gap-4">
-                <div
-                  className={`p-4 rounded-xl ${activeSection.bgColor} ${activeSection.color} shadow-md`}
-                >
-                  {activeSection.icon}
+                {activeSection.icon}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+                    {activeSection.label}
+                  </h2>
+                  {activeSection.badge && (
+                    <span
+                      className={`px-3 py-1 ${
+                        activeSection.badgeColor ||
+                        "bg-yellow-100 text-yellow-800"
+                      } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      {activeSection.badge}
+                    </span>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-                      {activeSection.label}
-                    </h2>
-                    {activeSection.badge && (
-                      <span
-                        className={`px-3 py-1 ${
-                          activeSection.badgeColor ||
-                          "bg-yellow-100 text-yellow-800"
-                        } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        {activeSection.badge}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-600 text-sm md:text-base">
-                    {activeSection.description}
-                  </p>
-                </div>
+                <p className="text-gray-600 text-sm md:text-base">
+                  {activeSection.description}
+                </p>
               </div>
             </div>
           </div>
 
           {/* Component Content */}
-          <div className="mt-6">{activeSection.component}</div>
+          <div>{activeSection.component}</div>
         </div>
       </div>
     );
