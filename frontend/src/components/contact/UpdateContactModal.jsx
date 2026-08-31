@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import PhoneNumberInput from "../common/PhoneNumberInput";
 import { X, Upload, User } from "lucide-react";
 import API from "../../services/api";
 
@@ -287,12 +288,12 @@ const UpdateContactModal = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Phone
               </label>
-              <input
-                type="tel"
+              <PhoneNumberInput
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                onChange={(next) => setForm({ ...form, phone: next })}
                 placeholder="Enter Phone number"
+                selectClassName="border border-gray-300 rounded-md px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent flex-shrink-0"
+                inputClassName="flex-1 min-w-0 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
               />
             </div>
 

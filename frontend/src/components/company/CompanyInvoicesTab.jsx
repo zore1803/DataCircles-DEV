@@ -3,9 +3,9 @@ import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
-import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import InvoiceForm from "../invoice/InvoiceForm";
+import InvoicePdfPreview from "../invoice/InvoicePdfPreview";
 import useFillToBottom from "../../hooks/useFillToBottom";
 import FilterIcon from "../common/FilterIcon";
 import HighlightText from "../common/HighlightText";
@@ -129,6 +129,10 @@ const INVOICE_FILTER_COLUMNS = [
 
 export default function CompanyInvoicesTab({ invoices, summary, loading, showStats = true, deals = [], refreshInvoices, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
   const [manualInvoiceFormOpen, setManualInvoiceFormOpen] = useState(false);
+  // Opening an invoice from this tab shows it here rather than navigating
+  // away — the number used to link to the invoices list page, which meant
+  // leaving the company you were looking at to find the row again.
+  const [previewInvoice, setPreviewInvoice] = useState(null);
   // Derived rather than copied into local state on a one-shot effect — a
   // copy raced the initial data load (whichever re-rendered first won) and
   // could get clobbered before ever becoming visible.
@@ -147,7 +151,9 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
       case "deal":
         return invoice.deal?.title || "";
       case "issueDate":
-        return invoice.issueDate ? new Date(invoice.issueDate).getTime() : 0;
+        // Column id stays "issueDate" (widths/pinning/sort keys are stored
+        // under it), but the value lives on the model's `date` field.
+        return invoice.date ? new Date(invoice.date).getTime() : 0;
       case "dueDate":
         return getDateRangeLabel(invoice.dueDate);
       case "amount":
@@ -555,7 +561,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
     const dataToExport = invoices.filter(inv => selectedItems.includes(inv._id)).map(inv => ({
       "Invoice Number": inv.invoiceNumber || "",
       "Deal": inv.deal?.title || "",
-      "Invoice Date": inv.issueDate ? new Date(inv.issueDate).toLocaleDateString() : "",
+      "Invoice Date": inv.date ? new Date(inv.date).toLocaleDateString() : "",
       "Due Date": inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "",
       "Status": inv.status || "Draft",
       "Amount": inv.amount || 0,
@@ -954,8 +960,8 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
             ) : (
               paginatedInvoices.map((invoice) => {
                 const isSelected = selectedItems.includes(invoice._id);
-                const issueDate = invoice.issueDate
-                  ? new Date(invoice.issueDate).toLocaleDateString("en-US", {
+                const issueDate = invoice.date
+                  ? new Date(invoice.date).toLocaleDateString("en-US", {
                     day: "numeric",
                     month: "long",
                     year: "numeric",
@@ -1018,12 +1024,13 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                         return (
                           <td key={col.id} style={cellStyle} className="px-3 text-left">
                             <div className="flex items-center justify-between gap-2">
-                              <Link
-                                to={`/invoices?tab=tax`}
-                                className="text-[14px] leading-5 font-medium text-[#222530] hover:text-blue-600 truncate block min-w-0"
+                              <button
+                                type="button"
+                                onClick={() => setPreviewInvoice(invoice)}
+                                className="text-[14px] leading-5 font-medium text-blue-600 hover:text-blue-700 truncate block min-w-0 text-left"
                               >
                                 <HighlightText text={invoice.invoiceNumber || invoice._id} query={searchTerm} />
-                              </Link>
+                              </button>
                               {isLastCol && downloadButton}
                             </div>
                             {boundaryOverlay}
@@ -1180,6 +1187,13 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
         onApply={setSelectedFilters}
         title="Filter Invoices"
         subtitle="Filter this list by column"
+      />
+
+      <InvoicePdfPreview
+        open={!!previewInvoice}
+        id={previewInvoice?._id}
+        title={previewInvoice?.invoiceNumber}
+        onClose={() => setPreviewInvoice(null)}
       />
 
       {showInvoiceForm && (

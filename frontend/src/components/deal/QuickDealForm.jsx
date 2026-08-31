@@ -292,9 +292,44 @@ const QuickDealForm = ({
     }
   };
 
+  // "<Company> - New Deal N", where N is the next free number for that
+  // company. Counted from the company's existing deals rather than a running
+  // total, so two companies both start at 1. Only ever fills an EMPTY title:
+  // once someone types their own name, changing the company must not
+  // overwrite it.
+  const suggestDealName = async (companyId) => {
+    const company = localCompanies.find((c) => c._id === companyId);
+    if (!company?.name) return;
+    let next = 1;
+    try {
+      const res = await API.get("/deals", { params: { company: companyId, limit: 500 } });
+      const deals = Array.isArray(res.data) ? res.data : res.data?.deals || [];
+      const used = deals
+        .map((d) => {
+          // Company names contain (), + and . often enough that the name has
+          // to be escaped before it goes into a pattern.
+          const safeName = company.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const pattern = "^" + safeName + "\\s*-\\s*New Deal\\s*(\\d+)$";
+          const m = new RegExp(pattern, "i").exec(d.title || "");
+          return m ? Number(m[1]) : 0;
+        })
+        .filter(Boolean);
+      if (used.length) next = Math.max(...used) + 1;
+    } catch {
+      // Falling back to 1 is fine — the name is a starting point the user can
+      // edit, not an identifier anything depends on.
+    }
+    setForm((prev) => (prev.title ? prev : { ...prev, title: `${company.name} - New Deal ${next}` }));
+  };
+
   const handleFormChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setIsFormDirty(true);
+
+    // Picking a company proposes a name for a deal that doesn't have one yet.
+    if (key === "company" && value && !isEditing) {
+      suggestDealName(value);
+    }
 
     // Clear validation error for this field
     if (validationErrors[key]) {
@@ -512,19 +547,57 @@ const QuickDealForm = ({
           </div>
           <div className="flex-1 overflow-y-auto px-8 py-6">
             <div className="space-y-6">
+            {/* Company - NOW REQUIRED */}
+            <div ref={companyRef}>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Company <span className="text-[#FF4935]">*</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <SearchableDropdown
+                  options={localCompanies}
+                  value={form.company}
+                  onChange={(value) => handleFormChange("company", value)}
+                  placeholder="Select Company"
+                  displayKey="name"
+                  valueKey="_id"
+                  className="flex-1"
+                  error={validationErrors.company}
+                  compact
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCompanyForm(true)}
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+                  title="Add New Company"
+                >
+                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                </button>
+              </div>
+              {validationErrors.company && (
+                <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.company}</p>
+              )}
+            </div>
+
             {/* Title - Now with validation */}
             <div>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Deal Name <span className="text-[#FF4935]">*</span>
               </label>
+              {/* Generated from the company above, so it's read-only and
+                  greyed: the name follows the company selection rather than
+                  being typed. It stays a real input (not plain text) so the
+                  scroll-to-first-error ref and the validation styling below
+                  keep working. */}
               <input
                 ref={titleInputRef}
                 type="text"
                 value={form.title}
-                onChange={(e) => handleFormChange("title", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
+                readOnly
+                tabIndex={-1}
+                aria-readonly="true"
+                className={`w-full border rounded-full px-3 h-8 text-[12px] bg-[#F5F6F6] text-[#6B7280] cursor-not-allowed focus:outline-none transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-500' : 'border-[#1F2937]/10'
                   }`}
-                placeholder="Enter Deal Title"
+                placeholder="Select a company to generate the name"
               />
               {validationErrors.title && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.title}</p>
@@ -578,37 +651,6 @@ const QuickDealForm = ({
               </div>
               {validationErrors.status && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.status}</p>
-              )}
-            </div>
-
-            {/* Company - NOW REQUIRED */}
-            <div ref={companyRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Company <span className="text-[#FF4935]">*</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <SearchableDropdown
-                  options={localCompanies}
-                  value={form.company}
-                  onChange={(value) => handleFormChange("company", value)}
-                  placeholder="Select Company"
-                  displayKey="name"
-                  valueKey="_id"
-                  className="flex-1"
-                  error={validationErrors.company}
-                  compact
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowQuickCompanyForm(true)}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
-                  title="Add New Company"
-                >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
-                </button>
-              </div>
-              {validationErrors.company && (
-                <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.company}</p>
               )}
             </div>
 

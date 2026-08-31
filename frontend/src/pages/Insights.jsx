@@ -29,6 +29,7 @@ import {
   Calendar,
   Download,
   TrendingUp,
+  TrendingDown,
   Users,
   Building,
   Briefcase,
@@ -70,6 +71,7 @@ import API from "../services/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import FilterIcon from "../components/common/FilterIcon";
+import StatTile from "../components/common/StatTile";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -962,34 +964,36 @@ const Insights = () => {
     );
   };
 
-  const StatCard = ({ title, value, icon, color, bgColor, change, changeLabel = "vs last month", trend }) => (
-    <div className="relative min-h-[72px] flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl min-w-0">
-      <div className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-        <div className={color}>{React.cloneElement(icon, { className: "w-5 h-5" })}</div>
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate w-full text-[11px] text-gray-500">{title}</p>
-        <p className="truncate w-full text-base font-bold text-gray-900">{value}</p>
-      </div>
-      {change !== undefined && (
-        <div className="absolute bottom-2 right-3 flex items-center gap-1">
-          <TrendingUp
-            className={`w-3 h-3 flex-shrink-0 ${
-              change >= 0 ? "text-green-600" : "text-red-600 rotate-180"
-            }`}
-          />
-          <span
-            className={`text-[11px] font-semibold whitespace-nowrap ${
-              change >= 0 ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {change >= 0 ? "+" : ""}
-            {change}% {changeLabel}
-          </span>
-        </div>
-      )}
-    </div>
-  );
+  // Insights' own card is gone: it now renders the shared StatTile every
+  // other page uses, so the KPI strip here matches Companies, Deals,
+  // Inventory and the dashboard instead of being a second, taller design.
+  // The prop signature is unchanged — 46 call sites keep working — and the
+  // mapping happens here: title -> label, change -> the trailing subtitle,
+  // color -> the icon's colour class.
+  const StatCard = ({ title, value, icon, color, bgColor, change, changeLabel = "vs last month", trend }) => {
+    // StatTile renders <Icon size={n} />; Insights passes a ready-made
+    // element, so this adapter drops the size prop and sizes via className.
+    const IconAdapter = () =>
+      icon ? React.cloneElement(icon, { className: "w-5 h-5" }) : null;
+
+    return (
+      <StatTile
+        tile={{
+          label: title,
+          value,
+          icon: IconAdapter,
+          iconClass: color,
+          ...(change !== undefined
+            ? {
+                subtitle: `${change >= 0 ? "+" : ""}${change}% ${changeLabel}`,
+                subtitleIcon: change >= 0 ? TrendingUp : TrendingDown,
+                subtitleColor: change >= 0 ? "#00C950" : "#E82222",
+              }
+            : {}),
+        }}
+      />
+    );
+  };
 
   const TableWrapper = ({ title, onExport, children }) => (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

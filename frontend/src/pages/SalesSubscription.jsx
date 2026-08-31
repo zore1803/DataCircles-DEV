@@ -994,7 +994,7 @@ const SalesSubscription = () => {
 
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 bg-white border-[#E1E4EA]`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -1004,11 +1004,11 @@ const SalesSubscription = () => {
           }}
         >
           {showBulkStrip ? (
-            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
-              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+            <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap items-center justify-between gap-4 w-full h-full overflow-x-auto`}>
+              <div className="flex flex-nowrap items-center flex-shrink-0">
                 <button
                   onClick={() => handleExport("Excel")}
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   <Download className="w-4 h-4 text-green-600" />
                   Export
@@ -1030,7 +1030,7 @@ const SalesSubscription = () => {
                 </button>
                 <button
                   onClick={exitSelectionMode}
-                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-[25px] hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Cancel
@@ -1088,7 +1088,7 @@ const SalesSubscription = () => {
               ) : (
                 <>
                   <div className="relative flex-1 min-w-0 flex items-center justify-end">
-                    <div className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}>
+                    <div className={`relative h-10 flex items-center border ${searchTerm ? "border-[#0085FF]" : "border-[#E1E4EA]"} rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-full lg:w-[416px]" : "w-10"} max-w-full`}>
                       <SearchIcon
                         className="absolute left-3 cursor-pointer z-10 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"
                         onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
@@ -1321,6 +1321,7 @@ const SalesSubscription = () => {
                           <tr
                             key={row.id}
                             className={`bg-white hover:bg-blue-50 transition-colors ${selectedSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
+                            style={{ height: 37, maxHeight: 37 }}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;
@@ -1336,12 +1337,18 @@ const SalesSubscription = () => {
                                   key={cell.id}
                                   style={{
                                     width: cell.column.getSize(),
+                                  height: "37px",
+                                  maxHeight: "37px",
+                                  boxSizing: "border-box",
+                                    height: "37px",
+                                    maxHeight: "37px",
+                                    boxSizing: "border-box",
                                     position: isSticky ? "sticky" : "static",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 10 : 1,
                                   }}
-                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
+                                  className="px-4 py-0 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                 >
                                   <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

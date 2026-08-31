@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { COUNTRY_DIAL_CODES, DEFAULT_DIAL_CODE } from "../../utils/countryDialCodes";
 import { X, Paperclip, Twitter, Linkedin, Instagram, Facebook } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import API from "../../services/api";
@@ -42,6 +43,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     website: "",
     email: "",
     gstin: "", // Added gstin field
+    whatsappNumber: { countryCode: DEFAULT_DIAL_CODE, number: "" },
     profilePicture: null,
     socialMedia: {
       twitter: "",
@@ -120,6 +122,10 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       website: editCompany.website || "",
       email: editCompany.email || "",
       gstin: editCompany.gstin || "",
+      whatsappNumber: {
+        countryCode: editCompany.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE,
+        number: editCompany.whatsappNumber?.number || "",
+      },
       profilePicture: null,
       socialMedia: {
         twitter: "",
@@ -384,6 +390,11 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     payload.append("website", form.website);
     payload.append("email", form.email);
     payload.append("gstin", form.gstin); // Added gstin to payload
+    payload.append(
+      "whatsappNumber[countryCode]",
+      form.whatsappNumber?.number ? form.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE : ""
+    );
+    payload.append("whatsappNumber[number]", form.whatsappNumber?.number || "");
     payload.append("socialMedia[twitter]", form.socialMedia.twitter || "");
     payload.append("socialMedia[linkedin]", form.socialMedia.linkedin || "");
     payload.append("socialMedia[instagram]", form.socialMedia.instagram || "");
@@ -797,6 +808,49 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
               />
             </div>
 
+            {/* WhatsApp Number — a dialable number, so it sits with the
+                company's own details rather than under Social Media Links
+                (which holds profile URLs). */}
+            <div>
+              <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                  <FaWhatsapp className="w-[18px] h-[18px]" />
+                </span>
+                WhatsApp Number
+              </label>
+              <div className="flex items-stretch gap-2">
+                <select
+                  value={form.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE}
+                  onChange={(e) =>
+                    handleFormChange("whatsappNumber", {
+                      ...(form.whatsappNumber || {}),
+                      countryCode: e.target.value,
+                    })
+                  }
+                  className="border border-[#1F2937]/10 rounded-full px-2 h-8 text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
+                >
+                  {COUNTRY_DIAL_CODES.map((c) => (
+                    <option key={`${c.iso}-${c.code}`} value={c.code}>
+                      {c.iso} {c.code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={form.whatsappNumber?.number || ""}
+                  onChange={(e) =>
+                    handleFormChange("whatsappNumber", {
+                      countryCode: form.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE,
+                      number: e.target.value.replace(/[^0-9]/g, ""),
+                    })
+                  }
+                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                  placeholder="1234567890"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 GSTIN
@@ -1015,21 +1069,6 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     onChange={(e) => handleSocialMediaChange("facebook", e.target.value)}
                     className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                     placeholder="https://facebook.com/vendorname"
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
-                      <FaWhatsapp className="w-[18px] h-[18px]" />
-                    </span>
-                    WhatsApp Number
-                  </label>
-                  <input
-                    type="text"
-                    value={form.socialMedia.whatsapp}
-                    onChange={(e) => handleSocialMediaChange("whatsapp", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
-                    placeholder="+91 1234567890"
                   />
                 </div>
               </div>

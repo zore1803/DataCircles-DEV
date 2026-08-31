@@ -1195,7 +1195,7 @@ function Vendors() {
           bar, so nothing shifts and it feels identical to Companies.jsx. */}
       <div
         className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${
-          showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
+          "bg-white border-[#E1E4EA]"
         }`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
       >
@@ -1203,7 +1203,7 @@ function Vendors() {
           <div
             className={`${
               bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"
-            } flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
+            } flex flex-nowrap items-center justify-between gap-4 w-full h-full overflow-x-auto`}
           >
             {/* One joined strip instead of separate pills, matching Companies:
                 no gap between buttons, square inner edges, rounding only on the
@@ -1212,10 +1212,10 @@ function Vendors() {
                 thick seam. All buttons share one neutral treatment — white fill,
                 grey border, near-black text — with only the icon carrying each
                 action's colour as an accent. */}
-            <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+            <div className="flex flex-nowrap items-center flex-shrink-0">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4 text-green-600" />
                 Export
@@ -1237,7 +1237,7 @@ function Vendors() {
               </button>
               <button
                 onClick={exitSelectionMode}
-                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
@@ -1251,14 +1251,14 @@ function Vendors() {
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All

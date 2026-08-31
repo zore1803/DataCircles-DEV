@@ -49,6 +49,15 @@ const companySchema = new mongoose.Schema(
     // One or more shipping addresses.
     shippingAddresses: { type: [postalAddressSchema], default: [] },
     email: { type: String, trim: true, lowercase: true },
+    // Kept structured rather than one string: the dial code is picked from a
+    // fixed list while the number is free text, and wa.me links need them
+    // concatenated without the "+" — splitting them here avoids re-parsing a
+    // combined value at every call site. Distinct from socialMedia.whatsapp,
+    // which is a profile/handle link, not a dialable number.
+    whatsappNumber: {
+      countryCode: { type: String, default: '' },
+      number: { type: String, default: '' },
+    },
     website: String,
     profilePicture: String,
     socialMedia: {

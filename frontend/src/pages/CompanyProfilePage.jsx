@@ -164,7 +164,15 @@ const CompanyProfilePage = () => {
   // The list of company ids the user was browsing (whatever search/filter was
   // active on the Companies page) when they clicked into this company — lets
   // the prev/next arrows step through that same set instead of every company.
-  const companyIds = location.state?.companyIds || null;
+  // The prev/next list arrives in location.state from whichever list you
+  // came from. Switching tabs calls setSearchParams(), which writes a new
+  // history entry and drops that state unless it's passed along — which is
+  // why the arrows vanished the moment you left Overview. The ref keeps the
+  // last list seen so any other state-dropping navigation can't lose it
+  // either; only a full page load legitimately clears it.
+  const companyIdsRef = useRef(null);
+  if (location.state?.companyIds) companyIdsRef.current = location.state.companyIds;
+  const companyIds = location.state?.companyIds || companyIdsRef.current || null;
   const companyIdsIndex = companyIds ? companyIds.indexOf(id) : -1;
   const prevCompanyId =
     companyIdsIndex > 0 ? companyIds[companyIdsIndex - 1] : null;
@@ -192,11 +200,16 @@ const CompanyProfilePage = () => {
   );
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("tab", tab);
-      return next;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      // Carry location.state across: without it the new entry has no state
+      // and the prev/next company arrows disappear.
+      { replace: true, state: location.state }
+    );
   };
 
   // Sliding pill indicator for the section-switcher tab bar

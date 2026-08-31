@@ -36,7 +36,7 @@ import InvoiceLivePreview from "./InvoiceLivePreview";
 import InsufficientStockDialog from "../common/InsufficientStockDialog";
 import TemplateDrawer from "./TemplateDrawer";
 import NotesTermsDrawer from "./NotesTermsDrawer";
-import { buildDocumentHtml, computeDocument } from "../../../../shared/documentTemplates.js";
+import { buildDocumentHtml, computeDocument, GST_RATES } from "../../../../shared/documentTemplates.js";
 import {
   SectionHeader,
   FieldLabel,
@@ -409,6 +409,41 @@ const InvoiceForm = ({
   const [itemFormSuccess, setItemFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+
+  // Mongoose hands back e.g.
+  //   "Invoice validation failed: items.0.name: Path `name` is required.,
+  //    items.0.rate: Path `rate` is required."
+  // which is a database error read out loud. This turns it into the same
+  // information as a sentence about the row the user is looking at.
+  const humanizeServerError = (raw) => {
+    if (!raw || typeof raw !== "string") return raw;
+    if (!/validation failed:/i.test(raw)) return raw;
+
+    const detail = raw.split(/validation failed:/i)[1] || "";
+    const byRow = new Map();
+    const others = [];
+
+    detail.split(/,\s*(?=[A-Za-z0-9_.]+:)/).forEach((part) => {
+      const field = (part.split(":")[0] || "").trim();
+      const itemMatch = field.match(/^items\.(\d+)\.(.+)$/);
+      if (itemMatch) {
+        const row = Number(itemMatch[1]) + 1;
+        if (!byRow.has(row)) byRow.set(row, []);
+        byRow.get(row).push(itemMatch[2]);
+      } else if (field) {
+        others.push(field);
+      }
+    });
+
+    const list = (arr) =>
+      arr.length > 1 ? `${arr.slice(0, -1).join(", ")} and ${arr[arr.length - 1]}` : arr[0];
+
+    const parts = [];
+    byRow.forEach((fields, row) => parts.push(`item ${row} is missing ${list(fields)}`));
+    if (others.length) parts.push(`${list(others)} ${others.length > 1 ? "are" : "is"} required`);
+
+    return parts.length ? `Can't save yet — ${parts.join("; ")}.` : raw;
+  };
   const [items, setItems] = useState([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -563,6 +598,16 @@ const InvoiceForm = ({
       return parseFloat(discount.value) || 0;
     }
     return 0;
+  };
+
+  // Mirrors computeDocument()'s own item-rate resolution (shared/
+  // documentTemplates.js): the item's rate when it is a real GST slab,
+  // otherwise the document-level rate.
+  const effectiveGstRate = (item) => {
+    const itemRate = Number(item.gstRate);
+    if (GST_RATES.includes(itemRate)) return itemRate;
+    const docRate = Number(form.gstRate);
+    return GST_RATES.includes(docRate) ? docRate : 18;
   };
 
   const calculateTotalAmount = useCallback(
@@ -913,7 +958,15 @@ const InvoiceForm = ({
           parentItemId: item.parentItemId,
           discountType: item.discountType,
           discount: parseFloat(item.discount),
-          gstRate: parseFloat(item.gstRate) || 0,
+          // The rate the document was actually priced at, not a blind
+          // parseFloat. computeDocument() falls back to the document-level
+          // gstRate when an item has no valid rate of its own — but
+          // `parseFloat(undefined) || 0` collapsed that "unset" into an
+          // explicit 0%, which IS a valid GST rate, so the saved invoice
+          // rendered 0% CGST/SGST while its stored amount still carried the
+          // 18% the preview had charged. Persist the effective rate so the
+          // PDF reproduces the total that was saved.
+          gstRate: effectiveGstRate(item),
           taxInclusive: !!item.taxInclusive,
         })),
       };
@@ -967,7 +1020,7 @@ const InvoiceForm = ({
         setToastMessage(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
         setToastMessage(
-          err.response?.data?.error ||
+          humanizeServerError(err.response?.data?.error) ||
           (editingInvoice
             ? "Failed to update invoice"
             : "Failed to create invoice")
@@ -1162,7 +1215,10 @@ const InvoiceForm = ({
   return createPortal(
     <>
       {toastMessage && (
-        <div className="fixed top-4 right-4 z-[10002] bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in-out">
+        // Red: every message set on this toast is a failure or a validation
+        // warning (successes use toast.success). It was green, so "Invoice
+        // validation failed..." arrived looking like a confirmation.
+        <div className="fixed top-4 right-4 z-[10002] max-w-md bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in-out">
           {toastMessage}
         </div>
       )}

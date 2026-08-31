@@ -2946,15 +2946,15 @@ function Tasks() {
         }}
       >
         {showBulkStrip ? (
-          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}>
+          <div className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap items-center justify-between gap-4 w-full h-full overflow-x-auto`}>
             {/* One joined strip instead of separate pills, matching Companies: no gap
     between buttons, rounding only on the two outer corners, and each
     border pulled left by 1px onto its neighbour so touching borders
     don't double up. Only the icons carry each action's colour. */}
-<div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+<div className="flex flex-nowrap items-center flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <Download className="w-4 h-4 text-green-600" />
                 Export
@@ -2976,7 +2976,7 @@ function Tasks() {
               </button>
               <button
                 onClick={() => (activeTab === "tasks" ? setSelectedTasks([]) : setSelectedMeetings([]))}
-                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 Clear
               </button>
@@ -2990,14 +2990,14 @@ function Tasks() {
               </span>
               <button
                 onClick={handleSelectAllAcrossPages}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllExtra}
-                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All

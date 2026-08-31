@@ -825,6 +825,7 @@ export default function Inventory() {
       >
         {showBulkStrip ? (
           <BulkActionBar
+            bare
             selectedCount={selectedIds.length}
             entityName="item"
             isClosing={bulkStripClosing}
@@ -854,7 +855,7 @@ export default function Inventory() {
 
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
           {/* Search */}
-          <div className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}>
+          <div className={`relative h-10 flex items-center border ${searchQuery ? "border-[#0085FF]" : "border-[#E1E4EA]"} rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}>
             <SearchIcon
               className="absolute left-3 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
               onClick={() => { setIsSearchExpanded(true); searchInputRef.current?.focus(); }}
@@ -1051,10 +1052,11 @@ export default function Inventory() {
                 <tr
                   key={item._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(item._id) ? "!bg-blue-50" : ""}`}
+                  style={{ height: 37, maxHeight: 37 }}
                 >
                   <td
-                    style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-3 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                    style={{ width: colWidths.selection, height: "37px", maxHeight: "37px", boxSizing: "border-box", position: "sticky", left: 0, zIndex: 10 }}
+                    className="px-4 py-0 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
                   >
                     {/* The stock-status dot that used to live here is redundant with the Status
                         column's badge, so the column now carries the selection checkbox instead. */}
@@ -1075,7 +1077,7 @@ export default function Inventory() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-3 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
+                        className={`px-4 py-0 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
                       >
                         {renderCell(col.id, item, isRightmost)}
                         {cellBoundaryShadowSide && <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />}

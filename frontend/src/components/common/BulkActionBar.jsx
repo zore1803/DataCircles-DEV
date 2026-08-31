@@ -37,6 +37,9 @@ const BulkActionBar = ({
   onCancel,
   isDeleting = false,
   isClosing = false,
+  // Pages that render this inside their own fixed toolbar pass `bare` — a
+  // bordered card inside that bar would be chrome stacked on chrome.
+  bare = false,
 }) => {
   // Left side is ONE joined segmented control (matching pages/Companies.jsx):
   // white fill, gray border, black label, the icon carrying each action's
@@ -57,18 +60,29 @@ const BulkActionBar = ({
     <div
       className={`${
         isClosing ? 'animate-slideOutRight' : 'animate-slideInLeft'
-      } flex flex-nowrap lg:flex-wrap items-center justify-between gap-4 lg:gap-6 w-full bg-blue-50 border border-blue-200 rounded-xl px-4 mb-4 overflow-x-auto lg:overflow-visible`}
+      } flex flex-nowrap items-center justify-between gap-4 w-full px-4 overflow-x-auto ${
+        bare ? "" : "bg-white border border-[#E1E4EA] rounded-xl mb-4"
+      }`}
       style={{ minHeight: 44 }}
     >
-      <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0 py-2">
+      {/* Never wraps: on a wide sidebar the strip used to break onto a
+          second line and overlap the table header underneath it. It stays one
+          row and scrolls horizontally instead. */}
+      <div className="flex flex-nowrap items-center flex-shrink-0 py-2">
         {leftButtons.map((btn, i) => (
           <button
             key={btn.key}
             onClick={btn.onClick}
             disabled={btn.disabled}
             className={`h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50 ${
-              i === 0 ? 'rounded-l-lg' : '-ml-px'
-            } ${i === leftButtons.length - 1 ? 'rounded-r-lg' : ''}`}
+              i === 0 ? '' : '-ml-px'
+            } ${i === leftButtons.length - 1 ? 'rounded-r-[25px]' : ''}`}
+            style={{
+              // 25px on the group's outer corners only — the joins between
+              // segments stay square so the buttons still read as one strip.
+              borderTopLeftRadius: i === 0 ? 25 : undefined,
+              borderBottomLeftRadius: i === 0 ? 25 : undefined,
+            }}
           >
             <btn.Icon className={`w-4 h-4 ${btn.iconClass}`} />
             {btn.label}
@@ -85,7 +99,7 @@ const BulkActionBar = ({
         {onSelectAll && (
           <button
             onClick={onSelectAll}
-            className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+            className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
           >
             <CheckSquare className="w-4 h-4" />
             Select All
@@ -94,7 +108,7 @@ const BulkActionBar = ({
         {onDeselectAll && (
           <button
             onClick={onDeselectAll}
-            className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+            className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
           >
             <X className="w-4 h-4" />
             Deselect All

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { COUNTRY_DIAL_CODES, DEFAULT_DIAL_CODE } from "../../utils/countryDialCodes";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import { Twitter, Linkedin, Facebook, FolderOpen, ChevronDown, X } from "lucide-react";
@@ -72,6 +73,15 @@ const CompanyForm = ({
     if (form._id && form.name) {
       console.log("Form data received:", form); // Debug log
       console.log("Social media data:", form.socialMedia); // Debug log
+
+      // Same reason as socialMedia below: an older company saved before this
+      // field existed has no object here for the inputs to bind to.
+      if (!form.whatsappNumber || typeof form.whatsappNumber !== "object") {
+        setForm((prev) => ({
+          ...prev,
+          whatsappNumber: { countryCode: DEFAULT_DIAL_CODE, number: "" },
+        }));
+      }
 
       // Ensure socialMedia is initialized
       if (!form.socialMedia || typeof form.socialMedia !== 'object') {
@@ -356,6 +366,11 @@ const CompanyForm = ({
     payload.append("website", form.website || "");
     payload.append("email", form.email || "");
     payload.append("leadSource", form.leadSource || "");
+    payload.append(
+      "whatsappNumber[countryCode]",
+      form.whatsappNumber?.number ? form.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE : ""
+    );
+    payload.append("whatsappNumber[number]", form.whatsappNumber?.number || "");
 
     // Add social media links - using bracket notation
     if (form.socialMedia) {
@@ -623,6 +638,46 @@ const CompanyForm = ({
               )}
             </div>
 
+            {/* WhatsApp Number */}
+            <div>
+              <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
+                WhatsApp Number
+              </label>
+              <div className="flex items-stretch gap-2">
+                <select
+                  value={form.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE}
+                  onChange={(e) =>
+                    handleFormChange("whatsappNumber", {
+                      ...(form.whatsappNumber || {}),
+                      countryCode: e.target.value,
+                    })
+                  }
+                  className="border border-[#E0E0E1] rounded-xl px-3 h-12 text-[14px] text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
+                >
+                  {COUNTRY_DIAL_CODES.map((c) => (
+                    <option key={`${c.iso}-${c.code}`} value={c.code}>
+                      {c.iso} {c.code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={form.whatsappNumber?.number || ""}
+                  onChange={(e) =>
+                    handleFormChange("whatsappNumber", {
+                      countryCode: form.whatsappNumber?.countryCode || DEFAULT_DIAL_CODE,
+                      // Digits only: the dial code is chosen from the list, so
+                      // anything typed here is the subscriber number.
+                      number: e.target.value.replace(/[^0-9]/g, ""),
+                    })
+                  }
+                  className="flex-1 min-w-0 border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                  placeholder="98765 43210"
+                />
+              </div>
+            </div>
+
             {/* GSTIN */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">
@@ -870,22 +925,6 @@ const CompanyForm = ({
                   />
                 </div>
 
-                {/* WhatsApp */}
-                <div>
-                  <label className="text-[13px] font-semibold text-[#111216] mb-1.5 flex items-center gap-2">
-                    <FaWhatsapp className="w-4 h-4" />
-                    WhatsApp Number
-                  </label>
-                  <input
-                    type="text"
-                    value={form.socialMedia?.whatsapp || ""}
-                    onChange={(e) =>
-                      handleSocialMediaChange("whatsapp", e.target.value)
-                    }
-                    className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
-                    placeholder="e.g., +1234567890"
-                  />
-                </div>
               </div>
             </div>
 

@@ -24,7 +24,7 @@ import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import InsufficientStockDialog from "../common/InsufficientStockDialog";
 import toast from "react-hot-toast";
-import { computeDocument } from "../../../../shared/documentTemplates";
+import { computeDocument, GST_RATES } from "../../../../shared/documentTemplates";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 import SearchIcon from "../common/SearchIcon";
@@ -745,6 +745,16 @@ const InvoiceFormFull = ({
     return 0;
   };
 
+  // Mirrors computeDocument()'s own item-rate resolution (shared/
+  // documentTemplates.js): the item's rate when it is a real GST slab,
+  // otherwise the document-level rate.
+  const effectiveGstRate = (item) => {
+    const itemRate = Number(item.gstRate);
+    if (GST_RATES.includes(itemRate)) return itemRate;
+    const docRate = Number(form.gstRate);
+    return GST_RATES.includes(docRate) ? docRate : 18;
+  };
+
   const calculateTotalAmount = useCallback((items, discount, gstRate = 18, transactionType = "intra") => {
     const subtotalAfterItemDiscounts =
       calculateSubtotalAfterItemDiscounts(items);
@@ -1106,7 +1116,15 @@ const InvoiceFormFull = ({
           parentItemId: item.parentItemId,
           discountType: item.discountType,
           discount: parseFloat(item.discount),
-          gstRate: parseFloat(item.gstRate) || 0,
+          // The rate the document was actually priced at, not a blind
+          // parseFloat. computeDocument() falls back to the document-level
+          // gstRate when an item has no valid rate of its own — but
+          // `parseFloat(undefined) || 0` collapsed that "unset" into an
+          // explicit 0%, which IS a valid GST rate, so the saved invoice
+          // rendered 0% CGST/SGST while its stored amount still carried the
+          // 18% the preview had charged. Persist the effective rate so the
+          // PDF reproduces the total that was saved.
+          gstRate: effectiveGstRate(item),
           taxInclusive: !!item.taxInclusive,
         })),
         style: form.style,

@@ -2345,17 +2345,17 @@ const Accounting = () => {
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
-              className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap lg:flex-wrap items-center justify-start lg:justify-between gap-4 lg:gap-6 w-full h-full overflow-x-auto lg:overflow-visible`}
+              className={`${bulkStripClosing ? "animate-slideOutRight" : "animate-slideInLeft"} flex flex-nowrap items-center justify-between gap-4 w-full h-full overflow-x-auto`}
             >
               {/* Left: bulk action buttons */}
               {/* One joined strip instead of separate pills, matching Companies: no gap
     between buttons, rounding only on the two outer corners, and each
     border pulled left by 1px onto its neighbour so touching borders
     don't double up. Only the icons carry each action's colour. */}
-              <div className="flex flex-nowrap lg:flex-wrap items-center flex-shrink-0">
+              <div className="flex flex-nowrap items-center flex-shrink-0">
                 <button
                   onClick={handleExportSelected}
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <Download className="w-4 h-4 text-green-600" />
                   Export
@@ -2499,7 +2499,7 @@ const Accounting = () => {
                 </button>
                 <button
                   onClick={() => setSelectedIds([])}
-                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-lg hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Cancel
@@ -2515,14 +2515,14 @@ const Accounting = () => {
                   onClick={() =>
                     setSelectedIds(currentDocuments.map((d) => d._id))
                   }
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <CheckSquare className="w-4 h-4" />
                   Select All
                 </button>
                 <button
                   onClick={() => setSelectedIds([])}
-                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
+                  className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
                   <X className="w-4 h-4" />
                   Deselect All
@@ -2591,7 +2591,7 @@ const Accounting = () => {
                   flex-1 above); on desktop it's the same fixed 380px as
                   before. */}
               <div
-                className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white min-w-0 max-w-full ${isSearchExpanded ? "flex-1 lg:flex-initial lg:w-[380px]" : "w-10 flex-shrink-0"}`}
+                className={`relative h-10 flex items-center border ${searchTerms[activeTab] ? "border-[#0085FF]" : "border-[#E1E4EA]"} rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white min-w-0 max-w-full ${isSearchExpanded ? "flex-1 lg:flex-initial lg:w-[380px]" : "w-10 flex-shrink-0"}`}
               >
                 <SearchIcon
                   className="absolute left-3 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]"

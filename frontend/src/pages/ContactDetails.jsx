@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import BasicDetails from "../components/contact/BasicDetails";
@@ -222,10 +223,13 @@ const ContactDetailsPage = () => {
     );
   }
 
+  // window.confirm renders the browser's own dialog — unstyleable, and it
+  // announces the origin ("localhost:5173") above the message, which reads
+  // like a security prompt rather than part of the app.
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleDeleteContact = async () => {
-    if (!window.confirm("Are you sure you want to delete this contact? This action cannot be undone.")) {
-      return;
-    }
+    setShowDeleteConfirm(false);
     try {
       await API.delete(`/contacts/${id}`);
       toast.success("Contact deleted successfully");
@@ -300,7 +304,7 @@ const ContactDetailsPage = () => {
             </span>
           </button>
           <button
-            onClick={handleDeleteContact}
+            onClick={() => setShowDeleteConfirm(true)}
             title="Delete Contact"
             className="flex items-center justify-center gap-2 rounded-full flex-shrink-0 w-8 sm:w-[139px]"
             style={{ minHeight: "32px", padding: 0, boxSizing: "border-box", background: "rgba(232, 34, 34, 0.1)", border: "1px solid rgba(232, 34, 34, 0.3)" }}
@@ -507,6 +511,15 @@ const ContactDetailsPage = () => {
           onClose={() => setShowMeetingForm(false)}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete contact"
+        message="Are you sure you want to delete this contact? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={handleDeleteContact}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 };

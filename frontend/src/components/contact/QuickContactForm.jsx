@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import PhoneNumberInput from "../common/PhoneNumberInput";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
@@ -627,17 +628,21 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Phone <span className="text-[#FF4935]">*</span>
               </label>
-              <input
-                ref={phoneInputRef}
-                type="tel"
-                placeholder="+91 123456789"
+              {/* Wrapper carries phoneInputRef: the scroll-to-first-error
+                  logic below targets a DOM node, and the ref used to sit on
+                  the raw <input>. */}
+              <div ref={phoneInputRef}>
+              <PhoneNumberInput
                 value={form.phone}
-                onChange={(e) => handleFormChange("phone", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.phone
+                onChange={(next) => handleFormChange("phone", next)}
+                placeholder="123456789"
+                selectClassName="border border-[#1F2937]/10 rounded-full px-2 h-8 text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
+                inputClassName={`flex-1 min-w-0 border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.phone
                   ? "border-red-500 focus:ring-red-500"
                   : "border-[#1F2937]/10 focus:ring-blue-500"
                   }`}
               />
+              </div>
               {validationErrors.phone && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.phone}</p>
               )}

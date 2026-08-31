@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import PhoneNumberInput from "../common/PhoneNumberInput";
 import API from "../../services/api";
 import { Paperclip, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -865,12 +866,12 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Phone
               </label>
-              <input
-                type="tel"
+              <PhoneNumberInput
                 value={form.phone}
-                onChange={(e) => handleFormChange("phone", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
+                onChange={(next) => handleFormChange("phone", next)}
                 placeholder="Enter Phone Number"
+                selectClassName="border border-[#1F2937]/10 rounded-full px-2 h-8 text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
+                inputClassName="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
               />
             </div>
 

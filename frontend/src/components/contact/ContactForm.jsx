@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import PhoneNumberInput from "../common/PhoneNumberInput";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
@@ -588,12 +589,9 @@ const ContactForm = ({
             {/* Phone */}
             <div>
               <label className="block text-[13px] font-semibold text-[#111216] mb-1.5">Phone</label>
-              <input
-                type="tel"
+              <PhoneNumberInput
                 value={form.phone || ""}
-                onChange={(e) => handleFormChange({ ...form, phone: e.target.value })}
-                className="w-full border border-[#E0E0E1] focus:ring-blue-500 rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 transition-all placeholder:text-[#A0A0A0]"
-                placeholder="9876543210"
+                onChange={(next) => handleFormChange({ ...form, phone: next })}
               />
             </div>
 

@@ -167,7 +167,7 @@ const toChromeTint = (hex) => {
 // 16px radius, fully transparent inside it, so whatever the page paints under
 // the corner shows through instead of a hardcoded page colour.
 const CORNER_MASK =
-  "radial-gradient(circle 16px at 100% 100%, transparent 0 16px, #000 16px)";
+  "radial-gradient(circle 16px at 16.5px 16.5px, transparent 0 16px, #000 16px)";
 
 const primary = {
   darknavy: "#16153C",
@@ -790,37 +790,6 @@ const Navbar = () => {
                 {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
               </button>
 
-              {/* Collapses the panel back to the icon rail. Only offered while the
-                  panel is open — collapsed, the rail has no room for it. */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPinned(false);
-                  localStorage.setItem("sidebarPinned", "false");
-                  setIsHovered(false);
-                  setIsMobileOpen(false);
-                }}
-                title="Collapse menu"
-                aria-label="Collapse menu"
-                className="flex items-center justify-center w-6 h-6 flex-shrink-0 rounded hover:opacity-70 transition-opacity"
-              >
-                {/* The frame, border and glyph all come from the design's SVG. */}
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-hidden="true"
-                >
-                  <rect x="0.5" y="0.5" width="23" height="23" rx="3.5" fill="white" />
-                  <rect x="0.5" y="0.5" width="23" height="23" rx="3.5" stroke="#E5E5E5" />
-                  <path
-                    d="M7.22388 12.0001L11.3619 16.1382L12.3047 15.1954L9.10949 12.0001L12.3047 8.80487L11.3619 7.86206L7.22388 12.0001ZM10.9905 12.0001L15.1285 16.1382L16.0713 15.1954L12.8761 12.0001L16.0713 8.80487L15.1285 7.86206L10.9905 12.0001Z"
-                    fill="#0A0A0A"
-                  />
-                </svg>
-              </button>
             </div>
           )}
         </div>
@@ -1080,8 +1049,8 @@ const Navbar = () => {
         style={{
           left: "calc(var(--sidebar-width, 64px) - 1px)",
           top: "63px",
-          width: "17px",
-          height: "17px",
+          width: "19px",
+          height: "19px",
           background: CHROME_BG,
           WebkitMaskImage: CORNER_MASK,
           maskImage: CORNER_MASK,
@@ -1089,20 +1058,32 @@ const Navbar = () => {
           transition: "left 300ms ease-in-out",
         }}
       />
-      <div
+      {/* The arc and the two straight borders are now one continuous stroke.
+          Previously the arc was a separate box-shadow whose ends merely
+          abutted the sidebar/header borders — at any zoom the joins showed as
+          a detached corner. This path runs 2.5px INTO each border (the L
+          segments) so the lines overlap rather than meet, and every endpoint
+          sits on the same 0.5px centreline the 1px borders occupy. */}
+      <svg
         aria-hidden="true"
         className="hidden lg:block fixed z-[9996] pointer-events-none"
+        width="19"
+        height="19"
+        viewBox="0 0 19 19"
+        fill="none"
         style={{
-          left: "var(--sidebar-width, 64px)",
-          top: "64px",
-          width: "16px",
-          height: "16px",
-          borderTopLeftRadius: "16px",
-          boxShadow: "-1px -1px 0 0 #E1E4EA",
+          left: "calc(var(--sidebar-width, 64px) - 1px)",
+          top: "63px",
           filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
           transition: "left 300ms ease-in-out",
         }}
-      />
+      >
+        <path
+          d="M0.5 19 L0.5 16.5 A16 16 0 0 1 16.5 0.5 L19 0.5"
+          stroke="#E1E4EA"
+          strokeWidth="1"
+        />
+      </svg>
     </>
   );
 };

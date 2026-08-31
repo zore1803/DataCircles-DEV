@@ -2030,54 +2030,57 @@ function Dashboard() {
 
         {showBulkStrip ? (
           <div
-            className={`${bulkStripClosing ? "animate-slideOutLeft" : "animate-slideInLeft"} flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4`}
+            className={`${bulkStripClosing ? "animate-slideOutLeft" : "animate-slideInLeft"} flex flex-nowrap items-center justify-between gap-4 bg-white border border-[#E1E4EA] rounded-xl px-4 overflow-x-auto`}
             style={{ width: "100%", minHeight: 44, marginTop: 24 }}
           >
-            <div className="flex flex-wrap items-center gap-2 py-2">
+            {/* Same joined strip as every other list page: one white group
+                with square inner edges, 25px on the outer ends, and colour
+                carried by the icons rather than filled buttons. */}
+            <div className="flex flex-nowrap items-center flex-shrink-0 py-2">
               <button
                 onClick={handleExportSelectedInvoices}
-                className="px-3.5 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
                 onClick={() => setShowBulkInvoiceStatusModal(true)}
-                className="px-3.5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
                 onClick={() => setShowBulkInvoiceDeleteModal(true)}
-                className="px-3.5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
                 onClick={() => setSelectedInvoices([])}
-                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Cancel
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <CheckSquare className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-800 font-semibold font-inter text-sm">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span className="text-blue-800 font-semibold font-inter text-sm whitespace-nowrap">
                 {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} selected
               </span>
               <button
                 onClick={handleSelectAllInvoicesAcrossPages}
-                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select All
               </button>
               <button
                 onClick={handleDeselectAllInvoicesExtra}
-                className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
                 <X className="w-4 h-4" />
                 Deselect All

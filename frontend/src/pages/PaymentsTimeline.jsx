@@ -1149,6 +1149,7 @@ export default function PaymentsTimeline() {
       >
         {stripVisible ? (
           <BulkActionBar
+            bare
             selectedCount={selectedIds.length}
             entityName="payment"
             isClosing={stripClosing}
@@ -1378,7 +1379,7 @@ export default function PaymentsTimeline() {
         <div className="flex flex-row items-center gap-2 flex-shrink-0 min-w-0">
           {/* Search — expands in place from the icon */}
           <div
-            className={`relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
+            className={`relative h-10 flex items-center border ${searchQuery ? "border-[#0085FF]" : "border-[#E1E4EA]"} rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${isSearchExpanded ? "w-[220px] sm:w-[300px] lg:w-[380px]" : "w-10"} max-w-full flex-shrink-0`}
           >
             <SearchIcon
               className="absolute left-3 text-[#525866] w-4 h-4 cursor-pointer z-10 flex-shrink-0 top-1/2 -translate-y-1/2"
