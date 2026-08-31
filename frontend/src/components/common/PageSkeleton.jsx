@@ -241,6 +241,48 @@ const InsightsSkeleton = () => (
   </div>
 );
 
+// Mirrors the real Settings page: the fixed header strip, then a category
+// heading (icon chip + title + hairline) over a row of icon-and-label tiles,
+// repeated. The generic variant used to stand in here, so the page jumped
+// from four wide cards to six small tiles the moment it loaded.
+// `groups` is the real per-category tile count, passed by the caller: the
+// settings item list is a static array in the component, so its exact shape
+// is known even while the page is still "loading". Without it the staff page
+// (1 + 7 + 1 entries) drew the admin page's three full rows of six.
+const SettingsSkeleton = ({ groups, categories = 3, tiles = 6 }) => (
+  <div className="space-y-0 -m-6">
+    <div className="flex items-center justify-between gap-4 border-b border-[#E1E4EA] bg-white px-4 sm:px-6 lg:px-8" style={{ height: 64 }}>
+      <div className="flex flex-col gap-1.5">
+        <Skeleton width={90} height={16} />
+        <Skeleton width={180} height={10} />
+      </div>
+      <Skeleton width={150} height={34} className="rounded-lg hidden md:block" />
+    </div>
+
+    <div className="px-4 sm:px-6 lg:px-8 pt-8 pb-8 space-y-8">
+      {(groups && groups.length ? groups : Array.from({ length: categories }, () => tiles)).map((count, c) => (
+        <div key={c}>
+          <div className="flex items-center gap-3 mb-5">
+            <Skeleton width={36} height={36} className="rounded-lg flex-shrink-0" />
+            <Skeleton width={130} height={20} />
+            <div className="flex-1">
+              <Skeleton width="100%" height={1} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {Array.from({ length: count }).map((_, t) => (
+              <div key={t} className="flex flex-col items-center gap-2 p-3">
+                <Skeleton width={48} height={48} className="rounded-xl" />
+                <Skeleton width={70} height={10} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 const GenericSkeleton = () => (
   <div className="space-y-4">
     <Skeleton width="25%" height={22} />
@@ -256,6 +298,7 @@ const VARIANTS = {
   profile: ProfileSkeleton,
   generic: GenericSkeleton,
   insights: InsightsSkeleton,
+  settings: SettingsSkeleton,
 };
 
 /**
@@ -275,4 +318,4 @@ export default function PageSkeleton({ variant = "generic", ...rest }) {
   );
 }
 
-export { TableSkeleton, KanbanSkeleton, CardsSkeleton, ProfileSkeleton, GenericSkeleton };
+export { TableSkeleton, KanbanSkeleton, CardsSkeleton, ProfileSkeleton, GenericSkeleton, SettingsSkeleton };

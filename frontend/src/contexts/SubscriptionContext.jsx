@@ -75,9 +75,16 @@ export const SubscriptionProvider = ({ children }) => {
       // *transitions* (the useEffect below only re-fires on that changing,
       // which misses "still confirmed, but a new change was just
       // scheduled/superseded/cancelled, or seat count just changed").
+      // Seat status is NOT gated on isPaymentConfirmed: seats are an
+      // entitlement of the plan on the subscription, and the endpoint reads
+      // PlanConfig directly, so it answers correctly whatever the billing
+      // state. Gating it meant an unpaid org got seatStatus = null, and
+      // User Management then fell back to subscription.userCount (1) for the
+      // staff limit — a Business org with 10 staff seats read "3 of 1
+      // (At limit - payment required)".
+      fetchSeatStatus();
       if (response.data?.subscription?.isPaymentConfirmed) {
         fetchScheduledChanges();
-        fetchSeatStatus();
       }
 
       // One-shot notice for super-admin-initiated changes (trial
@@ -227,8 +234,9 @@ export const SubscriptionProvider = ({ children }) => {
   }, [authLoading, isAuthenticated]); // Dependencies remain the same
 
   useEffect(() => {
-    if (subscription?.subscription?.isPaymentConfirmed) {
-      fetchSeatStatus();
+    if (!subscription?.subscription) return;
+    fetchSeatStatus();
+    if (subscription.subscription.isPaymentConfirmed) {
       fetchScheduledChanges();
     }
   }, [subscription?.subscription?.isPaymentConfirmed]);

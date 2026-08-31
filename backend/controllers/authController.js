@@ -1175,10 +1175,15 @@ exports.completeRegistration = async (req, res) => {
         { name: "Forms", permission: "read-write" },
       ];
 
-      // Generate new code for security
-      const newCode = await generateUniqueCode();
-      org.code = newCode;
-      await org.save();
+      // The code deliberately survives a join. It used to be rotated here
+      // ("for security"), which made it single-use: the first person to join
+      // invalidated the copy every other invitee had been given, so admins
+      // had to fetch and re-share a new code for each teammate. The rest of
+      // the product treats it as a standing code - User Management shows one
+      // persistent code to copy, and its Reset button exists precisely
+      // because rotating is meant to be a deliberate admin action ("This
+      // will invalidate the current code"). Joins stay bounded by the seat
+      // check above, not by the code being one-shot.
     } else if (req.body.orgName) {
       // User is creating a new organization
       const code = await generateUniqueCode();

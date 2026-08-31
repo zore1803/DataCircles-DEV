@@ -237,7 +237,12 @@ const BasicSettings = () => {
   // Loading State
   if (loading) {
     return (
-      <PageSkeleton variant="generic" />
+      <PageSkeleton
+        variant="settings"
+        groups={categoryOrder
+          .map((c) => (groupedSettings[c] || []).length)
+          .filter(Boolean)}
+      />
     );
   }
 
@@ -317,12 +322,19 @@ const BasicSettings = () => {
               Customize and configure your CRM system
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-            <Users className="w-4 h-4 text-blue-600" />
+          {/* Same action as the admin Settings header - that slot held a
+              static "Staff Panel" label, which named the page you were
+              already on rather than doing anything. */}
+          <button
+            onClick={() => window.open("https://help.datacircles.in/en", "_blank")}
+            className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors group flex-shrink-0"
+          >
+            <Globe className="w-4 h-4 text-blue-600" />
             <span className="text-sm font-semibold text-blue-700">
-              Staff Panel
+              Visit Help Center
             </span>
-          </div>
+            <ChevronRight className="w-4 h-4 text-blue-600 group-hover:translate-x-0.5 transition-transform" />
+          </button>
         </div>
       </div>
 
@@ -350,61 +362,34 @@ const BasicSettings = () => {
                   <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent"></div>
                 </div>
 
-                {/* Settings Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {/* Settings entries - just the icon and the section name. No
+                    card around them: the description and Configure footer the
+                    old cards carried only repeated what each section says on
+                    arrival, and once those were gone the box had nothing left
+                    to hold. */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {items.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleItemClick(item)}
-                      className="group relative flex flex-col bg-white rounded-xl border-2 border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 text-left overflow-hidden"
+                      title={item.description}
+                      className="group relative flex flex-col items-center gap-2 p-3 transition-colors"
                     >
-                      {/* Card Header */}
-                      <div className="p-6">
-                        <div className="flex items-start justify-between mb-4">
-                          <div
-                            className={`p-3 rounded-xl ${item.bgColor} ${item.color} shadow-md group-hover:scale-110 transition-transform duration-300`}
-                          >
-                            {item.icon}
-                          </div>
-                          {item.badge && (
-                            <span
-                              className={`px-2.5 py-1 ${
-                                item.badgeColor ||
-                                "bg-yellow-100 text-yellow-800"
-                              } text-xs font-bold rounded-full flex items-center gap-1 shadow-sm`}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-
-                        <h3 className="text-base font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                          {item.label}
-                        </h3>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                          {item.description}
-                        </p>
-                      </div>
-
-                      {/* Card Footer */}
                       <div
-                        className={`mt-auto px-6 py-3 ${item.bgColor} border-t-2 ${item.borderColor} flex items-center justify-between`}
+                        className={`p-3 rounded-xl border border-[#E1E4EA] ${item.bgColor} ${item.color} group-hover:scale-110 transition-transform duration-200`}
                       >
-                        <span className={`text-xs font-semibold ${item.color}`}>
-                          Configure
-                        </span>
-                        <ChevronRight
-                          className={`w-4 h-4 ${item.color} transform group-hover:translate-x-1 transition-transform`}
-                        />
+                        {item.icon}
                       </div>
-
-                      {/* External link indicator for help center */}
-                      {item.id === "help-center" && (
-                        <div className="absolute top-3 right-3">
-                          <ExternalLink className="w-4 h-4 text-gray-400" />
-                        </div>
-                      )}
+                      <span className="flex items-center justify-center gap-1 text-xs font-semibold text-gray-900 text-center leading-snug group-hover:text-blue-600 transition-colors">
+                        {item.label}
+                        {/* Marks Help Center as leaving the app. Inline after
+                            the label rather than absolutely positioned: with
+                            no card behind it, a corner marker floated in open
+                            space away from the entry it belonged to. */}
+                        {item.id === "help-center" && (
+                          <ExternalLink className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                        )}
+                      </span>
                     </button>
                   ))}
                 </div>

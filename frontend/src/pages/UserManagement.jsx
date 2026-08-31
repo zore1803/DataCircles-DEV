@@ -106,6 +106,9 @@ function UserManagement() {
   const [permissions, setPermissions] = useState({});
   const [showModal, setShowModal] = useState(false);
   const [orgCode, setOrgCode] = useState("");
+  // Distinguishes "still fetching" from "the fetch failed" - the card used to
+  // render "Loading..." for both.
+  const [orgCodeError, setOrgCodeError] = useState("");
   const { subscription, seatStatus, fetchSeatStatus } = useSubscription();
   const { razorpayLoaded, openCheckout } = useRazorpay();
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -172,15 +175,19 @@ function UserManagement() {
 
   useEffect(() => {
     configureAxios(getAccessTokenSilently);
-    if (auth0User) {
-      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-      if (storedUser.role !== "admin") {
-        navigate("/login");
-      } else {
-        fetchOrgCode();
-        fetchUsers();
-      }
+    // Gated on the stored user, not on auth0User: phone/password logins never
+    // produce an Auth0 user, so on a hard refresh this effect never ran for
+    // them - no fetch, no error, just a permanent "Loading..." in the code
+    // card. PrivateRoute has already populated localStorage by the time this
+    // mounts, for either login method.
+    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!storedUser.role && !auth0User) return;
+    if (storedUser.role !== "admin") {
+      navigate("/login");
+      return;
     }
+    fetchOrgCode();
+    fetchUsers();
   }, [navigate, auth0User, getAccessTokenSilently]);
 
   const resetOrgCode = async () => {
@@ -192,11 +199,9 @@ function UserManagement() {
       type: "warning",
       onConfirm: async () => {
         try {
-          const user = JSON.parse(localStorage.getItem("user") || "{}");
-          if (!user.organization) return;
-          const res = await API.post(
-            `/organisation/${user.organization}/reset-code`
-          );
+          const orgId = getOrgId();
+          if (!orgId) return;
+          const res = await API.post(`/organisation/${orgId}/reset-code`);
           setOrgCode(res.data.code);
           toast.success("Secret code has been reset!");
         } catch (err) {
@@ -214,14 +219,34 @@ function UserManagement() {
     });
   };
 
+  // The stored user comes from two different endpoints: /auth/login returns
+  // it with `organization` POPULATED (an object), /auth/me returns it as a
+  // bare id. Interpolating the object form produced
+  // `/organisation/[object Object]`, which fails - and the failure was
+  // silent, so the card sat on "Loading..." and looked like the code had
+  // expired, when hitting Reset was the only thing that ever filled it in.
+  const getOrgId = () => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const org = user.organization;
+    return typeof org === "object" && org !== null ? org._id : org;
+  };
+
   const fetchOrgCode = async () => {
+    const orgId = getOrgId();
+    if (!orgId) {
+      setOrgCodeError("No organization on this account");
+      return;
+    }
     try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      if (!user.organization) return;
-      const res = await API.get(`/organisation/${user.organization}`);
+      setOrgCodeError("");
+      const res = await API.get(`/organisation/${orgId}`);
       setOrgCode(res.data.code);
     } catch (err) {
       console.error("Failed to fetch organization code", err);
+      setOrgCode("");
+      setOrgCodeError(
+        err.response?.data?.error || "Couldn't load the code"
+      );
     }
   };
 
@@ -710,9 +735,25 @@ function UserManagement() {
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1 bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3">
-            <span className="font-mono text-xl font-bold text-gray-900">
-              {orgCode || "Loading..."}
-            </span>
+            {orgCode ? (
+              <span className="font-mono text-xl font-bold text-gray-900">
+                {orgCode}
+              </span>
+            ) : orgCodeError ? (
+              <span className="flex items-center gap-2 text-sm font-medium text-red-600">
+                {orgCodeError}
+                <button
+                  onClick={fetchOrgCode}
+                  className="text-blue-600 font-semibold hover:underline"
+                >
+                  Retry
+                </button>
+              </span>
+            ) : (
+              <span className="font-mono text-xl font-bold text-gray-400">
+                Loading...
+              </span>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -819,27 +860,36 @@ function UserManagement() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedUser(u);
-                              setPermissions(getInitialPermissions(u));
-                              setShowModal(true);
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-semibold transition-colors"
-                          >
-                            <Shield className="w-4 h-4" />
-                            Permissions
-                          </button>
-                          <button
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={isSelf}
-                            onClick={() => !isSelf && deleteUser(u._id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </button>
-                        </div>
+                        {/* No row actions for the admin: the admin seat is the
+                            org creator, has every permission by definition,
+                            and can't be deleted (Delete was already disabled
+                            for yourself) - so both buttons only ever offered
+                            something that couldn't happen. */}
+                        {u.role === "admin" ? (
+                          <span className="text-xs text-gray-400">—</span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedUser(u);
+                                setPermissions(getInitialPermissions(u));
+                                setShowModal(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-semibold transition-colors"
+                            >
+                              <Shield className="w-4 h-4" />
+                              Permissions
+                            </button>
+                            <button
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={isSelf}
+                              onClick={() => !isSelf && deleteUser(u._id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

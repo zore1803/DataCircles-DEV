@@ -465,7 +465,12 @@ const Settings = () => {
   // Loading State
   if (loading) {
     return (
-      <PageSkeleton variant="generic" />
+      <PageSkeleton
+        variant="settings"
+        groups={categoryOrder
+          .map((c) => (groupedSettings[c] || []).length)
+          .filter(Boolean)}
+      />
     );
   }
 
