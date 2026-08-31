@@ -1,7 +1,9 @@
 import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid } from "recharts";
+import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid, Tooltip } from "recharts";
+import { formatNumberToIndian } from "../utils/numberFormatter";
+import CrmHealthGauge from "../components/dashboard/CrmHealthGauge";
 import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare, Building2, Users, Video, ListChecks } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
@@ -74,6 +76,16 @@ const getInvoiceFieldValue = (inv, key) => {
 const invoiceColumnHelper = createColumnHelper();
 
 const formatSalesRevenueTick = (value) => (value === 0 ? "0" : `₹${Math.round(value / 1000)}k`);
+
+// Compact rupee for tight axes: crores, then lakhs, then thousands.
+const formatCompactRupee = (value) => {
+  const n = Math.abs(value || 0);
+  if (n === 0) return "₹0";
+  if (n >= 1e7) return `₹${(value / 1e7).toFixed(n >= 1e8 ? 0 : 1)} Cr`;
+  if (n >= 1e5) return `₹${(value / 1e5).toFixed(n >= 1e6 ? 0 : 1)}L`;
+  if (n >= 1e3) return `₹${Math.round(value / 1e3)}k`;
+  return `₹${Math.round(value)}`;
+};
 
 const InvoicesIcon = ({ size = 20, style }) => (
   <svg width={size} height={size} viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
@@ -763,6 +775,158 @@ function Dashboard() {
   const [totalMeetings, setTotalMeetings] = useState(0);
 
   const [averageDealSize, setAverageDealSize] = useState(0);
+  // CRM Health card — every figure is measured from this org's own records.
+  // A metric with nothing to measure reports 0 rather than a flattering
+  // default, so an empty CRM reads as empty.
+  const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+
+  const crmHealthMetrics = useMemo(() => {
+    // Engagement: contacts that are actually attached to a deal, vs all of them.
+    const contactIdsOnDeals = new Set(
+      (deals || [])
+        .map((d) => d.contact?._id || d.contact)
+        .filter(Boolean)
+        .map(String)
+    );
+    const engagedContacts = (contacts || []).filter((c) =>
+      contactIdsOnDeals.has(String(c._id))
+    ).length;
+
+    // Tasks: completed vs every task on record.
+    const completedTasks = (allTasks || []).filter(
+      (t) => (t.status || "").toLowerCase() === "completed"
+    ).length;
+
+    // Deal activity: deals touched in the last 30 days vs all deals — a
+    // pipeline nobody has updated is the thing this is meant to surface.
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - THIRTY_DAYS;
+    const activeDeals = (deals || []).filter((d) => {
+      const t = new Date(d.updatedAt || d.createdAt || 0).getTime();
+      return t >= cutoff;
+    }).length;
+
+    // Meetings: only those already due are judged — a meeting scheduled for
+    // next week isn't "incomplete", it just hasn't happened.
+    const pastMeetings = (allMeetings || []).filter(
+      (m) => m.scheduledAt && new Date(m.scheduledAt).getTime() <= Date.now()
+    );
+    const completedMeetings = pastMeetings.filter(
+      (m) => (m.status || "").toLowerCase() === "completed"
+    ).length;
+
+    return [
+      { label: "Contact Engagement", value: pct(engagedContacts, (contacts || []).length) },
+      { label: "Task Completion", value: pct(completedTasks, (allTasks || []).length) },
+      { label: "Deal Activity", value: pct(activeDeals, (deals || []).length) },
+      { label: "Meeting Completion", value: pct(completedMeetings, pastMeetings.length) },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, deals, allTasks, allMeetings]);
+
+  // Pipeline Snapshot (Card Two). Deal has amount, status and timestamps —
+  // no close-date field — so every figure below is derived from those three.
+  const pipelineSnapshot = useMemo(() => {
+    const all = deals || [];
+    const sum = (list) => list.reduce((t, d) => t + (d.amount || 0), 0);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+    const at = (d) => new Date(d.updatedAt || d.createdAt || 0).getTime();
+    const isStatus = (d, st) => (d.status || "Open").toLowerCase() === st;
+
+    const open = all.filter((d) => isStatus(d, "open"));
+    const wonThis = all.filter((d) => isStatus(d, "won") && at(d) >= monthStart);
+    const wonPrev = all.filter((d) => isStatus(d, "won") && at(d) >= prevMonthStart && at(d) < monthStart);
+    const lostThis = all.filter((d) => isStatus(d, "lost") && at(d) >= monthStart);
+    const lostPrev = all.filter((d) => isStatus(d, "lost") && at(d) >= prevMonthStart && at(d) < monthStart);
+    const activeWeek = open.filter((d) => at(d) >= weekAgo);
+
+    const change = (current, previous) => {
+      if (previous > 0) return Math.round(((current - previous) / previous) * 100);
+      return current > 0 ? 100 : 0;
+    };
+
+    const openPrev = sum(all.filter((d) => isStatus(d, "open") && at(d) < monthStart));
+
+    return [
+      { label: "Pipeline Value", value: sum(open), delta: change(sum(open), openPrev) },
+      { label: "Won this Month", value: sum(wonThis), delta: change(sum(wonThis), sum(wonPrev)) },
+      { label: "Lost", value: sum(lostThis), delta: change(sum(lostThis), sum(lostPrev)), invert: true },
+      // The design says "Closing this Week", but there is no expected-close
+      // date on a deal to compute that from. This is the honest equivalent
+      // the data supports: open deals touched in the last seven days.
+      { label: "Active this Week", value: sum(activeWeek), delta: change(sum(activeWeek), 0) },
+    ];
+  }, [deals]);
+
+  // Eight monthly buckets for the card's chart: value created vs value won.
+  const pipelineTrendData = useMemo(() => {
+    const months = Array.from({ length: 8 }, (_, i) => {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - (7 - i));
+      return {
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+        label: d.toLocaleDateString("en-IN", { month: "short" }),
+        pipeline: 0,
+        won: 0,
+      };
+    });
+    const index = new Map(months.map((m, i) => [m.key, i]));
+    (deals || []).forEach((d) => {
+      const created = new Date(d.createdAt || d.updatedAt || 0);
+      const ci = index.get(`${created.getFullYear()}-${created.getMonth()}`);
+      if (ci !== undefined) months[ci].pipeline += d.amount || 0;
+      if ((d.status || "").toLowerCase() === "won") {
+        const closed = new Date(d.updatedAt || d.createdAt || 0);
+        const wi = index.get(`${closed.getFullYear()}-${closed.getMonth()}`);
+        if (wi !== undefined) months[wi].won += d.amount || 0;
+      }
+    });
+    return months;
+  }, [deals]);
+
+  const crmHealthScore = Math.round(
+    crmHealthMetrics.reduce((sum, m) => sum + m.value, 0) / crmHealthMetrics.length
+  );
+  const crmHealthLabel =
+    crmHealthScore >= 85
+      ? "Excellent"
+      : crmHealthScore >= 70
+      ? "Good"
+      : crmHealthScore >= 50
+      ? "Fair"
+      : "Needs work";
+
+  // Drafts still to send. The banner below was hardcoded to "2 invoices" and
+  // rendered unconditionally, with dead Dismiss/View buttons.
+  const draftInvoices = useMemo(
+    () => (invoices || []).filter((inv) => (inv.status || "").toLowerCase() === "draft"),
+    [invoices]
+  );
+  const [draftNoticeDismissed, setDraftNoticeDismissed] = useState(
+    () => localStorage.getItem("dashboardDraftNoticeDismissed") === "true"
+  );
+
+  // A dismissal silences the drafts you had at the time, not every future
+  // one: when the count rises, or drops to zero, the notice resets.
+  useEffect(() => {
+    const seen = Number(localStorage.getItem("dashboardDraftNoticeCount") || 0);
+    if (draftInvoices.length === 0) {
+      localStorage.removeItem("dashboardDraftNoticeDismissed");
+      localStorage.removeItem("dashboardDraftNoticeCount");
+      setDraftNoticeDismissed(false);
+      return;
+    }
+    if (draftInvoices.length > seen) {
+      localStorage.removeItem("dashboardDraftNoticeDismissed");
+      setDraftNoticeDismissed(false);
+    }
+    localStorage.setItem("dashboardDraftNoticeCount", String(draftInvoices.length));
+  }, [draftInvoices.length]);
+
   const [invoiceStats, setInvoiceStats] = useState({
     delivered: 0,
     sent: 0,
@@ -1336,6 +1500,193 @@ function Dashboard() {
             />
           ))}
         </div>
+
+        {/* Same full-bleed rule that closes the KPI row on the other tabs. */}
+        <div
+          className="-mx-4 sm:-mx-6 lg:-mx-8"
+          style={{ marginTop: 24, borderBottom: "1px solid #E1E4EA" }}
+        />
+
+        {/* Card row. Card One is the health gauge + engagement bars from the
+            design; Card Two is still a shell awaiting its content. */}
+        <div className="flex flex-col lg:flex-row" style={{ gap: 16, marginTop: 24 }}>
+          {/* Two cards on a 2:3 split - the second absorbed the width of the
+              old third card, with the first given a little back so it isn't
+              squeezed to a third of the row. */}
+          <div
+            className="box-border flex flex-col items-start min-w-0 w-full lg:basis-0"
+            style={{
+              padding: 18,
+              gap: 16,
+              height: 320,
+              flexGrow: 2,
+              background: "#FFFFFF",
+              border: "1px solid #E1E4EA",
+              borderRadius: 12,
+            }}
+          >
+            <span
+              className="self-stretch"
+              style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+            >
+              CRM Health
+            </span>
+
+            {/* Chart Content: gauge on the left, metric bars on the right. */}
+            <div
+              className="flex flex-col sm:flex-row items-center self-stretch min-w-0"
+              style={{ gap: 24, flex: 1 }}
+            >
+              <div className="flex items-center justify-center min-w-0" style={{ flex: 1, alignSelf: "stretch" }}>
+                <CrmHealthGauge value={crmHealthScore} label={crmHealthLabel} />
+              </div>
+
+              {/* Shares the row with the gauge instead of being a fixed 181px
+                  block pinned to the card's edge: it grows with the card, but
+                  is capped so the bars don't stretch into a thin line on a
+                  wide screen. */}
+              <div
+                className="flex flex-col justify-center min-w-0"
+                style={{ gap: 16, flex: 1, maxWidth: 260 }}
+              >
+                {crmHealthMetrics.map((m) => (
+                  <div key={m.label} className="flex flex-col items-start self-stretch" style={{ gap: 9 }}>
+                    <span
+                      className="self-stretch truncate"
+                      style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#525252" }}
+                    >
+                      {m.label}
+                    </span>
+                    <div className="flex flex-row items-center self-stretch" style={{ gap: 9 }}>
+                      <div
+                        className="relative flex-1 min-w-0"
+                        style={{ height: 4, background: "rgba(0, 133, 255, 0.1)", borderRadius: 999 }}
+                      >
+                        <div
+                          className="absolute left-0 top-0"
+                          style={{ width: `${Math.min(100, Math.max(0, m.value))}%`, height: 4, background: "#0085FF", borderRadius: 999 }}
+                        />
+                      </div>
+                      <span
+                        className="flex-shrink-0 text-right"
+                        style={{ width: 34, fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#1F2937" }}
+                      >
+                        {m.value}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="box-border flex flex-col items-start min-w-0 w-full lg:basis-0"
+            style={{
+              padding: 18,
+              gap: 16,
+              height: 320,
+              flexGrow: 3,
+              background: "#FFFFFF",
+              border: "1px solid #E1E4EA",
+              borderRadius: 12,
+            }}
+          >
+            <span
+              className="self-stretch"
+              style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: 14, lineHeight: "120%", color: "#1F2937", opacity: 0.7 }}
+            >
+              Pipeline Snapshot
+            </span>
+
+            {/* Metric strip: four figures separated by vertical rules, each
+                with its own month-over-month delta. */}
+            <div className="flex flex-col self-stretch" style={{ gap: 12 }}>
+              <div className="self-stretch" style={{ height: 1, background: "#1F2937", opacity: 0.1 }} />
+
+              <div className="flex flex-row items-stretch self-stretch" style={{ gap: 8, height: 40 }}>
+                {pipelineSnapshot.map((m, i) => {
+                  // "Lost" going up is bad news, so its arrow and colour are
+                  // inverted rather than painting any rise green.
+                  const good = m.invert ? m.delta <= 0 : m.delta >= 0;
+                  const colour = good ? "#00C950" : "#F60000";
+                  return (
+                    <Fragment key={m.label}>
+                      {i > 0 && (
+                        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(31, 41, 55, 0.3)" }} />
+                      )}
+                      <div className="flex flex-row justify-between items-end min-w-0" style={{ flex: 1, gap: 4 }}>
+                        <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
+                          <span
+                            className="truncate"
+                            style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}
+                          >
+                            {m.label}
+                          </span>
+                          <span
+                            className="whitespace-nowrap"
+                            style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}
+                          >
+                            ₹{formatNumberToIndian(Math.round(m.value))}
+                          </span>
+                        </div>
+                        <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 4 }}>
+                          {m.delta >= 0 ? (
+                            <TrendingUp size={12} style={{ color: colour }} />
+                          ) : (
+                            <TrendingDown size={12} style={{ color: colour }} />
+                          )}
+                          <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: colour }}>
+                            {Math.abs(m.delta)}%
+                          </span>
+                        </div>
+                      </div>
+                    </Fragment>
+                  );
+                })}
+              </div>
+
+              <div className="self-stretch" style={{ height: 1, background: "#1F2937", opacity: 0.1 }} />
+            </div>
+
+            {/* Created vs won value, last 8 months. */}
+            <div className="self-stretch min-w-0" style={{ flex: 1 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={pipelineTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(31, 41, 55, 0.1)" />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={{ stroke: "rgba(31, 41, 55, 0.3)" }}
+                    tick={{ fontSize: 10, fontFamily: "Inter", fill: "#1F2937" }}
+                  />
+                  <YAxis
+                    tickFormatter={formatCompactRupee}
+                    tickLine={false}
+                    axisLine={false}
+                    width={44}
+                    tick={{ fontSize: 10, fontFamily: "Inter", fill: "#1F2937" }}
+                  />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      `₹${formatNumberToIndian(Math.round(value || 0))}`,
+                      name === "pipeline" ? "Created" : "Won",
+                    ]}
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: "1px solid #E1E4EA",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontFamily: "Inter",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line type="monotone" dataKey="pipeline" stroke="#0085FF" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="won" stroke="#0AA43E" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1393,6 +1744,9 @@ function Dashboard() {
           ))}
         </div>
 
+        {/* Only when there are actually drafts to send, and only until the
+            user dismisses it. */}
+        {draftInvoices.length > 0 && !draftNoticeDismissed && (
         <div
           className="box-border flex flex-row items-center self-stretch"
           style={{ padding: 12, gap: 16, marginTop: 24, background: "rgba(0, 133, 255, 0.1)", border: "1px solid rgba(0, 133, 255, 0.2)", borderRadius: 8 }}
@@ -1407,16 +1761,25 @@ function Dashboard() {
 
             <div className="flex flex-col items-start flex-1" style={{ gap: 6, height: 40 }}>
               <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#0085FF" }}>
-                2 Invoices Awaiting To Send
+                {draftInvoices.length} Invoice{draftInvoices.length === 1 ? "" : "s"} Awaiting To Send
               </span>
               <span className="self-stretch" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "140%", color: "#6B7280" }}>
-                2 invoices are waiting to be sent to the client.
+                {draftInvoices.length === 1
+                  ? "1 invoice is waiting to be sent to the client."
+                  : `${draftInvoices.length} invoices are waiting to be sent to the client.`}
               </span>
             </div>
 
             <div className="flex flex-row items-center flex-shrink-0" style={{ gap: 8, width: 157, height: 32 }}>
               <button
-                className="box-border flex flex-row justify-center items-center flex-shrink-0"
+                onClick={() => {
+                  // Sticky: re-showing on every dashboard visit is what makes
+                  // a dismissible notice annoying. Cleared when a new draft
+                  // appears (see the effect above).
+                  setDraftNoticeDismissed(true);
+                  localStorage.setItem("dashboardDraftNoticeDismissed", "true");
+                }}
+                className="box-border flex flex-row justify-center items-center flex-shrink-0 hover:bg-gray-50 transition-colors"
                 style={{ padding: 12, gap: 8, width: 83, height: 32, background: "#FFFFFF", border: "1px solid rgba(31, 41, 55, 0.3)", borderRadius: 96 }}
               >
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#1F2937" }}>
@@ -1425,7 +1788,8 @@ function Dashboard() {
               </button>
 
               <button
-                className="flex flex-row justify-center items-center flex-shrink-0"
+                onClick={() => navigate("/accounting?tab=tax&status=Draft")}
+                className="flex flex-row justify-center items-center flex-shrink-0 hover:opacity-90 transition-opacity"
                 style={{ padding: "12px 14px", gap: 10, width: 66, height: 32, background: "#0085FF", borderRadius: 96 }}
               >
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "20px", color: "#FFFFFF" }}>
@@ -1435,6 +1799,7 @@ function Dashboard() {
             </div>
           </div>
         </div>
+        )}
 
         <div
           className="-mx-4 sm:-mx-6 lg:-mx-8"
@@ -1575,7 +1940,7 @@ function Dashboard() {
               </span>
 
               <button
-                onClick={() => navigate("/invoices")}
+                onClick={() => navigate("/accounting")}
                 className="box-border flex flex-row justify-center items-center flex-shrink-0 hover:bg-gray-50 transition-colors"
                 style={{ padding: 12, gap: 8, width: 84, height: 32, background: "#FFFFFF", border: "1px solid rgba(31, 41, 55, 0.3)", borderRadius: 96 }}
               >
@@ -2184,6 +2549,25 @@ function Dashboard() {
                       tick={{ fontSize: 12, fontFamily: "Inter", fill: "rgba(33, 32, 31, 0.56)" }}
                     />
                     <YAxis domain={[0, salesRevenueYMax]} hide />
+                    {/* Sales Revenue had no Tooltip at all - hovering the
+                        chart showed nothing. Labels use each point's own
+                        "DD Mon" (the x tick only labels month starts, so the
+                        raw label is the only thing that identifies a point). */}
+                    <Tooltip
+                      cursor={{ stroke: "#0C4FCD", strokeWidth: 1, strokeDasharray: "3 3" }}
+                      labelFormatter={(label) => label}
+                      formatter={(value, name) => [
+                        `₹${formatNumberToIndian(Math.round(value || 0))}`,
+                        name === "revenue" ? "Revenue" : "Trend",
+                      ]}
+                      contentStyle={{
+                        borderRadius: 8,
+                        border: "1px solid #E1E4EA",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                        fontFamily: "Inter",
+                        fontSize: 12,
+                      }}
+                    />
                     <Area
                       type="linear"
                       dataKey="revenue"

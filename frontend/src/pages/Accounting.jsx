@@ -54,6 +54,7 @@ import {
   Video,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import { PDFDocument } from "pdf-lib";
 import API from "../services/api";
 import SearchIcon from "../components/common/SearchIcon";
@@ -115,7 +116,7 @@ const OpenNotesTermsButton = ({ label, onClick }) => (
 );
 
 /* Tab labels shown in the pill selector, mapped to the document type keys the
-   API (and Invoices1) already use. */
+   API already uses. */
 const TABS = [
   { label: "Invoices", key: "tax" },
   { label: "Pro Forma Invoices", key: "performa" },
@@ -752,6 +753,24 @@ const Accounting = () => {
     const el = tabRefs.current[activeTab];
     if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
   }, [activeTab]);
+
+  // Deep links land on a specific tab, already filtered — e.g. the
+  // dashboard's "N invoices awaiting to send" notice sends you to
+  // /accounting?tab=tax&status=Draft and you arrive looking at exactly
+  // those. Applied once per URL change, then the filter behaves like any
+  // other the user set by hand (clearing it doesn't fight the URL).
+  const location = useLocation();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    const status = params.get("status");
+    if (tab && TABS.some((t) => t.key === tab)) setActiveTab(tab);
+    if (status) {
+      const key = tab && TABS.some((t) => t.key === tab) ? tab : "tax";
+      setFilterStatuses((prev) => ({ ...prev, [key]: status }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const emptyByType = { tax: "", performa: "", quotation: "", deliveryChallan: "" };
   // Tracks whether each tab has completed at least one fetch, so a

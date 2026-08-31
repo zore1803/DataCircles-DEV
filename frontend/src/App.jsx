@@ -31,7 +31,6 @@ import FormBuilderPage from "./pages/FormBuilderPage";
 import PublicFormPage from "./pages/PublicFormPage";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
-import Invoices1 from "./pages/Invoices1";
 import ContactDetailsPage from "./pages/ContactDetails";
 import Insights from "./pages/Insights";
 import VendorDetailsPageNew from "./pages/VendorDetailsPageNew";
@@ -447,14 +446,6 @@ function App() {
               }
             />
             <Route
-              path="/invoices"
-              element={
-                <PrivateRoute>
-                  <Invoices1 />
-                </PrivateRoute>
-              }
-            />
-            <Route
               path="/sales-return"
               element={
                 <PrivateRoute>
@@ -555,14 +546,6 @@ function App() {
               element={
                 <PrivateRoute>
                   <Profile />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/invoices1"
-              element={
-                <PrivateRoute>
-                  <Invoices1 />
                 </PrivateRoute>
               }
             />

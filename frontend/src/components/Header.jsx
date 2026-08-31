@@ -929,7 +929,6 @@ const Header = () => {
     "/settings": "Settings",
     "/tasks": "Tasks and Meetings",
     "/calender": "Calendar",
-    "/invoices": "Invoices",
     "/sales-return": "Sales Return",
     "/sales-subscription": "Subscription",
     "/e-invoicing": "E-Invoicing",
