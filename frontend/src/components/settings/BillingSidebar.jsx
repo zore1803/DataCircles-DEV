@@ -102,30 +102,31 @@ const BillingSidebar = ({ subscription }) => {
   return (
     <div className="md:sticky md:top-6 md:self-start bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="p-6 pb-5">
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600">
-              <CreditCard className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-gray-900 capitalize">{prettyPlan(subscription.planName)}</h2>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide border ${statusStyle}`}>
-                  {statusLabel}
-                </span>
-              </div>
-            </div>
+        {/* Plan name and status stack under the icon rather than sharing one
+            row with the Calendar link: three items competing for a 300px
+            column clipped the link and wrapped a two-word status badge. */}
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 flex-shrink-0">
+            <CreditCard className="w-4 h-4" />
           </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900 capitalize leading-tight">{prettyPlan(subscription.planName)}</h2>
+            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide border whitespace-nowrap ${statusStyle}`}>
+              {statusLabel}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-end justify-between gap-3 mt-3">
+          <p className="text-3xl font-bold text-gray-900">
+            {formatPrice(recurringTotal)}<span className="text-sm font-medium text-gray-400">/{subscription.billingCycle === "monthly" ? "mo" : "yr"}</span>
+          </p>
           <button
             onClick={() => setShowBillingCalendar(true)}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline flex-shrink-0"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline flex-shrink-0 pb-1"
           >
             <Calendar className="w-3.5 h-3.5" /> Calendar
           </button>
         </div>
-        <p className="text-3xl font-bold text-gray-900 mt-2">
-          {formatPrice(recurringTotal)}<span className="text-sm font-medium text-gray-400">/{subscription.billingCycle === "monthly" ? "mo" : "yr"}</span>
-        </p>
         {/* Found via dashboard polish pass: effectiveRecurringTotal (from
             getScheduledChanges) prices scheduled plan/add-on changes but
             NEVER includes a referral discount, while the renewal-preview box

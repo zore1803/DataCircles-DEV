@@ -36,7 +36,11 @@ const BillingCenter = () => {
   }
 
   return (
-    <div className="grid md:grid-cols-[300px_1fr] gap-6 items-start">
+    // Capped width: on a wide monitor the right-hand card used to stretch the
+    // full page, so a handful of short rows read as a mostly-empty banner.
+    // 340px on the left is what the plan card needs for its price + Calendar
+    // row without clipping.
+    <div className="grid md:grid-cols-[340px_1fr] gap-6 items-start max-w-[1200px]">
       <BillingSidebar subscription={sub} />
 
       {/* One continuous card for the whole right column — Timeline, Payment
@@ -70,7 +74,7 @@ const BillingCenter = () => {
           className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-purple-50 rounded-lg text-purple-600">
+            <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
               <Building2 className="w-4 h-4" />
             </div>
             <p className="text-sm font-medium text-gray-900">Billing Information — Company, GST &amp; address</p>
