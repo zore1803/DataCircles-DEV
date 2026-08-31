@@ -36,8 +36,6 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
-  LayoutGrid,
-  List as ListIcon,
   Plus,
   Gem,
   Clock,
@@ -81,6 +79,8 @@ import useFillToBottom from "../../hooks/useFillToBottom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 
 import SearchIcon from "../common/SearchIcon";
+import TableViewIcon from "../common/TableViewIcon";
+import KanbanViewIcon from "../common/KanbanViewIcon";
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
   { label: "₹10,000 – ₹50,000", test: (v) => v >= 10000 && v < 50000 },
@@ -1583,14 +1583,14 @@ export default function CompanyDealsKanban({
               className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "text-blue-600" : "text-gray-500"
                 }`}
             >
-              <LayoutGrid size={16} />
+              <KanbanViewIcon size={16} className="text-current" />
             </button>
             <button
               onClick={() => setViewMode("list")}
               className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "text-blue-600" : "text-gray-500"
                 }`}
             >
-              <ListIcon size={16} />
+              <TableViewIcon size={16} className="text-current" />
             </button>
           </div>
           <button

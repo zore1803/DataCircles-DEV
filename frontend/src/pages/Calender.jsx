@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Filter,
   MoreHorizontal,
   MoreVertical,
   X,
@@ -28,6 +27,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 
 import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
+import FilterIcon from "../components/common/FilterIcon";
 // --- Components ---
 
 const CustomMonthIcon = (props) => (
@@ -624,7 +624,7 @@ const AdminCalendar = () => {
               borderRadius: 95,
             }}
           >
-            {loading ? <Skeleton width={16} height={16} shape="circle" /> : <Filter size={16} strokeWidth={2.5} style={{ color: "#1F2937" }} />}
+            {loading ? <Skeleton width={16} height={16} shape="circle" /> : <FilterIcon size={16} />}
           </button>
 
           <button

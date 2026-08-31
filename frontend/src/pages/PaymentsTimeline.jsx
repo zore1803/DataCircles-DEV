@@ -1201,7 +1201,7 @@ export default function PaymentsTimeline() {
                       className={`flex items-center justify-center w-6 h-6 rounded-lg border transition-all flex-shrink-0 ${filterOpen ? "bg-blue-50 border-blue-400 text-blue-600" : "bg-white border-[#E2E8F0] text-gray-400 hover:border-blue-400 hover:text-blue-600"}`}
                       title="Filter accounts"
                     >
-                      <FilterIcon size={12} />
+                      <FilterIcon size={16} />
                     </button>
                   </div>
                   <span className={`text-xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>

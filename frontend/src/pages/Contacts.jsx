@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Users,
   Building2,
   Mail,
@@ -41,7 +40,6 @@ import {
   Star,
   FileText,
   List,
-  LayoutGrid,
   Video,
 } from "lucide-react";
 import API from "../services/api";
@@ -90,6 +88,8 @@ import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 import SearchIcon from "../components/common/SearchIcon";
+import TableViewIcon from "../components/common/TableViewIcon";
+import KanbanViewIcon from "../components/common/KanbanViewIcon";
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -2428,7 +2428,7 @@ function Contacts() {
                     className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
                     title="Filters"
                   >
-                    <FilterIcon size={15} />
+                    <FilterIcon size={16} />
                     {activeFilters.length > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                         {activeFilters.length}
@@ -2447,7 +2447,7 @@ function Contacts() {
                         }`}
                       title="List View"
                     >
-                      <List className="w-4 h-4" />
+                      <TableViewIcon size={16} className="text-current" />
                     </button>
                     <button
                       onClick={() => setShowKanban(true)}
@@ -2455,9 +2455,7 @@ function Contacts() {
                         }`}
                       title="Kanban View"
                     >
-                      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
-                      </svg>
+                      <KanbanViewIcon size={16} className="text-current" />
                     </button>
                   </div>
                 </>
@@ -2484,7 +2482,7 @@ function Contacts() {
                           }}
                           className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <List className="w-4 h-4 text-gray-400" />
+                          <TableViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                           List View
                           {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                         </button>
@@ -2495,9 +2493,7 @@ function Contacts() {
                           }}
                           className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                            <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                          </svg>
+                          <KanbanViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                           Kanban View
                           {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                         </button>
@@ -2551,7 +2547,7 @@ function Contacts() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Filter className="w-4 h-4 text-gray-400" />
+                      <FilterIcon size={16} />
                       Filters
                       {activeFilters.length > 0 && (
                         <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">

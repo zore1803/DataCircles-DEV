@@ -138,7 +138,7 @@ const NotificationBell = ({ variant = "desktop" }) => {
   // the tint.
   const buttonClass = isMobile
     ? "relative flex items-center justify-center w-8 h-8 bg-white border border-[#E1E4EA] rounded-full flex-shrink-0"
-    : "relative flex items-center justify-center w-9 h-9 bg-white rounded-full border border-gray-200 hover:bg-gray-50 transition-colors";
+    : "relative flex items-center justify-center w-9 h-9 bg-white rounded-full border border-gray-300 hover:bg-gray-50 transition-colors";
 
   return (
     <div className="relative" ref={wrapRef}>

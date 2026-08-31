@@ -44,7 +44,6 @@ import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { exportToCSV } from "../../utils/exportToCSV";
 import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
-import useMinDelay from "../../hooks/useMinDelay";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
 import SearchIcon from "../common/SearchIcon";
@@ -96,7 +95,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
   // NOTE: the existing `loading` state below belongs to the save/submit path;
   // this is deliberately separate.
   const [isNotesLoading, setIsNotesLoading] = useState(true);
-  const showNotesSkeleton = useMinDelay(isNotesLoading, 300);
+  const showNotesSkeleton = isNotesLoading;
 
   // Keeps the list-view table box a fixed height ending at the bottom of the
   // screen, so changing rows-per-page scrolls internally.

@@ -11,7 +11,6 @@ import {
   Clock,
   Shield,
   Package,
-  Filter,
   X,
   Calendar,
   IndianRupeeIcon,
@@ -24,6 +23,7 @@ import * as XLSX from "xlsx";
 import API, { configureAxios } from "../services/api";
 
 import SearchIcon from "../components/common/SearchIcon";
+import FilterIcon from "../components/common/FilterIcon";
 const Shimmer = () => (
   <div className="animate-pulse space-y-6">
     <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -668,7 +668,7 @@ const Tenants = () => {
           {/* Active Filters Display */}
           {(statusFilter !== "all" || planFilter !== "all") && (
             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
-              <Filter className="w-4 h-4 text-gray-500" />
+              <FilterIcon size={16} />
               <span className="text-sm text-gray-600">Active Filters:</span>
               {statusFilter !== "all" && (
                 <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">

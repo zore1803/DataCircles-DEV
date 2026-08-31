@@ -13,7 +13,6 @@ import {
   Trash2,
   Repeat,
   Plus,
-  Filter,
   Calendar,
   Briefcase,
   AlertCircle,
@@ -47,6 +46,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import AppToaster from "../components/AppToaster";
 import { getDocumentSettings } from "../services/documentSettingsCache";
 import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
+import FilterIcon from "../components/common/FilterIcon";
 
 const statusOptions = [
   "Draft",
@@ -1697,7 +1697,7 @@ const MergedInvoiceManager = () => {
                 />
               </div>
               <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <FilterIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
                 <select
                   value={filterStatuses[activeTab]}
                   onChange={(e) =>

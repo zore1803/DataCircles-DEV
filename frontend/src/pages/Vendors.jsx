@@ -44,7 +44,6 @@ import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
 import TablePaginationFooter from "../components/common/TablePaginationFooter";
 import { getAncestorZoom } from "../utils/domUtils";
-import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
@@ -1172,9 +1171,9 @@ function Vendors() {
 
   // One flag drives every skeleton on the page — header, table body, and
   // pagination all appear and resolve together, same as Companies.jsx.
-  // useMinDelay holds it for 300ms so a fast fetch doesn't flash the
-  // placeholders.
-  const showLoadingSkeleton = useMinDelay(loading && vendors.length === 0, 300);
+  // Tracks the fetch exactly - no minimum hold, so the skeleton clears the
+  // moment data lands.
+  const showLoadingSkeleton = loading && vendors.length === 0;
   // `loading` toggles around every fetchVendors() call, including page/limit
   // changes — same source Companies.jsx feeds its top-edge bar from, so
   // paging here now gets the identical progress flash Companies.jsx shows.
@@ -1353,9 +1352,7 @@ function Vendors() {
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <FilterIcon
-                className={`w-4 h-4 ${activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"}`}
-              />
+              <FilterIcon size={16} className={activeFilters.length > 0 ? "text-[#0085FF]" : ""} />
               {activeFilters.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                   {activeFilters.length}
@@ -1389,7 +1386,7 @@ function Vendors() {
                   }}
                   className="lg:hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
-                  <FilterIcon className="w-4 h-4 text-gray-400" />
+                  <FilterIcon size={16} />
                   Filters
                   {activeFilters.length > 0 && (
                     <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">

@@ -1479,7 +1479,9 @@ const Header = () => {
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={() => handleSearchFocus()}
-              className="w-full h-full pl-11 pr-4 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
+              // gray-300 rather than gray-200: the field sits on the header's
+              // tinted chrome now, where the lighter border all but vanished.
+              className="w-full h-full pl-11 pr-4 bg-white border border-gray-300 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
             />
           </div>
 

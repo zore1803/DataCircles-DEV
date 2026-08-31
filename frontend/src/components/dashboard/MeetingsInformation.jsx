@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { ArrowUpRight, MoreHorizontal, ChevronDown, ListFilter, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { ArrowUpRight, MoreHorizontal, ChevronDown, Calendar as CalendarIcon, Clock } from "lucide-react";
+import FilterIcon from "../common/FilterIcon";
 
 // Helper for 12th Nov style dates
 const formatDueDay = (isoDate) => {
@@ -69,7 +70,7 @@ const MeetingsInformation = ({ meetings }) => {
                         <tr className="border-b border-[#F2F2F7]">
                             <th className="px-8 py-4 font-bold text-[#111216] text-[13px] border-r border-[#F2F2F7] min-w-[215px]">
                                 <div className="flex items-center gap-2 cursor-pointer group">
-                                    Meeting Title <ListFilter className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600" />
+                                    Meeting Title <FilterIcon size={16} />
                                 </div>
                             </th>
                             <th className="px-6 py-4 font-bold text-[#111216] text-[13px] border-r border-[#F2F2F7] min-w-[215px]">Client</th>

@@ -1742,7 +1742,7 @@ const PurchaseOrderPage = () => {
                   }`}
                   title="Filters"
                 >
-                  <FilterIcon size={15} className={activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"} />
+                  <FilterIcon size={16} className={activeFilters.length > 0 ? "text-[#0085FF]" : ""} />
                   {activeFilters.length > 0 && (
                     <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                       {activeFilters.length}
@@ -1769,7 +1769,7 @@ const PurchaseOrderPage = () => {
                         }}
                         className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <FilterIcon size={14} className="text-gray-400" />
+                        <FilterIcon size={16} />
                         Filters
                         {activeFilters.length > 0 && (
                           <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">

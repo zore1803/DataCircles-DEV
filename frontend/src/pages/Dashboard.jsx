@@ -1753,7 +1753,7 @@ function Dashboard() {
               className="box-border flex flex-row justify-center items-center flex-shrink-0"
               style={{ padding: 12, gap: 8, width: 44, height: 44, background: "#FFFFFF", border: "1px solid #E1E4EA", borderRadius: 95 }}
             >
-              <FilterIcon size={20} style={{ color: "#1F2937" }} />
+              <FilterIcon size={16} />
             </button>
 
             <button

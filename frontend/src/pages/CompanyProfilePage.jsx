@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from
 import { useParams, Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
-import useMinDelay from "../hooks/useMinDelay";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
 import CompanyContactsTab from "../components/company/CompanyContactsTab";
 import CompanyInvoicesTab from "../components/company/CompanyInvoicesTab";
@@ -700,12 +699,12 @@ const CompanyProfilePage = () => {
 
   // Overview renders invoice-derived tiles alongside deal/task data, so it
   // legitimately has to wait for both fetches.
-  const showOverviewSkeleton = useMinDelay(!dataLoaded || !invoicesLoaded, 300);
+  const showOverviewSkeleton = !dataLoaded || !invoicesLoaded;
   // Everything that comes out of the single fetchData batch — contacts, deals,
   // meetings, tasks, folders. Deliberately NOT gated on invoicesLoaded: those
   // tabs don't render invoice data, so waiting on that request would leave
   // their skeletons up long after their own data had arrived.
-  const showRecordsSkeleton = useMinDelay(!dataLoaded, 300);
+  const showRecordsSkeleton = !dataLoaded;
 
   useTopLoadingSignal(showOverviewSkeleton || showRecordsSkeleton);
 

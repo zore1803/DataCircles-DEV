@@ -28,7 +28,6 @@ import {
 import {
   Calendar,
   Download,
-  Filter,
   TrendingUp,
   Users,
   Building,
@@ -70,6 +69,7 @@ import {
 import API from "../services/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import FilterIcon from "../components/common/FilterIcon";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -6864,7 +6864,7 @@ const Insights = () => {
             className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
             title="Filters"
           >
-            <Filter className="w-4 h-4" />
+            <FilterIcon size={16} />
             {activeFilterCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                 {activeFilterCount}
@@ -6892,7 +6892,7 @@ const Insights = () => {
               />
               <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[min(90vw,720px)] bg-white p-6 rounded-xl border border-gray-200 shadow-lg">
         <div className="flex items-center gap-3 mb-4">
-          <Filter className="w-5 h-5 text-gray-600" />
+          <FilterIcon size={16} />
           <h3 className="text-base font-bold text-gray-900">Filters</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

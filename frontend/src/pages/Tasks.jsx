@@ -67,6 +67,8 @@ import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModa
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
 import SearchIcon from "../components/common/SearchIcon";
+import TableViewIcon from "../components/common/TableViewIcon";
+import KanbanViewIcon from "../components/common/KanbanViewIcon";
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>,
@@ -146,14 +148,6 @@ const CustomContactIcon = (props) => (
   </svg>
 );
 
-const CustomKanbanIcon = (props) => (
-  <svg viewBox="538 14 20 20" width={16} height={16} fill="none" {...props}>
-    <path
-      d="M543.833 28.1667H545.5V19.8333H543.833V28.1667ZM550.5 26.5H552.167V19.8333H550.5V26.5ZM547.167 24H548.833V19.8333H547.167V24ZM542.167 31.5C541.708 31.5 541.316 31.3368 540.99 31.0104C540.663 30.684 540.5 30.2917 540.5 29.8333V18.1667C540.5 17.7083 540.663 17.316 540.99 16.9896C541.316 16.6632 541.708 16.5 542.167 16.5H553.833C554.292 16.5 554.684 16.6632 555.01 16.9896C555.337 17.316 555.5 17.7083 555.5 18.1667V29.8333C555.5 30.2917 555.337 30.684 555.01 31.0104C554.684 31.3368 554.292 31.5 553.833 31.5H542.167ZM542.167 29.8333H553.833V18.1667H542.167V29.8333Z"
-      fill="currentColor"
-    />
-  </svg>
-);
 
 // Task Status Dropdown Component
 const StatusSelect = ({ task, onUpdate, query, statuses }) => {
@@ -3115,7 +3109,7 @@ function Tasks() {
                   borderRadius: 95,
                 }}
               >
-                <FilterIcon size={15} style={{ color: "#1F2937" }} />
+                <FilterIcon size={16} />
                 {activeAdvancedFilters.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                     {activeAdvancedFilters.length}
@@ -3142,7 +3136,7 @@ function Tasks() {
                     borderRadius: 95,
                   }}
                 >
-                  <CustomListIcon width={15} height={15} style={{ color: !showKanban ? "#0085FF" : "#525252" }} />
+                  <TableViewIcon size={16} style={{ color: !showKanban ? "#0085FF" : "#525252" }} />
                 </button>
                 <button
                   onClick={() => setShowKanban(true)}
@@ -3155,7 +3149,7 @@ function Tasks() {
                     borderRadius: 96,
                   }}
                 >
-                  <CustomKanbanIcon width={20} height={20} style={{ color: showKanban ? "#0085FF" : "#525252" }} />
+                  <KanbanViewIcon size={16} style={{ color: showKanban ? "#0085FF" : "#525252" }} />
                 </button>
               </div>
             </div>
@@ -3174,7 +3168,7 @@ function Tasks() {
                   borderRadius: 95,
                 }}
               >
-                <FilterIcon size={15} style={{ color: "#1F2937" }} />
+                <FilterIcon size={16} />
                 {activeAdvancedFilters.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                     {activeAdvancedFilters.length}
@@ -3263,7 +3257,7 @@ function Tasks() {
                   }}
                   className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <FilterIcon size={15} className="text-gray-400" />
+                  <FilterIcon size={16} />
                   Filters
                   {activeAdvancedFilters.length > 0 && (
                     <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
@@ -3277,7 +3271,7 @@ function Tasks() {
                       onClick={() => { setShowKanban(false); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      <TableViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                       List View
                       {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
@@ -3285,7 +3279,7 @@ function Tasks() {
                       onClick={() => { setShowKanban(true); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <CustomKanbanIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      <KanbanViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                       Kanban View
                       {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>

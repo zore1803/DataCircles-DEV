@@ -3,7 +3,6 @@ import {
   Plus,
   Trash2,
   X,
-  ListFilter,
   ChevronDown,
   Calendar,
 } from "lucide-react";
@@ -14,6 +13,7 @@ import toast from "react-hot-toast";
 import { formatNumberFixed } from "../../utils/numberFormatter";
 
 import SearchIcon from "../common/SearchIcon";
+import FilterIcon from "../common/FilterIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
 // Same fixed slab set as ItemForm.jsx/QuickItemDrawer.jsx, so a purchase's
 // per-item GST% can only be one of the rates products are actually defined
@@ -628,7 +628,7 @@ const PurchaseForm = ({
                           placeholder="01"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                          <ListFilter className="w-4 h-4" />
+                          <FilterIcon size={16} />
                         </div>
                       </div>
                     </div>

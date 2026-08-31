@@ -9,7 +9,6 @@ import React, {
 import {
   MoreVertical,
   Plus,
-  SlidersHorizontal,
   FileText,
   ChevronUp,
   ChevronDown,
@@ -89,13 +88,13 @@ import BulkSignatureModal from "../components/common/BulkSignatureModal";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import { getAncestorZoom } from "../utils/domUtils";
 import { exportToCSV } from "../utils/exportToCSV";
-import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import FilterIcon from "../components/common/FilterIcon";
 /* Drops the organization's saved boilerplate (Settings → document defaults)
    into a notes/terms box, so the same footer text doesn't have to be retyped
    on every document. Disabled — with the reason in the tooltip — when there's
@@ -1945,14 +1944,12 @@ const Accounting = () => {
   const pagination = paginations[activeTab];
 
   // One flag drives every skeleton on the page, so the header, the table body
-  // and the pagination strip all appear and resolve together. useMinDelay holds
-  // it for 300ms so a fast fetch doesn't flash the placeholders.
-  const showLoadingSkeleton = useMinDelay(
+  // and the pagination strip all appear and resolve together. Tracks the fetch
+  // exactly - no minimum hold, so the skeleton clears the moment data lands.
+  const showLoadingSkeleton =
     currentLoading &&
     currentDocuments.length === 0 &&
-    !hasLoadedOnceRef.current[activeTab],
-    300
-  );
+    !hasLoadedOnceRef.current[activeTab];
   useTopLoadingSignal(currentLoading);
 
   // Same compact "first ... current ... last" pattern as Companies.jsx —
@@ -2633,13 +2630,7 @@ const Accounting = () => {
                     : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                     }`}
                 >
-                  <SlidersHorizontal
-                    strokeWidth={2.5}
-                    className={`w-4 h-4 ${filterStatuses[activeTab]
-                        ? "text-[#0085FF]"
-                        : "text-gray-800"
-                      }`}
-                  />
+                  <FilterIcon size={16} className={filterStatuses[activeTab] ? "text-[#0085FF]" : ""} />
                 </button>
                 {showFilterMenu && (
                   <div

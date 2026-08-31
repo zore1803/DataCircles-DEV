@@ -223,7 +223,7 @@ export default function AdvancedFilterPanel({
         <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <FilterIcon size={20} className="text-blue-600" />
+              <FilterIcon size={16} />
             </div>
             <div>
               {/* USE DYNAMIC TITLE & SUBTITLE HERE */}
@@ -244,7 +244,7 @@ export default function AdvancedFilterPanel({
         <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50/30">
           {localFilters.length === 0 ? (
             <div className="text-center py-10 px-4 border-2 border-dashed border-gray-200 rounded-xl bg-white">
-              <FilterIcon size={32} className="text-gray-300 mx-auto mb-3" />
+              <FilterIcon size={16} className="mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-700">
                 No filters applied
               </h3>
