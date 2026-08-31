@@ -626,10 +626,30 @@ exports.inviteUser = async (req, res) => {
       const inviteLink = `${process.env.FRONTEND_URL}`;
       const org = await Organization.findById(req.user.organization);
       const html = generateInviteEmailHTML(inviteLink, org.name, req.user.name);
-      sendGridMail({ to: email, subject: "Invitation to DataCircles CRM", html });
+
+      // Awaited and caught. This used to be fire-and-forget: sendGridMail
+      // throws on failure, so a rejected send became an unhandled rejection
+      // (fatal in modern Node) while the API still answered "User invited
+      // successfully" — the invite appeared under Pending Invitations and
+      // nobody ever learned the mail hadn't gone out. The invite itself is
+      // still valid if the mail fails, so this reports the failure rather
+      // than rolling the invite back.
+      let emailSent = true;
+      let emailError = null;
+      try {
+        await sendGridMail({ to: email, subject: "Invitation to DataCircles CRM", html });
+      } catch (err) {
+        emailSent = false;
+        emailError = err.message;
+        console.error(`[inviteUser] invite email to ${email} failed:`, err.message);
+      }
 
       return res.json({
-        message: "User invited successfully",
+        message: emailSent
+          ? "User invited successfully"
+          : "Invite created, but the email could not be sent. Share the organization code with them instead.",
+        emailSent,
+        emailError: emailSent ? undefined : emailError,
         seatsUsed: seatStatus.occupiedStaffSeats + 1,
         totalSeats: seatStatus.totalStaffSeats,
       });

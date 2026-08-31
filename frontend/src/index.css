@@ -54,8 +54,10 @@
   --btn-primary-hover: #0070d9;
   /* Sidebar + header background. Navbar.jsx overwrites this at runtime with a
      pale wash of the org's Brand Settings button colour; this default is the
-     wash of the #0085FF default above. */
-  --chrome-bg: #EBF6FF;
+     wash of the brand blue #031CFC, so a brand-new org (or any org that
+     hasn't picked a colour) gets tinted chrome from the first paint rather
+     than a white one. */
+  --chrome-bg: #EBEDFF;
 }
 
 /* Solid primary button fill. Use instead of bg-blue-600 / bg-[#158FFF] /

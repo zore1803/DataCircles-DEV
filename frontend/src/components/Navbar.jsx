@@ -144,12 +144,15 @@ const CTA_PILL_STYLE = {
 // surface. The live value is the --chrome-bg variable, derived below from the
 // organization's Brand Settings button colour; the literal here is only the
 // fallback for the moment before branding loads (and for logged-out shells).
-const CHROME_BG = "var(--chrome-bg, #FFF3E8)";
+const CHROME_BG = "var(--chrome-bg, #EBEDFF)";
 
 // The chrome is a wash of the brand colour, not the brand colour itself: at
 // full saturation a picked hue makes an unreadable sidebar. This mixes the hex
 // toward white so any colour lands at the same pale weight the design expects.
 const CHROME_TINT_STRENGTH = 0.92;
+
+// Used until an organization picks its own colour in Brand Settings.
+const DEFAULT_BRAND_COLOR = "#031CFC";
 
 const toChromeTint = (hex) => {
   const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
@@ -263,12 +266,11 @@ const Navbar = () => {
   // rather than passed down as a prop because the header, and the per-page
   // fixed toolbars, need it too - same pattern as --sidebar-width above.
   useEffect(() => {
-    const tint = toChromeTint(branding?.colors?.primary);
-    if (tint) {
-      document.documentElement.style.setProperty("--chrome-bg", tint);
-    } else {
-      document.documentElement.style.removeProperty("--chrome-bg");
-    }
+    // DEFAULT_BRAND_COLOR when the org hasn't picked one - removing the
+    // property here would drop the chrome back to whatever the stylesheet
+    // says, and a new org would see untinted chrome until it set a colour.
+    const tint = toChromeTint(branding?.colors?.primary) || toChromeTint(DEFAULT_BRAND_COLOR);
+    document.documentElement.style.setProperty("--chrome-bg", tint);
   }, [branding?.colors?.primary]);
 
   const getInitials = (name) => {

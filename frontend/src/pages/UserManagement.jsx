@@ -282,7 +282,18 @@ function UserManagement() {
       setForm({ email: "", permissions: {} });
       fetchUsers();
       setFormVisible(false);
-      toast.success(response.data.message || "User invited successfully");
+      // A failed invite email is not a failed invite - the record is still
+      // created and the person can join with the org code - but it must not
+      // be reported as a plain success, which is how a silently dropped
+      // email used to look.
+      if (response.data.emailSent === false) {
+        toast.error(
+          response.data.message ||
+            "Invite created, but the email could not be sent."
+        );
+      } else {
+        toast.success(response.data.message || "User invited successfully");
+      }
     } catch (err) {
       if (err.response?.status === 402) {
         const { paymentDetails, message } = err.response.data;
