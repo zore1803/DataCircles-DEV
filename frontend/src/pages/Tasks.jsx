@@ -67,6 +67,8 @@ import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModa
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
 import SearchIcon from "../components/common/SearchIcon";
+import TableViewIcon from "../components/common/TableViewIcon";
+import KanbanViewIcon from "../components/common/KanbanViewIcon";
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>,
@@ -146,29 +148,35 @@ const CustomContactIcon = (props) => (
   </svg>
 );
 
-const CustomKanbanIcon = (props) => (
-  <svg viewBox="538 14 20 20" width={16} height={16} fill="none" {...props}>
-    <path
-      d="M543.833 28.1667H545.5V19.8333H543.833V28.1667ZM550.5 26.5H552.167V19.8333H550.5V26.5ZM547.167 24H548.833V19.8333H547.167V24ZM542.167 31.5C541.708 31.5 541.316 31.3368 540.99 31.0104C540.663 30.684 540.5 30.2917 540.5 29.8333V18.1667C540.5 17.7083 540.663 17.316 540.99 16.9896C541.316 16.6632 541.708 16.5 542.167 16.5H553.833C554.292 16.5 554.684 16.6632 555.01 16.9896C555.337 17.316 555.5 17.7083 555.5 18.1667V29.8333C555.5 30.2917 555.337 30.684 555.01 31.0104C554.684 31.3368 554.292 31.5 553.833 31.5H542.167ZM542.167 29.8333H553.833V18.1667H542.167V29.8333Z"
-      fill="currentColor"
-    />
-  </svg>
-);
 
 // Task Status Dropdown Component
 const StatusSelect = ({ task, onUpdate, query, statuses }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isOpen]);
 
   const getBadgeColor = (status) => {
     if (status === "Completed")
@@ -180,12 +188,19 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
     return "bg-gray-100 text-gray-800 border-gray-200";
   };
 
+  const openMenu = () => {
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+    setIsOpen(true);
+  };
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          isOpen ? setIsOpen(false) : openMenu();
         }}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${getBadgeColor(
           task.status,
@@ -198,8 +213,12 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 left-0 max-h-60 overflow-y-auto">
+      {isOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[10000] bg-white rounded-lg shadow-xl border border-gray-100 py-1 max-h-60 overflow-y-auto"
+        >
           {statuses.map((status) => (
             <button
               key={status}
@@ -222,7 +241,8 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -231,18 +251,32 @@ const StatusSelect = ({ task, onUpdate, query, statuses }) => {
 // Meeting Priority Dropdown Component
 const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
   const statuses = ["scheduled", "completed", "cancelled", "no-show"];
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isOpen]);
 
   const getBadgeColor = (status) => {
     if (status === "completed")
@@ -258,12 +292,19 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
 
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace("-", " ") : "");
 
+  const openMenu = () => {
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+    setIsOpen(true);
+  };
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          isOpen ? setIsOpen(false) : openMenu();
         }}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${getBadgeColor(
           meeting.status,
@@ -276,8 +317,12 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
         <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 left-0 max-h-60 overflow-y-auto">
+      {isOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[10000] bg-white rounded-lg shadow-xl border border-gray-100 py-1 max-h-60 overflow-y-auto"
+        >
           {statuses.map((status) => (
             <button
               key={status}
@@ -300,7 +345,8 @@ const MeetingStatusSelect = ({ meeting, onUpdate, query }) => {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -482,6 +528,12 @@ function Tasks() {
   const [deals, setDeals] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [users, setUsers] = useState([]);
+  // Org's custom-field DEFINITIONS for tasks/meetings (see
+  // components/settings/TaskFieldSettings.jsx / MeetingFieldSettings.jsx) —
+  // drives the dynamic "Custom" columns appended below, same pattern
+  // Deals.jsx uses for dealFields.
+  const [taskFields, setTaskFields] = useState([]);
+  const [meetingFields, setMeetingFields] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -659,12 +711,42 @@ function Tasks() {
     { id: "url", label: "URL" },
   ];
 
-  const DEFAULT_TASK_COLUMNS = useMemo(() => TASK_TOGGLE_COLUMNS.map((col, i) => ({
-    key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
-  })), []);
-  const DEFAULT_MEETING_COLUMNS = useMemo(() => MEETING_TOGGLE_COLUMNS.map((col, i) => ({
-    key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
-  })), []);
+  // Custom-field columns are hidden by default (like Deals.jsx's dealFields
+  // columns) — an org that hasn't defined any sees the same 6/5 columns as
+  // before; one that has can turn them on from Column Settings, where they
+  // carry the "Custom" badge (see ColumnSettingsPanel's isCustomField check).
+  const DEFAULT_TASK_COLUMNS = useMemo(() => {
+    const base = TASK_TOGGLE_COLUMNS.map((col, i) => ({
+      key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
+    }));
+    const custom = (taskFields || []).map((field, i) => ({
+      key: `custom:${field.name}`,
+      label: field.name,
+      visible: false,
+      order: base.length + i,
+      isCustomField: true,
+      type: field.type || "text",
+      options: field.options,
+      description: `Custom field: ${field.name}`,
+    }));
+    return [...base, ...custom];
+  }, [taskFields]);
+  const DEFAULT_MEETING_COLUMNS = useMemo(() => {
+    const base = MEETING_TOGGLE_COLUMNS.map((col, i) => ({
+      key: col.id, label: col.label, visible: true, order: i, defaultVisible: true,
+    }));
+    const custom = (meetingFields || []).map((field, i) => ({
+      key: `custom:${field.name}`,
+      label: field.name,
+      visible: false,
+      order: base.length + i,
+      isCustomField: true,
+      type: field.type || "text",
+      options: field.options,
+      description: `Custom field: ${field.name}`,
+    }));
+    return [...base, ...custom];
+  }, [meetingFields]);
   const { columns: taskColumnSettings, saveColumns: saveTaskColumns } = useColumnSettings("tasks", DEFAULT_TASK_COLUMNS);
   const { columns: meetingColumnSettings, saveColumns: saveMeetingColumns } = useColumnSettings("meetings", DEFAULT_MEETING_COLUMNS);
 
@@ -912,6 +994,19 @@ function Tasks() {
       setUsers(usr.data?.allUsers || []);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to load related data");
+    }
+    // Custom field definitions fail silently — an org with none defined is
+    // the normal case, not an error worth a toast.
+    try {
+      const [tf, mf] = await Promise.all([
+        API.get("/task-fields"),
+        API.get("/meeting-fields"),
+      ]);
+      setTaskFields(tf.data?.fields || []);
+      setMeetingFields(mf.data?.fields || []);
+    } catch {
+      setTaskFields([]);
+      setMeetingFields([]);
     }
   };
 
@@ -2218,6 +2313,27 @@ function Tasks() {
           );
         },
       }),
+      // One react-table column per org-defined TaskFields entry, keyed
+      // "custom:<name>" to match DEFAULT_TASK_COLUMNS above. Hidden unless
+      // the user turns it on via Column Settings; value read straight off
+      // Task.additionalFields (see models/Task.js), no lookup needed since
+      // the key IS the field name.
+      ...(taskFields || []).map((field) =>
+        taskColumnHelper.accessor((row) => row.additionalFields?.find((f) => f.key === field.name)?.value, {
+          id: `custom:${field.name}`,
+          size: 180,
+          header: () => renderHeaderMenu(`custom:${field.name}`, field.name, { sortable: false }),
+          cell: ({ getValue }) => {
+            const val = getValue();
+            const text = val === undefined || val === null || val === "" ? "—" : String(val);
+            return (
+              <div className="truncate text-gray-700" title={text}>
+                <HighlightText text={text} query={searchTerm} />
+              </div>
+            );
+          },
+        })
+      ),
     ],
     [
       tasks,
@@ -2235,6 +2351,7 @@ function Tasks() {
       rowActionsPos,
       searchTerm,
       taskStatuses,
+      taskFields,
     ],
   );
 
@@ -2509,6 +2626,24 @@ function Tasks() {
           );
         },
       }),
+      // One react-table column per org-defined MeetingFields entry, same
+      // pattern as the task table's custom columns above.
+      ...(meetingFields || []).map((field) =>
+        meetingColumnHelper.accessor((row) => row.additionalFields?.find((f) => f.key === field.name)?.value, {
+          id: `custom:${field.name}`,
+          size: 180,
+          header: () => renderHeaderMenu(`custom:${field.name}`, field.name, { sortable: false }),
+          cell: ({ getValue }) => {
+            const val = getValue();
+            const text = val === undefined || val === null || val === "" ? "—" : String(val);
+            return (
+              <div className="truncate text-gray-700" title={text}>
+                <HighlightText text={text} query={searchTerm} />
+              </div>
+            );
+          },
+        })
+      ),
     ],
     [
       meetings,
@@ -2524,6 +2659,7 @@ function Tasks() {
       openRowActionsId,
       rowActionsPos,
       searchTerm,
+      meetingFields,
     ],
   );
 
@@ -2794,7 +2930,7 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center px-4 lg:px-6 top-[54px] lg:top-16 gap-2 lg:gap-4"
+        className="flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 gap-2 lg:gap-4"
         style={{
           boxSizing: "border-box",
           height: 64,
@@ -2973,7 +3109,7 @@ function Tasks() {
                   borderRadius: 95,
                 }}
               >
-                <FilterIcon size={15} style={{ color: "#1F2937" }} />
+                <FilterIcon size={16} />
                 {activeAdvancedFilters.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                     {activeAdvancedFilters.length}
@@ -3000,7 +3136,7 @@ function Tasks() {
                     borderRadius: 95,
                   }}
                 >
-                  <CustomListIcon width={15} height={15} style={{ color: !showKanban ? "#0085FF" : "#525252" }} />
+                  <TableViewIcon size={16} style={{ color: !showKanban ? "#0085FF" : "#525252" }} />
                 </button>
                 <button
                   onClick={() => setShowKanban(true)}
@@ -3013,7 +3149,7 @@ function Tasks() {
                     borderRadius: 96,
                   }}
                 >
-                  <CustomKanbanIcon width={20} height={20} style={{ color: showKanban ? "#0085FF" : "#525252" }} />
+                  <KanbanViewIcon size={16} style={{ color: showKanban ? "#0085FF" : "#525252" }} />
                 </button>
               </div>
             </div>
@@ -3032,7 +3168,7 @@ function Tasks() {
                   borderRadius: 95,
                 }}
               >
-                <FilterIcon size={15} style={{ color: "#1F2937" }} />
+                <FilterIcon size={16} />
                 {activeAdvancedFilters.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                     {activeAdvancedFilters.length}
@@ -3121,7 +3257,7 @@ function Tasks() {
                   }}
                   className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <FilterIcon size={15} className="text-gray-400" />
+                  <FilterIcon size={16} />
                   Filters
                   {activeAdvancedFilters.length > 0 && (
                     <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
@@ -3135,7 +3271,7 @@ function Tasks() {
                       onClick={() => { setShowKanban(false); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <CustomListIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      <TableViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                       List View
                       {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
@@ -3143,7 +3279,7 @@ function Tasks() {
                       onClick={() => { setShowKanban(true); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <CustomKanbanIcon width={14} height={14} style={{ color: "#9CA3AF" }} />
+                      <KanbanViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                       Kanban View
                       {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
@@ -3262,7 +3398,7 @@ function Tasks() {
           bar reports the fetch instead. */}
       {/* No border-t: the toolbar strip right above already has its own
           border-b, so a top border here would double up against it. */}
-      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3370,16 +3506,17 @@ function Tasks() {
                             width: cell.column.getSize(),
                             height: "37px",
                             maxHeight: "37px",
-                            overflow: "hidden",
                             boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? taskPinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                          className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                         >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          <div style={{ overflow: "hidden" }}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </div>
                           {cellBoundaryShadowSide && (
                             <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                           )}
@@ -3425,7 +3562,7 @@ function Tasks() {
           bar reports the fetch instead. */}
       {/* No border-t: the toolbar strip right above already has its own
           border-b, so a top border here would double up against it. */}
-      <div className="relative bg-white border-x border-b border-[#E1E4EA]">
+      <div className="relative bg-white border-x border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
@@ -3527,16 +3664,17 @@ function Tasks() {
                           width: cell.column.getSize(),
                           height: "37px",
                           maxHeight: "37px",
-                          overflow: "hidden",
                           boxSizing: "border-box",
                           position: isSticky ? "sticky" : "static",
                           left: isLeftSticky ? meetingPinnedLeftOffsets[colId] ?? 0 : "auto",
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isSticky ? 10 : 1,
                         }}
-                        className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                        className="px-3 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        <div style={{ overflow: "hidden" }}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
                         {cellBoundaryShadowSide && (
                           <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                         )}
@@ -3708,7 +3846,7 @@ function Tasks() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             {/* Same content as before */}
             <div className="flex items-center gap-3 mb-4">

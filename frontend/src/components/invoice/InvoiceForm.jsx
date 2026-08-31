@@ -1354,6 +1354,7 @@ const InvoiceForm = ({
                     type="date"
                     className="w-full pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     value={form.dueDate}
+                    min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => {
                       setForm((prev) => ({ ...prev, dueDate: e.target.value }));
                       setHasUnsavedChanges(true);
@@ -3275,6 +3276,9 @@ const CreateInvoicePanel = ({
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
+              {fieldErrors.deal && (
+                <p className="text-xs text-red-600 mt-1">Deal is required</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1" ref={dateFieldRef}>
@@ -3304,6 +3308,9 @@ const CreateInvoicePanel = ({
                 </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+              {fieldErrors.date && (
+                <p className="text-xs text-red-600 mt-1">{docName} date is required</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -3315,6 +3322,7 @@ const CreateInvoicePanel = ({
                   <input
                     type="date"
                     value={form.dueDate}
+                    min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => setField("dueDate", e.target.value)}
                     className={inputClass}
                   />
@@ -3393,6 +3401,9 @@ const CreateInvoicePanel = ({
                 }));
               }}
             />
+            {fieldErrors.billingAddress && (
+              <p className="text-xs text-red-600 mt-1">Billing address is required</p>
+            )}
             </div>
             <div className="flex items-center gap-2 @md:col-span-2 -mb-1">
               <button
@@ -3451,6 +3462,9 @@ const CreateInvoicePanel = ({
                 />
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+              {fieldErrors.receiverGSTIN && (
+                <p className="text-xs text-red-600 mt-1">Valid receiver GSTIN is required</p>
+              )}
             </div>
 
 

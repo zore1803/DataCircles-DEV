@@ -2,6 +2,25 @@ import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import { Paperclip, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { Country, State } from "country-state-city";
+import CustomDropdown from "../common/CustomDropdown";
+
+// India first (GST is India-driven), then every other country alphabetically —
+// full list/state data from country-state-city instead of a hand-maintained one.
+// Mirrors the same helpers used in QuickCompanyForm.jsx.
+const ALL_COUNTRIES = Country.getAllCountries();
+const COUNTRIES = [
+  "India",
+  ...ALL_COUNTRIES.filter((c) => c.name !== "India")
+    .map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b)),
+];
+const countryIsoByName = Object.fromEntries(ALL_COUNTRIES.map((c) => [c.name, c.isoCode]));
+const getStatesForCountry = (countryName) => {
+  const iso = countryIsoByName[countryName];
+  if (!iso) return [];
+  return State.getStatesOfCountry(iso).map((s) => s.name);
+};
 
 const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, editVendor = null }) => {
   const isEditing = !!editVendor;
@@ -20,6 +39,9 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
       country: "India",
     },
   });
+  const [nameError, setNameError] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [addressError, setAddressError] = useState(false);
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
@@ -32,6 +54,9 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const fileInputRef = useRef(null);
+  const nameInputRef = useRef(null);
+  const emailInputRef = useRef(null);
+  const addressRef = useRef(null);
 
   // GSTIN API configuration
   const GSTIN_API_KEY = import.meta.env.VITE_APP_GSTIN_API_KEY || "";
@@ -377,17 +402,47 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
         ...prev,
         address: { ...prev.address, [addressKey]: value },
       }));
+      if (addressError) setAddressError(false);
     } else {
       setForm((prev) => ({ ...prev, [key]: value }));
+      if (key === "name" && nameError) setNameError(false);
     }
     setIsFormDirty(true);
   };
 
+  // Address is compulsory: line1, city, state, pincode, country (line2 optional).
+  const isAddressComplete = (a) =>
+    !!(a.line1?.trim() && a.city?.trim() && a.state?.trim() && a.pincode?.trim() && a.country?.trim());
+
   const handleSubmit = async (e, isSaveAndExit = false) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error("Vendor name is required");
-      if (!isSaveAndExit) closeForm();
+
+    // Check every mandatory field up front — highlight all of them at once,
+    // then scroll to whichever invalid one appears first on the page, so the
+    // user always lands on the top-most problem.
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const nameInvalid = !form.name.trim();
+    const emailInvalid = !!form.email.trim() && !emailRegex.test(form.email.trim());
+    const addressInvalid = !isAddressComplete(form.address);
+
+    setNameError(nameInvalid);
+    setEmailError(emailInvalid ? "Invalid email format" : "");
+    setAddressError(addressInvalid);
+
+    if (nameInvalid || emailInvalid || addressInvalid) {
+      const candidates = [
+        nameInvalid ? nameInputRef.current : null,
+        emailInvalid ? emailInputRef.current : null,
+        addressInvalid ? addressRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -515,7 +570,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
  className={`fixed dc-panel-card dc-panel-w z-[10002] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full min-h-0">
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Vendor" : "Create New Vendor"}
@@ -598,13 +653,18 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 Vendor Name <span className="text-red-500">*</span>
               </label>
               <input
+                ref={nameInputRef}
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${
+                  nameError ? "border-red-500" : "border-[#1F2937]/10"
+                }`}
                 placeholder="Enter Vendor Name"
-                required
               />
+              {nameError && (
+                <p className="mt-1 text-xs text-red-600">Vendor name is required</p>
+              )}
             </div>
 
             <div>
@@ -696,17 +756,109 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
               </p>
             </div>
 
+            <div ref={addressRef}>
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Address <span className="text-red-500">*</span>
+              </label>
+              {(() => {
+                const inputCls = (missing) =>
+                  `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${
+                    addressError && missing ? "border-red-500" : "border-[#1F2937]/10"
+                  }`;
+                const ddCls = (val, missing) =>
+                  `w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${val ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"} ${
+                    addressError && missing ? "border-red-500" : "border-[#1F2937]/10"
+                  }`;
+                const statesForCountry = getStatesForCountry(form.address.country);
+                return (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={form.address.line1}
+                      onChange={(e) => handleFormChange("address.line1", e.target.value)}
+                      className={inputCls(!form.address.line1?.trim())}
+                      placeholder="Address Line 1 *"
+                    />
+                    <input
+                      type="text"
+                      value={form.address.line2}
+                      onChange={(e) => handleFormChange("address.line2", e.target.value)}
+                      className={inputCls(false)}
+                      placeholder="Address Line 2"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <CustomDropdown
+                        options={COUNTRIES}
+                        value={form.address.country}
+                        onChange={(value) => handleFormChange("address.country", value)}
+                        placeholder="Country *"
+                        searchable
+                        buttonClassName={ddCls(form.address.country, !form.address.country?.trim())}
+                      />
+                      {statesForCountry.length > 0 ? (
+                        <CustomDropdown
+                          options={statesForCountry}
+                          value={form.address.state}
+                          onChange={(value) => handleFormChange("address.state", value)}
+                          placeholder="State *"
+                          searchable
+                          buttonClassName={ddCls(form.address.state, !form.address.state?.trim())}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={form.address.state}
+                          onChange={(e) => handleFormChange("address.state", e.target.value)}
+                          className={inputCls(!form.address.state?.trim())}
+                          placeholder="State / Province *"
+                        />
+                      )}
+                      <input
+                        type="text"
+                        value={form.address.city}
+                        onChange={(e) => handleFormChange("address.city", e.target.value)}
+                        className={inputCls(!form.address.city?.trim())}
+                        placeholder="City *"
+                      />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.address.pincode}
+                        onChange={(e) =>
+                          handleFormChange("address.pincode", e.target.value.replace(/\D/g, ""))
+                        }
+                        className={inputCls(!form.address.pincode?.trim())}
+                        placeholder="Pincode *"
+                      />
+                    </div>
+                    {addressError && (
+                      <p className="text-xs text-red-600">All fields marked * are required</p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
             <div>
               <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Email
               </label>
               <input
+                ref={emailInputRef}
                 type="email"
                 value={form.email}
-                onChange={(e) => handleFormChange("email", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
+                onChange={(e) => {
+                  handleFormChange("email", e.target.value);
+                  if (emailError) setEmailError("");
+                }}
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${
+                  emailError ? "border-red-500" : "border-[#1F2937]/10"
+                }`}
                 placeholder="Enter Vendor Email"
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-600">{emailError}</p>
+              )}
             </div>
 
             <div>
@@ -732,96 +884,6 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 onChange={(e) => handleFormChange("company", e.target.value)}
                 className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
                 placeholder="Enter Company Name"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Address Line 1
-              </label>
-              <input
-                type="text"
-                value={form.address.line1}
-                onChange={(e) =>
-                  handleFormChange("address.line1", e.target.value)
-                }
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
-                placeholder="Enter Address line 1"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Address Line 2
-              </label>
-              <input
-                type="text"
-                value={form.address.line2}
-                onChange={(e) =>
-                  handleFormChange("address.line2", e.target.value)
-                }
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
-                placeholder="Enter Address line 2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                City
-              </label>
-              <input
-                type="text"
-                value={form.address.city}
-                onChange={(e) =>
-                  handleFormChange("address.city", e.target.value)
-                }
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
-                placeholder="Enter City"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                State
-              </label>
-              <input
-                type="text"
-                value={form.address.state}
-                onChange={(e) =>
-                  handleFormChange("address.state", e.target.value)
-                }
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
-                placeholder="Enter State"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Pincode
-              </label>
-              <input
-                type="text"
-                value={form.address.pincode}
-                onChange={(e) =>
-                  handleFormChange("address.pincode", e.target.value)
-                }
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
-                placeholder="Enter Pincode"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Country
-              </label>
-              <input
-                type="text"
-                value={form.address.country}
-                onChange={(e) =>
-                  handleFormChange("address.country", e.target.value)
-                }
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
-                placeholder="Enter Country"
               />
             </div>
 

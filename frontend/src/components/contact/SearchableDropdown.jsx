@@ -54,7 +54,7 @@ const SearchableDropdown = ({
 
   // Determine the border color based on validation state
   const getBorderColor = () => {
-    if (error) return 'border-red-300 ring-1 ring-red-500';
+    if (error) return 'border-red-500 focus:ring-red-500';
     return isOpen ? 'border-blue-500 ring-1 ring-blue-500' : (compact ? 'border-[#1F2937]/10' : 'border-[#E0E0E1]');
   };
 

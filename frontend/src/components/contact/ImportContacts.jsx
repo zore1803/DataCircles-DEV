@@ -5,6 +5,8 @@ import {
   AlertCircle,
   X,
   Download,
+  Copy,
+  GitMerge,
 } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
@@ -25,6 +27,8 @@ function ImportContacts({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [duplicateCheck, setDuplicateCheck] = useState(null); // { duplicates, pendingImport }
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
 
   // Reset form state each time the panel is opened.
   useEffect(() => {
@@ -53,6 +57,8 @@ function ImportContacts({
     setSuccess("");
     setLoading(false);
     setProgress(0);
+    setDuplicateCheck(null);
+    setCheckingDuplicates(false);
     clearInterval(window.progressInterval);
   };
 
@@ -247,9 +253,77 @@ function ImportContacts({
         return;
       }
 
-      const payload = {
-        contacts: validContacts,
-      };
+      // Check for existing contacts (phone first, then email) before
+      // writing anything, so the user can choose to merge into them
+      // instead of always creating fresh duplicate rows.
+      setCheckingDuplicates(true);
+      const dupRes = await API.post("/contacts/check-duplicates", {
+        contacts: validContacts.map((c) => ({ phone: c.phone, email: c.email })),
+      });
+      setCheckingDuplicates(false);
+
+      if (dupRes.data.duplicates?.length > 0) {
+        setLoading(false);
+        setProgress(0);
+        setDuplicateCheck({
+          duplicates: dupRes.data.duplicates,
+          pendingImport: { validContacts },
+        });
+        return;
+      }
+
+      await runImport(validContacts, "duplicate");
+    } catch (err) {
+      console.error("Import error:", err);
+
+      let errorMessage = "Import failed. ";
+
+      if (err.response?.data) {
+        const { message, errors, imported, total } = err.response.data;
+
+        if (message) {
+          errorMessage += message;
+        }
+
+        if (errors && errors.length > 0) {
+          errorMessage += "\n\nDetailed errors:\n";
+          errors.slice(0, 5).forEach((error) => {
+            errorMessage += `• ${error}\n`;
+          });
+
+          if (errors.length > 5) {
+            errorMessage += `• ... and ${errors.length - 5} more errors`;
+          }
+        }
+
+        if (imported !== undefined && total !== undefined) {
+          errorMessage += `\n\nProgress: ${imported}/${total} contacts processed successfully.`;
+        }
+      } else {
+        errorMessage += "Please check your data and try again.";
+      }
+
+      clearInterval(window.progressInterval);
+      setProgress(0);
+      setCheckingDuplicates(false);
+      setTimeout(() => {
+        handleClose();
+      }, 2000);
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Actually posts the import, once any duplicate-handling choice has been
+  // made (or there were no duplicates to begin with).
+  const runImport = async (validContacts, duplicateAction) => {
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = { contacts: validContacts, duplicateAction };
 
       console.log("Final payload:", payload);
 
@@ -266,8 +340,7 @@ function ImportContacts({
       clearInterval(window.progressInterval);
       setProgress(100);
 
-      const { imported, total, errors, warnings, skipped, message } =
-        response.data;
+      const { imported, merged, total, errors, warnings, skipped } = response.data;
 
       if (errors && errors.length > 0) {
         const errorList = errors.slice(0, 5);
@@ -275,6 +348,7 @@ function ImportContacts({
 
         let errorMessage = `Import completed with issues:\n`;
         errorMessage += `• Successfully imported: ${imported} contacts\n`;
+        if (merged > 0) errorMessage += `• Merged: ${merged} contacts\n`;
         if (skipped > 0) errorMessage += `• Skipped: ${skipped} contacts\n`;
         errorMessage += `• Errors encountered:\n`;
 
@@ -291,7 +365,7 @@ function ImportContacts({
         const warningList = warnings.slice(0, 3);
         const remainingWarnings = warnings.length > 3 ? warnings.length - 3 : 0;
 
-        let successMessage = `Successfully imported ${imported} contacts.`;
+        let successMessage = `Imported ${imported} contacts${merged ? `, merged ${merged}` : ""}.`;
         if (skipped > 0) {
           successMessage += `\n\nSkipped ${skipped} contacts:\n`;
           warningList.forEach((warning) => {
@@ -303,11 +377,14 @@ function ImportContacts({
         }
 
         setSuccess(successMessage);
+      } else if (merged > 0) {
+        setSuccess(`Imported ${imported} new contacts, merged ${merged} existing`);
       } else {
         setSuccess(`Successfully imported ${imported} contacts`);
       }
 
       setShowMapping(false);
+      setDuplicateCheck(null);
       setFile(null);
       setCsvData([]);
       setCsvHeaders([]);
@@ -573,8 +650,76 @@ Contact Person 3,contact3@example.com,+1-555-0003,Customer,HealthCare Solutions,
           csvHeaders={csvHeaders}
           contactFieldNames={contactFieldNames}
           onImport={handleImport}
-          loading={loading}
+          loading={loading || checkingDuplicates}
         />
+
+        {/* Duplicate resolution prompt */}
+        {duplicateCheck && (
+          <div
+            className="fixed inset-0 bg-black/40 z-[10002] flex items-center justify-center p-4"
+            onClick={() => setDuplicateCheck(null)}
+          >
+            <div
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {duplicateCheck.duplicates.length} duplicate{" "}
+                {duplicateCheck.duplicates.length === 1 ? "contact" : "contacts"} found
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                {duplicateCheck.duplicates.length} of{" "}
+                {duplicateCheck.pendingImport.validContacts.length} contacts in this file
+                already exist (matched by phone number, or email if no phone matched). What
+                would you like to do with them?
+              </p>
+              <div className="max-h-32 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3 mb-5 text-sm text-gray-700 space-y-1">
+                {duplicateCheck.duplicates.map((d) => (
+                  <div key={d.existingId} className="flex items-center justify-between gap-2">
+                    <span>{d.existingName}</span>
+                    <span className="text-xs text-gray-400 uppercase flex-shrink-0">
+                      matched by {d.matchedBy}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    const { validContacts } = duplicateCheck.pendingImport;
+                    setDuplicateCheck(null);
+                    runImport(validContacts, "merge");
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <GitMerge className="w-4 h-4" />
+                  Merge into existing contacts
+                </button>
+                <button
+                  onClick={() => {
+                    const { validContacts } = duplicateCheck.pendingImport;
+                    setDuplicateCheck(null);
+                    runImport(validContacts, "duplicate");
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  Create as duplicates anyway
+                </button>
+                <button
+                  onClick={() => setDuplicateCheck(null)}
+                  className="w-full text-center text-sm text-gray-500 hover:text-gray-700 pt-1"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                Merge only fills in fields that are currently empty on the existing contact —
+                it never overwrites data that's already there.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

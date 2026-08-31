@@ -7,7 +7,6 @@ import {
   XCircle,
   Clock,
   FileText,
-  Filter,
   ChevronDown,
   ChevronUp,
   Receipt,
@@ -32,6 +31,7 @@ import BillingTimeline from "./BillingTimeline";
 import { GST_RATE } from "../../utils/pricingSnapshot";
 
 import SearchIcon from "../common/SearchIcon";
+import FilterIcon from "../common/FilterIcon";
 // `embedded`: rendered inside the Billing Center, which already shows its own
 // Timeline section — hide the tab switcher and force the Payments view so
 // the Timeline isn't shown twice on one page.
@@ -553,7 +553,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
               className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-all bg-white font-medium"
             >
-              <Filter className="w-4 h-4" />
+              <FilterIcon size={16} />
               <span>
                 {statusFilter === "all"
                   ? "All Status"

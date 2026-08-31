@@ -1,14 +1,52 @@
+// frontend/src/utils/contactConstants.js
+//
+// The frontend's single definition of the Contact lifecycle. It MIRRORS
+// backend/constants/contactLifecycle.js exactly — that file is authoritative,
+// this one exists only so the UI doesn't have to round-trip to render a
+// dropdown. If the backend map changes, change it here in the same commit.
+//
+//   lifecycleStage          stageStatus
+//   ----------------------  ------------------------------------------
+//   Lead                    New | Contacted | Interested | Unqualified
+//   Sales Qualified Lead    Qualified | Lost
+//   Customer                Won | Churned
+//
+// This previously listed two statuses the backend has never accepted —
+// "Lost Lead" under Lead and "Won Lead" under Customer. Selecting either sent
+// a value that failed the mongoose enum outright, so they are gone. Nothing
+// else may add a status here that isn't in the backend map.
+//
+// Every component that shows or edits a lifecycle value imports from here:
+// Contacts.jsx, ContactStatusModal.jsx, StatusDropdown.jsx,
+// CompanyContactsTab.jsx. No component defines its own copy.
+
 export const lifecycleStageOptions = {
-    Lead: ["New", "Contacted", "Interested", "Unqualified", "Lost Lead"],
+    Lead: ["New", "Contacted", "Interested", "Unqualified"],
     "Sales Qualified Lead": ["Qualified", "Lost"],
-    Customer: ["Won", "Won Lead", "Churned"],
+    Customer: ["Won", "Churned"],
 };
 
 export const allLifecycleStages = Object.keys(lifecycleStageOptions);
 export const allStageStatuses = Object.values(lifecycleStageOptions).flat();
 
+// Kept as an alias because existing imports use this name.
 export const lifecycleStageStatuses = allStageStatuses;
 
+// The status a stage lands on when the user picks a stage without a status —
+// mirrors the backend's DEFAULT_STAGE_STATUSES.
+export const defaultStageStatuses = {
+    Lead: "New",
+    "Sales Qualified Lead": "Qualified",
+    Customer: "Won",
+};
+
+export const defaultStatusForStage = (stage) =>
+    defaultStageStatuses[stage] || lifecycleStageOptions[stage]?.[0] || "New";
+
+// Every status belongs to exactly one stage, so the stage is always
+// recoverable from the status alone. This is what lets a status-only UI (a
+// Kanban drop, the status dropdown) still send BOTH fields, which is what the
+// backend requires — it never infers one from the other on a write.
 export const getLifecycleStageForStatus = (status) => {
     for (const [stage, statuses] of Object.entries(lifecycleStageOptions)) {
         if (statuses.includes(status)) {
@@ -18,46 +56,64 @@ export const getLifecycleStageForStatus = (status) => {
     return "Lead";
 };
 
-export const getColumnColor = (column) => {
-    switch (column) {
-        case "New":
-        case "Unqualified":
-        case "Lost":
-        case "Lost Lead":
-            return "bg-red-50 border-red-200";
-        case "Contacted":
-            return "bg-amber-50 border-amber-200";
-        case "Interested":
-        case "Qualified":
-            return "bg-blue-50 border-blue-200";
-        case "Won":
-        case "Won Lead":
-            return "bg-green-50 border-green-200";
-        case "Churned":
-            return "bg-gray-50 border-gray-200";
-        default:
-            return "bg-gray-50 border-gray-200";
-    }
+export const isValidCombination = (stage, status) =>
+    !!lifecycleStageOptions[stage]?.includes(status);
+
+// ---------------------------------------------------------------------------
+// Colors. One definition per status, used by every surface (table badge,
+// Kanban column, status modal) so the same status never renders in two
+// different colors depending on which screen you're on.
+// ---------------------------------------------------------------------------
+
+// Terminal/negative outcomes read red, in-progress amber/blue, won green,
+// churned grey.
+const STATUS_TONE = {
+    New: "slate",
+    Contacted: "amber",
+    Interested: "blue",
+    Unqualified: "red",
+    Qualified: "blue",
+    Lost: "red",
+    Won: "green",
+    Churned: "gray",
 };
 
-export const getBadgeColor = (column) => {
-    switch (column) {
-        case "New":
-        case "Unqualified":
-        case "Lost":
-        case "Lost Lead":
-            return "bg-red-50 text-red-600";
-        case "Contacted":
-            return "bg-amber-50 text-amber-600";
-        case "Interested":
-        case "Qualified":
-            return "bg-blue-50 text-blue-600";
-        case "Won":
-        case "Won Lead":
-            return "bg-green-50 text-green-600";
-        case "Churned":
-            return "bg-gray-100 text-gray-600";
-        default:
-            return "bg-gray-100 text-gray-600";
-    }
+const TONE_CLASSES = {
+    slate: {
+        column: "bg-slate-50 border-slate-200",
+        badge: "bg-slate-100 text-slate-700",
+        chip: "bg-slate-100 text-slate-800 border-slate-200",
+    },
+    amber: {
+        column: "bg-amber-50 border-amber-200",
+        badge: "bg-amber-50 text-amber-600",
+        chip: "bg-amber-100 text-amber-800 border-amber-200",
+    },
+    blue: {
+        column: "bg-blue-50 border-blue-200",
+        badge: "bg-blue-50 text-blue-600",
+        chip: "bg-blue-100 text-blue-800 border-blue-200",
+    },
+    red: {
+        column: "bg-red-50 border-red-200",
+        badge: "bg-red-50 text-red-600",
+        chip: "bg-red-100 text-red-800 border-red-200",
+    },
+    green: {
+        column: "bg-green-50 border-green-200",
+        badge: "bg-green-50 text-green-600",
+        chip: "bg-green-100 text-green-800 border-green-200",
+    },
+    gray: {
+        column: "bg-gray-50 border-gray-200",
+        badge: "bg-gray-100 text-gray-600",
+        chip: "bg-gray-200 text-gray-800 border-gray-300",
+    },
 };
+
+const toneFor = (status) => TONE_CLASSES[STATUS_TONE[status]] || TONE_CLASSES.gray;
+
+export const getColumnColor = (status) => toneFor(status).column;
+export const getBadgeColor = (status) => toneFor(status).badge;
+// Bordered pill used by the status modal's selectable options.
+export const getChipColor = (status) => toneFor(status).chip;

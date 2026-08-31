@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from
 import { useParams, Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
-import useMinDelay from "../hooks/useMinDelay";
 import CompanyDealsKanban from "../components/company/CompanyDealsKanban";
 import CompanyContactsTab from "../components/company/CompanyContactsTab";
 import CompanyInvoicesTab from "../components/company/CompanyInvoicesTab";
@@ -43,6 +42,8 @@ import {
   FolderOpen,
   LayoutGrid,
   X,
+  User,
+  Clock,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -58,6 +59,7 @@ import CompanyForm from "../components/company/CompanyForm";
 import QuickCompanyForm from "../components/company/QuickCompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
+import StatTile from "../components/common/StatTile";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
 
 const tabs = [
@@ -239,6 +241,17 @@ const CompanyProfilePage = () => {
   const [activityFeedFilter, setActivityFeedFilter] = useState("All");
   const newEntryRef = useRef(null);
   const actionsMenuRef = useRef(null);
+  const [showLastUpdatedTooltip, setShowLastUpdatedTooltip] = useState(false);
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    return new Date(value).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
   const incomeChartScrollRef = useRef(null);
 
   const chartDotCursorSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#filter0_dd_2154_683)"><rect x="4" y="2" width="12" height="12" rx="6" fill="white"/><rect x="5" y="3" width="10" height="10" rx="5" stroke="#0F0E0E" stroke-width="2"/></g><defs><filter id="filter0_dd_2154_683" x="0" y="0" width="20" height="20" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="2"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="BackgroundImageFix" result="effect1_dropShadow_2154_683"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="2"/><feGaussianBlur stdDeviation="1"/><feColorMatrix type="matrix" values="0 0 0 0 0.196487 0 0 0 0 0.196487 0 0 0 0 0.279476 0 0 0 0.06 0"/><feBlend mode="multiply" in2="effect1_dropShadow_2154_683" result="effect2_dropShadow_2154_683"/><feBlend mode="normal" in="SourceGraphic" in2="effect2_dropShadow_2154_683" result="shape"/></filter></defs></svg>`;
@@ -246,6 +259,26 @@ const CompanyProfilePage = () => {
 
   const [showSubsidiaryModal, setShowSubsidiaryModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [parentCompany, setParentCompany] = useState(null);
+  const [childCompanies, setChildCompanies] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  useEffect(() => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      setIsAdmin(storedUser?.role === "admin");
+      setCurrentUserId(storedUser?._id || null);
+    } catch {
+      setIsAdmin(false);
+      setCurrentUserId(null);
+    }
+  }, []);
+
+  const isCompanyOwner =
+    !!currentUserId &&
+    !!company?.owner &&
+    (company.owner._id || company.owner) === currentUserId;
+  const canManageChildCompany = isAdmin || isCompanyOwner;
 
   const [showForm, setShowForm] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
@@ -297,7 +330,7 @@ const CompanyProfilePage = () => {
   // Deal stages: the data model only tracks Open/Won/Lost (no Lead/Qualified/
   // Negotiation sub-stages), so the pipeline funnel reflects that.
   const pipelineStages = [
-    { key: "Open", label: "Open", color: "bg-gray-100 text-gray-700" },
+    { key: "Open", label: "Open", color: "bg-yellow-50 text-yellow-700" },
     { key: "Won", label: "Won", color: "bg-green-100 text-green-700" },
     { key: "Lost", label: "Lost", color: "bg-red-50 text-red-600" },
   ];
@@ -627,6 +660,10 @@ const CompanyProfilePage = () => {
         await fetchCompanyDetails();
         const resSubsidiaries = await API.get(`/companies/${id}/subsidiaries`);
         const subsidiaryIds = resSubsidiaries.data.map((sub) => sub._id);
+        setChildCompanies(resSubsidiaries.data || []);
+        API.get(`/companies/${id}/parent`)
+          .then((res) => setParentCompany(res.data || null))
+          .catch(() => setParentCompany(null));
         const resContacts = await API.get("/contacts");
         const resDeals = await API.get("/deals");
         const resMeetings = await API.get("/meetings", { params: { companyId: id } });
@@ -662,12 +699,12 @@ const CompanyProfilePage = () => {
 
   // Overview renders invoice-derived tiles alongside deal/task data, so it
   // legitimately has to wait for both fetches.
-  const showOverviewSkeleton = useMinDelay(!dataLoaded || !invoicesLoaded, 300);
+  const showOverviewSkeleton = !dataLoaded || !invoicesLoaded;
   // Everything that comes out of the single fetchData batch — contacts, deals,
   // meetings, tasks, folders. Deliberately NOT gated on invoicesLoaded: those
   // tabs don't render invoice data, so waiting on that request would leave
   // their skeletons up long after their own data had arrived.
-  const showRecordsSkeleton = useMinDelay(!dataLoaded, 300);
+  const showRecordsSkeleton = !dataLoaded;
 
   useTopLoadingSignal(showOverviewSkeleton || showRecordsSkeleton);
 
@@ -791,9 +828,20 @@ const CompanyProfilePage = () => {
             {/* Title + Address */}
             <div className="min-w-0">
               {company ? (
-                <h1 className="text-base font-semibold text-gray-900 truncate">
-                  {company.name}
-                </h1>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="text-base font-semibold text-gray-900 truncate">
+                    {company.name}
+                  </h1>
+                  {parentCompany && (
+                    <Link
+                      to={`/companies/${parentCompany._id}`}
+                      className="flex-shrink-0 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 hover:bg-blue-100 transition-colors truncate max-w-[160px]"
+                      title={`Child company of ${parentCompany.name}`}
+                    >
+                      Child company of {parentCompany.name}
+                    </Link>
+                  )}
+                </div>
               ) : (
                 <Skeleton width={140} height={16} className="mb-1" />
               )}
@@ -827,6 +875,61 @@ const CompanyProfilePage = () => {
 
           {/* RIGHT: Social Icons (desktop only here — shown below the name on mobile) + Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Owner — the org User (staff/admin) designated as this
+                company's owner (Company.owner, set from the Companies
+                list's row menu, admin-only). Not a CRM contact, so this is
+                just a label, not a link to a profile page. */}
+            {company?.owner ? (
+              <button
+                disabled
+                title={`Owner: ${company.owner.name}`}
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-800"
+              >
+                <User size={16} strokeWidth={2} />
+              </button>
+            ) : (
+              <button
+                disabled
+                title="No owner assigned — set one from the Companies list"
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-300 cursor-not-allowed"
+              >
+                <User size={16} strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Last updated / created — hover for a small popover with both
+                timestamps instead of a single-line native tooltip. */}
+            <div
+              className="relative hidden lg:block"
+              onMouseEnter={() => setShowLastUpdatedTooltip(true)}
+              onMouseLeave={() => setShowLastUpdatedTooltip(false)}
+            >
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+              >
+                <Clock size={16} strokeWidth={2} />
+              </button>
+              {showLastUpdatedTooltip && company && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 z-50 text-left">
+                  <div className="mb-2">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Last updated</p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(company.updatedAt)}
+                      {company.lastUpdatedBy?.name ? ` by ${company.lastUpdatedBy.name}` : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Created on</p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(company.createdAt)}
+                      {company.createdBy?.name ? ` by ${company.createdBy.name}` : ""}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Twitter/X */}
             <button
               disabled={!hasSocialLink("twitter")}
@@ -928,6 +1031,19 @@ const CompanyProfilePage = () => {
                     <Edit2 size={12} className="text-gray-400" />
                     Edit
                   </button>
+                  {canManageChildCompany && !parentCompany && (
+                    <button
+                      onClick={() => {
+                        setShowSubsidiaryModal(true);
+                        setShowActionsMenu(false);
+                      }}
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <Building2 size={12} className="text-gray-400 lg:hidden" />
+                      <Building2 size={14} className="text-gray-400 hidden lg:block" />
+                      Add Child Company
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1081,25 +1197,7 @@ const CompanyProfilePage = () => {
             {showOverviewSkeleton
               ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
               : statTiles.map((tile) => (
-                <div
-                  key={tile.label}
-                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                >
-                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                    <tile.icon size={18} />
-                  </div>
-                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                    <tile.icon size={20} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
-                      {tile.label}
-                    </p>
-                    <p className="truncate w-full text-xs sm:text-sm font-semibold text-gray-900">
-                      {tile.value}
-                    </p>
-                  </div>
-                </div>
+                <StatTile key={tile.label} tile={tile} />
               ))}
           </div>
         )}
@@ -1325,6 +1423,35 @@ const CompanyProfilePage = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Child Companies (subsidiaries) — only shown when this
+                      company actually has any linked. */}
+                  {childCompanies.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-5">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                        Child Companies ({childCompanies.length})
+                      </h3>
+                      <div className="flex flex-col gap-2">
+                        {childCompanies.map((child) => (
+                          <Link
+                            key={child._id}
+                            to={`/companies/${child._id}`}
+                            className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                              {(child.name || "?").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{child.name}</p>
+                              {child.industry && (
+                                <p className="text-xs text-gray-500 truncate">{child.industry}</p>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Sidebar: Activity Timeline + Calendar */}
@@ -1898,6 +2025,9 @@ const CompanyProfilePage = () => {
         onClose={() => setShowSubsidiaryModal(false)}
         onSuccess={() => {
           fetchCompanyDetails();
+          API.get(`/companies/${id}/subsidiaries`)
+            .then((res) => setChildCompanies(res.data || []))
+            .catch(() => {});
         }}
       />
       <MergeCompanyModal

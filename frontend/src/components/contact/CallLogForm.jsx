@@ -257,7 +257,7 @@ const CallLogForm = ({
         onClick={onClose}
       />
       <div
-        className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
           }`}
       >
         <div className="p-6">
@@ -356,7 +356,7 @@ const CallLogForm = ({
                   value={form.duration}
                   onChange={(e) => handleFormChange("duration", e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg text-sm ${validationErrors.duration
-                    ? 'border-red-300 focus:ring-red-500'
+                    ? 'border-red-500 focus:ring-red-500'
                     : allowDuration
                       ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                       : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"

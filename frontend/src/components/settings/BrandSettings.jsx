@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { useNavigate } from "react-router-dom";
 import { INDIA_STATES } from "../../constants/addressOptions";
+import PageSkeleton from "../common/PageSkeleton";
 import {
   Save,
   Upload,
@@ -32,7 +33,7 @@ function BrandSettings() {
     logoUrl: "",
     signatureUrl: "",
     colors: {
-      primary: "#3B82F6",
+      primary: "#0085FF",
       secondary: "#8B5CF6",
     },
   });
@@ -43,13 +44,25 @@ function BrandSettings() {
   const [logoPreview, setLogoPreview] = useState(null);
   const [signaturePreview, setSignaturePreview] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const companyNameRef = useRef(null);
+  const gstinRef = useRef(null);
+  const addressRef = useRef(null);
+  const emailRef = useRef(null);
+  const mobileRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
     API.get("/branding")
       .then((res) => {
         if (res.data) {
-          setForm(res.data);
+          setForm((prev) => ({
+            ...prev,
+            ...res.data,
+            colors: {
+              primary: res.data.colors?.primary || prev.colors.primary,
+              secondary: res.data.colors?.secondary || prev.colors.secondary,
+            },
+          }));
           if (res.data.logoUrl) {
             setLogoPreview(res.data.logoUrl);
           }
@@ -101,14 +114,13 @@ function BrandSettings() {
 
     if (!form.colors.primary) {
       newErrors.primary = "Primary color is required";
+    } else if (!/^#[0-9A-Fa-f]{6}$/.test(form.colors.primary)) {
+      newErrors.primary = "Enter exactly 6 hex characters after # (e.g. 0085FF)";
     }
 
-    if (!form.colors.secondary) {
-      newErrors.secondary = "Secondary color is required";
-    }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleLogoChange = (e) => {
@@ -205,7 +217,25 @@ function BrandSettings() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      toast.error("Please fix the errors before submitting");
+
+      const candidates = [
+        validationErrors.companyName ? companyNameRef.current : null,
+        validationErrors.gstin ? gstinRef.current : null,
+        validationErrors.address ? addressRef.current : null,
+        validationErrors.email ? emailRef.current : null,
+        validationErrors.mobile ? mobileRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -244,10 +274,14 @@ function BrandSettings() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      // The sidebar/header tint derives from the button colour, and the
+      // Navbar only fetches branding on mount - tell it to refetch so the
+      // chrome retints on save instead of on the next full page load.
+      window.dispatchEvent(new CustomEvent("branding-updated"));
+
       setSaveSuccess(true);
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1500);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("Failed to update branding:", error);
       if (error.response?.status === 402) {
@@ -276,7 +310,7 @@ function BrandSettings() {
             <p className="text-green-900 font-semibold">
               Brand settings saved successfully!
             </p>
-            <p className="text-green-700 text-sm">Redirecting to dashboard...</p>
+            <p className="text-green-700 text-sm">Your changes have been saved.</p>
           </div>
         </div>
       )}
@@ -302,10 +336,10 @@ function BrandSettings() {
  
             <div className="grid md:grid-cols-2 gap-6">
               {/* Company Name */}
-              <div>
+              <div ref={companyNameRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Building2 className="w-4 h-4" />
-                  Company Name
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -331,7 +365,7 @@ function BrandSettings() {
               </div>
 
               {/* GSTIN */}
-              <div>
+              <div ref={gstinRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   GSTIN Number
                 </label>
@@ -358,10 +392,10 @@ function BrandSettings() {
               </div>
 
               {/* Email */}
-              <div>
+              <div ref={emailRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Mail className="w-4 h-4" />
-                  Email Address
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -386,10 +420,10 @@ function BrandSettings() {
               </div>
 
               {/* Mobile */}
-              <div>
+              <div ref={mobileRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Phone className="w-4 h-4" />
-                  Mobile Number
+                  Mobile Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -415,10 +449,10 @@ function BrandSettings() {
             </div>
 
             {/* Address */}
-            <div className="mt-6">
+            <div className="mt-6" ref={addressRef}>
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                 <MapPin className="w-4 h-4" />
-                Company Address
+                Company Address <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={form.address}
@@ -607,12 +641,19 @@ function BrandSettings() {
             </div>
 
             <div className="grid md:grid-cols-1 gap-6">
-              {/* Primary Color */}
-              {/* <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
+              {/* Primary Color — drives every button's fill app-wide (the
+                  --btn-primary CSS variable). Whatever's picked here
+                  replaces the #0085FF default everywhere it's used, for
+                  this organization only. */}
+              <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-4">
                   <Palette className="w-4 h-4" />
-                  Primary Color
+                  Button Colour
                 </label>
+                <p className="text-xs text-gray-500 -mt-3 mb-4">
+                  Sets the fill colour for every button across your CRM, and
+                  tints the sidebar and header with a pale wash of it.
+                </p>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -625,18 +666,32 @@ function BrandSettings() {
                     }
                     className="w-14 h-14 border-2 border-gray-300 rounded-xl cursor-pointer"
                   />
-                  <input
-                    type="text"
-                    value={form.colors.primary}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        colors: { ...form.colors, primary: e.target.value },
-                      })
-                    }
-                    className="flex-1 px-4 py-3 border-2 rounded-xl text-sm border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder="#000000"
-                  />
+                  <div className="relative flex-1">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-mono text-gray-500 pointer-events-none">
+                      #
+                    </span>
+                    <input
+                      type="text"
+                      value={form.colors.primary.replace(/^#/, "")}
+                      onChange={(e) => {
+                        // "#" is a fixed, non-editable prefix — only the 6
+                        // hex characters after it are ever stored, so the
+                        // saved value can never be a partial/invalid hex.
+                        const hex = e.target.value
+                          .replace(/[^0-9a-fA-F]/g, "")
+                          .slice(0, 6);
+                        setForm({
+                          ...form,
+                          colors: { ...form.colors, primary: `#${hex}` },
+                        });
+                      }}
+                      maxLength={6}
+                      className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
+                        errors.primary ? "border-red-400 bg-red-50" : "border-gray-300"
+                      }`}
+                      placeholder="0085FF"
+                    />
+                  </div>
                 </div>
                 <div
                   className="mt-4 h-12 rounded-lg"
@@ -646,49 +701,6 @@ function BrandSettings() {
                   <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     {errors.primary}
-                  </p>
-                )}
-              </div> */}
-
-              {/* Secondary Color */}
-              <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-4">
-                  <Palette className="w-4 h-4" />
-                  Secondary Color
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={form.colors.secondary}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        colors: { ...form.colors, secondary: e.target.value },
-                      })
-                    }
-                    className="w-14 h-14 border-2 border-gray-300 rounded-xl cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={form.colors.secondary}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        colors: { ...form.colors, secondary: e.target.value },
-                      })
-                    }
-                    className="flex-1 px-4 py-3 border-2 rounded-xl text-sm border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder="#FFFFFF"
-                  />
-                </div>
-                <div
-                  className="mt-4 h-12 rounded-lg"
-                  style={{ backgroundColor: form.colors.secondary }}
-                ></div>
-                {errors.secondary && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.secondary}
                   </p>
                 )}
               </div>
@@ -736,4 +748,3 @@ function BrandSettings() {
 }
 
 export default BrandSettings;
-import PageSkeleton from "../common/PageSkeleton";

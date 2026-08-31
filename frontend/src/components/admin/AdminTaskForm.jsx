@@ -414,8 +414,8 @@ const AdminTaskForm = ({
         onClick={onClose}
       />
       <div
- className={`fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out ${
-          isSliding ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out ${
+          isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
         <div className="h-full flex flex-col">
@@ -561,7 +561,7 @@ const AdminTaskForm = ({
                       <input
                         type="date"
                         value={form.dueDate}
-                        min="2000-01-01"
+                        min={form.selectedDate || "2000-01-01"}
                         max="2099-12-31"
                         onChange={(e) => handleChange("dueDate", e.target.value)}
                         className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${

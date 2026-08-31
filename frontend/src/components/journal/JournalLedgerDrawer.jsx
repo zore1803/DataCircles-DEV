@@ -54,6 +54,13 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
+      // Drawer stays mounted between opens (only hidden via isSliding), so
+      // the date filter has to be cleared explicitly on close — otherwise
+      // it silently carries over to the next journal opened.
+      setStartDate("");
+      setEndDate("");
+      setSearchTerm("");
+      setCurrentPage(1);
     }
   }, [isOpen]);
 

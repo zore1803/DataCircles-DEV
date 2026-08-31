@@ -34,6 +34,97 @@
   min-height: 100vh;
 }
 
+/* Consistent left gutter between the sidebar edge and fixed-position page
+   content (toolbars, tables, footers) that pins itself via
+   `left: var(--sidebar-width, 0px)`. Applied ad-hoc as
+   `paddingLeft: "var(--content-inset, 16px)"` on flush-left wrappers that
+   don't already carry their own left padding (px-4/px-6/p-6/etc).
+   Kept in sync with the sidebar's collapsed/expanded state by
+   Navbar.jsx (0px collapsed — edge to edge; 16px once expanded). This
+   default (0px) only matters for the brief moment before that JS runs,
+   and matches the sidebar's default collapsed state. */
+:root {
+  --content-inset: 0px;
+  /* Single source of truth for every primary/action button's fill colour
+     across the whole app. Change this one value to re-theme every button
+     at once instead of editing files one by one. Never applied to icons —
+     only backgrounds/borders via .btn-primary-* below or the var() itself
+     where a component needs it inline (e.g. gradient buttons). */
+  --btn-primary: #0085FF;
+  --btn-primary-hover: #0070d9;
+  /* Sidebar + header background. Navbar.jsx overwrites this at runtime with a
+     pale wash of the org's Brand Settings button colour; this default is the
+     wash of the #0085FF default above. */
+  --chrome-bg: #EBF6FF;
+}
+
+/* Solid primary button fill. Use instead of bg-blue-600 / bg-[#158FFF] /
+   bg-[#0C4FCD] / etc. so every "main action" button re-colors from the one
+   --btn-primary variable above. */
+.btn-primary-bg {
+  background-color: var(--btn-primary);
+}
+.btn-primary-bg:hover {
+  background-color: var(--btn-primary-hover);
+}
+.btn-primary-border {
+  border-color: var(--btn-primary);
+}
+
+/* Blanket re-theme: every button across the app that used one of these
+   hardcoded brand-blue shades now pulls from --btn-primary instead, so
+   changing that one variable above re-colors all of them at once. Scoped to
+   background/border utilities only — text-*/fill-*/stroke-* (icons, links,
+   chart colors) are deliberately left untouched. */
+.bg-blue-600,
+.bg-\[\#0C4FCD\],
+.bg-\[\#158FFF\],
+.bg-\[\#0085FF\] {
+  background-color: var(--btn-primary) !important;
+}
+.hover\:bg-blue-700:hover,
+.hover\:bg-blue-600:hover {
+  background-color: var(--btn-primary-hover) !important;
+}
+.border-\[\#0C4FCD\],
+.border-\[\#158FFF\],
+.border-\[\#0085FF\] {
+  border-color: var(--btn-primary) !important;
+}
+
+/* Same blanket re-theme, for TEXT colour — every hardcoded brand-blue
+   shade (hover or not) used across the app now pulls from --btn-primary
+   too, including the literal #0085FF default itself — it's a picked
+   colour now (Brand Settings), not a hardcoded constant, so nothing
+   should stay stuck on the old hex once an org changes it. */
+.hover\:text-blue-600:hover,
+.hover\:text-blue-700:hover,
+.hover\:text-blue-800:hover,
+.hover\:text-blue-900:hover,
+.hover\:text-sky-600:hover,
+.hover\:text-sky-700:hover,
+.text-blue-600,
+.text-blue-700,
+.text-blue-800,
+.text-\[\#0085FF\] {
+  color: var(--btn-primary) !important;
+}
+
+/* App-boot splash (PrivateRoute's initial auth check, once per hard
+   refresh) — logo starts small, rotates once while zooming out to fill
+   the screen, and fades itself out in that same final stretch (opacity
+   ramps to 0 while still scaling/rotating, not a separate step after it
+   stops) — one continuous motion, not a loop. */
+@keyframes dc-splash-zoom-rotate {
+  0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
+  15% { opacity: 1; }
+  75% { transform: scale(5) rotate(300deg); opacity: 1; }
+  100% { transform: scale(6.5) rotate(360deg); opacity: 0; }
+}
+.dc-splash-logo {
+  animation: dc-splash-zoom-rotate 1.1s ease-in forwards;
+}
+
 /* Dozens of page toolbars/headers pin themselves to the sidebar edge via
    `left: var(--sidebar-width, 0px)` in inline styles, updated by Navbar.jsx
    whenever the sidebar expands/collapses/pins. Most of those inline styles

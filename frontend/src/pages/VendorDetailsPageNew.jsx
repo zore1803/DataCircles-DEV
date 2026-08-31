@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "re
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
-import useMinDelay from "../hooks/useMinDelay";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import Skeleton from "../components/common/Skeleton";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
@@ -331,8 +330,8 @@ const VendorDetailsPageNew = () => {
   // Activity timeline filter
   const [activityFeedFilter, setActivityFeedFilter] = useState("All");
 
-  /* ── Skeleton loading with min-delay ── */
-  const showSkeleton = useMinDelay(!dataLoaded, 300);
+  /* ── Skeleton loading ── */
+  const showSkeleton = !dataLoaded;
   useTopLoadingSignal(showSkeleton);
 
   /* ── Data Fetching ──
@@ -1062,7 +1061,7 @@ const VendorDetailsPageNew = () => {
               {/* One shared, edge-to-edge table skeleton for every tab (built from
                 the common TableSkeletonRows) instead of a different hand-rolled
                 placeholder per tab, so all four resolve identically off the
-                single useMinDelay(300) flag. The tab bar itself is never
+                single showSkeleton flag. The tab bar itself is never
                 skeletoned — it's navigation, not data. */}
               {showSkeleton ? (
                 <TabTableSkeleton />

@@ -20,6 +20,11 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
   const profilePictureInputRef = useRef(null);
+  const nameInputRef = useRef(null);
+  const emailInputRef = useRef(null);
+  const companyRef = useRef(null);
+  const phoneInputRef = useRef(null);
+  const leadSourceRef = useRef(null);
   // Object URL for the currently picked file, so the preview shows the actual
   // image instead of just its filename. Revoked whenever the selection
   // changes or the form unmounts, since object URLs otherwise leak.
@@ -153,6 +158,12 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
 
     if (!form.email.trim()) {
       errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errors.email = "Invalid email format";
+    }
+
+    if (!form.phone.trim()) {
+      errors.phone = "Phone is required";
     }
 
     if (!form.company) {
@@ -196,7 +207,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
 
     const hasError = validationErrors[`additional_${fieldDef.name}`];
     const inputClassName = `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
-      ? 'border-red-300 ring-1 ring-red-500'
+      ? 'border-red-500 focus:ring-red-500'
       : 'border-[#1F2937]/10 focus:ring-blue-500'
       }`;
 
@@ -231,7 +242,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
             rows={3}
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className={`w-full border rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter resize-vertical ${hasError ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'}`}
+            className={`w-full border rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter resize-vertical ${hasError ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'}`}
             placeholder={`Enter ${fieldDef.name}`}
           />
         );
@@ -337,11 +348,30 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
   const handleSubmit = async (e, isSaveAndExit = false) => {
     e.preventDefault();
 
-    // Validate form
+    // Validate every mandatory field up front — highlight all of them at
+    // once, then scroll to whichever invalid one appears first on the page
+    // (not necessarily the one checked first here), so the user always lands
+    // on the top-most problem instead of being surprised by one further down
+    // after fixing what looked like the only error.
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      toast.error("Please fill in all required fields");
+
+      const candidates = [
+        errors.name ? nameInputRef.current : null,
+        errors.email ? emailInputRef.current : null,
+        errors.phone ? phoneInputRef.current : null,
+        errors.company ? companyRef.current : null,
+        errors.leadSource ? leadSourceRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -480,7 +510,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full overflow-hidden">
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Contact" : "Create New Contact"}
@@ -500,7 +530,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
             {/* Profile Picture */}
             <div>
               <label className="block text-[12px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
-                Profile Picture <span className="text-[#FF4935]">*</span>
+                Profile Picture
               </label>
               <div className="flex items-center gap-3">
                 <div className="flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10">
@@ -522,7 +552,6 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                   accept="image/*"
                   onChange={handleFileChange}
                   className="hidden"
-                  required={!profilePicture}
                 />
               </div>
               <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
@@ -557,15 +586,15 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                 Full Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={nameInputRef}
                 type="text"
                 placeholder="Enter Full Name"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
                 className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.name
-                  ? 'border-red-300 ring-1 ring-red-500'
+                  ? 'border-red-500 focus:ring-red-500'
                   : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
-                required
               />
               {validationErrors.name && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.name}</p>
@@ -578,15 +607,15 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                 Email <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={emailInputRef}
                 type="email"
                 placeholder="example@gmail.com"
                 value={form.email}
                 onChange={(e) => handleFormChange("email", e.target.value)}
                 className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.email
-                  ? 'border-red-300 ring-1 ring-red-500'
+                  ? 'border-red-500 focus:ring-red-500'
                   : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
-                required
               />
               {validationErrors.email && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.email}</p>
@@ -599,16 +628,23 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                 Phone <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={phoneInputRef}
                 type="tel"
                 placeholder="+91 123456789"
                 value={form.phone}
                 onChange={(e) => handleFormChange("phone", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter"
+                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.phone
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-[#1F2937]/10 focus:ring-blue-500"
+                  }`}
               />
+              {validationErrors.phone && (
+                <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.phone}</p>
+              )}
             </div>
 
             {/* Company - Now required with validation */}
-            <div>
+            <div ref={companyRef}>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Company <span className="text-[#FF4935]">*</span>
               </label>
@@ -621,7 +657,6 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                   displayKey="name"
                   valueKey="_id"
                   className="flex-1"
-                  required={true}
                   error={validationErrors.company}
                   compact
                 />
@@ -640,7 +675,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
             </div>
 
             {/* Lead Source */}
-            <div>
+            <div ref={leadSourceRef}>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Lead Source <span className="text-[#FF4935]">*</span>
               </label>
@@ -649,8 +684,7 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
                 value={form.leadSource}
                 onChange={(value) => handleFormChange("leadSource", value)}
                 placeholder="Choose Lead Source"
-                required
-                buttonClassName={`w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${validationErrors.leadSource ? 'border-red-300 ring-1 ring-red-500' : 'border-[#1F2937]/10'} ${form.leadSource ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+                buttonClassName={`w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${validationErrors.leadSource ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10'} ${form.leadSource ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
               {validationErrors.leadSource && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.leadSource}</p>

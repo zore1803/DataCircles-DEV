@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
+import CustomFieldsSection from "../common/CustomFieldsSection";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -214,6 +215,7 @@ const initialState = {
   contactId: null,
   companyId: null,
   vendorId: null,
+  additionalFields: [],
 };
 
 const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
@@ -569,6 +571,8 @@ const AdminMeetingForm = ({
   companyName = "",
 }) => {
   const [form, setForm] = useState(initialState);
+  // Org's MeetingFields definitions — drives the Custom Fields section below.
+  const [meetingFieldDefs, setMeetingFieldDefs] = useState([]);
   const { meetingTypes } = useSystemSettings();
   // Which of the Entity Type/Related To/Duration/Meeting Type/Priority
   // dropdowns is open, if any — shared so opening one closes the others
@@ -588,6 +592,11 @@ const AdminMeetingForm = ({
   const [errors, setErrors] = useState({});
   const quillModules = useMemo(() => baseMeetingQuillModules, []);
   const [isEditMode, setIsEditMode] = useState(mode === "create" || !!startInEditMode);
+  const titleInputRef = useRef(null);
+  const dateInputRef = useRef(null);
+  const linkedToRef = useRef(null);
+  const entityRef = useRef(null);
+  const participantsRef = useRef(null);
 
   const entityTypeOptions = [
     { value: 'company', label: 'Company', icon: Building2, className: 'bg-cyan-50 text-cyan-600' },
@@ -701,6 +710,9 @@ const AdminMeetingForm = ({
       API.get("/invoices")
         .then((res) => setLinkableInvoices(res.data || []))
         .catch(() => setLinkableInvoices([]));
+      API.get("/meeting-fields")
+        .then((res) => setMeetingFieldDefs(res.data?.fields || []))
+        .catch(() => setMeetingFieldDefs([]));
 
       if (meetingData && mode === "view") {
         const initialFormData = {
@@ -852,7 +864,30 @@ const AdminMeetingForm = ({
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Please fix the errors before submitting");
+      // Scroll to whichever invalid field sits highest on screen, rather
+      // than just reporting via toast that something is wrong.
+      const latestErrors = {};
+      if (!form.title?.trim()) latestErrors.title = true;
+      if (!form.date && !calendarDate) latestErrors.date = true;
+      if (!form.linkedTo) latestErrors.linkedTo = true;
+      if (!getSelectedEntityId()) latestErrors.entity = true;
+      if (form.linkedTo === "company" && form.participants.length === 0) latestErrors.participants = true;
+
+      const candidates = [
+        latestErrors.title ? titleInputRef.current : null,
+        latestErrors.date ? dateInputRef.current : null,
+        latestErrors.linkedTo ? linkedToRef.current : null,
+        latestErrors.entity ? entityRef.current : null,
+        latestErrors.participants ? participantsRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -880,6 +915,7 @@ const AdminMeetingForm = ({
         scheduledAt: getScheduledAt(),
         participants: form.participants || [],
         internalParticipants: form.internalParticipants || [],
+        additionalFields: form.additionalFields || [],
       };
 
       if (form.linkedTo === "contact") {
@@ -961,10 +997,10 @@ const AdminMeetingForm = ({
 
           {/* Form Body */}
           <div className="flex-1 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="flex flex-col h-full">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full">
               {/* Content */}
               <div className="px-8 py-6 space-y-6">
-                <div>
+                <div ref={titleInputRef}>
                   <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Meeting Title <span className="text-[#FF4935]">*</span>
                   </label>
@@ -972,7 +1008,7 @@ const AdminMeetingForm = ({
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter disabled:opacity-50 ${errors.title ? "border-red-300 ring-1 ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter disabled:opacity-50 ${errors.title ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                       }`}
                     placeholder="Enter Meeting Title"
                     disabled={readOnly}
@@ -1100,7 +1136,7 @@ const AdminMeetingForm = ({
                     would be redundant. */}
                 {!initialCompanyId && (
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
+                    <div ref={linkedToRef}>
                       <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Entity Type</label>
                       <SingleSelectDropdown
                         options={entityTypeOptions}
@@ -1113,7 +1149,7 @@ const AdminMeetingForm = ({
                       {errors.linkedTo && <p className="text-red-500 text-xs mt-1 font-inter">{errors.linkedTo}</p>}
                     </div>
 
-                    <div>
+                    <div ref={entityRef}>
                       <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2 capitalize">
                         {form.linkedTo || "Record"}
                       </label>
@@ -1176,14 +1212,15 @@ const AdminMeetingForm = ({
 
                 <div className="grid grid-cols-3 gap-4">
                   {/* Date */}
-                  <div>
+                  <div ref={dateInputRef}>
                     <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Date</label>
                     <input
                       type="date"
                       value={form.date || calendarDate || ""}
+                      min={new Date().toISOString().split("T")[0]}
                       onChange={(e) => handleChange("date", e.target.value)}
                       disabled={readOnly}
-                      className={`w-full border rounded-full px-3 h-8 text-[12px] focus:outline-none focus:ring-1 transition-all cursor-pointer disabled:opacity-50 ${errors.date ? "border-red-300 ring-1 ring-red-500 text-red-600" : "border-[#1F2937]/10 focus:ring-blue-500 text-[#1F2937]"}`}
+                      className={`w-full border rounded-full px-3 h-8 text-[12px] focus:outline-none focus:ring-1 transition-all cursor-pointer disabled:opacity-50 ${errors.date ? "border-red-500 focus:ring-red-500 text-red-600" : "border-[#1F2937]/10 focus:ring-blue-500 text-[#1F2937]"}`}
                     />
                     {errors.date && <p className="text-red-500 text-xs mt-1 font-inter">{errors.date}</p>}
                   </div>
@@ -1242,7 +1279,7 @@ const AdminMeetingForm = ({
                     list to pick from; a contact meeting IS the contact,
                     and vendors have no contacts in this model. */}
                 {form.linkedTo === "company" && (
-                  <div>
+                  <div ref={participantsRef}>
                     <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Client Contacts</label>
                     <MultiSelectDropdown
                       users={companyContacts}
@@ -1330,6 +1367,26 @@ const AdminMeetingForm = ({
                     onOpenChange={(open) => setOpenDropdown(open ? "linkedInvoice" : null)}
                   />
                 </div>
+
+                {meetingFieldDefs.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <span className="flex-1 h-px bg-[#D9D9D9]" />
+                      <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                        Custom Fields
+                      </h3>
+                      <span className="flex-1 h-px bg-[#D9D9D9]" />
+                    </div>
+                    <fieldset disabled={readOnly}>
+                      <CustomFieldsSection
+                        fieldDefs={meetingFieldDefs}
+                        values={form.additionalFields}
+                        onChange={(next) => handleChange("additionalFields", next)}
+                        title=""
+                      />
+                    </fieldset>
+                  </>
+                )}
 
                 {/* Conflict Alert */}
                 {timeConflict && (

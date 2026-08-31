@@ -1,6 +1,19 @@
 // models/Task.js
 const mongoose = require('mongoose');
 
+// Same shape as the other modules' additionalFields (Contact/Company/Deal/
+// Vendor) — key/value/type, with `type` set from the org's TaskFields
+// definition at write time (see services/fieldCoercionService.js).
+const additionalFieldSchema = new mongoose.Schema({
+  key: { type: String, required: true },
+  value: mongoose.Schema.Types.Mixed,
+  type: {
+    type: String,
+    enum: ['string', 'number', 'dropdown', 'text', 'url', 'date', 'multiselect'],
+    default: 'text',
+  },
+}, { _id: false });
+
 const taskSchema = new mongoose.Schema({
   title: String,
   description: String,
@@ -24,7 +37,8 @@ const taskSchema = new mongoose.Schema({
   users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
-  starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  additionalFields: [additionalFieldSchema],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Task', taskSchema);

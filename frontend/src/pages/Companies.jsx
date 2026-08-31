@@ -38,6 +38,7 @@ import {
   PinOff,
   Star,
   Video,
+  User,
 } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -170,6 +171,7 @@ function Companies() {
   const [showImport, setShowImport] = useState(false);
   const [showHotlist, setShowHotlist] = useState(false);
   const [permission, setPermission] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showAddToHotlistModal, setShowAddToHotlistModal] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
@@ -185,6 +187,11 @@ function Companies() {
   const columnMenuRef = useRef(null);
   const tableScrollRef = useRef(null);
   const [quickHotlistCompanyId, setQuickHotlistCompanyId] = useState(null);
+  const [ownerPickerCompanyId, setOwnerPickerCompanyId] = useState(null);
+  const [ownerPickerSearch, setOwnerPickerSearch] = useState("");
+  const [ownerPickerSaving, setOwnerPickerSaving] = useState(false);
+  const [orgUsers, setOrgUsers] = useState([]);
+  const [orgUsersLoaded, setOrgUsersLoaded] = useState(false);
 
   // Starring is per-user and persisted server-side (not localStorage) so the
   // paginated API can sort starred companies to the top of page 1 regardless
@@ -562,9 +569,9 @@ function Companies() {
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 160;
             const MARGIN = 8;
-            // 5 items (View Company, Edit, Add to Hotlist, Star/Unstar,
-            // Delete) + one divider + container padding.
-            const MENU_H = 184;
+            // 6 items (View Company, Edit, Add to Hotlist, Star/Unstar,
+            // Set/Change Owner, Delete) + one divider + container padding.
+            const MENU_H = 214;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -641,6 +648,29 @@ function Companies() {
                 <Star className={`w-3.5 h-3.5 ${company.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
                 {company.isStarred ? "Unstar Company" : "Star Company"}
               </button>
+              {isAdmin && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenRowActionsId(null);
+                    setRowActionsPos(null);
+                    setOwnerPickerSearch("");
+                    setOwnerPickerCompanyId(company._id);
+                    if (!orgUsersLoaded) {
+                      API.get("/auth/all-user-admin")
+                        .then((res) => {
+                          setOrgUsers(res.data?.allUsers || []);
+                          setOrgUsersLoaded(true);
+                        })
+                        .catch(() => toast.error("Failed to load users"));
+                    }
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                >
+                  <User className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                  {company.owner ? "Change Owner" : "Set Owner"}
+                </button>
+              )}
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
                 onClick={(e) => {
@@ -1128,6 +1158,7 @@ function Companies() {
         (p) => p.name.toLowerCase() === "companies",
       );
       setPermission(userPerm?.permission || "no");
+      setIsAdmin(user?.user?.role === "admin");
     } catch {
       setPermission("no");
       toast.error("Failed to fetch user permissions");
@@ -1144,7 +1175,9 @@ function Companies() {
       }
     } catch (err) {
       console.error("Failed to fetch company fields");
-      toast.error("Failed to fetch company fields");
+      if (err.response?.status !== 402) {
+        toast.error("Failed to fetch company fields");
+      }
     }
   };
 
@@ -1183,7 +1216,9 @@ function Companies() {
       setIndustries(allIndustries);
     } catch (err) {
       console.error("Failed to fetch industries", err);
-      toast.error("Failed to fetch industries");
+      if (err.response?.status !== 402) {
+        toast.error("Failed to fetch industries");
+      }
     } finally {
       setIndustriesLoading(false);
     }
@@ -1228,7 +1263,10 @@ function Companies() {
       }
     } catch (err) {
       console.error("Error fetching companies:", err);
-      if (err.response && err.response.status === 403) {
+      if (err.response?.status === 402) {
+        // Subscription state is already shown via the persistent
+        // header banner/pill — don't pile on a redundant toast here.
+      } else if (err.response && err.response.status === 403) {
         toast.error(err.response.data.error || "Access denied");
       } else {
         toast.error("Failed to load companies");
@@ -1786,7 +1824,7 @@ function Companies() {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -1885,7 +1923,7 @@ function Companies() {
                   <>
                     <div className="flex items-center gap-2">
                       <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
-                      
+                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                       Manage your accounts & company directory
@@ -2003,7 +2041,7 @@ function Companies() {
                               }}
                               className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <FilterIcon size={16} className="text-gray-400" />
+                              <FilterIcon size={16} />
                               Filters
                               {activeFilters.length > 0 && (
                                 <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
@@ -2097,7 +2135,7 @@ function Companies() {
           // the header + the "No companies found" row, so that border would
           // sit right under it as a second stray line with an odd gap instead
           // of closing off a real table body.
-          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`}>
+          <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || companies.length > 0 ? "border-b" : ""}`} style={{ paddingLeft: "var(--content-inset, 16px)" }}>
             <table
               className="w-full border-separate border-spacing-0 text-left"
               style={{
@@ -2241,16 +2279,15 @@ function Companies() {
                                       width: cell.column.getSize(),
                                       height: "37px",
                                       maxHeight: "37px",
-                                      overflow: "hidden",
                                       boxSizing: "border-box",
                                       position: isSticky ? "sticky" : "static",
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                     }}
-                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
-                                    <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                    <div style={{ opacity: isColDragging ? 0.35 : 1, overflow: "hidden" }}>
                                       {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext(),
@@ -2407,6 +2444,120 @@ function Companies() {
         selectedCompanyIds={quickHotlistCompanyId ? [quickHotlistCompanyId] : []}
         onComplete={() => setQuickHotlistCompanyId(null)}
       />
+
+      {/* Set/Change Company Owner — pick a contact from this org's contact list */}
+      {ownerPickerCompanyId && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setOwnerPickerCompanyId(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-900">Set Company Owner</h3>
+              <button
+                onClick={() => setOwnerPickerCompanyId(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-4 pt-3 pb-2">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search users..."
+                value={ownerPickerSearch}
+                onChange={(e) => setOwnerPickerSearch(e.target.value)}
+                className="w-full border border-gray-200 rounded-full px-3 h-9 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            {companies.find((c) => c._id === ownerPickerCompanyId)?.owner && (
+              <div className="px-4 pb-2">
+                <button
+                  disabled={ownerPickerSaving}
+                  onClick={async () => {
+                    setOwnerPickerSaving(true);
+                    try {
+                      await API.patch(`/companies/${ownerPickerCompanyId}/owner`, {
+                        ownerId: null,
+                      });
+                      setCompanies((prev) =>
+                        prev.map((c) =>
+                          c._id === ownerPickerCompanyId ? { ...c, owner: null } : c
+                        )
+                      );
+                      toast.success("Company owner removed");
+                      setOwnerPickerCompanyId(null);
+                    } catch (err) {
+                      toast.error(err.response?.data?.error || "Failed to remove owner");
+                    } finally {
+                      setOwnerPickerSaving(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Remove Owner
+                </button>
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto px-2 pb-2">
+              {orgUsers
+                .filter((u) => u.role === "staff")
+                .filter((u) =>
+                  !ownerPickerSearch.trim() ||
+                  u.name?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase()) ||
+                  u.email?.toLowerCase().includes(ownerPickerSearch.trim().toLowerCase())
+                )
+                .map((orgUser) => (
+                  <button
+                    key={orgUser._id}
+                    disabled={ownerPickerSaving}
+                    onClick={async () => {
+                      setOwnerPickerSaving(true);
+                      try {
+                        const res = await API.patch(`/companies/${ownerPickerCompanyId}/owner`, {
+                          ownerId: orgUser._id,
+                        });
+                        setCompanies((prev) =>
+                          prev.map((c) =>
+                            c._id === ownerPickerCompanyId ? { ...c, owner: res.data.owner } : c
+                          )
+                        );
+                        toast.success(`${orgUser.name} set as company owner`);
+                        setOwnerPickerCompanyId(null);
+                      } catch (err) {
+                        toast.error(err.response?.data?.error || "Failed to set owner");
+                      } finally {
+                        setOwnerPickerSaving(false);
+                      }
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-gray-50 text-left disabled:opacity-50"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                      {(orgUser.name || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-900 truncate">{orgUser.name}</p>
+                      {orgUser.email && (
+                        <p className="text-xs text-gray-500 truncate">{orgUser.email}</p>
+                      )}
+                    </div>
+                    <span className="text-[10px] uppercase font-medium text-gray-400 flex-shrink-0">
+                      {orgUser.role}
+                    </span>
+                  </button>
+                ))}
+              {orgUsersLoaded && orgUsers.filter((u) => u.role === "staff").length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-6">No staff users found.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export Selected Companies Modal */}
       <ExportModal

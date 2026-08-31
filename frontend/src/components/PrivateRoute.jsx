@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useEffect, useState, useRef } from "react";
 import API, { configureAxios, setCsrfToken } from "../services/api";
-import logo from "/DataCircles.png";
+import SplashLoader from "./common/SplashLoader";
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, isLoading, getAccessTokenSilently, logout } =
@@ -12,6 +12,17 @@ function PrivateRoute({ children }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const isCheckingRef = useRef(false); // Prevent duplicate checks
+
+  // The auth check can resolve faster than the splash's one CSS animation
+  // cycle (1.1s — the zoom/rotate keyframes fade the logo to opacity 0 in
+  // their own final stretch, see index.css), making it flash and vanish
+  // before it's noticeable. Hold the splash up for the full cycle so the
+  // fade-out is always the animation's own doing, never a hard cut.
+  const [minSplashElapsed, setMinSplashElapsed] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashElapsed(true), 1100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Array of cool loading messages
   const loadingMessages = [
@@ -162,17 +173,18 @@ function PrivateRoute({ children }) {
 
   // Show loading state
   if (
+    !minSplashElapsed ||
     isLoading ||
     ((isAuthenticated || localStorage.getItem("token")) &&
       isAuthorized === null)
   ) {
     return (
       <>
-        <PageSkeleton variant="generic" />
+        <SplashLoader />
         {retryCount > 0 && (
           <div
-            className="fixed z-30 flex justify-center"
-            style={{ top: 80, left: "var(--sidebar-width, 0px)", right: 0 }}
+            className="fixed z-[10000] flex justify-center"
+            style={{ top: 80, left: 0, right: 0 }}
           >
             <p className="rounded-full bg-white px-4 py-1.5 text-sm text-gray-500 shadow">
               Retrying connection... ({retryCount}/2)
@@ -245,4 +257,3 @@ function PrivateRoute({ children }) {
 }
 
 export default PrivateRoute;
-import PageSkeleton from "./common/PageSkeleton";

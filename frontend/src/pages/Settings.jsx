@@ -26,6 +26,8 @@ import {
   Gift,
   FileText,
   Wallet as WalletIcon,
+  ListChecks,
+  CalendarClock,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -37,6 +39,8 @@ import DealFieldSettings from "../components/settings/DealFieldSettings";
 import HelpCenter from "../components/settings/HelpCenter";
 import VendorFieldSettings from "../components/settings/VendorFieldSettings";
 import ItemFieldSettings from "../components/settings/ItemFieldSettings";
+import TaskFieldSettings from "../components/settings/TaskFieldSettings";
+import MeetingFieldSettings from "../components/settings/MeetingFieldSettings";
 import FormsList from "../components/settings/FormsList";
 import EmailNotifications from "../components/settings/EmailNotifications";
 import SubscriptionPlans from "../components/settings/SubscriptionPlans";
@@ -330,6 +334,30 @@ const Settings = () => {
       category: "Customization",
     },
     {
+      id: "task-fields",
+      icon: <ListChecks className="w-5 h-5" />,
+      label: "Task Fields",
+      description: "Customize task data fields",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <TaskFieldSettings />,
+      category: "Customization",
+    },
+    {
+      id: "meeting-fields",
+      icon: <CalendarClock className="w-5 h-5" />,
+      label: "Meeting Fields",
+      description: "Customize meeting data fields",
+      color: "text-violet-600",
+      bgColor: "bg-violet-50",
+      borderColor: "border-violet-200",
+      hoverBg: "hover:bg-violet-50",
+      component: <MeetingFieldSettings />,
+      category: "Customization",
+    },
+    {
       id: "system-defaults",
       icon: <SettingsIcon className="w-5 h-5" />,
       label: "System Defaults",
@@ -458,7 +486,7 @@ const Settings = () => {
         }}
       >
         <div
-          className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -490,7 +518,7 @@ const Settings = () => {
           </div>
         </div>
 
-        <div className="pt-[118px] lg:pt-[128px] px-4 lg:px-6 pb-8">
+        <div className="pt-[118px] lg:pt-[128px] px-4 sm:px-6 lg:px-8 pb-8">
           {activeSection.component}
         </div>
       </div>
@@ -498,10 +526,10 @@ const Settings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
       {/* Fixed page-header strip */}
       <div
-        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -528,7 +556,7 @@ const Settings = () => {
         </div>
       </div>
 
-      <div className="pt-[118px] lg:pt-[128px]">
+      <div className="pt-[118px] lg:pt-[128px] px-4 sm:px-6 lg:px-8 pb-8">
         {/* Settings by Category */}
         <div className="space-y-8">
           {categoryOrder.map((category) => {

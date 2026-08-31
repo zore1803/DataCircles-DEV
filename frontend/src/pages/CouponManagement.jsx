@@ -563,10 +563,10 @@ const CouponManagement = () => {
               {/* Validity */}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Start Date">
-                  <input type="date" value={draft.validity.startDate} onChange={(e) => setDraft({ ...draft, validity: { ...draft.validity, startDate: e.target.value } })} className={inputCls} />
+                  <input type="date" value={draft.validity.startDate} min={new Date().toISOString().split("T")[0]} onChange={(e) => setDraft({ ...draft, validity: { ...draft.validity, startDate: e.target.value } })} className={inputCls} />
                 </Field>
                 <Field label="Expiry Date">
-                  <input type="date" value={draft.validity.expiryDate} onChange={(e) => setDraft({ ...draft, validity: { ...draft.validity, expiryDate: e.target.value } })} className={inputCls} />
+                  <input type="date" value={draft.validity.expiryDate} min={new Date().toISOString().split("T")[0]} onChange={(e) => setDraft({ ...draft, validity: { ...draft.validity, expiryDate: e.target.value } })} className={inputCls} />
                 </Field>
               </div>
 

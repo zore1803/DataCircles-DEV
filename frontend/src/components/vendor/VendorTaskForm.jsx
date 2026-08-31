@@ -363,7 +363,7 @@ const VendorTaskForm = ({
                       <input
                         type="date"
                         value={form.dueDate}
-                        min="2000-01-01"
+                        min={form.selectedDate || "2000-01-01"}
                         max="2099-12-31"
                         onChange={(e) =>
                           handleChange("dueDate", e.target.value)

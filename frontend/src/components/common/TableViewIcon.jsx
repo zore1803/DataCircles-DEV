@@ -1,0 +1,37 @@
+import React from "react";
+
+/*
+ * The product's table/list-view glyph, from the design system.
+ *
+ * Pairs with KanbanViewIcon in every table/kanban switcher. Same conventions
+ * as FilterIcon: `size` drives both dimensions, `currentColor` fills the path,
+ * and the default colour is #1F1F1F.
+ *
+ * The viewBox is the artwork's own 18x14 box padded to a 20-unit square, so it
+ * carries the same 10% slack as the filter and sidebar glyphs and reads at the
+ * same weight beside them.
+ */
+const TableViewIcon = ({ size = 16, className = "", style, ...props }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="-1 -3 20 20"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    // Attribute rather than inline style, so a caller's `text-*` class still
+    // wins - see FilterIcon.
+    color="#1F1F1F"
+    style={style}
+    aria-hidden="true"
+    focusable="false"
+    {...props}
+  >
+    <path
+      d="M1 2C0.716667 2 0.479167 1.90417 0.2875 1.7125C0.0958333 1.52083 0 1.28333 0 1C0 0.716667 0.0958333 0.479167 0.2875 0.2875C0.479167 0.0958333 0.716667 0 1 0H17C17.2833 0 17.5208 0.0958333 17.7125 0.2875C17.9042 0.479167 18 0.716667 18 1C18 1.28333 17.9042 1.52083 17.7125 1.7125C17.5208 1.90417 17.2833 2 17 2H1ZM1 14C0.716667 14 0.479167 13.9042 0.2875 13.7125C0.0958333 13.5208 0 13.2833 0 13C0 12.7167 0.0958333 12.4792 0.2875 12.2875C0.479167 12.0958 0.716667 12 1 12H17C17.2833 12 17.5208 12.0958 17.7125 12.2875C17.9042 12.4792 18 12.7167 18 13C18 13.2833 17.9042 13.5208 17.7125 13.7125C17.5208 13.9042 17.2833 14 17 14H1ZM1 8C0.716667 8 0.479167 7.90417 0.2875 7.7125C0.0958333 7.52083 0 7.28333 0 7C0 6.71667 0.0958333 6.47917 0.2875 6.2875C0.479167 6.09583 0.716667 6 1 6H17C17.2833 6 17.5208 6.09583 17.7125 6.2875C17.9042 6.47917 18 6.71667 18 7C18 7.28333 17.9042 7.52083 17.7125 7.7125C17.5208 7.90417 17.2833 8 17 8H1Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+export default TableViewIcon;

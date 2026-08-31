@@ -1,0 +1,22 @@
+import logo from "/DC Circle Logo.png";
+
+// Shown during PrivateRoute's initial auth check (once per hard refresh /
+// fresh login) instead of a generic skeleton — the logo grows while
+// spinning in a full circle, fading itself out in the final stretch of
+// that same motion (see the dc-splash-zoom-rotate keyframes in index.css),
+// so it dims out smoothly as one continuous animation rather than a
+// separate fade bolted on after it stops.
+export default function SplashLoader() {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center overflow-hidden bg-white"
+      style={{ zIndex: 2147483647 }}
+    >
+      <img
+        src={logo}
+        alt="DataCircles"
+        className="dc-splash-logo w-36 h-36 object-contain"
+      />
+    </div>
+  );
+}

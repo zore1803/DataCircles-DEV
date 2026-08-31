@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -12,13 +12,13 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Users,
   Building2,
   Mail,
   Phone,
   User,
   MoreVertical,
+  RefreshCw,
   Trash2,
   Edit2,
   CheckSquare,
@@ -40,7 +40,6 @@ import {
   Star,
   FileText,
   List,
-  LayoutGrid,
   Video,
 } from "lucide-react";
 import API from "../services/api";
@@ -63,14 +62,14 @@ import { Settings } from "lucide-react"; // Add this to your lucide-react import
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import {
-  lifecycleStageOptions, // Added
-  allLifecycleStages, // Added
-  allStageStatuses, // Added
-  getLifecycleStageForStatus, // Added
-  getColumnColor,
+  lifecycleStageOptions,
+  allLifecycleStages,
+  allStageStatuses,
+  getLifecycleStageForStatus,
   getBadgeColor,
 } from "../utils/contactConstants";
 import StatusDropdown from "../components/contact/StatusDropdown";
+import ContactStatusModal from "../components/contact/ContactStatusModal";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import useContactStore from "../store/useContactStore";
 import AddToContactHotlistModal from "../components/contact/AddToContactHotlistModal";
@@ -89,6 +88,8 @@ import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 import SearchIcon from "../components/common/SearchIcon";
+import TableViewIcon from "../components/common/TableViewIcon";
+import KanbanViewIcon from "../components/common/KanbanViewIcon";
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -188,6 +189,8 @@ function Contacts() {
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
+  // Contact whose lifecycle is being edited via the row menu's Change Status.
+  const [statusModalContact, setStatusModalContact] = useState(null);
   const rowActionsRef = useRef(null);
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
@@ -492,20 +495,6 @@ function Contacts() {
     setCurrentContactIds,
   } = useContactStore();
 
-  // Sliding underline indicator for the tab bar
-  const tabRefs = useRef({});
-  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
-  useLayoutEffect(() => {
-    const el = tabRefs.current[activeTab];
-    if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
-    const onResize = () => {
-      const cur = tabRefs.current[activeTab];
-      if (cur) setTabIndicator({ left: cur.offsetLeft, width: cur.offsetWidth });
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [activeTab]);
-
   const fetchFolders = async () => {
     try {
       const res = await API.get("/contact-folders/");
@@ -799,9 +788,9 @@ function Contacts() {
             // menu portals to document.body, which paints inside the zoom),
             // flip upward when there isn't room below, clamp on both axes.
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 130;
+            const MENU_W = 150;
             const MARGIN = 8;
-            const MENU_H = 180; // Quick View + Edit + Add to Folder + Star + divider + Delete
+            const MENU_H = 210; // Quick View + Edit + Change Status + Add to Folder + Star + divider + Delete
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -832,7 +821,7 @@ function Contacts() {
               ref={rowActionsRef}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               onMouseDown={(e) => e.stopPropagation()}
-              className="w-[130px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-[150px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               <button
                 onClick={(e) => {
@@ -855,6 +844,17 @@ function Contacts() {
               >
                 <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeMenu();
+                  setStatusModalContact(contact);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                Change Status
               </button>
               <button
                 onClick={(e) => {
@@ -1220,30 +1220,47 @@ function Contacts() {
     enableColumnResizing: true,
   });
 
-  const handleStatusUpdate = async (contact, newStatus) => {
+  // The single write path for a lifecycle change, used by the inline status
+  // dropdown, the row menu's Change Status modal, and the Kanban drop.
+  //
+  // It takes a contact ID and BOTH lifecycle fields. It used to take a contact
+  // OBJECT and a status alone, while its only caller (StatusDropdown) passed
+  // an ID — so `contact._id` was undefined and every inline status change sent
+  // PUT /contacts/undefined. It also sent stageStatus without lifecycleStage,
+  // which the API accepts per-field, leaving the two contradicting each other.
+  // Both are fixed: ID in, pair out, against the endpoint that validates the
+  // combination.
+  const handleStatusUpdate = async (contactId, lifecycleStage, stageStatus) => {
+    const previousContact = contacts.find((c) => c._id === contactId);
+    const loadingToast = toast.loading("Updating status...");
+
+    // Optimistic — rolled back below if the API rejects the combination.
+    setContacts((prev) =>
+      prev.map((c) => (c._id === contactId ? { ...c, lifecycleStage, stageStatus } : c)),
+    );
+
     try {
-      const loadingToast = toast.loading("Updating status...");
-      await API.put(`/contacts/${contact._id}`, {
-        stageStatus: newStatus,
+      await API.put(`/contacts/${contactId}/lifecycle-stage`, {
+        lifecycleStage,
+        stageStatus,
       });
       toast.success("Status updated", { id: loadingToast });
-
-      // Optimistic update
-      setContacts((prev) =>
-        prev.map((c) =>
-          c._id === contact._id ? { ...c, stageStatus: newStatus } : c,
-        ),
-      );
-
-      // No need to fetch data immediately if we update optimistically, but let's do it to be safe
-      // fetchData();
     } catch (error) {
       console.error("Failed to update status", error);
-      if (error.response?.status === 402) {
-        toast.error(error.response?.data?.message || "An active subscription is required to make changes.");
-      } else {
-        toast.error(error.response?.data?.error || "Failed to update status");
+      if (previousContact) {
+        setContacts((prev) =>
+          prev.map((c) => (c._id === contactId ? previousContact : c)),
+        );
       }
+      if (error.response?.status === 402) {
+        toast.error(error.response?.data?.message || "An active subscription is required to make changes.", { id: loadingToast });
+      } else {
+        toast.error(
+          error.response?.data?.error || error.response?.data?.message || "Failed to update status",
+          { id: loadingToast },
+        );
+      }
+      throw error;
     }
   };
 
@@ -1398,7 +1415,7 @@ function Contacts() {
     if (!showMobileFilters) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-end justify-center z-50 md:hidden">
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-end justify-center z-[10000] md:hidden">
         <div className="bg-white w-full max-h-96 rounded-t-xl shadow-2xl">
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
@@ -1452,260 +1469,12 @@ function Contacts() {
     );
   };
 
-  // Component for the hierarchical status dropdown with logical coloring (Mobile Responsive)
-  const LifecycleStageDropdown = ({ contact, onUpdate }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedStage, setSelectedStage] = useState(
-      contact.lifecycleStage || "Lead",
-    );
-    const [selectedStatus, setSelectedStatus] = useState(
-      contact.stageStatus || "New",
-    );
-
-    // Lifecycle stage options with logical colors
-    const lifecycleStageOptions = {
-      Lead: [
-        { name: "New", color: "bg-red-100 text-red-800 border-red-200" },
-        {
-          name: "Contacted",
-          color: "bg-yellow-100 text-yellow-800 border-yellow-200",
-        },
-        {
-          name: "Interested",
-          color: "bg-blue-100 text-blue-800 border-blue-200",
-        },
-        {
-          name: "Unqualified",
-          color: "bg-red-200 text-red-900 border-red-300",
-        },
-      ],
-      "Sales Qualified Lead": [
-        {
-          name: "Qualified",
-          color: "bg-blue-100 text-blue-800 border-blue-200",
-        },
-        { name: "Lost", color: "bg-red-300 text-red-900 border-red-400" },
-      ],
-      Customer: [
-        { name: "Won", color: "bg-green-100 text-green-800 border-green-200" },
-        { name: "Churned", color: "bg-gray-200 text-gray-800 border-gray-300" },
-      ],
-    };
-
-    const allLifecycleStages = Object.keys(lifecycleStageOptions);
-
-    const handleSave = async () => {
-      try {
-        await onUpdate(contact._id, selectedStage, selectedStatus);
-        setIsOpen(false);
-        toast.success("Contact lifecycle stage updated successfully!");
-      } catch (error) {
-        console.error("Failed to update lifecycle stage:", error);
-        toast.error(
-          error.response?.data?.message || "Failed to update lifecycle stage",
-        );
-      }
-    };
-
-    const handleCancel = () => {
-      setSelectedStage(contact.lifecycleStage || "Lead");
-      setSelectedStatus(contact.stageStatus || "New");
-      setIsOpen(false);
-    };
-
-    const handleStageChange = (newStage) => {
-      setSelectedStage(newStage);
-      setSelectedStatus(lifecycleStageOptions[newStage][0].name);
-    };
-
-    if (!isOpen) {
-      const currentStatusOptions =
-        lifecycleStageOptions[contact.lifecycleStage || "Lead"] || [];
-      const currentStatusObj = currentStatusOptions.find(
-        (s) => s.name === (contact.stageStatus || "New"),
-      );
-      const displayColor = currentStatusObj
-        ? currentStatusObj.color
-        : "bg-gray-100 text-gray-700 border-gray-200";
-
-      return (
-        <div
-          className={`cursor-pointer hover:opacity-80 rounded-lg px-3 py-1.5 text-xs border transition-all duration-200 font-semibold ${displayColor}`}
-          onClick={() => setIsOpen(true)}
-        >
-          {contact.stageStatus || "New"}
-        </div>
-      );
-    }
-
-    if (isMobile) {
-      return (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md mx-4 rounded-xl shadow-2xl">
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Update Status</h3>
-                <button
-                  onClick={handleCancel}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <div className="p-4 space-y-4 max-h-80 overflow-y-auto">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Lifecycle stage
-                </label>
-                <select
-                  value={selectedStage}
-                  onChange={(e) => handleStageChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {allLifecycleStages.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Status
-                </label>
-                <div className="grid grid-cols-1 gap-2">
-                  {lifecycleStageOptions[selectedStage]?.map((statusObj) => (
-                    <button
-                      key={statusObj.name}
-                      onClick={() => setSelectedStatus(statusObj.name)}
-                      className={`
-                        w-full px-4 py-3 rounded-lg border text-center font-semibold transition-all duration-200
-                        ${selectedStatus === statusObj.name
-                          ? statusObj.color +
-                          " ring-2 ring-blue-400 ring-offset-1"
-                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                        }
-                      `}
-                    >
-                      {statusObj.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-t bg-white border-gray-200">
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCancel}
-                  className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[9999]"
-        onClick={handleCancel} // Close on backdrop click
-      >
-        <div
-          className="bg-white rounded-xl shadow-2xl p-6 min-w-[320px] max-w-md mx-4"
-          onClick={(e) => e.stopPropagation()} // Prevent backdrop click from closing when clicking inside modal
-        >
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Update Status</h3>
-              <button
-                onClick={handleCancel}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Lifecycle stage
-              </label>
-              <select
-                value={selectedStage}
-                onChange={(e) => handleStageChange(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {allLifecycleStages.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Status
-              </label>
-              <div className="space-y-2">
-                {lifecycleStageOptions[selectedStage]?.map((statusObj) => (
-                  <label
-                    key={statusObj.name}
-                    className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors"
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value={statusObj.name}
-                      checked={selectedStatus === statusObj.name}
-                      onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="sr-only"
-                    />
-                    <div
-                      className={`
-                    flex-1 px-3 py-2 rounded-lg border text-center font-semibold transition-all duration-200
-                    ${selectedStatus === statusObj.name
-                          ? statusObj.color +
-                          " ring-2 ring-blue-400 ring-offset-1"
-                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                        }
-                  `}
-                    >
-                      {statusObj.name}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex space-x-2 pt-2 border-t border-gray-200 mt-4">
-              <button
-                onClick={handleCancel}
-                className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // The hierarchical LifecycleStageDropdown that lived here was the THIRD
+  // definition of the lifecycle map (after backend/constants/contactLifecycle.js
+  // and utils/contactConstants.js) — and it was never rendered. It has been
+  // replaced by components/contact/ContactStatusModal.jsx, which is the same
+  // stage-then-status UI reading the shared constants, and is now actually
+  // wired up: the row menu's "Change Status" action opens it.
 
   // Pagination lives in the Zustand store, so it OUTLIVES this component —
   // leaving the page on 3 and coming back would otherwise remount still on 3.
@@ -2304,24 +2073,10 @@ function Contacts() {
     }
   };
 
-  const handleLifecycleStageUpdate = async (
-    contactId,
-    lifecycleStage,
-    stageStatus,
-  ) => {
-    try {
-      await API.put(`/contacts/${contactId}/lifecycle-stage`, {
-        lifecycleStage,
-        stageStatus,
-      });
-      await fetchData();
-      toast.success("Contact lifecycle stage updated successfully!");
-    } catch (err) {
-      toast.error(
-        err.response?.data?.error || "Failed to update lifecycle stage",
-      );
-    }
-  };
+  // handleLifecycleStageUpdate lived here — a second, unused copy of the same
+  // PUT that handleStatusUpdate already does. Every lifecycle write now goes
+  // through handleStatusUpdate (inline dropdown, Change Status modal) or
+  // handleKanbanItemMove (drag), both sending lifecycleStage + stageStatus.
 
   const handleKanbanItemMove = async (contactId, newStatus) => {
     const newLifecycleStage = getLifecycleStageForStatus(newStatus);
@@ -2511,7 +2266,7 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 lg:px-6 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
+        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 border-b top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E5E5EC]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -2593,40 +2348,34 @@ function Contacts() {
             >
               <div className="flex items-center gap-2">
                 <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
-                
+                <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
               </div>
               <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
                 Manage your contacts and leads
               </p>
             </div>
 
-            <nav className="hidden lg:flex relative items-stretch h-11 overflow-x-auto flex-shrink-0">
+            <nav className="hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar flex-shrink-0">
               {[
-                { id: "All", label: "All" },
+                { id: "All", label: "All Contacts" },
                 { id: "Leads", label: "Leads" },
                 { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
                 { id: "Customers", label: "Customers" },
-              ].map(({ id, label }) => (
-                <button
-                  key={id}
-                  ref={(el) => (tabRefs.current[id] = el)}
-                  onClick={() => handleTabChange(id)}
-                  className="flex items-center justify-center px-4 h-full whitespace-nowrap"
-                  style={{
-                    fontFamily: "Inter",
-                    fontWeight: 600,
-                    fontSize: "14px",
-                    letterSpacing: "-0.04em",
-                    color: activeTab === id ? "#0085FF" : "#44444A",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-              <span
-                className="absolute bottom-0 pointer-events-none transition-all duration-300 ease-out"
-                style={{ left: tabIndicator.left, width: tabIndicator.width, height: 3, background: "#0085FF" }}
-              />
+              ].map(({ id, label }) => {
+                const isActive = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleTabChange(id)}
+                    className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
+                    }`}
+                    style={isActive ? { color: "var(--btn-primary)" } : undefined}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </nav>
 
             {activeTab !== "Hotlist" && (
@@ -2679,7 +2428,7 @@ function Contacts() {
                     className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] bg-white text-gray-700 hover:bg-gray-50 transition-colors flex-shrink-0"
                     title="Filters"
                   >
-                    <FilterIcon size={15} />
+                    <FilterIcon size={16} />
                     {activeFilters.length > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                         {activeFilters.length}
@@ -2698,7 +2447,7 @@ function Contacts() {
                         }`}
                       title="List View"
                     >
-                      <List className="w-4 h-4" />
+                      <TableViewIcon size={16} className="text-current" />
                     </button>
                     <button
                       onClick={() => setShowKanban(true)}
@@ -2706,9 +2455,7 @@ function Contacts() {
                         }`}
                       title="Kanban View"
                     >
-                      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={showKanban ? "#0085FF" : "#525252"} />
-                      </svg>
+                      <KanbanViewIcon size={16} className="text-current" />
                     </button>
                   </div>
                 </>
@@ -2735,7 +2482,7 @@ function Contacts() {
                           }}
                           className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <List className="w-4 h-4 text-gray-400" />
+                          <TableViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                           List View
                           {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                         </button>
@@ -2746,9 +2493,7 @@ function Contacts() {
                           }}
                           className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                            <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                          </svg>
+                          <KanbanViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                           Kanban View
                           {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                         </button>
@@ -2802,7 +2547,7 @@ function Contacts() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Filter className="w-4 h-4 text-gray-400" />
+                      <FilterIcon size={16} />
                       Filters
                       {activeFilters.length > 0 && (
                         <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
@@ -2972,7 +2717,12 @@ function Contacts() {
           {/* Content Area */}
           {showKanban ? (
             <div className="flex gap-4 px-6 pt-6 pb-2 h-full">
-              {["New", "Contacted", "Interested", "Unqualified"].map((col) => {
+              {/* The board is the LEAD pipeline, so its columns are exactly the
+                  Lead stage's statuses — bound to the shared map rather than
+                  re-typed, so adding a Lead status can't leave a column out.
+                  Moving a card across all three lifecycle stages is done from
+                  the row menu's Change Status, not by drag. */}
+              {lifecycleStageOptions.Lead.map((col) => {
                 const count = sortedContacts.filter(
                   (c) => (c.stageStatus || "New") === col
                 ).length;
@@ -3096,7 +2846,7 @@ function Contacts() {
             // loads; the top progress bar reports the fetch instead.
             // No border-t: the toolbar strip right above already has its own
             // border-b, so a top border here would double up against it.
-            <div className="relative bg-white border-r border-b border-[#E1E4EA]">
+            <div className="relative bg-white border-r border-b border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
               <table
                 className="w-full border-separate border-spacing-0 text-left"
                 style={{
@@ -3245,16 +2995,15 @@ function Contacts() {
                                       width: cell.column.getSize(),
                                       height: "37px",
                                       maxHeight: "37px",
-                                      overflow: "hidden",
                                       boxSizing: "border-box",
                                       position: isSticky ? "sticky" : "static",
                                       left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                       right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                       zIndex: isSticky ? 10 : 1,
                                     }}
-                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                                    className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
-                                    <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                    <div style={{ opacity: isColDragging ? 0.35 : 1, overflow: "hidden" }}>
                                       {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext(),
@@ -3322,7 +3071,7 @@ function Contacts() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-100 p-2 rounded-lg">
@@ -3441,6 +3190,15 @@ function Contacts() {
         module="contacts"
       />
       {/* Add to Folder Modal */}
+      {/* Change Status — the row menu's lifecycle editor. Sends BOTH
+          lifecycleStage and stageStatus through handleStatusUpdate, the same
+          path the inline dropdown and the Kanban drop use. */}
+      <ContactStatusModal
+        contact={statusModalContact}
+        isOpen={!!statusModalContact}
+        onClose={() => setStatusModalContact(null)}
+        onSave={handleStatusUpdate}
+      />
       <AddToContactHotlistModal
         isOpen={showAddToHotlistModal}
         onClose={() => setShowAddToHotlistModal(false)}

@@ -13,7 +13,6 @@ import {
   Edit2,
   Trash2,
   Truck,
-  Filter,
   Calendar,
   MoreVertical,
   CheckSquare,
@@ -34,6 +33,7 @@ import PaymentPreview from "../components/vendor/venerPaymentPreview";
 import AppToaster from "../components/AppToaster";
 
 import SearchIcon from "../components/common/SearchIcon";
+import FilterIcon from "../components/common/FilterIcon";
 const PaymentPage = () => {
   const [vendors, setVendors] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -564,7 +564,7 @@ const PaymentPage = () => {
               />
             </div>
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <FilterIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
               <select
                 value={filterDirection}
                 onChange={(e) => setFilterDirection(e.target.value)}
@@ -761,7 +761,7 @@ const PaymentPage = () => {
 
         {/* Delete Confirmation */}
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="bg-red-100 p-2 rounded-lg">

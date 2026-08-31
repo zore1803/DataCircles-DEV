@@ -4,7 +4,6 @@ import {
   Trash2,
   X,
   ChevronDown,
-  ListFilter,
   GripVertical,
   Clock,
   CheckCircle2,
@@ -18,6 +17,7 @@ import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
 
 import SearchIcon from "../common/SearchIcon";
+import FilterIcon from "../common/FilterIcon";
 const API_BASE = `${import.meta.env.VITE_APP_API_URL}/api`;
 // The product's description is rich text ("<p>...</p>" etc, same as
 // PurchaseForm.jsx/InvoiceForm.jsx's own stripHtml) — strip the markup
@@ -188,7 +188,7 @@ const ItemSearchSelect = ({ value, onSelect, onAddNew, error = null }) => {
   };
 
   const getBorderColor = () => {
-    if (error) return "border-red-300 focus:ring-red-500";
+    if (error) return "border-red-500 focus:ring-red-500";
     return "border-[#1F2937]/10 focus:ring-blue-500";
   };
 
@@ -610,7 +610,7 @@ const PurchaseOrderForm = ({
                           placeholder="01"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                          <ListFilter className="w-4 h-4" />
+                          <FilterIcon size={16} />
                         </div>
                       </div>
                     </div>

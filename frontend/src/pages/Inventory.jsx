@@ -22,6 +22,7 @@ import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import PageSkeleton from "../components/common/PageSkeleton";
 import StockMovementModal from "../components/inventory/StockMovementModal";
 import HighlightText from "../components/common/HighlightText";
+import StatTile from "../components/common/StatTile";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -37,7 +38,7 @@ const DEFAULT_COL_WIDTHS = {
 };
 const MIN_COL_WIDTH = 60;
 // Matches Deals.jsx / PaymentsTimeline.jsx KPI band height so the pages line up.
-const KPI_BAND_HEIGHT = 120;
+const KPI_BAND_HEIGHT = 104;
 // Bottom edge of the fixed toolbar (top-16 = 64px offset + h-16 = 64px tall).
 // The KPI band and the table both hang off this, so they sit flush against the
 // toolbar and against each other — hardcoding 126/130 here left a 2px overlap
@@ -819,7 +820,7 @@ export default function Inventory() {
 
       {/* ── Fixed header bar ─────────────────────────────────────────── */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, height: 64, minHeight: 64, maxHeight: 64, boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -956,28 +957,8 @@ export default function Inventory() {
           style={{ left: "var(--sidebar-width, 0px)", top: TOOLBAR_BOTTOM, height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
         >
           <div className="grid grid-cols-2 lg:flex lg:flex-row lg:items-stretch gap-3 lg:gap-6">
-            {kpis.map(({ label, value, sub, icon: Icon, iconClass }) => (
-              <div
-                key={label}
-                className="box-border flex flex-row items-center justify-between min-w-0 lg:min-w-[200px] lg:w-[280px] lg:flex-1 bg-white"
-                style={{ padding: 16, border: "1px solid #E1E4EA", borderRadius: 12 }}
-              >
-                <div className="flex flex-row items-center min-w-0" style={{ gap: 14 }}>
-                  <div
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 40, height: 40, padding: 8, background: "rgba(255,255,255,0.1)", border: "1px solid #E1E4EA", borderRadius: 6 }}
-                  >
-                    <Icon className={`w-5 h-5 ${iconClass}`} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: 4 }}>
-                    <span className="truncate text-xs" style={{ color: "#525866" }}>{label}</span>
-                    <div className="flex items-baseline gap-1.5 min-w-0">
-                      <span className="truncate text-lg font-semibold" style={{ color: "#0E121B" }}>{value}</span>
-                      {sub && <span className="truncate text-xs text-[#99A0AE]">({sub})</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {kpis.map((kpi) => (
+              <StatTile key={kpi.label} tile={kpi} />
             ))}
           </div>
         </div>
@@ -986,7 +967,7 @@ export default function Inventory() {
       {/* ── Full-bleed table ─────────────────────────────────────────── */}
       <div
         className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0) }}
+        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0), paddingLeft: "var(--content-inset, 16px)" }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">

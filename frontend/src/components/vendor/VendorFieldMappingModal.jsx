@@ -164,8 +164,8 @@ const VendorFieldMappingModal = ({
       
       {/* Sliding Modal */}
       <div
- className={`fixed inset-y-0 right-0 z-[10001] dc-panel-w bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
-          isOpen ? "translate-x-0" : "translate-x-full"
+        className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out ${
+          isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
       >
         <div className="p-6">

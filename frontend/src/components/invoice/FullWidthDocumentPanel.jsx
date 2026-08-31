@@ -133,6 +133,7 @@ const FullWidthDocumentPanel = ({
           <input
             type="date"
             value={form.dueDate}
+            min={new Date().toISOString().split("T")[0]}
             onChange={(e) => setField("dueDate", e.target.value)}
             className={inputClass}
           />

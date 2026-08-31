@@ -9,6 +9,8 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
     companyName: '',
     gstin: '',
     address: '',
+    city: '',
+    pincode: '',
     state: '',
     email: '',
     mobile: '',
@@ -16,6 +18,7 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
     signatureBase64: ''
   });
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [existingBranding, setExistingBranding] = useState(null);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);  // NEW
@@ -50,6 +53,8 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
           companyName: response.data.branding.companyName || '',
           gstin: response.data.branding.gstin || '',
           address: response.data.branding.address || '',
+          city: response.data.branding.city || '',
+          pincode: response.data.branding.pincode || '',
           state: response.data.branding.state || '',
           email: response.data.branding.email || '',
           mobile: response.data.branding.mobile || '',
@@ -78,6 +83,13 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setEmailError('Invalid email format');
+      return;
+    }
+    setEmailError('');
+
     setLoading(true);
 
     try {
@@ -145,7 +157,7 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-blue-800">
@@ -185,6 +197,29 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
                 placeholder="Enter company address"
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                <input
+                  type="text"
+                  value={formData.city}
+                  onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g. Mumbai"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">PIN Code</label>
+                <input
+                  type="text"
+                  value={formData.pincode}
+                  onChange={(e) => setFormData(prev => ({ ...prev, pincode: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g. 400001"
+                  maxLength="6"
+                />
+              </div>
+            </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">Seller State (for GST)</label>
               <select
@@ -204,10 +239,18 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, email: e.target.value }));
+                  if (emailError) setEmailError('');
+                }}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  emailError ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="company@example.com"
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-600">{emailError}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>

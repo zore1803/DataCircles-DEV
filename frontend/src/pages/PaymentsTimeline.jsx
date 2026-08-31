@@ -31,6 +31,7 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import PaymentReceiptModal from "../components/vendor/PaymentReceiptModal";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
+import StatTile from "../components/common/StatTile";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -43,9 +44,9 @@ const DEFAULT_COL_WIDTHS = {
   date: 180,
 };
 const MIN_COL_WIDTH = 60;
-// Matches Deals.jsx's KPI band desktop height (h-[120px]) so the two pages'
+// Matches Deals.jsx's KPI band desktop height (h-[104px]) so the two pages'
 // header/stats layout lines up the same way.
-const KPI_BAND_HEIGHT = 120;
+const KPI_BAND_HEIGHT = 104;
 // Bottom edge of the fixed toolbar (top-16 = 64px offset + header height).
 // The KPI band and the table both hang off this, so they sit flush against the
 // toolbar and against each other — hardcoding 126/130 here left a 2px overlap
@@ -1136,7 +1137,7 @@ export default function PaymentsTimeline() {
           block stacked (name + video icon, subtitle below) instead of a
           single title+badge line. ──────────────────────────────────────── */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -1200,7 +1201,7 @@ export default function PaymentsTimeline() {
                       className={`flex items-center justify-center w-6 h-6 rounded-lg border transition-all flex-shrink-0 ${filterOpen ? "bg-blue-50 border-blue-400 text-blue-600" : "bg-white border-[#E2E8F0] text-gray-400 hover:border-blue-400 hover:text-blue-600"}`}
                       title="Filter accounts"
                     >
-                      <FilterIcon size={12} />
+                      <FilterIcon size={16} />
                     </button>
                   </div>
                   <span className={`text-xl font-semibold tracking-tight leading-none ${isNegative ? "text-red-600" : "text-emerald-600"}`}>
@@ -1496,29 +1497,14 @@ export default function PaymentsTimeline() {
               { label: "Total Debit", value: `₹${paymentStats.totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingDown, iconClass: "text-red-600" },
               { label: "Net", value: `₹${paymentStats.net.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: Wallet, iconClass: paymentStats.net >= 0 ? "text-green-600" : "text-red-600" },
               { label: "Transactions", value: paymentStats.count, icon: ListChecks, iconClass: "text-[#0085FF]" },
-            ].map(({ label, value, icon: Icon, iconClass }) => (
-              <div
-                key={label}
-                className="box-border flex flex-row items-center justify-between min-w-0 lg:min-w-[200px] lg:w-[280px] lg:flex-1 bg-white"
-                style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
-              >
-                <div className="flex flex-row items-center min-w-0" style={{ gap: "14px" }}>
-                  <div
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: "40px", height: "40px", padding: "8px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
-                  >
-                    <Icon className={`w-5 h-5 ${iconClass}`} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0" style={{ gap: "4px" }}>
-                    <span className="truncate text-xs" style={{ color: "#525866" }}>
-                      {label}{paymentStats.isFiltered ? " (selected)" : ""}
-                    </span>
-                    <span className="truncate text-lg font-semibold" style={{ color: "#0E121B" }}>
-                      {value}
-                    </span>
-                  </div>
-                </div>
-              </div>
+            ].map((kpi) => (
+              <StatTile
+                key={kpi.label}
+                tile={{
+                  ...kpi,
+                  label: `${kpi.label}${paymentStats.isFiltered ? " (selected)" : ""}`,
+                }}
+              />
             ))}
           </div>
         </div>
@@ -1531,6 +1517,7 @@ export default function PaymentsTimeline() {
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
           top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0),
+          paddingLeft: "var(--content-inset, 16px)",
         }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
@@ -1538,8 +1525,14 @@ export default function PaymentsTimeline() {
             <tr>
               {/* Selection column */}
               <th
-                style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 20 }}
-                className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#E1E4EA]"
+                style={{
+                  width: colWidths.selection,
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 20,
+                  boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                }}
+                className="relative px-4 py-3 bg-[#F5F7FA]"
               >
                 <div className="flex justify-center items-center">
                   <input
@@ -1567,9 +1560,10 @@ export default function PaymentsTimeline() {
                     style={{
                       width: colWidths[col.id],
                       opacity: isDragging ? 0.35 : 1,
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
                       ...stickyStyleFor(col.id),
                     }}
-                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] border-b border-r border-[#E1E4EA] transition-colors ${
+                    className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] transition-colors ${
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
@@ -1618,8 +1612,14 @@ export default function PaymentsTimeline() {
                 >
                   {/* Selection cell */}
                   <td
-                    style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
+                    style={{
+                      width: colWidths.selection,
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 10,
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                    }}
+                    className="px-4 py-2 align-middle bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
                       <input
@@ -1638,8 +1638,14 @@ export default function PaymentsTimeline() {
                     return (
                       <td
                         key={col.id}
-                        style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
+                        style={{
+                          width: colWidths[col.id],
+                          boxShadow: isRightmost
+                            ? "inset 0 -1px 0 0 #E1E4EA"
+                            : "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                          ...stickyStyleFor(col.id),
+                        }}
+                        className={`px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
                       >
                         {renderCell(col.id, doc, isRightmost)}
                         {cellBoundaryShadowSide && (
@@ -2306,7 +2312,7 @@ export default function PaymentsTimeline() {
                         onChange={(e) => setSelfTransferAmount(e.target.value)}
                         className={`w-full h-11 px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 text-sm font-bold transition-all ${
                           isOverdraft
-                            ? "border-red-300 bg-red-50/10 focus:border-red-500 focus:ring-red-500 text-red-600"
+                            ? "border-red-500 bg-red-50/10 focus:ring-red-500 text-red-600"
                             : selfTransferAmount
                               ? "border-emerald-300 bg-emerald-50/10 focus:border-emerald-500 focus:ring-emerald-500 text-emerald-600"
                               : "border-[#E1E4EA] focus:border-[#0085FF] focus:ring-[#0085FF] text-gray-700"

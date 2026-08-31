@@ -218,6 +218,7 @@ const VendorForm = ({
 
     if (!safeTrim(form.name)) errors.name = "Vendor Name is required";
     if (!safeTrim(form.email)) errors.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeTrim(form.email))) errors.email = "Invalid email format";
     if (!safeTrim(form.phone)) errors.phone = "Phone is required";
     if (!safeTrim(form.company)) errors.company = "Company is required";
     if (!safeTrim(form.address?.line1)) errors.address_line1 = "Address Line 1 is required";

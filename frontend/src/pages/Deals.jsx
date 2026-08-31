@@ -84,6 +84,9 @@ import AppToaster from "../components/AppToaster";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
+import StatTile from "../components/common/StatTile";
+import TableViewIcon from "../components/common/TableViewIcon";
+import KanbanViewIcon from "../components/common/KanbanViewIcon";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -1340,7 +1343,7 @@ function Deals() {
   const fetchStatuses = async () => {
     try {
       const res = await API.get("/kanban");
-      setStatuses(res.data?.statuses);
+      setStatuses(res.data?.statuses || []);
     } catch (error) {
       console.error("Error fetching statuses:", error);
       toast.error("Failed to fetch statuses", {
@@ -2293,7 +2296,7 @@ function Deals() {
 
       {/* New Strip */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 lg:px-6 top-[54px] lg:top-16"
+        className={`fixed right-0 border-b flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -2376,7 +2379,7 @@ function Deals() {
                 >
                   Deals
                 </h2>
-                
+                <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
               </div>
               <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
                 Manage Your Sales Pipeline
@@ -2434,7 +2437,7 @@ function Deals() {
                 className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors flex-shrink-0"
                 title="Filters"
               >
-                <FilterIcon size={15} />
+                <FilterIcon size={16} />
                 {activeAdvancedFilters.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                     {activeAdvancedFilters.length}
@@ -2453,16 +2456,14 @@ function Deals() {
                   className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${!showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
                   title="List View"
                 >
-                  <List className="w-4 h-4" />
+                  <TableViewIcon size={16} className="text-current" />
                 </button>
                 <button
                   onClick={() => setShowKanban(true)}
                   className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showKanban ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
                   title="Kanban View"
                 >
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="currentColor" />
-                  </svg>
+                  <KanbanViewIcon size={16} className="text-current" />
                 </button>
               </div>
 
@@ -2486,7 +2487,7 @@ function Deals() {
                       }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <FilterIcon size={15} className="text-gray-400" />
+                      <FilterIcon size={16} />
                       Filters
                       {activeAdvancedFilters.length > 0 && (
                         <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
@@ -2501,7 +2502,7 @@ function Deals() {
                       }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <List className="w-4 h-4 text-gray-400" />
+                      <TableViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                       List View
                       {!showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
@@ -2512,9 +2513,7 @@ function Deals() {
                       }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                      </svg>
+                      <KanbanViewIcon size={16} className="flex-shrink-0 text-gray-400" />
                       Kanban View
                       {showKanban && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
@@ -2615,7 +2614,7 @@ function Deals() {
 
       {showStats && (
         <div
-          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[238px] lg:h-[120px] px-4 lg:px-6 py-4 lg:py-6"
+          className="fixed right-0 box-border flex flex-col justify-start items-start bg-white border-b border-[#E1E4EA] top-[118px] lg:top-[128px] h-[156px] lg:h-[104px] px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 39,
@@ -2629,73 +2628,16 @@ function Deals() {
               { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
               { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: ClipboardList, iconClassName: "w-7 h-7", trend: `${Math.abs(dealStatistics.trends.avgSize)}% this week`, trendUp: dealStatistics.trends.avgSize >= 0 },
               { label: "Deals Lost", value: dealStatistics.lostCount, icon: DealsLostIcon, trend: `${Math.abs(dealStatistics.trends.lost)}% this week`, trendUp: dealStatistics.trends.lost >= 0 },
-            ].map(({ label, value, icon: Icon, iconClassName, trend, trendUp }) => (
-              <div
-                key={label}
-                className="box-border flex flex-row justify-start items-center relative w-full h-[89px] lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0 bg-white"
-                style={{ padding: "16px", border: "1px solid #E1E4EA", borderRadius: "12px" }}
-              >
-                <div className="flex flex-row items-center w-full min-w-0" style={{ gap: "14px" }}>
-                  {/* Mobile: plain icon, no badge/border */}
-                  <Icon className={`flex lg:hidden flex-shrink-0 ${iconClassName || "w-5 h-5"}`} style={{ color: "#0085FF" }} />
-                  {/* Desktop: original bordered icon box */}
-                  <div
-                    className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                    style={{ width: "40px", height: "40px", padding: "8px", gap: "10px", background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: "6px" }}
-                  >
-                    <Icon className={iconClassName || "w-6 h-6"} style={{ color: "#0085FF" }} />
-                  </div>
-                  <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: "4px" }}>
-                    <span
-                      className="truncate w-full text-[10px] sm:text-xs"
-                      style={{ fontFamily: "'Inter Tight', 'Inter', sans-serif", fontWeight: 400, lineHeight: "120%", color: "#525866" }}
-                    >
-                      {label}
-                    </span>
-                    <span
-                      className="truncate w-full text-base sm:text-lg"
-                      style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                    >
-                      {value}
-                    </span>
-                    {/* Trend, inline under the value on mobile */}
-                    {trend && (
-                      <div className="flex lg:hidden flex-row items-center" style={{ gap: 4 }}>
-                        {trendUp ? (
-                          <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                        ) : (
-                          <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                        )}
-                        <span
-                          className="truncate min-w-0 text-[9px]"
-                          style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                        >
-                          {trend}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {/* Trend, absolute bottom-right on desktop */}
-                {trend && (
-                  <div
-                    className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-                    style={{ gap: 4, right: 16, bottom: 16 }}
-                  >
-                    {trendUp ? (
-                      <TrendingUp size={14} style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={14} style={{ color: "#E82222" }} />
-                    )}
-                    <span
-                      className="whitespace-nowrap"
-                      style={{ fontFamily: "Inter, sans-serif", fontWeight: 400, fontSize: "12px", lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                    >
-                      {trend}
-                    </span>
-                  </div>
-                )}
-              </div>
+            ].map((kpi) => (
+              <StatTile
+                key={kpi.label}
+                tile={{
+                  ...kpi,
+                  subtitle: kpi.trend,
+                  subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                  subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
+                }}
+              />
             ))}
           </div>
         </div>
@@ -2755,7 +2697,7 @@ function Deals() {
 
         {/* Delete Modal */}
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-6 h-6 text-red-600" />

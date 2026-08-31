@@ -56,6 +56,9 @@ const companySchema = new mongoose.Schema(
       default: () => ({}),
     },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // The org User (staff/admin) designated as this company's owner —
+    // separate from `user` (the CRM user who originally created the record).
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false, default: null },
     lastUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     organization: {

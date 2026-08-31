@@ -6,6 +6,24 @@ const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
 const EmailTemplate = require("../models/EmailTemplate");
 const User = require("../models/User");
+const { getOwnedCompanyIds } = require("../utils/ownedCompanies");
+
+// Mirrors companyController's isOwnedByUser, using the same `user`/`createdBy` fields
+// getAllDeals' req.ownOnly filter already uses — plus: a deal under a company
+// this user OWNS (Company.owner) counts as owned too, so being made a
+// company's owner surfaces everything tied to it, not just deals the user
+// personally created. `ownedCompanyIds` is optional (from getOwnedCompanyIds).
+const isOwnedByUser = (deal, userId, ownedCompanyIds = []) => {
+  const uid = userId.toString();
+  // .populate("user"/"createdBy") turns these into subdocuments — normalize
+  // via ._id first so this works whether the field is populated or raw.
+  const ownerUid = (deal.user?._id ?? deal.user)?.toString();
+  const createdByUid = (deal.createdBy?._id ?? deal.createdBy)?.toString();
+  if (ownerUid === uid || createdByUid === uid) return true;
+
+  const companyId = (deal.company?._id ?? deal.company)?.toString();
+  return !!companyId && ownedCompanyIds.some((id) => id.toString() === companyId);
+};
 
 const createDeal = async (req, res) => {
   try {
@@ -79,19 +97,34 @@ const getAllDeals = async (req, res) => {
     const { search, contact, company } = req.query;
     let query = { organization: req.user.organization };
 
+    const preAndConditions = [];
+
     if (req.ownOnly) {
-      query.$or = [{ user: req.user._id }, { createdBy: req.user._id }];
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      preAndConditions.push({
+        $or: [
+          { user: req.user._id },
+          { createdBy: req.user._id },
+          { company: { $in: ownedCompanyIds } },
+        ],
+      });
     }
 
     if (contact) query.contact = contact;
     if (company) query.company = company;
 
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-        { "additionalFields.value": { $regex: search, $options: "i" } },
-      ];
+      preAndConditions.push({
+        $or: [
+          { title: { $regex: search, $options: "i" } },
+          { status: { $regex: search, $options: "i" } },
+          { "additionalFields.value": { $regex: search, $options: "i" } },
+        ],
+      });
+    }
+
+    if (preAndConditions.length > 0) {
+      query.$and = preAndConditions;
     }
 
     const deals = await Deal.find(query)
@@ -174,6 +207,13 @@ const getDealById = async (req, res) => {
       return res.status(404).json({ error: "Deal not found" });
     }
 
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(deal, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only view deals you own" });
+      }
+    }
+
     res.json(deal);
   } catch (err) {
     res.status(404).json({ error: "Deal not found" });
@@ -183,17 +223,27 @@ const getDealById = async (req, res) => {
 const updateDeal = async (req, res) => {
   try {
     // 1. Authorization Check
+    // Manual fallback: checkPermission is commented out on the PUT /:id route, so
+    // req.ownOnly is never set here — mirrors companyController.updateCompany's fallback.
     if (req.user.role !== "admin") {
-      const hasEditPermission = req.user.permissions?.some(
-        (p) =>
-          p.name.toLowerCase() === "deals" && p.permission === "read-write",
-      );
+      const dealPerm = req.user.permissions?.find(
+        (p) => p.name.toLowerCase() === "deals",
+      )?.permission;
 
-      if (!hasEditPermission) {
+      if (dealPerm !== "read-write" && dealPerm !== "own-only") {
         return res.status(403).json({
           error:
             "Access denied. You do not have read-write permissions for deals.",
         });
+      }
+
+      if (dealPerm === "own-only") {
+        const existing = await Deal.findOne({ _id: req.params.id, organization: req.user.organization });
+        if (!existing) return res.status(404).json({ error: "Deal not found" });
+        const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+        if (!isOwnedByUser(existing, req.user._id, ownedCompanyIds)) {
+          return res.status(403).json({ error: "You can only edit deals you own" });
+        }
       }
     }
 
@@ -504,6 +554,13 @@ const deleteDeal = async (req, res) => {
 
     if (!deal) {
       return res.status(404).json({ error: "Deal not found" });
+    }
+
+    if (req.ownOnly) {
+      const ownedCompanyIds = await getOwnedCompanyIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(deal, req.user._id, ownedCompanyIds)) {
+        return res.status(403).json({ error: "You can only delete deals you own" });
+      }
     }
 
     const invoices = await Invoice.find({

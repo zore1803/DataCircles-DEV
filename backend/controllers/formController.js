@@ -21,6 +21,13 @@ const duplicateResolutionService = require("../services/duplicateResolutionServi
 
 const RECORD_MODEL_BY_MODULE = { Contact, Company, Vendor };
 
+// Mirrors companyController's isOwnedByUser — a form is owned if either its owner or its
+// creator matches the requesting user (FormDefinition carries both fields, see §2.9 model).
+const isOwnedByUser = (form, userId) => {
+  const uid = userId.toString();
+  return form.owner?.toString() === uid || form.createdBy?.toString() === uid;
+};
+
 // Mirrors publicFormController's error-classification approach — map known service error messages
 // to the right HTTP status rather than a blanket 500. Anything unrecognized still falls through to
 // 500 in the caller's catch block.
@@ -49,6 +56,9 @@ async function listForms(req, res) {
     const skip = (page - 1) * limit;
 
     const query = { organization: req.user.organization };
+    if (req.ownOnly) {
+      query.$or = [{ owner: req.user._id }, { createdBy: req.user._id }];
+    }
     if (req.query.status) query.status = req.query.status;
     if (req.query.module) query.module = req.query.module;
     if (req.query.search) query.title = { $regex: req.query.search, $options: "i" };
@@ -147,6 +157,10 @@ async function getForm(req, res) {
     const form = await FormDefinition.findOne({ _id: req.params.id, organization: req.user.organization });
     if (!form) return res.status(404).json({ error: "Form not found" });
 
+    if (req.ownOnly && !isOwnedByUser(form, req.user._id)) {
+      return res.status(403).json({ error: "You can only view forms you own" });
+    }
+
     let activeVersion = null;
     if (form.publishState.activeFormVersionId) {
       const version = await FormVersion.findById(form.publishState.activeFormVersionId, {
@@ -172,6 +186,14 @@ async function getForm(req, res) {
  */
 async function updateForm(req, res) {
   try {
+    if (req.ownOnly) {
+      const existing = await FormDefinition.findOne({ _id: req.params.id, organization: req.user.organization });
+      if (!existing) return res.status(404).json({ error: "Form not found" });
+      if (!isOwnedByUser(existing, req.user._id)) {
+        return res.status(403).json({ error: "You can only edit forms you own" });
+      }
+    }
+
     const { layout, theme, title } = req.body || {};
     const form = await formPublishService.saveDraft(req.params.id, req.user.organization, { layout, theme, title });
     res.json({ form });
@@ -451,6 +473,10 @@ async function deleteForm(req, res) {
   try {
     const form = await FormDefinition.findOne({ _id: req.params.id, organization: req.user.organization });
     if (!form) return res.status(404).json({ error: "Form not found" });
+
+    if (req.ownOnly && !isOwnedByUser(form, req.user._id)) {
+      return res.status(403).json({ error: "You can only delete forms you own" });
+    }
 
     if (form.status === "published" || form.status === "paused") {
       return res.status(400).json({ error: "Archive this form before deleting it." });

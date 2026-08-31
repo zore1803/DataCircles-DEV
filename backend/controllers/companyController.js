@@ -36,10 +36,22 @@ const getAllCompanies = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to companies this user created/owns, combined with
+    // the search $or above via $and so neither condition clobbers the other.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }, { owner: req.user._id }] };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const companies = await Company.find(query)
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
+      .populate("lastUpdatedBy", "name")
+      .populate("owner", "name email");
 
     res.json(companies);
   } catch (error) {
@@ -153,6 +165,12 @@ const getAllCompaniesPaginated = async (req, res) => {
       }
     }
 
+    // own-only: restrict to companies this user created/owns.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ user: req.user._id }, { createdBy: req.user._id }, { owner: req.user._id }] };
+      query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
+    }
+
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
@@ -212,6 +230,16 @@ const getAllCompaniesPaginated = async (req, res) => {
               },
             },
             { $unwind: { path: "$lastUpdatedBy", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [{ $project: { name: 1, email: 1 } }],
+              },
+            },
+            { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
             { $project: { __v: 0, starredBy: 0 } },
           ],
           totalCountArr: [{ $count: "count" }],
@@ -254,11 +282,28 @@ const getMyCompanies = async (req, res) => {
     })
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
+      .populate("lastUpdatedBy", "name")
+      .populate("owner", "name email");
     res.json(companies);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+};
+
+// A user with own-only permission may only touch companies they created,
+// or that are explicitly designated theirs via the `owner` field (set from
+// the Companies list's "Set/Change Owner" menu) — shared here since
+// getCompanyById/updateCompany/deleteCompany all need the same check.
+const isOwnedByUser = (company, userId) => {
+  const uid = userId.toString();
+  // .populate("user"/"createdBy"/"owner") turns these into subdocuments —
+  // normalize via ._id first so this still works whether the field is
+  // populated or a raw ObjectId (getCompanyById populates all three before
+  // this check runs).
+  const recordUserUid = (company.user?._id ?? company.user)?.toString();
+  const createdByUid = (company.createdBy?._id ?? company.createdBy)?.toString();
+  const ownerUid = (company.owner?._id ?? company.owner)?.toString();
+  return recordUserUid === uid || createdByUid === uid || ownerUid === uid;
 };
 
 const getCompanyById = async (req, res) => {
@@ -269,10 +314,14 @@ const getCompanyById = async (req, res) => {
     })
       .populate("user", "name")
       .populate("createdBy", "name")
-      .populate("lastUpdatedBy", "name");
+      .populate("lastUpdatedBy", "name")
+      .populate("owner", "name email");
 
     if (!company) {
       return res.status(404).json({ error: "Company not found" });
+    }
+    if (req.ownOnly && !isOwnedByUser(company, req.user._id)) {
+      return res.status(403).json({ error: "You can only view companies you own" });
     }
     res.json(company);
   } catch (err) {
@@ -288,6 +337,9 @@ const deleteCompany = async (req, res) => {
     });
     if (!company) {
       return res.status(404).json({ error: "Company not found" });
+    }
+    if (req.ownOnly && !isOwnedByUser(company, req.user._id)) {
+      return res.status(403).json({ error: "You can only delete companies you own" });
     }
 
     const contacts = await Contact.find({
@@ -308,16 +360,28 @@ const deleteCompany = async (req, res) => {
 const updateCompany = async (req, res) => {
   try {
     if (req.user.role !== "admin") {
-      const hasEditPermission = req.user.permissions?.some(
-        (p) =>
-          p.name.toLowerCase() === "companies" && p.permission === "read-write",
-      );
+      const companyPerm = req.user.permissions?.find(
+        (p) => p.name.toLowerCase() === "companies",
+      )?.permission;
 
-      if (!hasEditPermission) {
+      if (companyPerm !== "read-write" && companyPerm !== "own-only") {
         return res.status(403).json({
           error:
             "Access denied. You do not have read-write permissions for companies.",
         });
+      }
+
+      if (companyPerm === "own-only") {
+        const existing = await Company.findOne({
+          _id: req.params.id,
+          organization: req.user.organization,
+        });
+        if (!existing) {
+          return res.status(404).json({ error: "Company not found" });
+        }
+        if (!isOwnedByUser(existing, req.user._id)) {
+          return res.status(403).json({ error: "You can only edit companies you own" });
+        }
       }
     }
 
@@ -525,6 +589,19 @@ const addSubsidiary = async (req, res) => {
       return res.status(404).json({ message: "Company not found" });
     }
 
+    const isOwner = parent.owner && parent.owner.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      return res.status(403).json({ message: "Only admins or the company owner can add a child company" });
+    }
+
+    if (parent.parentCompany) {
+      return res.status(400).json({ message: "A child company cannot have its own child companies" });
+    }
+
+    if (child.parentCompany) {
+      return res.status(400).json({ message: "That company is already a child of another company" });
+    }
+
     if (parent.organization.toString() !== child.organization.toString()) {
       return res.status(403).json({ message: "Companies must belong to the same organization" });
     }
@@ -576,8 +653,13 @@ const removeSubsidiary = async (req, res) => {
   const { id, subsidiaryId } = req.params;
 
   try {
-    const parent = await Company.findById(id);
+    const parent = await Company.findOne({ _id: id, organization: req.user.organization });
     if (!parent) return res.status(404).json({ message: "Parent company not found" });
+
+    const isOwner = parent.owner && parent.owner.toString() === req.user._id.toString();
+    if (req.user.role !== "admin" && !isOwner) {
+      return res.status(403).json({ message: "Only admins or the company owner can remove a child company" });
+    }
 
     // Remove from parent's subsidiaries array
     await Company.findByIdAndUpdate(id, {
@@ -602,7 +684,7 @@ const getSubsidiaries = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const company = await Company.findById(id)
+    const company = await Company.findOne({ _id: id, organization: req.user.organization })
       .populate('subsidiaries', 'name industry website address profilePicture');
 
     if (!company) return res.status(404).json({ message: "Company not found" });
@@ -617,7 +699,7 @@ const getParentCompany = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const company = await Company.findById(id)
+    const company = await Company.findOne({ _id: id, organization: req.user.organization })
       .populate('parentCompany', 'name industry website');
 
     if (!company) return res.status(404).json({ message: "Company not found" });
@@ -653,6 +735,46 @@ const toggleStarCompany = async (req, res) => {
   }
 };
 
+// Sets (or clears, with ownerId: null) the Contact designated as this
+// company's owner — one of this org's own User accounts (staff/admin), not
+// a CRM contact. The user must belong to the same organization so a company
+// can never be assigned an owner from outside it.
+const setCompanyOwner = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can set a company's owner" });
+    }
+
+    const { ownerId } = req.body;
+
+    if (ownerId) {
+      const User = require("../models/User");
+      const ownerUser = await User.findOne({
+        _id: ownerId,
+        organization: req.user.organization,
+      });
+      if (!ownerUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      if (ownerUser.role !== "staff") {
+        return res.status(400).json({ error: "Company owner must be a staff user" });
+      }
+    }
+
+    const company = await Company.findOneAndUpdate(
+      { _id: req.params.id, organization: req.user.organization },
+      { owner: ownerId || null, lastUpdatedBy: req.user._id },
+      { new: true }
+    ).populate("owner", "name email");
+
+    if (!company) return res.status(404).json({ error: "Company not found" });
+
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to set company owner", message: error.message });
+  }
+};
+
 module.exports = {
   createCompany,
   getAllCompanies,
@@ -668,4 +790,5 @@ module.exports = {
   getSubsidiaries,
   getParentCompany,
   toggleStarCompany,
+  setCompanyOwner,
 };

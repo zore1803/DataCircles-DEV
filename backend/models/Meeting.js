@@ -163,6 +163,20 @@
 // models/Meeting.js (updated with organization field)
 const mongoose = require("mongoose");
 
+// Same shape as the other modules' additionalFields (Contact/Company/Deal/
+// Vendor/Task) — key/value/type, with `type` set from the org's
+// MeetingFields definition at write time (see
+// services/fieldCoercionService.js).
+const additionalFieldSchema = new mongoose.Schema({
+  key: { type: String, required: true },
+  value: mongoose.Schema.Types.Mixed,
+  type: {
+    type: String,
+    enum: ["string", "number", "dropdown", "text", "url", "date", "multiselect"],
+    default: "text",
+  },
+}, { _id: false });
+
 const meetingSchema = new mongoose.Schema(
   {
     title: {
@@ -313,6 +327,8 @@ const meetingSchema = new mongoose.Schema(
 
     // Users who have starred this meeting
     starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+    additionalFields: [additionalFieldSchema],
   },
   {
     timestamps: true,

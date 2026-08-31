@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -26,6 +26,7 @@ import QuickContactForm from "../contact/QuickContactForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import CustomFieldsSection from "../common/CustomFieldsSection";
 
 // isOpen/onOpenChange are controlled by the parent form (a single shared
 // "which dropdown is open" key) rather than each instance owning its own
@@ -179,10 +180,13 @@ const QuickTaskForm = ({
     relationModel: "Company",
     relatedTo: "",
     users: [],
+    additionalFields: [],
   });
   const [deals, setDeals] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [users, setUsers] = useState([]);
+  // Org's TaskFields definitions — drives the Custom Fields section below.
+  const [taskFieldDefs, setTaskFieldDefs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
@@ -200,6 +204,11 @@ const QuickTaskForm = ({
   const [localCompanies, setLocalCompanies] = useState(companies);
   const [localContacts, setLocalContacts] = useState(contacts);
   const [validationErrors, setValidationErrors] = useState({});
+  const titleInputRef = useRef(null);
+  const relatedToRef = useRef(null);
+  const usersRef = useRef(null);
+  const selectedDateRef = useRef(null);
+  const dueDateRef = useRef(null);
 
   const { taskStatuses } = useSystemSettings();
 
@@ -253,6 +262,7 @@ const QuickTaskForm = ({
       relationModel: rel.entityModel || "Company",
       relatedTo: rel.entityId?._id || rel.entityId || "",
       users: (editTask.users || []).map((u) => u._id || u),
+      additionalFields: editTask.additionalFields || [],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTask]);
@@ -270,6 +280,12 @@ const QuickTaskForm = ({
     } catch (err) {
       console.error("Failed to fetch data:", err);
       toast.error("Failed to fetch task-related data");
+    }
+    try {
+      const fieldsRes = await API.get("/task-fields");
+      setTaskFieldDefs(fieldsRes.data?.fields || []);
+    } catch {
+      setTaskFieldDefs([]);
     }
   };
 
@@ -411,6 +427,12 @@ const QuickTaskForm = ({
     if (form.relationModel && !form.relatedTo) {
       errors.relatedTo = `Please select a ${form.relationModel.toLowerCase()}`;
     }
+    if (!form.selectedDate) {
+      errors.selectedDate = "Selected date is required";
+    }
+    if (!form.dueDate) {
+      errors.dueDate = "Due date is required";
+    }
     return errors;
   };
 
@@ -420,7 +442,22 @@ const QuickTaskForm = ({
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      toast.error("Please fill in all required fields");
+
+      const candidates = [
+        errors.title ? titleInputRef.current : null,
+        errors.relatedTo ? relatedToRef.current : null,
+        errors.selectedDate ? selectedDateRef.current : null,
+        errors.dueDate ? dueDateRef.current : null,
+        errors.users ? usersRef.current : null,
+      ].filter(Boolean);
+
+      let topMost = null;
+      for (const el of candidates) {
+        if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+          topMost = el;
+        }
+      }
+      topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -447,6 +484,7 @@ const QuickTaskForm = ({
         // relationModel/relatedTo pair the form tracks internally gets
         // rejected by createTask's "at least one related entity" check.
         relatedEntities: [{ entityModel: form.relationModel, entityId: form.relatedTo }],
+        additionalFields: form.additionalFields,
       };
 
       const res = isEditing
@@ -590,10 +628,10 @@ const QuickTaskForm = ({
 
           {/* Form Body */}
           <div className="flex-1 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="flex flex-col h-full">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full">
               {/* Content */}
               <div className="px-8 py-6 space-y-6">
-                <div>
+                <div ref={titleInputRef}>
                   <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Task Title <span className="text-[#FF4935]">*</span>
                   </label>
@@ -601,7 +639,7 @@ const QuickTaskForm = ({
                     type="text"
                     value={form.title}
                     onChange={(e) => handleFormChange("title", e.target.value)}
-                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? "border-red-300 ring-1 ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                       }`}
                     placeholder="Enter Task Title"
                   />
@@ -638,7 +676,7 @@ const QuickTaskForm = ({
                 </div>
 
                 {/* The record itself, with a quick-create shortcut */}
-                <div>
+                <div ref={relatedToRef}>
                   <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     {form.relationModel}
                   </label>
@@ -670,64 +708,75 @@ const QuickTaskForm = ({
                   )}
                 </div>
 
-                {/* Selected Date (Start Date) */}
-                <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Selected Date
-                  </label>
-                  <input
-                    type="date"
-                    value={form.selectedDate}
-                    onChange={(e) => handleFormChange("selectedDate", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
-                  />
+                {/* Selected Date + Due Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div ref={selectedDateRef}>
+                    <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Selected Date <span className="text-[#FF4935]">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.selectedDate}
+                      onChange={(e) => handleFormChange("selectedDate", e.target.value)}
+                      className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.selectedDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                        }`}
+                    />
+                    {validationErrors.selectedDate && (
+                      <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.selectedDate}</p>
+                    )}
+                  </div>
+
+                  <div ref={dueDateRef}>
+                    <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Due Date <span className="text-[#FF4935]">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.dueDate}
+                      min={form.selectedDate || ""}
+                      onChange={(e) => handleFormChange("dueDate", e.target.value)}
+                      className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.dueDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                        }`}
+                    />
+                    {validationErrors.dueDate && (
+                      <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.dueDate}</p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Due Date */}
-                <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Due Date
-                  </label>
-                  <input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) => handleFormChange("dueDate", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
-                  />
-                </div>
+                {/* Status + Priority */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Status
+                    </label>
+                    <SingleSelectDropdown
+                      options={statusOptions}
+                      value={form.status}
+                      onChange={(val) => handleFormChange("status", val)}
+                      isOpen={openDropdown === "status"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
+                      dropUp={true}
+                    />
+                  </div>
 
-                {/* Status */}
-                <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Status
-                  </label>
-                  <SingleSelectDropdown
-                    options={statusOptions}
-                    value={form.status}
-                    onChange={(val) => handleFormChange("status", val)}
-                    isOpen={openDropdown === "status"}
-                    onOpenChange={(open) => setOpenDropdown(open ? "status" : null)}
-                    dropUp={true}
-                  />
-                </div>
-
-                {/* Priority */}
-                <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                    Priority
-                  </label>
-                  <SingleSelectDropdown
-                    options={priorityOptions}
-                    value={form.priority}
-                    onChange={(val) => handleFormChange("priority", val)}
-                    isOpen={openDropdown === "priority"}
-                    onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
-                    dropUp={true}
-                  />
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      Priority
+                    </label>
+                    <SingleSelectDropdown
+                      options={priorityOptions}
+                      value={form.priority}
+                      onChange={(val) => handleFormChange("priority", val)}
+                      isOpen={openDropdown === "priority"}
+                      onOpenChange={(open) => setOpenDropdown(open ? "priority" : null)}
+                      dropUp={true}
+                    />
+                  </div>
                 </div>
 
                 {/* Assignees */}
-                <div>
+                <div ref={usersRef}>
                   <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Assignees
                   </label>
@@ -805,6 +854,16 @@ const QuickTaskForm = ({
                       )}
                     </div>
                   </div>
+
+                  {taskFieldDefs.length > 0 && (
+                    <div className="pt-2 border-t border-gray-100">
+                      <CustomFieldsSection
+                        fieldDefs={taskFieldDefs}
+                        values={form.additionalFields}
+                        onChange={(next) => setForm((prev) => ({ ...prev, additionalFields: next }))}
+                      />
+                    </div>
+                  )}
               </div>
             </form>
           </div>

@@ -36,8 +36,6 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
-  LayoutGrid,
-  List as ListIcon,
   Plus,
   Gem,
   Clock,
@@ -73,6 +71,7 @@ import QuickDealForm from "../deal/QuickDealForm";
 import FilterIcon from "../common/FilterIcon";
 import CompanyFilterPanel from "./CompanyFilterPanel";
 import { applyColumnFilters } from "../../utils/advancedFilters";
+import StatTile from "../common/StatTile";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import DealCardSkeleton from "../common/DealCardSkeleton";
 import Skeleton from "../common/Skeleton";
@@ -80,6 +79,8 @@ import useFillToBottom from "../../hooks/useFillToBottom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 
 import SearchIcon from "../common/SearchIcon";
+import TableViewIcon from "../common/TableViewIcon";
+import KanbanViewIcon from "../common/KanbanViewIcon";
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
   { label: "₹10,000 – ₹50,000", test: (v) => v >= 10000 && v < 50000 },
@@ -1500,23 +1501,7 @@ export default function CompanyDealsKanban({
             {isLoading
               ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
               : kpiTiles.map((tile) => (
-                <div
-                  key={tile.label}
-                  className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl"
-                >
-                  <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                    <tile.icon size={18} strokeWidth={1.5} />
-                  </div>
-                  <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                    <tile.icon size={20} strokeWidth={1.5} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                    <p className="text-sm font-semibold text-gray-900 truncate">
-                      {tile.value}
-                    </p>
-                  </div>
-                </div>
+                <StatTile key={tile.label} tile={tile} />
               ))}
           </div>
 
@@ -1598,14 +1583,14 @@ export default function CompanyDealsKanban({
               className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "board" ? "text-blue-600" : "text-gray-500"
                 }`}
             >
-              <LayoutGrid size={16} />
+              <KanbanViewIcon size={16} className="text-current" />
             </button>
             <button
               onClick={() => setViewMode("list")}
               className={`relative z-10 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${viewMode === "list" ? "text-blue-600" : "text-gray-500"
                 }`}
             >
-              <ListIcon size={16} />
+              <TableViewIcon size={16} className="text-current" />
             </button>
           </div>
           <button

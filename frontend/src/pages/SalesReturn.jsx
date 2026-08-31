@@ -35,6 +35,7 @@ import {
   ListOrdered,
   List as ListIcon,
   Link as LinkIcon,
+  Video,
 } from "lucide-react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -1516,7 +1517,7 @@ const SalesReturn = () => {
       {/* Fixed edge-to-edge toolbar */}
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -1589,7 +1590,10 @@ const SalesReturn = () => {
                   </>
                 ) : (
                   <>
-                    <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Sales Returns</h1>
+                    <div className="flex items-center gap-2">
+                      <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Sales Returns</h1>
+                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 truncate">
                       Goods returned by customers against sales invoices
                     </p>
@@ -1667,7 +1671,7 @@ const SalesReturn = () => {
                             onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
                             className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <FilterIcon size={16} className="text-gray-400" />
+                            <FilterIcon size={16} />
                             Filters
                             {activeFilters.length > 0 && (
                               <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
@@ -1740,6 +1744,7 @@ const SalesReturn = () => {
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
+            paddingLeft: "var(--content-inset, 16px)",
             right: 0,
             bottom: !showLoadingSkeleton ? 64 : 0,
           }}

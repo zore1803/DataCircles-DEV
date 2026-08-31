@@ -1,7 +1,30 @@
 import React, { useEffect, useRef } from "react";
-import { ChevronDown } from "lucide-react";
-import { lifecycleStageStatuses } from "../../utils/contactConstants";
+import { ChevronDown, Check } from "lucide-react";
+import {
+    lifecycleStageOptions,
+    allLifecycleStages,
+    getLifecycleStageForStatus,
+    getBadgeColor,
+} from "../../utils/contactConstants";
 
+/*
+ * Inline status picker on the contacts table.
+ *
+ * Two things were wrong here and both could corrupt data:
+ *
+ *  1. It rendered one FLAT list of every status, so a Lead could be set to
+ *     "Won" — a status that only exists under Customer. It sent stageStatus
+ *     alone, leaving lifecycleStage on "Lead". Mongoose's per-field enums
+ *     accept each half in isolation and findOneAndUpdate skips the model's
+ *     pre-save pair check, so that impossible contact SAVED.
+ *  2. The flat list came from `lifecycleStageStatuses`, which included
+ *     "Lost Lead" and "Won Lead" — values the backend enum rejects outright.
+ *
+ * Now the list is grouped by lifecycle stage, so what a status belongs to is
+ * visible before you click it, and picking one sends BOTH lifecycleStage and
+ * stageStatus, derived from the status itself. Statuses come from
+ * utils/contactConstants.js — this component defines none.
+ */
 const StatusDropdown = ({ contact, onUpdate, isOpen, onToggle }) => {
     const dropdownRef = useRef(null);
 
@@ -15,24 +38,15 @@ const StatusDropdown = ({ contact, onUpdate, isOpen, onToggle }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [isOpen, onToggle]);
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case "New":
-            case "Lead":
-                return "bg-blue-100 text-blue-800";
-            case "Contacted":
-                return "bg-amber-100 text-amber-800";
-            case "Interested":
-                return "bg-cyan-100 text-cyan-800";
-            case "Qualified":
-            case "Won":
-                return "bg-purple-100 text-purple-800 border-purple-200";
-            case "Un-Qualified":
-            case "Lost":
-                return "bg-red-100 text-red-800";
-            default:
-                return "bg-gray-100 text-gray-800";
-        }
+    const currentStatus = contact.stageStatus || "New";
+
+    const handleSelect = (e, status) => {
+        e.stopPropagation();
+        onToggle(null);
+        if (status === currentStatus) return;
+        // Both fields, always — the API validates the pair and never infers
+        // one from the other.
+        onUpdate(contact._id, getLifecycleStageForStatus(status), status);
     };
 
     return (
@@ -42,34 +56,37 @@ const StatusDropdown = ({ contact, onUpdate, isOpen, onToggle }) => {
                     e.stopPropagation();
                     onToggle(isOpen ? null : contact._id);
                 }}
-                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all hover:ring-2 hover:ring-opacity-50 ${getStatusColor(
-                    contact.stageStatus || "New"
+                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all hover:ring-2 hover:ring-opacity-50 ${getBadgeColor(
+                    currentStatus
                 )}`}
             >
-                <span>{contact.stageStatus || "New"}</span>
+                <span>{currentStatus}</span>
                 <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""
-                        }`}
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                 />
             </button>
 
             {isOpen && (
-                <div className="absolute left-0 mt-2 w-40 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-left">
-                    {lifecycleStageStatuses.map((status) => (
-                        <button
-                            key={status}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdate(contact._id, status);
-                                onToggle(null);
-                            }}
-                            className={`w-full text-left px-4 py-2 text-xs transition-colors hover:bg-gray-50 ${contact.stageStatus === status
-                                    ? "bg-blue-50 text-blue-700 font-bold"
-                                    : "text-gray-700"
-                                }`}
-                        >
-                            {status}
-                        </button>
+                <div className="absolute left-0 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+                    {allLifecycleStages.map((stage) => (
+                        <div key={stage}>
+                            <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+                                {stage}
+                            </div>
+                            {lifecycleStageOptions[stage].map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={(e) => handleSelect(e, status)}
+                                    className={`w-full text-left px-4 py-2 text-xs transition-colors hover:bg-gray-50 flex items-center justify-between ${currentStatus === status
+                                        ? "bg-blue-50 text-blue-700 font-bold"
+                                        : "text-gray-700"
+                                        }`}
+                                >
+                                    <span>{status}</span>
+                                    {currentStatus === status && <Check className="w-3.5 h-3.5" />}
+                                </button>
+                            ))}
+                        </div>
                     ))}
                 </div>
             )}

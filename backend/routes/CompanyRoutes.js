@@ -74,6 +74,15 @@ router.post(
   companyController.toggleStarCompany,
 );
 
+// PATCH /api/companies/:id/owner (assign/clear the company's owning contact)
+router.patch(
+  "/:id/owner",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("Companies", "read-write"),
+  companyController.setCompanyOwner,
+);
+
 // DELETE /api/companies/:id
 // skipLimit: true — an org already at/over its limit must still be able to
 // delete back under it; the un-flagged limit check treats delete the same
@@ -95,6 +104,48 @@ router.delete('/:id/remove-subsidiary/:subsidiaryId', requireAuth, subscriptionG
 router.get('/:id/subsidiaries', requireAuth, subscriptionGate, companyController.getSubsidiaries);
 router.get("/:id/parent", requireAuth, subscriptionGate, companyController.getParentCompany);
 
+// POST /api/companies/check-duplicates — given a list of names from a CSV
+// about to be imported, reports which ones already exist in this org (exact
+// match, case-insensitive) so the import UI can ask Merge vs. Create
+// Duplicates before actually writing anything.
+router.post(
+  "/check-duplicates",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("Companies", "read-write"),
+  async (req, res) => {
+    try {
+      const { names } = req.body;
+      if (!names || !Array.isArray(names) || names.length === 0) {
+        return res.json({ duplicates: [] });
+      }
+
+      const trimmedNames = names.map((n) => String(n || "").trim()).filter(Boolean);
+      const existing = await Company.find({
+        organization: req.user.organization,
+        name: {
+          $in: trimmedNames.map(
+            (n) => new RegExp(`^${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")
+          ),
+        },
+      }).select("_id name");
+
+      const existingByLowerName = new Map(existing.map((c) => [c.name.toLowerCase(), c]));
+      const duplicates = trimmedNames
+        .filter((n) => existingByLowerName.has(n.toLowerCase()))
+        .map((n) => {
+          const match = existingByLowerName.get(n.toLowerCase());
+          return { name: n, existingId: match._id, existingName: match.name };
+        });
+
+      res.json({ duplicates });
+    } catch (error) {
+      console.error("Check duplicates error:", error);
+      res.status(500).json({ message: "Failed to check duplicates: " + error.message });
+    }
+  }
+);
+
 // POST /api/companies/bulk-import
 router.post(
   "/bulk-import",
@@ -104,7 +155,7 @@ router.post(
   checkPermission("Companies", "read-write"),
   async (req, res) => {
     try {
-      const { companies, template } = req.body;
+      const { companies, template, duplicateAction } = req.body;
 
       if (!companies || !Array.isArray(companies) || companies.length === 0) {
         return res.status(400).json({ message: "No companies data provided" });
@@ -172,16 +223,64 @@ router.post(
       console.log(`Found ${validCompanies.length} valid companies to import`);
 
       try {
-        const results = await Company.insertMany(validCompanies, {
-          ordered: false,
-          rawResult: false,
-        });
+        let mergedCount = 0;
+        let toInsert = validCompanies;
 
-        console.log(`Successfully imported ${results.length} companies`);
+        if (duplicateAction === "merge") {
+          // Resolve every row's name against an existing company in one query
+          // instead of one findOne per row.
+          const existingCompanies = await Company.find({
+            organization: req.user.organization,
+            name: {
+              $in: validCompanies.map(
+                (c) => new RegExp(`^${c.name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")
+              ),
+            },
+          });
+          const existingByLowerName = new Map(
+            existingCompanies.map((c) => [c.name.toLowerCase(), c])
+          );
+
+          toInsert = [];
+          for (const incoming of validCompanies) {
+            const existing = existingByLowerName.get(incoming.name.trim().toLowerCase());
+            if (!existing) {
+              toInsert.push(incoming);
+              continue;
+            }
+
+            // Fill blanks only — never overwrite a value the existing record
+            // already has, per the user's chosen merge behavior.
+            const updates = {};
+            for (const [key, value] of Object.entries(incoming)) {
+              if (["name", "organization", "user"].includes(key)) continue;
+              const isEmptyOnExisting =
+                existing[key] === undefined || existing[key] === null || existing[key] === "";
+              if (isEmptyOnExisting && value !== undefined && value !== null && value !== "") {
+                updates[key] = value;
+              }
+            }
+            if (Object.keys(updates).length > 0) {
+              await Company.findByIdAndUpdate(existing._id, { $set: updates });
+            }
+            mergedCount++;
+          }
+        }
+
+        const results =
+          toInsert.length > 0
+            ? await Company.insertMany(toInsert, { ordered: false, rawResult: false })
+            : [];
+
+        console.log(`Successfully imported ${results.length} companies, merged ${mergedCount}`);
 
         const response = {
-          message: `Successfully imported ${results.length} companies`,
+          message:
+            mergedCount > 0
+              ? `Imported ${results.length} new companies, merged ${mergedCount} existing`
+              : `Successfully imported ${results.length} companies`,
           imported: results.length,
+          merged: mergedCount,
           total: companies.length,
           skipped: skippedCompanies.length,
         };

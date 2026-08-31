@@ -34,6 +34,11 @@ async function syncItemMasterPricing(items, organizationId) {
   }
 }
 
+// Mirrors companyController's isOwnedByUser — Purchase only carries a single `user` field.
+const isOwnedByUser = (purchase, userId) => {
+  return purchase.user?.toString() === userId.toString();
+};
+
 // Helper function to calculate item total
 const calculateItemTotal = (quantity, unitPrice) => {
   return parseFloat(quantity) * parseFloat(unitPrice);
@@ -181,6 +186,10 @@ exports.getAllPurchases = async (req, res) => {
     const { search } = req.query;
     let query = { organization: req.user.organization };
 
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
+
     if (search) {
       query.$or = [
         { purchaseNumber: { $regex: search, $options: 'i' } },
@@ -215,6 +224,10 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
 
     // Build query object
     let query = { organization: req.user.organization };
+
+    if (req.ownOnly) {
+      query.user = req.user._id;
+    }
 
     // Search functionality
     if (search) {
@@ -326,6 +339,11 @@ exports.getPurchaseById = async (req, res) => {
       .populate("items.itemId", "name description purchasePrice hsnSac gstRate");
 
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
+    if (req.ownOnly && !isOwnedByUser(purchase, req.user._id)) {
+      return res.status(403).json({ message: "You can only view purchases you own" });
+    }
+
     res.json(purchase);
   } catch (err) {
     console.error("Error fetching purchase:", err);
@@ -344,6 +362,10 @@ exports.updatePurchase = async (req, res) => {
     });
 
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
+    if (req.ownOnly && !isOwnedByUser(purchase, req.user._id)) {
+      return res.status(403).json({ message: "You can only edit purchases you own" });
+    }
 
     // Paid is terminal — same rule as updatePurchaseStatus, applied here too
     // since this endpoint is also how the edit form changes status.
@@ -450,6 +472,37 @@ exports.updatePurchaseStatus = async (req, res) => {
       return res.status(400).json({ message: "A Paid purchase can't be changed to another status." });
     }
 
+    // When a purchase is marked Paid via the status dropdown, record the exact
+    // remaining unpaid balance as a payment entry so the Payment Timeline
+    // reflects the actual cash movement. Method is "Other" because the
+    // status-only UI has no payment-method field — neutral label is more
+    // honest than silently inventing a method. Skipped if already fully paid.
+    if (status === "Paid" && oldPurchase.status !== "Paid") {
+      const alreadyPaid = (oldPurchase.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const totalAmount = Number(oldPurchase.grandTotal || oldPurchase.subtotal) || 0;
+      const remaining = totalAmount - alreadyPaid;
+      if (remaining > 0) {
+        oldPurchase.payments.push({
+          amount: remaining,
+          paymentDate: new Date(),
+          paymentMethod: 'Other',
+          reference: '',
+          notes: 'Auto-recorded when status set to Paid',
+          recordedBy: req.user._id,
+          recordedAt: new Date(),
+        });
+      }
+      oldPurchase.status = status;
+      await oldPurchase.save({ validateModifiedOnly: true });
+
+      const purchase = await Purchase.findById(oldPurchase._id)
+        .populate('vendor', 'name email phone')
+        .populate('purchaseOrder', 'poNumber vendor')
+        .populate('items.itemId', 'name description purchasePrice hsnSac gstRate');
+
+      return res.json(purchase);
+    }
+
     const purchase = await Purchase.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -514,6 +567,10 @@ exports.deletePurchase = async (req, res) => {
 
     if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
+    }
+
+    if (req.ownOnly && !isOwnedByUser(purchase, req.user._id)) {
+      return res.status(403).json({ message: "You can only delete purchases you own" });
     }
 
     if (purchase.stockMovementStatus === 'applied') {

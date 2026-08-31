@@ -11,6 +11,7 @@ const sendPaymentEmail = require("../utils/sendPaymentEmail");
 const sendSMS = require("../utils/sendSMS");
 const sendGridMail = require("../utils/sendGridMail");
 const { syncDocumentStock } = require("../utils/inventorySync");
+const { getOwnedDealIds } = require("../utils/ownedCompanies");
 
 const calculateItemAmount = (item) => {
   const rate = parseFloat(item.rate) || 0;
@@ -379,6 +380,18 @@ const getAllInvoices = async (req, res) => {
       ];
     }
 
+    // own-only: restrict to invoices this user owns, or whose deal belongs
+    // to a company this user owns.
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      const ownFilter = { $or: [{ user: req.user._id }, { deal: { $in: ownedDealIds } }] };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
+    }
+
     const invoices = await Invoice.find(query).populate("deal");
     res.json(invoices);
   } catch (error) {
@@ -526,6 +539,19 @@ const getAllInvoicesPaginated = async (req, res) => {
       query.status = status;
     }
 
+    // own-only: restrict to invoices this user owns, or whose deal belongs
+    // to a company this user owns.
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      const ownFilter = { $or: [{ user: req.user._id }, { deal: { $in: ownedDealIds } }] };
+      if (query.$or) {
+        query.$and = query.$and ? [...query.$and, { $or: query.$or }, ownFilter] : [{ $or: query.$or }, ownFilter];
+        delete query.$or;
+      } else {
+        query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
+      }
+    }
+
     // Build sort object
     const sortObj = {};
     sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -567,6 +593,23 @@ const getAllInvoicesPaginated = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+// A user with own-only permission may only touch invoices they own — shared
+// here since getInvoiceById/updateInvoice/deleteInvoice all need the same check.
+// record.user may be a raw ObjectId or, if a caller populates it, a User
+// subdocument — handle both so a populated lookup doesn't false-negative.
+// Invoice links to a company only indirectly via `deal -> Deal.company`, so
+// an invoice under a deal whose company this user OWNS counts as owned too
+// — mirrors contactController's isOwnedByUser, swapping company/ownedCompanyIds
+// for deal/ownedDealIds (via getOwnedDealIds). `ownedDealIds` is optional.
+const isOwnedByUser = (record, userId, ownedDealIds = []) => {
+  const uid = userId.toString();
+  const recordUserId = record.user?._id ?? record.user;
+  if (recordUserId?.toString() === uid) return true;
+
+  const dealId = (record.deal?._id ?? record.deal)?.toString();
+  return !!dealId && ownedDealIds.some((id) => id.toString() === dealId);
 };
 
 const getMyInvoices = async (req, res) => {
@@ -633,6 +676,15 @@ const deleteInvoice = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
       return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(invoice, req.user._id, ownedDealIds)) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(403).json({ error: "You can only delete invoices you own" });
+      }
     }
 
     if (invoice.stockMovementStatus === 'applied') {
@@ -786,6 +838,15 @@ const updateInvoice = async (req, res) => {
       return res.status(404).json({ error: "Invoice not found" });
     }
 
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(invoice, req.user._id, ownedDealIds)) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(403).json({ error: "You can only edit invoices you own" });
+      }
+    }
+
     const previousItems = invoice.items.map(item => ({
       itemId: item.itemId,
       variantId: item.variantId || undefined,
@@ -867,6 +928,28 @@ const updateStatus = async (req, res) => {
     const oldStatus = invoice.status;
     invoice.status = status;
 
+    // When an invoice is marked Paid via the status dropdown, record the exact
+    // remaining unpaid balance as a payment entry so the Payment Timeline
+    // reflects the actual cash movement. Method is "Other" because the
+    // status-only UI has no payment-method field — using a neutral label is
+    // more honest than silently inventing "UPI".
+    // Skipped when the invoice is already fully paid (remaining ≤ 0).
+    if (status === 'Paid' && oldStatus !== 'Paid') {
+      const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const remaining = (Number(invoice.amount) || 0) - alreadyPaid;
+      if (remaining > 0) {
+        invoice.payments.push({
+          amount: remaining,
+          paymentDate: new Date(),
+          paymentMethod: 'Other',
+          reference: '',
+          notes: 'Auto-recorded when status set to Paid',
+          recordedBy: req.user._id,
+          recordedAt: new Date(),
+        });
+      }
+    }
+
     if (status === 'Cancelled' && invoice.stockMovementStatus === 'applied') {
       await syncDocumentStock({
         organization: req.user.organization,
@@ -909,10 +992,41 @@ const bulkUpdateStatus = async (req, res) => {
     if (!ids || !ids.length || !status) {
       return res.status(400).json({ error: "ids and status are required" });
     }
-    await Invoice.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { status }
-    );
+
+    // For non-Paid bulk updates, the fast updateMany path is fine.
+    // For Paid, fetch each invoice so we can compute the remaining balance
+    // and push one payment record — same logic as the single updateStatus.
+    if (status === 'Paid') {
+      const invoices = await Invoice.find({
+        _id: { $in: ids },
+        organization: req.user.organization,
+      });
+      const now = new Date();
+      await Promise.all(invoices.map(async (invoice) => {
+        if (invoice.status === 'Paid') return; // already paid — skip
+        const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const remaining = (Number(invoice.amount) || 0) - alreadyPaid;
+        invoice.status = 'Paid';
+        if (remaining > 0) {
+          invoice.payments.push({
+            amount: remaining,
+            paymentDate: now,
+            paymentMethod: 'Other',
+            reference: '',
+            notes: 'Auto-recorded when status set to Paid',
+            recordedBy: req.user._id,
+            recordedAt: now,
+          });
+        }
+        await invoice.save({ validateModifiedOnly: true });
+      }));
+    } else {
+      await Invoice.updateMany(
+        { _id: { $in: ids }, organization: req.user.organization },
+        { status }
+      );
+    }
+
     res.json({ message: `Updated ${ids.length} invoices to status: ${status}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1212,6 +1326,12 @@ const getInvoiceById = async (req, res) => {
       .populate("deal", "title")
       .populate("payments.recordedBy", "name email");
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    if (req.ownOnly) {
+      const ownedDealIds = await getOwnedDealIds(req.user._id, req.user.organization);
+      if (!isOwnedByUser(invoice, req.user._id, ownedDealIds)) {
+        return res.status(403).json({ error: "You can only view invoices you own" });
+      }
+    }
     res.json(invoice);
   } catch (error) {
     res.status(500).json({ error: `Failed to fetch invoice: ${error.message}` });

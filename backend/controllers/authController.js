@@ -6,7 +6,6 @@ const Subscription = require("../models/Subscription");
 const PlanConfig = require("../models/PlanConfig");
 const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 const KanbanBoard = require("../models/KanbanBoard");
-const BankDetails = require("../models/BankDetails");
 const generateUniqueCode = require("../utils/generateUniqueCode");
 const { logUserAction } = require("../utils/logger");
 const razorpay = require("../config/razorpay");
@@ -23,6 +22,55 @@ const PlanAddon = require("../models/PlanAddon");
 const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
 const sessionService = require("../services/sessionService");
 const { setSessionCookie } = require("../utils/sessionCookie");
+const Notification = require("../models/Notification");
+
+// Emails + writes an in-app Notification when a new staff member joins an
+// organization (via invite or company code). Best-effort — callers must
+// swallow rejections so this never blocks registration itself.
+async function notifyAdminsOfNewStaff({ organization, staffUser }) {
+  const [org, admins] = await Promise.all([
+    Organization.findById(organization).select("name"),
+    User.find({ organization, role: "admin" }).select("email name"),
+  ]);
+  if (!org) return;
+
+  const staffName = staffUser.name || staffUser.email || staffUser.phone || "A new staff member";
+
+  // In-app: one org-wide feed entry, same pattern the rest of the app's
+  // notification bell already reads from.
+  await Notification.create({
+    organization,
+    actorName: staffName,
+    action: "created",
+    entityType: "User",
+    entityId: staffUser._id,
+    entityLabel: staffName,
+    message: `"${staffName}" has joined your organization`,
+  });
+
+  const adminEmails = admins.map((a) => a.email).filter(Boolean);
+  if (adminEmails.length === 0) return;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+      <h2 style="color: #111827;">New team member joined ${org.name}</h2>
+      <p style="color: #374151; font-size: 15px;">
+        <strong>${staffName}</strong> just joined your organization on DataCircles CRM
+        as a staff member.
+      </p>
+      <p style="color: #6b7280; font-size: 13px;">
+        You can review or update their permissions anytime from Settings &rarr; User Management.
+      </p>
+    </div>
+  `;
+
+  await sendGridMail({
+    to: adminEmails,
+    subject: `${staffName} has joined ${org.name}`,
+    html,
+  });
+}
+module.exports.notifyAdminsOfNewStaff = notifyAdminsOfNewStaff;
 
 // TempOTP Model Definition
 const TempOTP = mongoose.model(
@@ -1291,22 +1339,19 @@ exports.completeRegistration = async (req, res) => {
 
     await user.save();
 
-    await BankDetails.create({
-      contact: {
-        email: "contact@organization.com",
-        phone: "9999999999",
-      },
-      bank: "HDFC Bank",
-      accountHolder: "Organization Pvt Ltd",
-      accountNumber: "1234567890",
-      ifscCode: "HDFC0001234",
-      branch: "Mumbai",
-      isDefault: true,
-      organization: organization,
-      user: user._id, // null for org default
-    });
-
     // Note: new organizations start empty — no sample/demo data is seeded.
+    // (Previously auto-created a placeholder "HDFC Bank / Organization Pvt
+    // Ltd / 1234567890" BankDetails record here, contradicting this very
+    // comment — every org got an identical dummy account, which looked like
+    // leaked cross-org data since the fields were indistinguishable.)
+
+    // Notify the org's admins (email + in-app) that a new staff member has
+    // joined — best-effort, never blocks registration itself.
+    if (role !== "admin") {
+      notifyAdminsOfNewStaff({ organization, staffUser: user }).catch((err) =>
+        console.error("Failed to notify admins of new staff:", err.message)
+      );
+    }
 
     console.log(
       `User registered successfully - Method: ${joinMethod}, Email: ${email || phone
@@ -1711,5 +1756,32 @@ exports.googleDisconnect = async (req, res) => {
   } catch (error) {
     console.error("Error disconnecting Google integration:", error);
     res.status(500).json({ error: "Failed to disconnect Google account" });
+  }
+};
+
+// GET /api/auth/intercom-jwt — Intercom Messenger JWT security. Signed
+// server-side with INTERCOM_SECRET_KEY (the Messenger API Secret from
+// Intercom Settings > Messenger > Security) so a client can never forge a
+// token to impersonate another user in chat. Short-lived (1h) since the
+// frontend re-fetches it on every boot.
+exports.getIntercomJwt = async (req, res) => {
+  try {
+    const secretKey = process.env.INTERCOM_SECRET_KEY;
+    if (!secretKey) {
+      return res.status(503).json({ error: "Intercom is not configured" });
+    }
+    const identity = req.superAdmin || req.user;
+    const token = jwt.sign(
+      {
+        user_id: identity._id.toString(),
+        email: identity.email,
+      },
+      secretKey,
+      { expiresIn: "1h" },
+    );
+    res.status(200).json({ token });
+  } catch (error) {
+    console.error("Error generating Intercom JWT:", error);
+    res.status(500).json({ error: "Failed to generate Intercom JWT" });
   }
 };

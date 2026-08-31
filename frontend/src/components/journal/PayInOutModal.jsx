@@ -132,6 +132,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
   const [notifySMS, setNotifySMS] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerEmailError, setCustomerEmailError] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [signatures, setSignatures] = useState([]);
   const [selectedSignature, setSelectedSignature] = useState("");
@@ -174,22 +175,42 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
     setNotifySMS(false);
     setNotifyEmail(false);
     setCustomerEmail("");
+    setCustomerEmailError("");
     setCustomerPhone("");
     setSelectedSignature("");
 
+    fetchSignatures();
+  }, [isOpen, type, journal?._id]);
+
+  const fetchSignatures = () => {
     API.get("/document-settings/signatures").then((res) => {
       const sigs = Array.isArray(res.data) ? res.data : (res.data?.signatures || []);
       const mapped = sigs.map((s) => ({
         label: s.name || "Signature",
-        value: s.id || s._id || s.name,
+        // Always coerce to string so the <select> value comparison works.
+        value: (s.id && s.id.toString().trim()) || (s._id && s._id.toString()) || s.name,
         url: s.dataUrl || "",
         isDefault: !!s.isDefault,
       }));
       setSignatures(mapped);
-      const defaultSig = mapped.find((s) => s.isDefault);
-      if (defaultSig) setSelectedSignature(defaultSig.value);
+      
+      // We don't have selectedSignature in scope for the default check here easily if we
+      // use the state asynchronously, so we only set default if it's empty.
+      setForm(curr => curr); // Just triggering a safe state update callback to keep block clean
+      
+      // If we don't have a signature selected yet and there are signatures
+      if (mapped.length > 0) {
+         // Using the setState callback form ensures we have the latest value of selectedSignature
+         setSelectedSignature(currentSig => {
+             if (!currentSig) {
+                 const defaultSig = mapped.find((s) => s.isDefault) || mapped[0];
+                 return defaultSig ? defaultSig.value : "";
+             }
+             return currentSig;
+         });
+      }
     }).catch(() => setSignatures([]));
-  }, [isOpen, type, journal?._id]);
+  };
 
   const handleClose = () => {
     setIsSliding(false);
@@ -216,6 +237,12 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
       toast.error("Please enter a valid amount greater than 0");
       return;
     }
+
+    if (notifyEmail && customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      setCustomerEmailError("Invalid email format");
+      return;
+    }
+    setCustomerEmailError("");
 
     setLoading(true);
     try {
@@ -281,7 +308,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
 
         {/* Scrollable body */}
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <form id="payinout-form" onSubmit={handleSubmit}>
+          <form id="payinout-form" onSubmit={handleSubmit} noValidate>
             {/* Current -> projected balance, so the effect is visible before saving */}
             <div className="mx-6 mt-4 mb-1 flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 border border-[#1F2937]/10">
               <span className="text-[11px] text-gray-500">Journal balance</span>
@@ -500,10 +527,16 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                       <input
                         type="email"
                         value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        onChange={(e) => {
+                          setCustomerEmail(e.target.value);
+                          if (customerEmailError) setCustomerEmailError("");
+                        }}
                         placeholder="Customer email address"
-                        className={fieldClass}
+                        className={`${fieldClass} ${customerEmailError ? "border-red-500" : ""}`}
                       />
+                      {customerEmailError && (
+                        <p className="mt-1 text-xs text-red-600">{customerEmailError}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -526,6 +559,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                   <select
                     value={selectedSignature}
                     onChange={(e) => setSelectedSignature(e.target.value)}
+                    onFocus={fetchSignatures}
                     className={`${fieldClass} appearance-none bg-white cursor-pointer`}
                   >
                     <option value="">No Signature</option>

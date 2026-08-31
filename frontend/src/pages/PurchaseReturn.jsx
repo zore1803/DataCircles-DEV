@@ -1082,7 +1082,7 @@ const PurchaseReturn = () => {
     const endItem = Math.min(currentPage * limit, totalCount);
 
     return (
-      <div className="flex items-center justify-between w-full px-4 lg:px-6">
+      <div className="flex items-center justify-between w-full px-4 sm:px-6 lg:px-8">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -1715,7 +1715,7 @@ const PurchaseReturn = () => {
 
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
         >
           {showBulkStrip ? (
@@ -1843,7 +1843,7 @@ const PurchaseReturn = () => {
                       }`}
                       title="Filters"
                     >
-                      <FilterIcon size={15} className={activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"} />
+                      <FilterIcon size={16} className={activeFilters.length > 0 ? "text-[#0085FF]" : ""} />
                       {activeFilters.length > 0 && (
                         <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                           {activeFilters.length}
@@ -1865,7 +1865,7 @@ const PurchaseReturn = () => {
                             onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
                             className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <FilterIcon size={14} className="text-gray-400" />
+                            <FilterIcon size={16} />
                             Filters
                             {activeFilters.length > 0 && (
                               <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
@@ -1935,7 +1935,7 @@ const PurchaseReturn = () => {
         <div
           ref={tableScrollRef}
           className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
-          style={{ position: "fixed", left: "var(--sidebar-width, 0px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
+          style={{ position: "fixed", left: "var(--sidebar-width, 0px)", paddingLeft: "var(--content-inset, 16px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
         >
           <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || purchaseReturns.length > 0 ? "border-b" : ""}`}>
             <table
@@ -2060,16 +2060,15 @@ const PurchaseReturn = () => {
                                     width: cell.column.getSize(),
                                     height: "37px",
                                     maxHeight: "37px",
-                                    overflow: "hidden",
                                     boxSizing: "border-box",
                                     position: isSticky ? "sticky" : "static",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                                     right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                                     zIndex: isSticky ? 10 : 1,
                                   }}
-                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0 overflow-hidden"
+                                  className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                 >
-                                  <div style={{ opacity: isColDragging ? 0.35 : 1 }}>
+                                  <div style={{ opacity: isColDragging ? 0.35 : 1, overflow: "hidden" }}>
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                   </div>
                                   {cellBoundaryShadowSide && <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />}

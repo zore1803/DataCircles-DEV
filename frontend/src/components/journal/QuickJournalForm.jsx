@@ -25,7 +25,9 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
     notes: "",
   });
   const [attachments, setAttachments] = useState([]);
+  const [nameError, setNameError] = useState(false);
   const fileInputRef = useRef(null);
+  const nameInputRef = useRef(null);
 
   useEffect(() => {
     setTimeout(() => setIsOpen(true), 10);
@@ -44,6 +46,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
 
   const handleFormChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "name" && nameError) setNameError(false);
   };
 
   const handleClose = () => {
@@ -75,8 +78,11 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error("Journal name is required");
+
+    const nameInvalid = !form.name.trim();
+    setNameError(nameInvalid);
+    if (nameInvalid) {
+      nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setLoading(true);
@@ -127,7 +133,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
           ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
-        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the QuickCompanyForm header spec */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-base font-normal leading-5 text-[#78788D] uppercase tracking-wide">
@@ -147,16 +153,22 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
-              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Journal Name
+              <label className="flex items-center gap-0.5 text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Journal Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
+                ref={nameInputRef}
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                className={`w-full border rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
+                  nameError ? "border-red-500" : "border-[#1F2937]/10"
+                }`}
                 placeholder="e.g. Petty Cash Journal"
               />
+              {nameError && (
+                <p className="mt-1 text-xs text-red-600">Journal name is required</p>
+              )}
             </div>
 
             <div>

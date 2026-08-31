@@ -1,5 +1,11 @@
 // models/Contact.js
 const mongoose = require("mongoose");
+const {
+  LIFECYCLE_STAGES,
+  STAGE_STATUSES,
+  isValidCombination,
+  invalidCombinationMessage,
+} = require("../constants/contactLifecycle");
 
 const additionalFieldSchema = new mongoose.Schema({
   key: { type: String, required: true },
@@ -42,24 +48,17 @@ const contactSchema = new mongoose.Schema(
     company: { type: mongoose.Schema.Types.ObjectId, ref: "Company" },
 
     // Replace 'tag' with lifecycle stage system
+    // Enums come from constants/contactLifecycle.js — the one authoritative
+    // definition of the lifecycle. Never restate the lists here.
     lifecycleStage: {
       type: String,
-      enum: ["Lead", "Sales Qualified Lead", "Customer"],
+      enum: LIFECYCLE_STAGES,
       default: "Lead",
       required: true,
     },
     stageStatus: {
       type: String,
-      enum: [
-        "New",
-        "Contacted",
-        "Interested",
-        "Unqualified",
-        "Qualified",
-        "Lost",
-        "Won",
-        "Churned",
-      ],
+      enum: STAGE_STATUSES,
       required: true,
       default: "New",
     },
@@ -88,20 +87,14 @@ const contactSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Validation to ensure stageStatus is valid for the lifecycleStage
+// The enums above only check each field in isolation — this checks the PAIR,
+// which is what actually matters ("Won" is a legal stageStatus but not a legal
+// one for a Lead). Note this hook fires on .save() only, never on
+// findOneAndUpdate — the update path is guarded separately in
+// services/contactService.js, which is where the API's writes actually go.
 contactSchema.pre("save", function (next) {
-  const stageStatusMap = {
-    Lead: ["New", "Contacted", "Interested", "Unqualified"],
-    "Sales Qualified Lead": ["Qualified", "Lost"],
-    Customer: ["Won", "Churned"],
-  };
-
-  if (!stageStatusMap[this.lifecycleStage].includes(this.stageStatus)) {
-    return next(
-      new Error(
-        `Invalid stageStatus '${this.stageStatus}' for lifecycleStage '${this.lifecycleStage}'`,
-      ),
-    );
+  if (!isValidCombination(this.lifecycleStage, this.stageStatus)) {
+    return next(new Error(invalidCombinationMessage(this.lifecycleStage, this.stageStatus)));
   }
   next();
 });

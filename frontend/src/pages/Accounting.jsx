@@ -9,7 +9,6 @@ import React, {
 import {
   MoreVertical,
   Plus,
-  SlidersHorizontal,
   FileText,
   ChevronUp,
   ChevronDown,
@@ -52,6 +51,7 @@ import {
   ListOrdered,
   List as ListIcon,
   Link as LinkIcon,
+  Video,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { PDFDocument } from "pdf-lib";
@@ -88,13 +88,13 @@ import BulkSignatureModal from "../components/common/BulkSignatureModal";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import { getAncestorZoom } from "../utils/domUtils";
 import { exportToCSV } from "../utils/exportToCSV";
-import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
+import FilterIcon from "../components/common/FilterIcon";
 /* Drops the organization's saved boilerplate (Settings → document defaults)
    into a notes/terms box, so the same footer text doesn't have to be retyped
    on every document. Disabled — with the reason in the tooltip — when there's
@@ -1944,14 +1944,12 @@ const Accounting = () => {
   const pagination = paginations[activeTab];
 
   // One flag drives every skeleton on the page, so the header, the table body
-  // and the pagination strip all appear and resolve together. useMinDelay holds
-  // it for 300ms so a fast fetch doesn't flash the placeholders.
-  const showLoadingSkeleton = useMinDelay(
+  // and the pagination strip all appear and resolve together. Tracks the fetch
+  // exactly - no minimum hold, so the skeleton clears the moment data lands.
+  const showLoadingSkeleton =
     currentLoading &&
     currentDocuments.length === 0 &&
-    !hasLoadedOnceRef.current[activeTab],
-    300
-  );
+    !hasLoadedOnceRef.current[activeTab];
   useTopLoadingSignal(currentLoading);
 
   // Same compact "first ... current ... last" pattern as Companies.jsx —
@@ -2324,7 +2322,7 @@ const Accounting = () => {
             mirroring the Companies page layout and slide animation. */}
         {showBulkStrip && (
           <div
-            className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+            className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
@@ -2516,7 +2514,7 @@ const Accounting = () => {
         )}
         {/* 2nd Header - Tab Bar & Actions Row */}
         <div
-          className="fixed right-0 h-16 px-4 lg:px-[24px] border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
           {/* Mobile-only page title — fills the same left slot the tab pill
@@ -2526,11 +2524,14 @@ const Accounting = () => {
               Collapses away when the mobile search is expanded, same as
               Companies.jsx's title, so the search field gets the freed
               width instead of staying pinned to a small fixed size. */}
-          <h1
-            className={`lg:hidden text-base font-bold text-[#0E121B] overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-auto opacity-100 flex-shrink-0"}`}
+          <div
+            className={`lg:hidden flex items-center gap-2 overflow-hidden transition-all duration-300 ease-in-out ${isSearchExpanded ? "w-0 opacity-0" : "w-auto opacity-100 flex-shrink-0"}`}
           >
-            Accountings
-          </h1>
+            <h1 className="m-0 text-base font-bold text-[#0E121B] whitespace-nowrap">
+              Accountings
+            </h1>
+            <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          </div>
 
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
@@ -2629,13 +2630,7 @@ const Accounting = () => {
                     : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
                     }`}
                 >
-                  <SlidersHorizontal
-                    strokeWidth={2.5}
-                    className={`w-4 h-4 ${filterStatuses[activeTab]
-                        ? "text-[#0085FF]"
-                        : "text-gray-800"
-                      }`}
-                  />
+                  <FilterIcon size={16} className={filterStatuses[activeTab] ? "text-[#0085FF]" : ""} />
                 </button>
                 {showFilterMenu && (
                   <div
@@ -2785,7 +2780,7 @@ const Accounting = () => {
             above the pagination bar. */}
         <div
           className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[118px] lg:top-[128px]"
-          style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
+          style={{ left: "var(--sidebar-width, 0px)", bottom: 64, paddingLeft: "var(--content-inset, 16px)" }}
         >
           <table
             className="border-separate border-spacing-0 text-left"
@@ -2925,16 +2920,18 @@ const Accounting = () => {
                           width: colWidths[col.id],
                           ...stickyStyleFor(col.id),
                         }}
-                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
                       >
-                        {isLastCol ? (
-                          <div className="flex items-center justify-between gap-2 w-full">
-                            {renderCell(col.id, doc)}
-                            {renderRowActions(doc)}
-                          </div>
-                        ) : (
-                          renderCell(col.id, doc)
-                        )}
+                        <div style={{ overflow: "hidden" }}>
+                          {isLastCol ? (
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              {renderCell(col.id, doc)}
+                              {renderRowActions(doc)}
+                            </div>
+                          ) : (
+                            renderCell(col.id, doc)
+                          )}
+                        </div>
                         {boundaryShadowSideFor(col.id) && (
                           <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
                         )}
@@ -3142,7 +3139,7 @@ const Accounting = () => {
             (same treatment as Companies.jsx). */}
         {!showForm && !showCreatePanel && (
           <div
-            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 lg:px-6 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
+            className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center justify-between px-4 sm:px-6 lg:px-8 ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
             style={{
               left: "var(--sidebar-width, 0px)",
               height: 64,

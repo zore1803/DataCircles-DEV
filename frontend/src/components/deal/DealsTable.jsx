@@ -969,7 +969,7 @@ export default function DealsTable({
                         right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                         zIndex: isSticky ? 20 : 1,
                       }}
-                      className={`px-4 py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                      className={`${colId === "selection" ? "px-0" : "px-4"} py-3 text-sm font-bold text-[#525866] border-r border-[#E1E4EA] transition-colors bg-[#F5F7FA] ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                     >
                       {/* Opacity on this wrapper, not the <th>, so dragging never
                           dims the pinned border or its boundary shadow. */}
@@ -1067,19 +1067,20 @@ export default function DealsTable({
                             maxWidth: cell.column.getSize(),
                             height: "37px",
                             maxHeight: "37px",
-                            overflow: "hidden",
                             boxSizing: "border-box",
                             position: isSticky ? "sticky" : "static",
                             left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",
                             right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className={`px-3 py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] overflow-hidden ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
+                          className={`${colId === "selection" ? "px-0" : "px-3"} py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
                         >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
+                          <div style={{ overflow: "hidden" }}>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </div>
                           {cellBoundaryShadowSide && (
                             <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />
                           )}

@@ -1,17 +1,24 @@
 import Skeleton from "./Skeleton";
 
 /**
- * Matches the 72px-tall icon+label+number stat tile used across the Deals
- * kanban KPI strip and company profile stat rows, so loading and loaded
- * states occupy identical space.
+ * Loading counterpart to StatTile. Deliberately mirrors that component's
+ * shell class-for-class - same 56px height, padding, gap, background and
+ * border - and puts placeholders exactly where the icon, label, value and
+ * trailing subtitle sit, so the row doesn't shift or resize when data lands.
  */
-export default function StatTileSkeleton() {
+export default function StatTileSkeleton({ subtitle = false }) {
   return (
-    <div className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl">
-      <Skeleton shape="rect" width={40} height={40} className="rounded-lg flex-shrink-0" />
-      <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-        <Skeleton width="70%" height={10} />
-        <Skeleton width="50%" height={14} />
+    <div className="h-[56px] w-full flex-1 flex items-center gap-2 px-3 bg-gray-50 border border-gray-200 rounded-xl min-w-0">
+      <Skeleton shape="rounded" width={20} height={20} className="flex-shrink-0" />
+      <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
+        {/* Label (11px) over value (14px), matching StatTile's text block. */}
+        <div className="min-w-0 flex flex-col gap-1">
+          <Skeleton width={64} height={9} />
+          <Skeleton width={48} height={12} />
+        </div>
+        {/* Only where the loaded tile actually carries a trailing subtitle
+            (the dashboard trend badges) - most company tiles have none. */}
+        {subtitle && <Skeleton width={40} height={9} className="flex-shrink-0" />}
       </div>
     </div>
   );

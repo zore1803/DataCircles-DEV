@@ -7,6 +7,8 @@ import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
 import Skeleton from "../components/common/Skeleton";
+import StatTile from "../components/common/StatTile";
+import StatTileSkeleton from "../components/common/StatTileSkeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
@@ -125,8 +127,31 @@ const RevenueGeneratedIcon = ({ size = 24, style }) => (
 
 function Dashboard() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeDashboardTab = searchParams.get("tab") || "Overview";
+  const setActiveDashboardTab = (tab) => {
+    setSearchParams(tab === "Overview" ? {} : { tab });
+  };
+  const DASHBOARD_TABS = ["Overview", "CRM", "Invoices"];
+  const DashboardTabSwitcher = () => (
+    <div className="inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full flex-shrink-0">
+      {DASHBOARD_TABS.map((name) => {
+        const isActive = activeDashboardTab === name;
+        return (
+          <button
+            key={name}
+            onClick={() => setActiveDashboardTab(name)}
+            className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
+            }`}
+            style={isActive ? { color: "var(--btn-primary, #0085FF)" } : undefined}
+          >
+            {name}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1058,8 +1083,9 @@ function Dashboard() {
     return { clearedPct, topClient, topClientPct, points, linePath, months: months.map((m) => m.month) };
   }, [invoices, deals, invoiceStats]);
 
-  // Sales Revenue widget — 100 evenly-spaced points across the last 12 months, seeded with a
-  // gentle upward trend and topped up with real invoice totals so the demo chart has a dense curve to scroll through.
+  // Sales Revenue widget — 100 evenly-spaced points across the last 12 months,
+  // built entirely from this org's own invoices (no fabricated baseline/noise —
+  // a org with no invoices yet sees a flat line at 0, not a fake growth curve).
   const monthlySalesRevenueData = useMemo(() => {
     const pointCount = 100;
     const totalDays = 365;
@@ -1067,24 +1093,12 @@ function Dashboard() {
     const startTime = now.getTime() - totalDays * 24 * 60 * 60 * 1000;
     const msPerPoint = (totalDays * 24 * 60 * 60 * 1000) / (pointCount - 1);
 
-    // Deterministic pseudo-random noise per point (stable across re-renders) using a seeded hash.
-    const pseudoRandom = (seed) => {
-      const x = Math.sin(seed * 12.9898) * 43758.5453;
-      return x - Math.floor(x);
-    };
-
-    let trailingRevenue = 400000;
     const points = Array.from({ length: pointCount }, (_, i) => {
       const d = new Date(startTime + i * msPerPoint);
-      const progress = i / (pointCount - 1);
-      const growthBaseline = 400000 + progress * 500000;
-      const wobble = (pseudoRandom(i) - 0.5) * 220000;
-      // Smooth the noise against the previous point so consecutive values don't jump around.
-      trailingRevenue = trailingRevenue * 0.55 + (growthBaseline + wobble) * 0.45;
       return {
         date: d,
         month: d.toLocaleDateString("en-US", { day: "2-digit", month: "short" }),
-        revenue: Math.max(0, Math.round(trailingRevenue / 500) * 500),
+        revenue: 0,
       };
     });
 
@@ -1097,16 +1111,16 @@ function Dashboard() {
       points[idx].revenue += inv.amount || 0;
     });
 
-    // Inverse wave: a pure cosine curve (not derived from the noisy data) that starts
-    // high while revenue is low and eases down as revenue trends up over the year —
-    // a clean sinusoidal shape rather than a mirrored copy of the real line.
-    const revenueMax = Math.max(...points.map((p) => p.revenue));
-    const revenueMin = Math.min(...points.map((p) => p.revenue));
-    const mid = (revenueMax + revenueMin) / 2;
-    const amplitude = (revenueMax - revenueMin) / 2;
+    // Trend line: a real trailing moving average of this org's own revenue
+    // (not a decorative shape) — smooths the day-to-day spikes so the actual
+    // direction of the business is visible alongside the raw daily total.
+    const windowSize = 10;
+    let windowSum = 0;
     points.forEach((p, i) => {
-      const t = i / (pointCount - 1);
-      p.inverseRevenue = mid + amplitude * Math.cos(t * Math.PI);
+      windowSum += p.revenue;
+      if (i >= windowSize) windowSum -= points[i - windowSize].revenue;
+      const count = Math.min(i + 1, windowSize);
+      p.trendRevenue = windowSum / count;
     });
 
     return points;
@@ -1234,7 +1248,7 @@ function Dashboard() {
   // ------------------- Loading UI -------------------
   // if (loading) {
   //   return (
-  //     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 z-50">
+  //     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 z-[10000]">
   //       <img
   //         src={logo}
   //         alt="Loading..."
@@ -1286,7 +1300,7 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
@@ -1298,34 +1312,7 @@ function Dashboard() {
             boxSizing: "border-box",
           }}
         >
-          <div
-            className="flex flex-col items-start flex-shrink-0"
-            style={{ gap: 6, width: 614, height: 39 }}
-          >
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "120%",
-                letterSpacing: "-0.5px",
-                color: "#0E121B",
-              }}
-            >
-              CRM
-            </span>
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "120%",
-                color: "#525866",
-              }}
-            >
-              A consolidated view of your CRM activity
-            </span>
-          </div>
+          <DashboardTabSwitcher />
         </div>
         {/* Spacer to offset the fixed header bar */}
         <div className="h-[72px] lg:h-16" />
@@ -1334,85 +1321,19 @@ function Dashboard() {
             same card shape (icon + label/value + bottom-right trend badge)
             as the Overview tab's KPI row. */}
         <div
-          className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+          className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ marginTop: 24 }}
         >
-          {crmKpis.map(({ icon: Icon, label, value, trend, trendUp }, i) => (
-            <div
+          {crmKpis.map((kpi, i) => (
+            <StatTile
               key={i}
-              className="box-border flex flex-row justify-start items-center relative w-full h-[89px] rounded-2xl shadow-sm lg:shadow-none lg:rounded-xl lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0"
-              style={{
-                padding: 16,
-                background: "#FFFFFF",
-                border: "1px solid #E1E4EA",
+              tile={{
+                ...kpi,
+                subtitle: kpi.trend,
+                subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
               }}
-            >
-              <div className="flex flex-row items-center w-full min-w-0" style={{ gap: 14 }}>
-                {/* Mobile: plain icon, no badge/border */}
-                <div className="flex lg:hidden flex-shrink-0">
-                  <Icon size={20} style={{ color: "#0085FF" }} />
-                </div>
-                {/* Desktop: original icon style */}
-                <div
-                  className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    padding: 8,
-                    background: "rgba(255, 255, 255, 0.1)",
-                    border: "1px solid #E1E4EA",
-                    borderRadius: 6,
-                  }}
-                >
-                  <Icon size={24} style={{ color: "#0085FF" }} />
-                </div>
-                <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: 4 }}>
-                  <span
-                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-xs"
-                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", lineHeight: "120%", color: "#525866" }}
-                  >
-                    {label}
-                  </span>
-                  <span
-                    className="truncate w-full text-base sm:text-lg"
-                    style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                  >
-                    {value}
-                  </span>
-                  {/* Trend, inline under the value on mobile */}
-                  <div className="flex lg:hidden flex-row items-center w-full min-w-0" style={{ gap: 4 }}>
-                    {trendUp ? (
-                      <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                    )}
-                    <span
-                      className="truncate min-w-0 text-[9px]"
-                      style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                    >
-                      {trend}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              {/* Trend, absolute bottom-right on desktop */}
-              <div
-                className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-                style={{ gap: 4, right: 16, bottom: 16 }}
-              >
-                {trendUp ? (
-                  <TrendingUp size={14} style={{ color: "#00C950" }} />
-                ) : (
-                  <TrendingDown size={14} style={{ color: "#E82222" }} />
-                )}
-                <span
-                  className="whitespace-nowrap"
-                  style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                >
-                  {trend}
-                </span>
-              </div>
-            </div>
+            />
           ))}
         </div>
       </div>
@@ -1424,14 +1345,13 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center"
+          className="box-border flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8"
           style={{
             position: "fixed",
             top: 64,
             left: "var(--sidebar-width, 0px)",
             right: 0,
             zIndex: 40,
-            padding: "0px 24px",
             gap: 16,
             height: 64,
             minHeight: 64,
@@ -1441,41 +1361,14 @@ function Dashboard() {
             boxSizing: "border-box",
           }}
         >
-          <div
-            className="flex flex-col items-start flex-shrink-0"
-            style={{ gap: 6, width: 614, height: 39 }}
-          >
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 500,
-                fontSize: 16,
-                lineHeight: "120%",
-                letterSpacing: "-0.5px",
-                color: "#0E121B",
-              }}
-            >
-              Invoices
-            </span>
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "120%",
-                color: "#525866",
-              }}
-            >
-              Visual summary of key lead performance metrics and your data
-            </span>
-          </div>
+          <DashboardTabSwitcher />
         </div>
         {/* Spacer to offset the fixed header bar */}
         <div style={{ height: 64 }} />
 
         {/* KPI Cards */}
         <div
-          className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+          className="flex flex-row items-stretch -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
           style={{ gap: 16, marginTop: 24 }}
         >
           {[
@@ -1483,49 +1376,20 @@ function Dashboard() {
             { icon: RevenueGeneratedIcon, label: "Paid Invoices", value: `₹${Math.round(invoiceStats.accepted).toLocaleString("en-IN")}`, trend: `${invoiceKpiTrends.paid.pct}% this month`, trendUp: invoiceKpiTrends.paid.up },
             { icon: TotalDealsClosedIcon, label: "Pending Invoices", value: `₹${Math.round(invoiceStats.sent).toLocaleString("en-IN")}`, trend: `${invoiceKpiTrends.pending.pct}% this month`, trendUp: invoiceKpiTrends.pending.up },
             { icon: DealValueOvertimeIcon, label: "Due Invoices", value: `₹${Math.round(invoiceStats.due).toLocaleString("en-IN")}`, trend: `${invoiceKpiTrends.due.pct}% this month`, trendUp: invoiceKpiTrends.due.up },
-          ].map(({ icon: Icon, label, value, trend, trendUp }, i) => (
-            <div
-              key={i}
-              className="box-border flex flex-col justify-center items-start relative min-w-0"
-              style={{ padding: 16, height: 72, background: "#FFFFFF", border: "1px solid #E1E4EA", borderRadius: 12, flex: "1 1 0" }}
-            >
-              <div className="flex flex-row items-end w-full" style={{ gap: 14, height: 40 }}>
-                <div
-                  className="box-border flex items-center justify-center flex-shrink-0"
-                  style={{ width: 40, height: 40, padding: 8, background: "rgba(255, 255, 255, 0.1)", border: "1px solid #E1E4EA", borderRadius: 6 }}
-                >
-                  <Icon size={24} style={{ color: "#0085FF" }} />
-                </div>
-                <div className="flex flex-col items-start flex-1 min-w-0" style={{ gap: 4, height: 40 }}>
-                  <span className="whitespace-nowrap" style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}>
-                    {label}
-                  </span>
-                  {loading ? (
-                    <Skeleton width={70} height={18} />
-                  ) : (
-                    <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 18, lineHeight: "120%", color: "#0E121B" }}>
-                      {value}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-row items-center flex-shrink-0 absolute" style={{ gap: 4, right: 16, bottom: 16 }}>
-                {loading ? (
-                  <Skeleton width={60} height={12} />
-                ) : (
-                  <>
-                    {trendUp ? (
-                      <TrendingUp size={14} style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={14} style={{ color: "#E82222" }} />
-                    )}
-                    <span className="whitespace-nowrap" style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}>
-                      {trend}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
+          ].map((kpi, i) => (
+            loading ? (
+              <StatTileSkeleton key={i} subtitle />
+            ) : (
+              <StatTile
+                key={i}
+                tile={{
+                  ...kpi,
+                  subtitle: kpi.trend,
+                  subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                  subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
+                }}
+              />
+            )
           ))}
         </div>
 
@@ -1889,7 +1753,7 @@ function Dashboard() {
               className="box-border flex flex-row justify-center items-center flex-shrink-0"
               style={{ padding: 12, gap: 8, width: 44, height: 44, background: "#FFFFFF", border: "1px solid #E1E4EA", borderRadius: 95 }}
             >
-              <FilterIcon size={20} style={{ color: "#1F2937" }} />
+              <FilterIcon size={16} />
             </button>
 
             <button
@@ -2168,7 +2032,7 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-6 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:px-6 lg:py-0 lg:top-16"
+        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -2180,45 +2044,14 @@ function Dashboard() {
           boxSizing: "border-box",
         }}
       >
-        <div
-          className="flex flex-col items-start flex-shrink-0"
-          style={{ gap: 6, width: 614, height: 39 }}
-        >
-          <span
-            style={{
-              fontFamily: "Inter",
-              fontWeight: 500,
-              fontSize: 16,
-              lineHeight: "120%",
-              letterSpacing: "-0.5px",
-              color: "#0E121B",
-            }}
-          >
-            Overview
-          </span>
-          {loading ? (
-            <Skeleton width={260} height={12} />
-          ) : (
-            <span
-              style={{
-                fontFamily: "Inter",
-                fontWeight: 400,
-                fontSize: 12,
-                lineHeight: "120%",
-                color: "#525866",
-              }}
-            >
-              Visual summary of key lead performance metrics and your data
-            </span>
-          )}
-        </div>
+        <DashboardTabSwitcher />
       </div>
       {/* Spacer to offset the fixed header bar */}
       <div className="h-[72px] lg:h-16" />
 
       {/* KPI Cards */}
       <div
-        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-6"
+        className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-stretch lg:gap-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8"
         style={{ marginTop: 24 }}
       >
         {[
@@ -2226,104 +2059,20 @@ function Dashboard() {
           { icon: RevenueGeneratedIcon, label: "Revenue Generated", value: `₹${Math.round(overviewKpis.revenueGenerated).toLocaleString("en-IN")}`, trend: `${overviewKpis.revenueGeneratedTrend.pct}% this month`, trendUp: overviewKpis.revenueGeneratedTrend.up },
           { icon: TotalDealsClosedIcon, label: "Total Deals Closed", value: `${overviewKpis.dealsClosedCount}`, trend: `${overviewKpis.dealsClosedTrend.pct}% this month`, trendUp: overviewKpis.dealsClosedTrend.up },
           { icon: DealValueOvertimeIcon, label: "Deal Value Overtime", value: `₹${Math.round(overviewKpis.dealValue).toLocaleString("en-IN")}`, trend: `${overviewKpis.dealValueTrend.pct}% this month`, trendUp: overviewKpis.dealValueTrend.up },
-        ].map(({ icon: Icon, label, value, trend, trendUp }, i) => (
-          <div
-            key={i}
-            className="box-border flex flex-row justify-start items-center relative w-full h-[89px] rounded-2xl shadow-sm lg:shadow-none lg:rounded-xl lg:justify-between lg:items-start lg:min-w-[200px] lg:w-[313.5px] lg:h-[72px] lg:flex-1 lg:shrink lg:basis-0"
-            style={{
-              padding: 16,
-              background: "#FFFFFF",
-              border: "1px solid #E1E4EA",
-            }}
-          >
-            <div className="flex flex-row items-center w-full min-w-0" style={{ gap: 14 }}>
-              {loading ? (
-                <Skeleton width={40} height={40} />
-              ) : (
-                <>
-                  {/* Mobile: plain icon, no badge/border */}
-                  <div className="flex lg:hidden flex-shrink-0">
-                    <Icon size={20} style={{ color: "#0085FF" }} />
-                  </div>
-                  {/* Desktop: original icon style */}
-                  <div
-                    className="hidden lg:flex box-border items-center justify-center flex-shrink-0"
-                    style={{
-                      width: 40,
-                      height: 40,
-                      padding: 8,
-                      background: "rgba(255, 255, 255, 0.1)",
-                      border: "1px solid #E1E4EA",
-                      borderRadius: 6,
-                    }}
-                  >
-                    <Icon size={24} style={{ color: "#0085FF" }} />
-                  </div>
-                </>
-              )}
-              <div className="flex flex-col items-start min-w-0 flex-1" style={{ gap: 4 }}>
-                {loading ? (
-                  <Skeleton width={90} height={10} />
-                ) : (
-                  <span
-                    className="truncate w-full text-[10px] sm:text-xs uppercase tracking-wide font-semibold lg:normal-case lg:tracking-normal lg:font-normal lg:text-xs"
-                    style={{ fontFamily: "'Inter Tight', Inter, sans-serif", lineHeight: "120%", color: "#525866" }}
-                  >
-                    {label}
-                  </span>
-                )}
-                {loading ? (
-                  <Skeleton width={70} height={16} />
-                ) : (
-                  <span
-                    className="truncate w-full text-base sm:text-lg"
-                    style={{ fontFamily: "Inter", fontWeight: 600, lineHeight: "120%", color: "#0E121B" }}
-                  >
-                    {value}
-                  </span>
-                )}
-                {/* Trend, inline under the value on mobile (matches Figma mobile card) */}
-                {!loading && (
-                  <div className="flex lg:hidden flex-row items-center w-full min-w-0" style={{ gap: 4 }}>
-                    {trendUp ? (
-                      <TrendingUp size={12} className="flex-shrink-0" style={{ color: "#00C950" }} />
-                    ) : (
-                      <TrendingDown size={12} className="flex-shrink-0" style={{ color: "#E82222" }} />
-                    )}
-                    <span
-                      className="truncate min-w-0 text-[9px]"
-                      style={{ fontFamily: "Inter", fontWeight: 400, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                    >
-                      {trend}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Trend, absolute bottom-right on desktop */}
-            <div
-              className="hidden lg:flex flex-row items-center flex-shrink-0 absolute"
-              style={{ gap: 4, right: 16, bottom: 16 }}
-            >
-              {loading ? (
-                <Skeleton width={60} height={11} />
-              ) : (
-                <>
-                  {trendUp ? (
-                    <TrendingUp size={14} style={{ color: "#00C950" }} />
-                  ) : (
-                    <TrendingDown size={14} style={{ color: "#E82222" }} />
-                  )}
-                  <span
-                    className="whitespace-nowrap"
-                    style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: trendUp ? "#00C950" : "#E82222" }}
-                  >
-                    {trend}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
+        ].map((kpi, i) => (
+          loading ? (
+            <StatTileSkeleton key={i} subtitle />
+          ) : (
+            <StatTile
+              key={i}
+              tile={{
+                ...kpi,
+                subtitle: kpi.trend,
+                subtitleIcon: kpi.trendUp ? TrendingUp : TrendingDown,
+                subtitleColor: kpi.trendUp ? "#00C950" : "#E82222",
+              }}
+            />
+          )
         ))}
       </div>
 
@@ -2450,7 +2199,7 @@ function Dashboard() {
                     />
                     <Line
                       type="natural"
-                      dataKey="inverseRevenue"
+                      dataKey="trendRevenue"
                       stroke="#34C759"
                       strokeWidth={2}
                       strokeDasharray="4 3"

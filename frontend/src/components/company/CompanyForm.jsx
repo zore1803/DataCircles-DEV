@@ -40,6 +40,7 @@ const CompanyForm = ({
     name: false,
     industry: false,
     gstin: false,
+    email: false,
   });
 
   const [error, setErrorState] = useState(null);
@@ -159,7 +160,7 @@ const CompanyForm = ({
 
   const closeForm = () => {
     setIsOpen(false);
-    setErrors({ name: false, industry: false, gstin: false });
+    setErrors({ name: false, industry: false, gstin: false, email: false });
     setTimeout(() => {
       onRequestClose();
     }, 300);
@@ -329,17 +330,20 @@ const CompanyForm = ({
     e.preventDefault();
 
     // Validate required fields
+    const emailValue = (form.email || "").trim();
     const newErrors = {
       name: !form.name || !form.name.trim(),
-      industry: !form.industry || !form.industry.trim()
+      industry: !form.industry || !form.industry.trim(),
+      email: !!emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue),
     };
 
     setErrors(newErrors);
 
-    if (newErrors.name || newErrors.industry) {
+    if (newErrors.name || newErrors.industry || newErrors.email) {
       const errorMessages = [];
       if (newErrors.name) errorMessages.push("Company name is required");
       if (newErrors.industry) errorMessages.push("Industry is required");
+      if (newErrors.email) errorMessages.push("Invalid email format");
       setError(errorMessages.join(", "));
       return;
     }
@@ -549,7 +553,7 @@ const CompanyForm = ({
         `}
       >
         {/* Responsive form container */}
-        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full overflow-hidden">
           {/* Header */}
           <div className="relative flex items-center justify-end px-6 py-[23px] border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="absolute left-1/2 -translate-x-1/2 text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
@@ -692,9 +696,13 @@ const CompanyForm = ({
                 type="email"
                 value={form.email || ""}
                 onChange={(e) => handleFormChange("email", e.target.value)}
-                className="w-full border border-[#E0E0E1] rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0]"
+                className={`w-full border rounded-xl px-4 h-12 text-[14px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#A0A0A0] ${errors.email ? "border-red-500" : "border-[#E0E0E1]"
+                  }`}
                 placeholder="contact@company.com"
               />
+              {errors.email && (
+                <p className="mt-1 text-xs font-sf text-red-600">Invalid email format</p>
+              )}
             </div>
 
             {/* Profile Picture */}

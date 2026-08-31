@@ -878,7 +878,7 @@ export default function EInvoicing() {
 
   // Pagination controls — server-driven, same shape as SalesReturn.jsx's.
   const PaginationControls = () => (
-    <div className="flex items-center justify-between w-full px-4 lg:px-6">
+    <div className="flex items-center justify-between w-full px-4 sm:px-6 lg:px-8">
       <div className="flex items-center space-x-2">
         <div className="text-sm text-gray-700 font-inter">
           Showing{" "}
@@ -998,7 +998,7 @@ export default function EInvoicing() {
 
       {/* ── Fixed header toolbar — edge-to-edge, matches PurchasePage ──*/}
       <div
-        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
+        className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"}`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -1123,7 +1123,7 @@ export default function EInvoicing() {
                   }`}
                   title="Filters"
                 >
-                  <FilterIcon size={15} className={activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"} />
+                  <FilterIcon size={16} className={activeFilters.length > 0 ? "text-[#0085FF]" : ""} />
                   {activeFilters.length > 0 && (
                     <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                       {activeFilters.length}
@@ -1146,7 +1146,7 @@ export default function EInvoicing() {
                         onClick={() => { setShowAdvancedFilters(true); setIsMoreMenuOpen(false); }}
                         className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <FilterIcon size={14} className="text-gray-400" />
+                        <FilterIcon size={16} />
                         Filters
                         {activeFilters.length > 0 && (
                           <span className="ml-auto bg-blue-100 text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
@@ -1241,6 +1241,7 @@ export default function EInvoicing() {
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
+          paddingLeft: "var(--content-inset, 16px)",
           right: 0,
           bottom: !showLoadingSkeleton ? 64 : 0,
         }}

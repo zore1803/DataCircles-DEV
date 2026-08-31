@@ -28,7 +28,6 @@ import {
 import {
   Calendar,
   Download,
-  Filter,
   TrendingUp,
   Users,
   Building,
@@ -70,6 +69,7 @@ import {
 import API from "../services/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import FilterIcon from "../components/common/FilterIcon";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -1938,18 +1938,6 @@ const Insights = () => {
         ? 100
         : 0;
 
-    // Company distribution (top 5)
-    const companyDistribution = filteredData.filteredContacts
-      .filter((c) => c.company?.name)
-      .reduce((acc, contact) => {
-        const company = contact.company.name;
-        acc[company] = (acc[company] || 0) + 1;
-        return acc;
-      }, {});
-
-    const topCompanies = Object.entries(companyDistribution)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
 
     return (
       <div className="space-y-6">
@@ -2334,29 +2322,6 @@ const Insights = () => {
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
-                </div>
-                <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm min-h-[272px]">
-                  <h3 className="text-sm font-semibold text-[#0E121B]">Top Companies</h3>
-                  <p className="text-xs text-[#525866] mt-1">
-                    {totalContacts > 0
-                      ? `${Math.round((contactsWithPhone / totalContacts) * 100)}% have a phone · ${Math.round((contactsWithCompany / totalContacts) * 100)}% linked to a company`
-                      : "By number of contacts"}
-                  </p>
-                  {topCompanies.length === 0 ? (
-                    <p className="text-sm text-gray-400 py-10 text-center">No company data yet</p>
-                  ) : (
-                    <div className="mt-4 flex flex-col gap-2.5">
-                      {topCompanies.map(([company, count], idx) => (
-                        <div key={company} className="flex items-center gap-2.5">
-                          <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
-                          <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{company}</span>
-                          <span className="text-xs font-medium text-[#525866] flex-shrink-0">
-                            {count} contact{count !== 1 ? "s" : ""}
-                          </span>
-                        </div>
-                      ))}
                     </div>
                   )}
                 </div>
@@ -4113,7 +4078,7 @@ const Insights = () => {
       );
     }).length;
 
-    // Company distribution (top 5)
+
     const companyDistribution = filteredData.filteredVendors
       .filter((v) => v.company)
       .reduce((acc, vendor) => {
@@ -6220,23 +6185,34 @@ const Insights = () => {
       .slice(0, 5);
 
     // Chart data for invoice status
+    // One colour per status, from the same palette as Payment Distribution -
+    // every status but Paid/Sent used to fall through to a single grey, which
+    // left five indistinguishable slices in the donut.
+    const invoiceStatusColors = {
+      Paid: "#34C759",
+      Sent: "#0085FF",
+      Accepted: "#9747FF",
+      "Partially Paid": "#FC9C32",
+      Pending: "#FBBF24",
+      Rejected: "#E82222",
+      Overdue: "#EF4444",
+      Draft: "#9CA3AF",
+      Void: "#6B7280",
+    };
+    const invoiceStatusTotal = Object.values(statusDistribution).reduce(
+      (sum, d) => sum + d.count,
+      0
+    );
     const invoiceStatusChartData = Object.entries(statusDistribution)
       .map(([status, data]) => ({
         name: status,
         value: data.count,
         amount: data.amount,
-        color:
-          status === "Paid"
-            ? "#10b981"
-            : status === "Pending"
-            ? "#f59e0b"
-            : status === "Sent"
-            ? "#3b82f6"
-            : status === "Overdue"
-            ? "#ef4444"
-            : "#6b7280",
+        pct: invoiceStatusTotal > 0 ? Math.round((data.count / invoiceStatusTotal) * 100) : 0,
+        color: invoiceStatusColors[status] || "#9CA3AF",
       }))
-      .filter((item) => item.value > 0);
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value);
 
     // Monthly trend (last 6 months)
     const monthlyData = {};
@@ -6474,10 +6450,10 @@ const Insights = () => {
               </div>
               <div className="flex-1 min-h-0 flex flex-col gap-1.5 p-2 bg-[#F8FAFC] rounded-md overflow-hidden">
                 <div className="flex bg-white rounded-md shrink-0">
-                  <span className="flex-1 text-center text-[11px] text-[#1F2937] px-1.5 py-1">
+                  <span className="flex-1 text-left text-[11px] text-[#1F2937] px-1.5 py-1">
                     Invoice ID
                   </span>
-                  <span className="flex-1 text-center text-[11px] text-[#1F2937] px-1.5 py-1">
+                  <span className="flex-1 text-right text-[11px] text-[#1F2937] px-1.5 py-1">
                     Amount
                   </span>
                   <span className="flex-1 text-right text-[11px] text-[#1F2937] px-1.5 py-1">
@@ -6496,10 +6472,10 @@ const Insights = () => {
                           <div className="h-px bg-[#1F2937] opacity-10" />
                         )}
                         <div className="flex items-center">
-                          <span className="flex-1 text-center text-[11px] font-medium text-[#1F2937] px-1.5 py-1.5 truncate whitespace-nowrap">
+                          <span className="flex-1 text-left text-[11px] font-medium text-[#1F2937] px-1.5 py-1.5 truncate whitespace-nowrap">
                             {invoice.invoiceNumber}
                           </span>
-                          <span className="flex-1 text-center text-[11px] font-medium text-black px-1.5 py-1.5 truncate whitespace-nowrap">
+                          <span className="flex-1 text-right text-[11px] font-medium text-black px-1.5 py-1.5 truncate whitespace-nowrap">
                             ₹{formatNumberToIndian(invoice.amount || 0)}
                           </span>
                           <span className="flex-1 text-right text-[11px] font-medium text-[#34C759] px-1.5 py-1.5 truncate whitespace-nowrap">
@@ -6697,58 +6673,70 @@ const Insights = () => {
             {invoiceStatusChartData.length === 0 ? (
               <p className="text-sm text-gray-400 py-16 text-center">No invoices yet</p>
             ) : (
-              <div className="relative mt-2" style={{ width: 160, height: 160, margin: "8px auto 0" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={invoiceStatusChartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      cornerRadius={3}
-                      paddingAngle={invoiceStatusChartData.length > 1 ? 2 : 0}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {invoiceStatusChartData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name, { payload }) => [
-                        `${value} invoice${value !== 1 ? "s" : ""} · ₹${formatNumberToIndian(payload.amount)}`,
-                        payload.name,
-                      ]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-            {invoiceStatusChartData.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-3">
-                {invoiceStatusChartData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
-                    <span className="text-xs text-[#21201F]/70 truncate flex-1 min-w-0">{entry.name}</span>
-                    <span className="text-[11px] text-[#525866] flex-shrink-0">{entry.value}</span>
-                  </div>
-                ))}
+              // Same shape as the Payment Distribution card: donut on the left,
+              // legend with percentages on the right.
+              <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
+                <div className="relative flex-shrink-0" style={{ width: 220, height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={invoiceStatusChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={68}
+                        outerRadius={108}
+                        cornerRadius={3}
+                        paddingAngle={invoiceStatusChartData.length > 1 ? 2 : 0}
+                        dataKey="value"
+                        nameKey="name"
+                        stroke="none"
+                      >
+                        {invoiceStatusChartData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name, { payload }) => [
+                          `${value} invoice${value !== 1 ? "s" : ""} · ₹${formatNumberToIndian(payload.amount)}`,
+                          payload.name,
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  {invoiceStatusChartData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                        style={{ background: entry.color }}
+                      />
+                      <span className="text-xs text-[#21201F]/70 truncate min-w-[90px]">{entry.name}</span>
+                      <span className="text-[11px] text-[#525866] text-right flex-shrink-0 w-8">
+                        {entry.pct}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
           {/* Top Deals by Invoice Amount */}
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm flex flex-col">
             <h3 className="text-sm font-semibold text-[#0E121B]">Top Deals by Invoice Amount</h3>
             {topDeals.length === 0 ? (
               <p className="text-sm text-gray-400 py-10 text-center">No deal-linked invoices yet</p>
             ) : (
-              <div className="mt-4 flex flex-col gap-2.5">
+              // flex-1 on the list and on each row: the rows share whatever
+              // height the donut card sets for this grid row instead of
+              // bunching at the top, and because they end up equal height the
+              // divide-y rules land centred in the gaps. Nothing adds height.
+              <div className="mt-4 flex flex-col flex-1 divide-y divide-[#F1F1F5]">
                 {topDeals.map(([dealTitle, data], idx) => (
-                  <div key={dealTitle} className="flex items-center gap-2.5">
+                  <div key={dealTitle} className="flex flex-1 items-center gap-2.5">
                     <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
                     <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">{dealTitle}</span>
-                    <span className="text-[11px] text-[#525866] flex-shrink-0">{data.paid}/{data.count} paid</span>
+                    <span className="text-[11px] text-[#525866] flex-shrink-0 w-16 text-right">{data.paid}/{data.count} paid</span>
                     <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
                       ₹{formatNumberToIndian(Math.round(data.amount))}
                     </span>
@@ -6758,27 +6746,29 @@ const Insights = () => {
             )}
           </div>
           {/* Largest Invoices */}
-          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm">
+          <div className="bg-white p-5 rounded-xl border border-[#E7E4E3] shadow-sm flex flex-col">
             <h3 className="text-sm font-semibold text-[#0E121B]">Largest Invoices</h3>
             {largestInvoices.length === 0 ? (
               <p className="text-sm text-gray-400 py-10 text-center">No invoices yet</p>
             ) : (
-              <div className="mt-4 flex flex-col gap-2.5">
+              <div className="mt-4 flex flex-col flex-1 divide-y divide-[#F1F1F5]">
                 {largestInvoices.map((inv, idx) => (
-                  <div key={inv._id} className="flex items-center gap-2.5">
+                  <div key={inv._id} className="flex flex-1 items-center gap-2.5">
                     <span className="text-[11px] font-medium text-[#99A0AE] w-4 flex-shrink-0">{idx + 1}</span>
                     <span className="text-xs text-[#0E121B] truncate flex-1 min-w-0">
                       {inv.deal?.title || inv.deal?.company?.name || "Untitled"}
                     </span>
-                    <span
-                      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0"
-                      style={
-                        inv.status === "Paid"
-                          ? { background: "rgba(0,201,80,0.1)", color: "#00A63E" }
-                          : { background: "rgba(0,133,255,0.1)", color: "#0085FF" }
-                      }
-                    >
-                      {inv.status}
+                    <span className="flex-shrink-0 w-16 flex justify-center">
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate"
+                        style={
+                          inv.status === "Paid"
+                            ? { background: "rgba(0,201,80,0.1)", color: "#00A63E" }
+                            : { background: "rgba(0,133,255,0.1)", color: "#0085FF" }
+                        }
+                      >
+                        {inv.status}
+                      </span>
                     </span>
                     <span className="text-xs font-medium text-[#0E121B] flex-shrink-0 w-24 text-right">
                       ₹{formatNumberToIndian(inv.amount || 0)}
@@ -6833,7 +6823,7 @@ const Insights = () => {
           toolbar. Title text lives in the top navbar (Header.jsx) instead;
           this strip is just the spacer bar. */}
       <div
-        className="fixed right-0 h-16 px-4 lg:px-6 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,
@@ -6864,7 +6854,7 @@ const Insights = () => {
             className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
             title="Filters"
           >
-            <Filter className="w-4 h-4" />
+            <FilterIcon size={16} />
             {activeFilterCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                 {activeFilterCount}
@@ -6892,7 +6882,7 @@ const Insights = () => {
               />
               <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[min(90vw,720px)] bg-white p-6 rounded-xl border border-gray-200 shadow-lg">
         <div className="flex items-center gap-3 mb-4">
-          <Filter className="w-5 h-5 text-gray-600" />
+          <FilterIcon size={16} />
           <h3 className="text-base font-bold text-gray-900">Filters</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

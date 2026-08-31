@@ -8,6 +8,7 @@ const uploadMiddlewareS3 = require("../middlewares/uploadMiddlewareS3");
 const restrictByPlan = require("../middlewares/restrictByPlan");
 const Company = require("../models/Company");
 const Contact = require("../models/Contact");
+const normalizePhone = require("../utils/normalizePhone");
 
 const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
@@ -118,6 +119,66 @@ router.get(
 
 router.post("/:primaryId/merge", requireAuth, subscriptionGate, contactController.mergeContacts);
 
+// POST /api/contacts/check-duplicates — given a list of {phone, email} pairs
+// from a CSV about to be imported, reports which ones already exist in this
+// org (matched by phone first — normalized so a country code/leading 0
+// doesn't matter — then by email if no phone match) so the import UI can
+// ask Merge vs. Create Duplicates before writing anything.
+router.post(
+  "/check-duplicates",
+  requireAuth,
+  subscriptionGate,
+  checkPermission("contacts", "read-write"),
+  async (req, res) => {
+    try {
+      const { contacts } = req.body;
+      if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
+        return res.json({ duplicates: [] });
+      }
+
+      const existing = await Contact.find({ organization: req.user.organization }).select(
+        "_id name phone email"
+      );
+      const byPhone = new Map();
+      const byEmail = new Map();
+      for (const c of existing) {
+        const p = normalizePhone(c.phone);
+        if (p && !byPhone.has(p)) byPhone.set(p, c);
+        const e = (c.email || "").trim().toLowerCase();
+        if (e && !byEmail.has(e)) byEmail.set(e, c);
+      }
+
+      const duplicates = [];
+      contacts.forEach((row, index) => {
+        const p = normalizePhone(row.phone);
+        const e = (row.email || "").trim().toLowerCase();
+        let match = null;
+        let matchedBy = null;
+        if (p && byPhone.has(p)) {
+          match = byPhone.get(p);
+          matchedBy = "phone";
+        } else if (e && byEmail.has(e)) {
+          match = byEmail.get(e);
+          matchedBy = "email";
+        }
+        if (match) {
+          duplicates.push({
+            index,
+            matchedBy,
+            existingId: match._id,
+            existingName: match.name,
+          });
+        }
+      });
+
+      res.json({ duplicates });
+    } catch (error) {
+      console.error("Check duplicates error:", error);
+      res.status(500).json({ message: "Failed to check duplicates: " + error.message });
+    }
+  }
+);
+
 // POST /api/contacts/bulk-import (Bulk import - requires write permission)
 router.post(
   "/bulk-import",
@@ -127,7 +188,7 @@ router.post(
   checkPermission("contacts", "read-write"),
   async (req, res) => {
     try {
-      const { contacts } = req.body;
+      const { contacts, duplicateAction } = req.body;
 
       if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
         return res.status(400).json({ message: "No contacts data provided" });
@@ -191,17 +252,67 @@ router.post(
       console.log(`Found ${validContacts.length} valid contacts to import`);
 
       try {
-        // Use insertMany for bulk insertion
-        const results = await Contact.insertMany(validContacts, {
-          ordered: false,
-          rawResult: false,
-        });
+        let mergedCount = 0;
+        let toInsert = validContacts;
 
-        console.log(`Successfully imported ${results.length} contacts`);
+        if (duplicateAction === "merge") {
+          const existing = await Contact.find({ organization: req.user.organization }).select(
+            "_id name phone email"
+          );
+          const byPhone = new Map();
+          const byEmail = new Map();
+          for (const c of existing) {
+            const p = normalizePhone(c.phone);
+            if (p && !byPhone.has(p)) byPhone.set(p, c);
+            const e = (c.email || "").trim().toLowerCase();
+            if (e && !byEmail.has(e)) byEmail.set(e, c);
+          }
+
+          toInsert = [];
+          for (const incoming of validContacts) {
+            const p = normalizePhone(incoming.phone);
+            const e = (incoming.email || "").trim().toLowerCase();
+            const match = (p && byPhone.get(p)) || (e && byEmail.get(e)) || null;
+
+            if (!match) {
+              toInsert.push(incoming);
+              continue;
+            }
+
+            // Fill blanks only — never overwrite a value the existing
+            // record already has, per the chosen merge behavior.
+            const existingDoc = await Contact.findById(match._id);
+            const updates = {};
+            for (const [key, value] of Object.entries(incoming)) {
+              if (["name", "organization", "user"].includes(key)) continue;
+              const isEmptyOnExisting =
+                existingDoc[key] === undefined || existingDoc[key] === null || existingDoc[key] === "";
+              if (isEmptyOnExisting && value !== undefined && value !== null && value !== "") {
+                updates[key] = value;
+              }
+            }
+            if (Object.keys(updates).length > 0) {
+              await Contact.findByIdAndUpdate(match._id, { $set: updates });
+            }
+            mergedCount++;
+          }
+        }
+
+        // Use insertMany for bulk insertion
+        const results =
+          toInsert.length > 0
+            ? await Contact.insertMany(toInsert, { ordered: false, rawResult: false })
+            : [];
+
+        console.log(`Successfully imported ${results.length} contacts, merged ${mergedCount}`);
 
         const response = {
-          message: `Successfully imported ${results.length} contacts`,
+          message:
+            mergedCount > 0
+              ? `Imported ${results.length} new contacts, merged ${mergedCount} existing`
+              : `Successfully imported ${results.length} contacts`,
           imported: results.length,
+          merged: mergedCount,
           total: contacts.length,
           skipped: skippedContacts.length,
         };

@@ -44,7 +44,6 @@ import AppToaster from "../components/AppToaster";
 import HighlightText from "../components/common/HighlightText";
 import TablePaginationFooter from "../components/common/TablePaginationFooter";
 import { getAncestorZoom } from "../utils/domUtils";
-import useMinDelay from "../hooks/useMinDelay";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
@@ -1172,9 +1171,9 @@ function Vendors() {
 
   // One flag drives every skeleton on the page — header, table body, and
   // pagination all appear and resolve together, same as Companies.jsx.
-  // useMinDelay holds it for 300ms so a fast fetch doesn't flash the
-  // placeholders.
-  const showLoadingSkeleton = useMinDelay(loading && vendors.length === 0, 300);
+  // Tracks the fetch exactly - no minimum hold, so the skeleton clears the
+  // moment data lands.
+  const showLoadingSkeleton = loading && vendors.length === 0;
   // `loading` toggles around every fetchVendors() call, including page/limit
   // changes — same source Companies.jsx feeds its top-edge bar from, so
   // paging here now gets the identical progress flash Companies.jsx shows.
@@ -1195,7 +1194,7 @@ function Vendors() {
           toolbar, the bulk-action strip slides in and takes over this exact
           bar, so nothing shifts and it feels identical to Companies.jsx. */}
       <div
-        className={`fixed right-0 h-16 px-4 lg:px-6 border-b flex items-center top-[54px] lg:top-16 ${
+        className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 ${
           showBulkStrip ? "bg-blue-50 border-blue-200" : "bg-white border-[#E1E4EA]"
         }`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
@@ -1282,7 +1281,7 @@ function Vendors() {
                 <>
                   <div className="flex items-center gap-2">
                     <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
-                    
+                    <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   </div>
                   <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your vendors.
@@ -1353,9 +1352,7 @@ function Vendors() {
                   : "border-[#E1E4EA] text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <FilterIcon
-                className={`w-4 h-4 ${activeFilters.length > 0 ? "text-[#0085FF]" : "text-gray-800"}`}
-              />
+              <FilterIcon size={16} className={activeFilters.length > 0 ? "text-[#0085FF]" : ""} />
               {activeFilters.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
                   {activeFilters.length}
@@ -1389,7 +1386,7 @@ function Vendors() {
                   }}
                   className="lg:hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
-                  <FilterIcon className="w-4 h-4 text-gray-400" />
+                  <FilterIcon size={16} />
                   Filters
                   {activeFilters.length > 0 && (
                     <span className="ml-auto bg-[#0085FF] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
@@ -1505,7 +1502,7 @@ function Vendors() {
           </div>
         )}
 
-        <div className="bg-white border border-[#E1E4EA]">
+        <div className="bg-white border border-[#E1E4EA]" style={{ paddingLeft: "var(--content-inset, 16px)" }}>
           <table
             className="border-separate border-spacing-0 text-left"
             style={{ minWidth: "100%", width: tableWidth, tableLayout: "fixed" }}
@@ -1645,18 +1642,20 @@ function Vendors() {
                       <td
                         key={col.id}
                         style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
+                        className="relative px-4 py-2 align-middle whitespace-nowrap border-b border-r border-[#E1E4EA] bg-inherit"
                       >
-                        {col.id === lastColumnId ? (
-                          <div className="flex items-center justify-between w-full gap-2">
-                            <div className="min-w-0 flex-1">
-                              {renderCellContent(vendor, col.id)}
+                        <div style={{ overflow: "hidden" }}>
+                          {col.id === lastColumnId ? (
+                            <div className="flex items-center justify-between w-full gap-2">
+                              <div className="min-w-0 flex-1">
+                                {renderCellContent(vendor, col.id)}
+                              </div>
+                              {renderRowActionsMenu(vendor)}
                             </div>
-                            {renderRowActionsMenu(vendor)}
-                          </div>
-                        ) : (
-                          renderCellContent(vendor, col.id)
-                        )}
+                          ) : (
+                            renderCellContent(vendor, col.id)
+                          )}
+                        </div>
                         {boundaryShadowSideFor(col.id) && (
                           <div style={getPinnedBoundaryOverlayStyle(boundaryShadowSideFor(col.id))} />
                         )}
@@ -1858,7 +1857,7 @@ function Vendors() {
         )}
 
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-100 p-2 rounded-lg">

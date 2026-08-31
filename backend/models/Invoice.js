@@ -64,6 +64,10 @@ const invoiceSchema = new mongoose.Schema({
     // the invoice, same as gstRate — lets computeDocument() know this line's
     // rate already includes GST instead of taxing it again.
     taxInclusive: { type: Boolean, default: false },
+    // IRP UQC (Unit Quantity Code) — snapshotted from Item.primaryUnit at
+    // add-time (e.g. "OTH OTHERS", "NOS", "KGS"). The e-invoice mapper
+    // extracts the code portion: primaryUnit.split(' ')[0] → "OTH".
+    primaryUnit: { type: String, default: 'OTH OTHERS' },
   }],
   // Payment records for this invoice
   payments: [{
@@ -91,6 +95,11 @@ const invoiceSchema = new mongoose.Schema({
   // at the source invoice it was cloned from. Never set on the source itself.
   duplicatedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
   stockMovementStatus: { type: String, enum: ['pending', 'applied', 'reversed'], default: 'pending' },
+  // Pointer to the most-recent EInvoice attempt for this invoice (Phase-8/11).
+  // A retry after FAILED creates a new EInvoice row and updates this pointer;
+  // older attempts stay reachable via EInvoice.find({ invoice }) for the audit
+  // trail. Not required — an invoice with no attempts has this null.
+  latestEInvoice: { type: mongoose.Schema.Types.ObjectId, ref: 'EInvoice', default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

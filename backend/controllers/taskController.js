@@ -6,6 +6,7 @@ const Deal = require("../models/Deal");
 const Vendor = require("../models/Vendor");
 const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
+const { processAdditionalFields } = require("../services/fieldCoercionService");
 
 // Parses a search term as a calendar date so free-text search can match the
 // "Due Date" column, which the UI renders as D/M/YYYY (toLocaleDateString).
@@ -32,6 +33,15 @@ const parseSearchAsDayRange = (search) => {
   const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
   const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
   return { $gte: start, $lte: end };
+};
+
+// A user with own-only permission may only touch tasks they're assigned to
+// (users array) or created — shared by getAllTask/getAllTasksPaginated/
+// updateTask/updateTaskStatus/deleteTask.
+const isTaskOwnedByUser = (task, userId) => {
+  const uid = userId.toString();
+  const inUsers = (task.users || []).some((u) => u?.toString() === uid);
+  return inUsers || task.createdBy?.toString() === uid;
 };
 
 const createTask = async (req, res) => {
@@ -143,6 +153,17 @@ const createTask = async (req, res) => {
       organization: req.user.organization,
     };
 
+    // Coerce against the org's TaskFields definitions (number -> Number,
+    // dropdown/text -> String, etc) — same treatment Contact/Company/Vendor
+    // give their additionalFields on write.
+    if (req.body.additionalFields) {
+      taskData.additionalFields = await processAdditionalFields(
+        "task",
+        req.body.additionalFields,
+        req.user.organization
+      );
+    }
+
     const task = await Task.create(taskData);
 
     // Populate the relatedEntities
@@ -230,6 +251,16 @@ const getAllTask = async (req, res) => {
         { description: { $regex: search, $options: "i" } },
         { status: { $regex: search, $options: "i" } },
       ];
+    }
+
+    // own-only: restrict to tasks this user is assigned to or created.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ users: req.user._id }, { createdBy: req.user._id }] };
+      if (query.$or) {
+        query = { organization: query.organization, $and: [{ $or: query.$or }, ownFilter] };
+      } else {
+        Object.assign(query, ownFilter);
+      }
     }
 
     const tasks = await Task.find(query)
@@ -352,6 +383,12 @@ const getAllTasksPaginated = async (req, res) => {
       end.setUTCHours(23, 59, 59, 999);
 
       query.dueDate = { $gte: start, $lte: end };
+    }
+
+    // own-only: restrict to tasks this user is assigned to or created.
+    if (req.ownOnly) {
+      const ownFilter = { $or: [{ users: req.user._id }, { createdBy: req.user._id }] };
+      query.$and = query.$and ? [...query.$and, ownFilter] : [ownFilter];
     }
 
     // Sorting
@@ -567,6 +604,10 @@ const updateTask = async (req, res) => {
 
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    if (req.ownOnly && !isTaskOwnedByUser(task, req.user._id)) {
+      return res.status(403).json({ message: "You can only edit tasks you own" });
+    }
+
     // Validate new users belong to the organization if provided
     if (req.body.users) {
       const users = await User.find({
@@ -654,7 +695,17 @@ const updateTask = async (req, res) => {
     }
 
     const prevUsers = task.users.map((u) => u.toString());
-    await task.updateOne(req.body);
+
+    const updatePayload = { ...req.body };
+    if (updatePayload.additionalFields) {
+      updatePayload.additionalFields = await processAdditionalFields(
+        "task",
+        updatePayload.additionalFields,
+        req.user.organization
+      );
+    }
+
+    await task.updateOne(updatePayload);
 
     // Get updated task with populated fields
     const updatedTask = await Task.findById(req.params.id)
@@ -747,6 +798,19 @@ const updateTaskStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
+    const existing = await Task.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (req.ownOnly && !isTaskOwnedByUser(existing, req.user._id)) {
+      return res.status(403).json({ message: "You can only edit tasks you own" });
+    }
+
     const task = await Task.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -777,6 +841,10 @@ const deleteTask = async (req, res) => {
     });
 
     if (!task) return res.status(404).json({ message: "Task not found" });
+
+    if (req.ownOnly && !isTaskOwnedByUser(task, req.user._id)) {
+      return res.status(403).json({ message: "You can only delete tasks you own" });
+    }
 
     await task.deleteOne();
     res.status(200).json({ message: "Task deleted successfully" });

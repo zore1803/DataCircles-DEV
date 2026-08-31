@@ -5,6 +5,8 @@ import {
   AlertCircle,
   X,
   Download,
+  Copy,
+  GitMerge,
 } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
@@ -25,6 +27,8 @@ function ImportClients({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [duplicateCheck, setDuplicateCheck] = useState(null); // { duplicates, pendingImport }
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
 
   // Reset form state each time the panel is opened.
   useEffect(() => {
@@ -53,6 +57,8 @@ function ImportClients({
     setSuccess("");
     setLoading(false);
     setProgress(0);
+    setDuplicateCheck(null);
+    setCheckingDuplicates(false);
     clearInterval(window.progressInterval);
   };
 
@@ -253,12 +259,55 @@ function ImportClients({
         return;
       }
 
+      // Check for existing companies (case-insensitive exact name match)
+      // before writing anything, so the user can choose to merge into them
+      // instead of always creating fresh duplicate rows.
+      setCheckingDuplicates(true);
+      const dupRes = await API.post("/companies/check-duplicates", {
+        names: validCompanies.map((c) => c.name),
+      });
+      setCheckingDuplicates(false);
+
+      if (dupRes.data.duplicates?.length > 0) {
+        setLoading(false);
+        setProgress(0);
+        setDuplicateCheck({
+          duplicates: dupRes.data.duplicates,
+          pendingImport: { validCompanies, template },
+        });
+        return;
+      }
+
+      await runImport(validCompanies, template, "duplicate");
+    } catch (err) {
+      console.error("Import error:", err);
+      setError(
+        err.response?.data?.error ||
+          "Import failed. Please check your data and try again."
+      );
+      clearInterval(window.progressInterval);
+      setProgress(0);
+      setCheckingDuplicates(false);
+      setTimeout(() => {
+        handleClose();
+      }, 2000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Actually posts the import, once any duplicate-handling choice has been
+  // made (or there were no duplicates to begin with).
+  const runImport = async (validCompanies, template, duplicateAction) => {
+    setLoading(true);
+    setError("");
+
+    try {
       const payload = {
         companies: validCompanies,
-        template: template,
+        template,
+        duplicateAction,
       };
-
-      console.log("Final payload:", payload);
 
       setProgress(50);
       let simulatedProgress = 50;
@@ -273,18 +322,21 @@ function ImportClients({
       clearInterval(window.progressInterval);
       setProgress(100);
 
-      const { imported, total, errors } = response.data;
+      const { imported, merged, total, errors } = response.data;
 
       if (errors && errors.length > 0) {
         setSuccess(
-          `Successfully imported ${imported} out of ${total} companies. ${errors.length} failed.`
+          `Imported ${imported}${merged ? `, merged ${merged}` : ""} out of ${total} companies. ${errors.length} failed.`
         );
         console.warn("Import errors:", errors);
+      } else if (merged > 0) {
+        setSuccess(`Imported ${imported} new companies, merged ${merged} existing`);
       } else {
         setSuccess(`Successfully imported ${imported} companies`);
       }
 
       setShowMapping(false);
+      setDuplicateCheck(null);
       setFile(null);
       setCsvData([]);
       setCsvHeaders([]);
@@ -524,8 +576,72 @@ HealthCare Solutions,Healthcare,"789 Health Blvd, Med City",www.healthcaresoluti
           csvHeaders={csvHeaders}
           companyFieldNames={companyFieldNames}
           onImport={handleImport}
-          loading={loading}
+          loading={loading || checkingDuplicates}
         />
+
+        {/* Duplicate resolution prompt */}
+        {duplicateCheck && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/40 z-[10002] flex items-center justify-center p-4"
+              onClick={() => setDuplicateCheck(null)}
+            >
+              <div
+                className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {duplicateCheck.duplicates.length} duplicate{" "}
+                  {duplicateCheck.duplicates.length === 1 ? "company" : "companies"} found
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  {duplicateCheck.duplicates.length} of{" "}
+                  {duplicateCheck.pendingImport.validCompanies.length} companies in this file
+                  already exist (matched by name). What would you like to do with them?
+                </p>
+                <div className="max-h-32 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3 mb-5 text-sm text-gray-700 space-y-1">
+                  {duplicateCheck.duplicates.map((d) => (
+                    <div key={d.existingId}>{d.existingName}</div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      const { validCompanies, template } = duplicateCheck.pendingImport;
+                      setDuplicateCheck(null);
+                      runImport(validCompanies, template, "merge");
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    <GitMerge className="w-4 h-4" />
+                    Merge into existing companies
+                  </button>
+                  <button
+                    onClick={() => {
+                      const { validCompanies, template } = duplicateCheck.pendingImport;
+                      setDuplicateCheck(null);
+                      runImport(validCompanies, template, "duplicate");
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Create as duplicates anyway
+                  </button>
+                  <button
+                    onClick={() => setDuplicateCheck(null)}
+                    className="w-full text-center text-sm text-gray-500 hover:text-gray-700 pt-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-3">
+                  Merge only fills in fields that are currently empty on the existing company —
+                  it never overwrites data that's already there.
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

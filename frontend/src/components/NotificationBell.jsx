@@ -133,9 +133,12 @@ const NotificationBell = ({ variant = "desktop" }) => {
     filter === "unread" ? items.filter((n) => !n.read) : items;
 
   const isMobile = variant === "mobile";
+  // White fill on both variants: the header chrome is tinted, so the icon
+  // buttons read as raised controls sitting on it rather than dissolving into
+  // the tint.
   const buttonClass = isMobile
-    ? "relative flex items-center justify-center w-8 h-8 border border-[#E1E4EA] rounded-full flex-shrink-0"
-    : "relative flex items-center justify-center w-9 h-9 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors";
+    ? "relative flex items-center justify-center w-8 h-8 bg-white border border-[#E1E4EA] rounded-full flex-shrink-0"
+    : "relative flex items-center justify-center w-9 h-9 bg-white rounded-full border border-gray-300 hover:bg-gray-50 transition-colors";
 
   return (
     <div className="relative" ref={wrapRef}>

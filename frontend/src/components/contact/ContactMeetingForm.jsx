@@ -1,5 +1,5 @@
 // ContactMeetingForm.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -106,6 +106,8 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
   const [timeConflict, setTimeConflict] = useState(null);
   const [errors, setErrors] = useState({});
   const [isEditMode, setIsEditMode] = useState(false); // Separate state for edit mode toggle
+  const titleInputRef = useRef(null);
+  const dateInputRef = useRef(null);
 
   const fetchMeetingsForDate = useCallback(async (date) => {
     try {
@@ -291,9 +293,26 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
 
   const handleSubmit = async (e) => {
   e.preventDefault();
-  
+
   if (!validateForm()) {
-    toast.error("Please fix the errors before submitting");
+    // Scroll to whichever invalid field sits highest on screen, rather than
+    // just reporting via toast that something is wrong.
+    const latestErrors = {};
+    if (!form.title?.trim()) latestErrors.title = true;
+    if (!form.date && !calendarDate) latestErrors.date = true;
+
+    const candidates = [
+      latestErrors.title ? titleInputRef.current : null,
+      latestErrors.date ? dateInputRef.current : null,
+    ].filter(Boolean);
+
+    let topMost = null;
+    for (const el of candidates) {
+      if (!topMost || el.getBoundingClientRect().top < topMost.getBoundingClientRect().top) {
+        topMost = el;
+      }
+    }
+    topMost?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
 
@@ -383,8 +402,8 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
       onClick={onClose}
     >
       <div
- className="fixed inset-y-0 right-0 dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
-        style={{ transform: isSliding ? 'translateX(0)' : 'translateX(100%)' }}
+        className="fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl transform transition-transform duration-300 ease-out overflow-hidden"
+        style={{ transform: isSliding ? 'translateX(0)' : 'translateX(calc(100% + 2rem))' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-full flex flex-col">
@@ -495,9 +514,10 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
               </div>
             ) : (
               /* EDIT/CREATE MODE - Form */
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
                 <FormField label="Meeting Title" required error={errors.title} icon={FileText}>
                   <input
+                    ref={titleInputRef}
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
@@ -512,9 +532,10 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                   {!calendarDate ? (
                     <FormField label="Date" required error={errors.date} icon={Calendar}>
                       <input
+                        ref={dateInputRef}
                         type="date"
                         value={form.date}
-                        min="2000-01-01"
+                        min={new Date().toISOString().split("T")[0]}
                         max="2099-12-31"
                         onChange={(e) => handleChange("date", e.target.value)}
                         className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -538,7 +559,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                       onChange={(e) => handleChange("time", e.target.value)}
                       className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 ${
                         timeConflict
-                          ? "border-red-300 bg-red-50 focus:ring-red-500"
+                          ? "border-red-500 bg-red-50 focus:ring-red-500"
                           : "border-gray-300 bg-white focus:ring-blue-500"
                       }`}
                     />

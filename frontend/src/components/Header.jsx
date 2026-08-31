@@ -743,7 +743,7 @@
 // export default Header;
 
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
 import {
   Search,
@@ -842,11 +842,6 @@ const CallLogAddIcon = ({ className, style }) => (
 );
 
 const Header = () => {
-  const [dashboardSearchParams, setDashboardSearchParams] = useSearchParams();
-  const activeDashboardTab = dashboardSearchParams.get("tab") || "Overview";
-  const setActiveDashboardTab = (tab) => {
-    setDashboardSearchParams(tab === "Overview" ? {} : { tab });
-  };
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1391,104 +1386,21 @@ const Header = () => {
   return (
     <>
       <header
-        className="hidden lg:flex fixed top-0 right-0 bg-white border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 lg:px-6 transition-all duration-300 ease-in-out"
-        style={{ left: "var(--sidebar-width, 0px)" }}
+        className="hidden lg:flex fixed top-0 right-0 border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 sm:px-6 lg:px-8 transition-all duration-300 ease-in-out"
+        // Same tint as the sidebar (Navbar.jsx CHROME_BG) - the two are one
+        // continuous surface, joined by the curved corner.
+        style={{ left: "var(--sidebar-width, 0px)", background: "var(--chrome-bg, #FFF3E8)" }}
       >
-        {/* Left Section: Breadcrumb / Dashboard tabs */}
-        <div className="flex items-center gap-4 h-full">
-          {location.pathname === "/" ? (
-            <div className="flex flex-row items-center h-full">
-              {[
-                { name: "Overview", icon: LayoutDashboard },
-                { name: "CRM", icon: CRMIcon },
-                { name: "Invoices", icon: InvoicesIcon },
-              ].map((tab) => {
-                const isActive = activeDashboardTab === tab.name;
-                return (
-                  <button
-                    key={tab.name}
-                    onClick={() => setActiveDashboardTab(tab.name)}
-                    className="box-border flex flex-row justify-center items-center flex-shrink-0 h-full"
-                    style={{
-                      padding: "0px 16px",
-                      gap: 10,
-                      borderBottom: isActive ? "3px solid #0A5AFE" : "3px solid transparent",
-                    }}
-                  >
-                    <tab.icon size={20} style={{ color: isActive ? "#1B66FE" : "#1C1B1F" }} />
-                    <span
-                      className="whitespace-nowrap"
-                      style={{
-                        fontFamily: "Inter",
-                        fontWeight: 600,
-                        fontSize: 14,
-                        lineHeight: "150%",
-                        letterSpacing: isActive ? "-0.04em" : "-0.02em",
-                        color: isActive ? "#0A5AFE" : "#1D1E22",
-                      }}
-                    >
-                      {tab.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : location.pathname.startsWith("/tasks") ? (
-            <span className="text-base font-semibold text-gray-900">
-              Tasks & Meetings
-            </span>
-          ) : location.pathname.startsWith("/accounting") ? (
-            <div className="flex flex-col justify-center gap-[6px]">
-              <h1 className="m-0 leading-[120%] font-medium text-[16px] text-[#0E121B] tracking-[-0.5px]">
-                Accounting
-              </h1>
-              <p className="m-0 leading-[14px] text-[12px] text-[#525866] font-inter">
-                Create, manage, and track all your documents
-              </p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {getBreadcrumb().map((crumb, idx, arr) => {
-                const isLast = idx === arr.length - 1;
-                return (
-                  <span key={idx} className="flex items-center gap-2">
-                    {isLast ? (
-                      <span className="text-base font-semibold text-gray-900">
-                        {crumb.label}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => navigate(crumb.path)}
-                        className="text-base font-semibold text-gray-500 hover:text-gray-700 hover:underline transition-colors"
-                      >
-                        {crumb.label}
-                      </button>
-                    )}
-                    {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <img
+          src="/DC Logo Export.png"
+          alt="DataCircles"
+          className="h-9 w-auto object-contain"
+        />
 
         {/* Right Section: Promo Buttons, Search & Actions */}
-        <div className="flex items-center gap-2 lg:gap-4">
+        <div className="flex items-center gap-2 lg:gap-4 ml-auto">
           {/* Promo Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            {!isTrialActive && (
-              <button
-                className="box-border flex flex-row items-center justify-center gap-2 w-[160px] h-[42px] flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
-                style={{
-                  background:
-                    "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
-                  boxShadow: "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
-                }}
-              >
-                Book a Call
-              </button>
-            )}
-
             {(() => {
               const label = trialLeftLabel || subscriptionLabel;
               if (!label) return null;
@@ -1521,18 +1433,33 @@ const Header = () => {
                       {label}
                     </span>
                   </div>
-                  <button
-                    onClick={() => navigate("/settings/subscription")}
-                    className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
-                    style={{
-                      background:
-                        "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), #0C4FCD",
-                      boxShadow:
-                        "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
-                    }}
-                  >
-                    {buttonText}
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => navigate("/settings/subscription")}
+                      className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
+                      style={{
+                        background:
+                          "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), var(--btn-primary)",
+                        boxShadow:
+                          "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
+                      }}
+                    >
+                      {buttonText}
+                    </button>
+                    {!isLoadingData && (
+                      <button
+                        className="box-border flex flex-row items-center justify-center gap-2 h-8 px-3 flex-shrink-0 rounded-full border border-[#0C4FCD] text-white font-inter text-[12px] leading-5 text-center whitespace-nowrap transition-opacity hover:opacity-90"
+                        style={{
+                          background:
+                            "linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%), var(--btn-primary)",
+                          boxShadow:
+                            "inset 0px 0px 0px 1.8px rgba(255, 255, 255, 0.25)",
+                        }}
+                      >
+                        Book a Call
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })()}
@@ -1552,7 +1479,9 @@ const Header = () => {
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={() => handleSearchFocus()}
-              className="w-full h-full pl-11 pr-4 bg-white border border-gray-200 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
+              // gray-300 rather than gray-200: the field sits on the header's
+              // tinted chrome now, where the lighter border all but vanished.
+              className="w-full h-full pl-11 pr-4 bg-white border border-gray-300 rounded-full text-sm text-gray-700 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans"
             />
           </div>
 
@@ -1724,7 +1653,10 @@ const Header = () => {
       </header>
 
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-[9992] bg-[#FAFAFA] h-[54px] flex items-center border-b border-[#ECECEC]">
+      <header
+        style={{ background: "var(--chrome-bg, #FFF3E8)" }}
+        className="lg:hidden fixed top-0 left-0 right-0 z-[9992] h-[54px] flex items-center border-b border-[#ECECEC]"
+      >
         <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full">
           {/* Logo — opens the sidebar on mobile */}
           <img
