@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middlewares/auth');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 const uploadMiddlewareS3 = require("../middlewares/uploadMiddlewareS3");
 const folderController = require('../controllers/folderController.js');
 const restrictByPlan = require('../middlewares/restrictByPlan.js');
 
-const requireAuth = [authMiddleware, require('../middlewares/userSync')];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // Create folder

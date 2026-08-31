@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middlewares/auth');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 const contactFolderController = require('../controllers/contactFolderController');
 
-const requireAuth = [authMiddleware, require('../middlewares/userSync')];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const restrictByPlan = require('../middlewares/restrictByPlan');
 

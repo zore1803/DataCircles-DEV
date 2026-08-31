@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const organizationController = require('../controllers/organizationController');
-const userSync = require('../middlewares/userSync');
-const authMiddleware = require('../middlewares/auth');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // GET organization code

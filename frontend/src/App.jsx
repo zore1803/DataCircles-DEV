@@ -341,11 +341,14 @@ function App() {
   useEffect(() => {
     const DESIGN_WIDTH = 1440;
     const MIN_ZOOM = 0.6;
-    const MAX_ZOOM = 1.3;
-    // Baseline shrink so the default (100% browser zoom) view matches the
-    // more compact density users previously got by manually zooming the
-    // browser out to ~85%.
-    const BASE_SCALE = 0.85;
+    // Lowered from 1.3 to 1.105 when BASE_SCALE went from 0.85 -> 1
+    // (1.3 * 0.85 = 1.105) so this stays purely per-window-width responsive:
+    // wide screens land at the exact same effective ceiling they always
+    // had (~110%), narrow/laptop screens (previously landing around ~80%)
+    // get the intended lift. Nobody's zoom goes UP beyond what they already
+    // had before this change — only the narrow end was raised.
+    const MAX_ZOOM = 1.105;
+    const BASE_SCALE = 1;
 
     // Both innerWidth and outerWidth are measured in CSS pixels, which
     // shrink/grow as the user zooms with +/- — so neither is safe to feed

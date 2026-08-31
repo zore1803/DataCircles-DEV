@@ -1,13 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const dealController = require("../controllers/dealController");
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const checkPermission = require("../middlewares/checkPermission");
 const restrictByPlan = require("../middlewares/restrictByPlan");
 const Company = require("../models/Company");
 const Contact = require("../models/Contact");
 const Deal = require("../models/Deal");
-const requireAuth = [authMiddleware, require("../middlewares/userSync")];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const { getDashboardDeals } = require("../controllers/dealController");
 

@@ -5,12 +5,12 @@
 const express = require("express");
 const router = express.Router();
 const inventoryController = require("../controllers/inventoryController");
-const authMiddleware = require("../middlewares/auth");
-const userSync = require("../middlewares/userSync");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const subscriptionGate = require("../middlewares/subscriptionGate");
 const checkPermission = require("../middlewares/checkPermission");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const readGate = [requireAuth, subscriptionGate, checkPermission("items", "readonly")];
 const writeGate = [requireAuth, subscriptionGate, checkPermission("items", "read-write")];
 

@@ -1,6 +1,41 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import { groupPaidSegmentsByTier, addBillingCycle } from "../../utils/billingCalendarSegments";
 
 const LABEL_COL = "104px";
+
+// One hue per plan tier, distinct from the trial's own blue-500 — found
+// live: Growth's original bg-blue-600 sat right next to the trial's
+// blue-500 and read as "basically the same color."
+//
+// Deliberately DESATURATED (slate/stone/deep-violet, not teal-600/amber-800/
+// orange-500 — all tried and reported as "very bad and too bright" live).
+// The rest of the app uses white cards, gray borders, and exactly one
+// accent color; a saturated rainbow of tiers fights that, so these read as
+// muted material tones that differ in hue and depth without shouting.
+// Growth is stone (a warm brownish gray), per the explicit brownish
+// request, at a lightness that stays quiet next to the others.
+// An unrecognized plan name (a future new tier not added to this map yet)
+// falls back here too rather than rendering unstyled.
+const PLAN_TIER_COLOR = {
+  starter: "bg-slate-400",
+  growth: "bg-stone-500",
+  business: "bg-violet-800",
+  default: "bg-stone-500",
+};
+
+// Border-color counterpart, for the projection's own connector lines — kept
+// as its own map (not derived from PLAN_TIER_COLOR's bg-* strings) so an
+// upgrade/downgrade connector reads as tied to the branch it leads to,
+// rather than the same neutral gray used for the REAL historical tier-
+// ladder connectors (BillingCalendarTimeline's own `connectors` — a
+// projection line must never look identical to a real one, or a real
+// past transition and a hypothetical what-if become indistinguishable).
+const PLAN_TIER_BORDER_COLOR = {
+  starter: "border-slate-300",
+  growth: "border-stone-400",
+  business: "border-violet-400",
+  default: "border-stone-400",
+};
 
 function pct(date, range) {
   if (!date) return null;
@@ -105,12 +140,28 @@ const Segment = ({ seg, range, isBase }) => {
   const isAnnual = isBase && seg.billingCycle === "yearly" && !isScheduled;
   const isTrial = seg.tone === "trial";
 
+  // Each plan TIER gets its own hue on the paid track (not just current-
+  // vs-past) — found necessary live: with every tier rendered in the same
+  // flat blue, a real Starter -> Growth -> Business history read as one
+  // undifferentiated bar with no visual sense of which stretch was which
+  // plan. isPast fades it (opacity) rather than flattening it to gray, so
+  // history stays identifiable by tier while still reading as "not current".
+  // Add-on lanes (isBase=false) get their own hue too — add-ons were
+  // originally hardcoded to bg-blue-600, indistinguishable from the trial's
+  // blue-500 right above them. Indigo, then orange, were both tried and
+  // reported as too bright/bad live — teal-700 is muted enough to sit
+  // quietly next to the (deliberately desaturated) tier colors while still
+  // being clearly its own thing, since an add-on is a different KIND of
+  // object than a plan tier, not another rung on the same ladder.
+  const tierColor = isBase && !isTrial ? (PLAN_TIER_COLOR[(seg.planName || '').toLowerCase()] || PLAN_TIER_COLOR.default) : 'bg-teal-700';
+
   // Trial renders a shade lighter than a real paid segment (blue-500 vs the
   // app's blue-600 accent) — this leaves headroom for the adjustment-
   // extension overlay to read as "one step darker than the trial bar"
   // without turning near-navy the way blue-600 + a darker-still overlay did.
-  const colorStr = isScheduled ? "border-amber-400" : (isPast ? "bg-gray-300" : (isTrial ? "bg-blue-500" : "bg-blue-600"));
-  const baseClass = `absolute top-1/2 -translate-y-1/2 h-3.5 rounded-full ${isScheduled ? `border-[3px] border-dashed ${colorStr}` : `${colorStr} shadow-sm`}`;
+  const colorStr = isScheduled ? "border-amber-400" : (isTrial ? "bg-blue-500" : tierColor);
+  const fadeClass = isPast && !isScheduled ? "opacity-50" : "";
+  const baseClass = `absolute top-1/2 -translate-y-1/2 h-3.5 rounded-full ${isScheduled ? `border-[3px] border-dashed ${colorStr}` : `${colorStr} ${fadeClass} shadow-sm`}`;
 
   return (
     <div className="absolute top-1/2 -translate-y-1/2" style={{ left: `${left}%`, width: `${width}%` }}>
@@ -122,7 +173,7 @@ const Segment = ({ seg, range, isBase }) => {
       </div>
 
       {isAnnual ? (
-        <div className="absolute top-1/2 -translate-y-1/2 h-5 w-full bg-blue-600 rounded-full shadow-sm overflow-hidden flex items-center px-3">
+        <div className={`absolute top-1/2 -translate-y-1/2 h-5 w-full ${tierColor} ${fadeClass} rounded-full shadow-sm overflow-hidden flex items-center px-3`}>
            <span className="text-[10px] font-bold uppercase text-white tracking-wide truncate">Full paid term</span>
            {right >= 95 && <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-white/40" />}
         </div>
@@ -298,17 +349,6 @@ const LEGEND_Y = LANE_Y.annual + 40;
 const FORK_HEIGHT = LEGEND_Y + 20;
 const KINK_PX = 26; // fixed real-pixel diagonal, same at every zoom level
 
-// Mirrors backend/utils/renewalEngine.js's own addBillingCycle exactly —
-// monthly is a CALENDAR month via setMonth(+1), not a flat 30 days, and
-// annual is a calendar year via setFullYear(+1). The branch length on the
-// chart needs to be the same policy the backend actually bills on, not an
-// approximation invented on the frontend.
-function addBillingCycle(date, cycle) {
-  const next = new Date(date);
-  if (cycle === 'monthly') next.setMonth(next.getMonth() + 1);
-  else next.setFullYear(next.getFullYear() + 1);
-  return next;
-}
 
 const TrialConversionFork = ({ range, now, onPreview }) => {
   // Hooks must run unconditionally — called before the validity check below,
@@ -510,8 +550,207 @@ const TrialConversionFork = ({ range, now, onPreview }) => {
   );
 };
 
+// Paid-subscription upgrade/downgrade projection — the "what-if" layer for
+// an org already on a real paid plan (the trial's own fork above is a
+// SEPARATE component/concept; this one attaches only to the current tier's
+// row). Renders as light/faded SOLID bars, never dashed — dashed is
+// reserved for a genuinely SCHEDULED change (a real ScheduledChange
+// document), faded-solid means "hypothetical, nothing committed, moving
+// the slider changes nothing real." Never written into paidPlanSegments/
+// tierGroups — these must never appear in the Billing Journey strip or be
+// mistaken for real history.
+//
+// Upgrade moves with the slider (immediate + prorated, backend-verified
+// contract — see verifyUpgradePreviewContract.js): the amount and target
+// renewal date come from previewPlanUpgrade(), never computed here.
+// Downgrade NEVER moves — it's always scheduled for the current renewal
+// regardless of slider position, which is real billing behavior the visual
+// should teach, not hide.
+const PlanChangeProjection = ({
+  range, currentEnd, upgrade, downgrade,
+  sliderValue, sliderMin, sliderMax, onSliderChange, onPreview,
+}) => {
+  // Same click-to-reveal / click-again-to-hide pattern as the trial fork's
+  // own handle, applied here too — "just like the trial projections, that
+  // was perfect." A drag (value actually changes) always leaves it ON; only
+  // a genuine no-movement click toggles it off, mirroring
+  // TrialConversionFork's dragStartRef technique exactly. Both branches
+  // (upgrade AND downgrade) reveal/hide together — one shared handle, one
+  // shared toggle, not two independent ones.
+  const [touched, setTouched] = useState(false);
+  const dragStartRef = useRef({ value: 0, wasTouched: false });
+
+  // Feeds the selected date up to the SHARED axis preview row (the same
+  // mechanism TrialConversionFork's own onPreview drives) — "dates should
+  // be on top... just like we did for trial projections." Not a second,
+  // locally-rendered date label; one date display, one place, same as the
+  // trial fork already established.
+  useEffect(() => {
+    if (!onPreview) return;
+    onPreview(touched ? sliderValue.getTime() : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [touched, sliderValue]);
+
+  if (!upgrade && !downgrade) return null;
+
+  const BAR_CENTER_Y = 32; // vertical center of the row's own h-16 (64px) box
+  const HANDLE_ROW_H = 22;
+
+  const sliderLeftPct = pct(sliderMin, range);
+  const sliderRightPct = pct(sliderMax, range);
+  const trackWidthPct = sliderRightPct != null && sliderLeftPct != null ? sliderRightPct - sliderLeftPct : 0;
+
+  // Growth's own real segment renders its label ABOVE its bar (Segment's
+  // `bottom-full mb-2.5`, ~text-sm line height + margin ≈ 30px of space
+  // above the bar's own top edge). Found live: the upgrade projection's
+  // label used PROJECTION_OFFSET_Y=40 measured from the bar's CENTER, which
+  // put it almost exactly where the real segment's own label already sits —
+  // the two texts printed on top of each other, and the faded bar read as
+  // sitting ON the real bar rather than clearly above it. Fixed two ways:
+  // (1) the upgrade block's order is bar-then-label (label BELOW its own
+  // bar, same as downgrade already does) so the two labels don't compete
+  // for the same "above the bar" real estate at all; (2) pushed well
+  // clear of the real label's ~-25px to +15px zone.
+  const UPGRADE_BAR_TOP = BAR_CENTER_Y - 58; // bar sits here; its own label renders ~18px below that (still just clear of growth's real label's -25px zone) — the row's own `pt-5` wrapper (20px) may not fully contain this if this happens to be the TOPMOST tier row; worth a live check, same as this file's other estimated-not-measured constants.
+  const DOWNGRADE_BAR_TOP = BAR_CENTER_Y + 44;
+
+  const handlePct = pct(sliderValue, range);
+
+  return (
+    <>
+      {/* Dotted drag rail — same affordance as the trial fork's own
+          dragRailLeft/dragRailWidth (Track component), spanning the
+          slider's full draggable range so it's visually obvious there's
+          something to slide, even before the first click reveals the
+          projection bars themselves. */}
+      {sliderLeftPct != null && (
+        <div
+          className="absolute h-0 border-t-2 border-dotted border-gray-300 pointer-events-none"
+          style={{ left: `${sliderLeftPct}%`, width: `${trackWidthPct}%`, top: `${BAR_CENTER_Y}px` }}
+        />
+      )}
+
+      {/* A short dotted connector from the slider handle up/down to each
+          revealed branch — same idea as the trial fork's diagonal kink,
+          simplified to a plain vertical line since these branches don't
+          fan out sideways the way the trial's Monthly/Annual ones do.
+          Colored to the TARGET branch (not neutral gray) — a projection
+          connector must never look like the real historical tier-ladder
+          connectors, which stay gray on purpose (see BillingCalendarTimeline's
+          own `connectors`, and PLAN_TIER_BORDER_COLOR's own comment). */}
+      {touched && upgrade && handlePct != null && (
+        <div
+          className={`absolute w-0 border-l-2 border-dotted opacity-60 ${PLAN_TIER_BORDER_COLOR[(upgrade.targetPlanName || '').toLowerCase()] || PLAN_TIER_BORDER_COLOR.default} pointer-events-none`}
+          style={{ left: `${handlePct}%`, top: `${UPGRADE_BAR_TOP + 14}px`, height: `${BAR_CENTER_Y - 7 - (UPGRADE_BAR_TOP + 14)}px` }}
+        />
+      )}
+      {/* Downgrade's connector deliberately starts at the SLIDER handle
+          (not straight down from the fixed renewal point) and bends over
+          to the renewal date — the bend is the point: wherever the handle
+          moves, this line's horizontal run stretches or shrinks, but it
+          always lands at the SAME fixed x (renewal). That's the visual
+          teaching moment for "downgrade never moves, no matter when you
+          say you'd make it." */}
+      {touched && downgrade && handlePct != null && (() => {
+        const renewalPct = pct(currentEnd, range);
+        if (renewalPct == null) return null;
+        const waypointY = BAR_CENTER_Y + 20;
+        const left = Math.min(handlePct, renewalPct);
+        const width = Math.abs(renewalPct - handlePct);
+        const downgradeBorder = PLAN_TIER_BORDER_COLOR[(downgrade.targetPlanName || '').toLowerCase()] || PLAN_TIER_BORDER_COLOR.default;
+        return (
+          <React.Fragment>
+            <div
+              className={`absolute w-0 border-l-2 border-dotted opacity-60 ${downgradeBorder} pointer-events-none`}
+              style={{ left: `${handlePct}%`, top: `${BAR_CENTER_Y + 7}px`, height: `${waypointY - (BAR_CENTER_Y + 7)}px` }}
+            />
+            <div
+              className={`absolute h-0 border-t-2 border-dotted opacity-60 ${downgradeBorder} pointer-events-none`}
+              style={{ left: `${left}%`, width: `${width}%`, top: `${waypointY}px` }}
+            />
+            <div
+              className={`absolute w-0 border-l-2 border-dotted opacity-60 ${downgradeBorder} pointer-events-none`}
+              style={{ left: `${renewalPct}%`, top: `${waypointY}px`, height: `${DOWNGRADE_BAR_TOP - waypointY}px` }}
+            />
+          </React.Fragment>
+        );
+      })()}
+
+      {touched && upgrade && (
+        <div
+          className="absolute flex flex-col items-start"
+          style={{
+            left: `${pct(sliderValue, range)}%`,
+            width: `${Math.max(0, (pct(upgrade.newRenewalDate, range) ?? 0) - (pct(sliderValue, range) ?? 0))}%`,
+            top: `${UPGRADE_BAR_TOP}px`,
+          }}
+        >
+          <div className={`h-3.5 w-full rounded-full ${PLAN_TIER_COLOR[(upgrade.targetPlanName || '').toLowerCase()] || PLAN_TIER_COLOR.default} opacity-25`} />
+          <div className="text-[11px] font-semibold text-gray-500 mt-1 truncate whitespace-nowrap">
+            <span className="uppercase tracking-wide text-[9px] font-bold text-gray-400 mr-1">Preview</span>
+            {upgrade.targetPlanName} · {upgrade.loading ? 'Calculating…' : `₹${upgrade.dueToday} now`}
+          </div>
+        </div>
+      )}
+
+      {touched && downgrade && (
+        <div
+          className="absolute flex flex-col items-start"
+          style={{
+            left: `${pct(currentEnd, range)}%`,
+            width: `${Math.max(0, (pct(downgrade.visualEnd, range) ?? 0) - (pct(currentEnd, range) ?? 0))}%`,
+            top: `${DOWNGRADE_BAR_TOP}px`,
+          }}
+        >
+          <div className={`h-3.5 w-full rounded-full ${PLAN_TIER_COLOR[(downgrade.targetPlanName || '').toLowerCase()] || PLAN_TIER_COLOR.default} opacity-25`} />
+          <div className="text-[11px] font-semibold text-gray-500 mt-1 truncate whitespace-nowrap">
+            <span className="uppercase tracking-wide text-[9px] font-bold text-gray-400 mr-1">Preview</span>
+            If downgraded: {downgrade.targetPlanName} · starts at renewal
+          </div>
+        </div>
+      )}
+
+      {!touched && handlePct != null && (
+        <span
+          className="absolute -translate-x-1/2 text-[10px] font-semibold text-gray-400 whitespace-nowrap"
+          style={{ left: `${handlePct}%`, top: `${BAR_CENTER_Y + 14}px` }}
+        >
+          drag to preview upgrade/downgrade
+        </span>
+      )}
+
+
+      {/* One shared slider — "when would you make this change?" — controls
+          ONLY the upgrade branch's position (downgrade is date-invariant by
+          design), but toggles BOTH branches' visibility together. Same
+          invisible-range-input-over-the-bar technique as the trial fork's
+          own handle, including its click-vs-drag distinction. */}
+      {sliderLeftPct != null && (
+        <input
+          type="range"
+          min={sliderMin.getTime()}
+          max={sliderMax.getTime()}
+          step={60 * 60 * 1000}
+          value={sliderValue.getTime()}
+          onChange={(e) => { onSliderChange(new Date(Number(e.target.value))); setTouched(true); }}
+          onPointerDown={() => {
+            dragStartRef.current = { value: sliderValue.getTime(), wasTouched: touched };
+            setTouched(true);
+          }}
+          onPointerUp={() => {
+            const { value, wasTouched } = dragStartRef.current;
+            if (sliderValue.getTime() === value && wasTouched) setTouched(false);
+          }}
+          className="absolute appearance-none bg-transparent cursor-grab active:cursor-grabbing z-30 plan-change-slider"
+          style={{ left: `${sliderLeftPct}%`, width: `${trackWidthPct}%`, top: `${BAR_CENTER_Y - HANDLE_ROW_H / 2}px`, height: `${HANDLE_ROW_H}px` }}
+        />
+      )}
+    </>
+  );
+};
+
 // A single continuous track — one lane per billing object.
-const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialConversion }) => {
+const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialConversion, planChangeProjection }) => {
   const allMarkers = useMemo(() => markers || [], [markers]);
   // Admin trial adjustments now flow through the SAME clusterMarkers
   // pipeline as every other event (see the note above AdjustmentOverlay's
@@ -550,12 +789,12 @@ const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialCo
   }
 
   return (
-    <div className={`relative ${trialConversion ? 'mb-40' : 'mb-16'}`}>
+    <div className={`relative ${trialConversion || planChangeProjection ? 'mb-40' : 'mb-16'}`}>
       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[92px] text-right pr-5">
         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">{title}</h3>
       </div>
 
-      <div className="relative h-16" style={{ marginLeft: LABEL_COL }}>
+      <div className="relative h-16 overflow-visible" style={{ marginLeft: LABEL_COL }}>
         {dragRailLeft != null && (
           <div
             className="absolute top-1/2 -translate-y-1/2 h-0 border-t-2 border-dotted border-gray-300 pointer-events-none"
@@ -580,12 +819,15 @@ const Track = ({ title, segments, markers, range, isBase, onSelectEvent, trialCo
         {trialConversion && (
           <TrialConversionFork range={range} now={trialConversion.now} onPreview={trialConversion.onPreview} />
         )}
+        {/* Same "same positioned box, overflow visible" technique as the
+            trial fork above, for the CURRENT paid tier's row only. */}
+        {planChangeProjection && <PlanChangeProjection range={range} {...planChangeProjection} />}
       </div>
     </div>
   );
 };
 
-const BillingCalendarTimeline = ({ now, range, basePlanSegments, basePlanMarkers, addonLanes, onSelectEvent, trialEndsAt }) => {
+const BillingCalendarTimeline = ({ now, range, trialSegments, trialMarkers, paidPlanSegments, paidPlanMarkers, addonLanes, onSelectEvent, trialEndsAt, planChange }) => {
   const spanDays = (range.end.getTime() - range.start.getTime()) / (24 * 60 * 60 * 1000);
   const isMonthly = spanDays > 45;
   // At 1Y+ zoom the key-date text (TODAY / TRIAL ENDS · date / the preview
@@ -651,6 +893,80 @@ const BillingCalendarTimeline = ({ now, range, basePlanSegments, basePlanMarkers
   // longer renders.
   const PREVIEW_LINE_TOP = crowded ? 4 : 20; // just under the preview row (h-4)
   const KEY_LINE_TOP = crowded ? 4 : 44; // just under the Today/Trial-ends row
+
+  // One row per plan tier (Business top, Starter bottom) plus the trial's
+  // own row below all of them — see the tier-ladder comment at the render
+  // site for why. Computed here (not inside the JSX) since the trial->paid
+  // connector below needs the same row geometry.
+  const tierGroups = useMemo(() => groupPaidSegmentsByTier(paidPlanSegments), [paidPlanSegments]);
+
+  const ROW_HEIGHT_PX = 128; // Track's own h-16 (64px) + mb-16 (64px) — see the render-site comment
+  const TALL_ROW_HEIGHT_PX = 224; // h-16 (64px) + mb-40 (160px) — Track uses this taller margin whenever trialConversion OR planChangeProjection is attached (see Track's own className)
+  const ROWS_TOP_PAD_PX = 20; // the wrapping div's own pt-5
+  // Found live: the tier connector lines (e.g. Starter -> Trial) silently
+  // vanished the moment a plan-change projection was added to the current
+  // tier's row — that row got Track's taller `mb-40` margin (same CSS branch
+  // trialConversion already used), but this array still assumed every tier
+  // row was the plain 128px height, so every row's computed Y BELOW the
+  // current tier came out wrong by the missing 96px, pushing those
+  // connectors to nonsensical positions. Must mirror Track's own
+  // `trialConversion || planChangeProjection ? 'mb-40' : 'mb-16'` exactly.
+  const rowHeights = [
+    ...tierGroups.map((g) => (planChange && g.planName === planChange.currentPlanName ? TALL_ROW_HEIGHT_PX : ROW_HEIGHT_PX)),
+    ...(trialSegments.length > 0 ? [trialEndsAt ? TALL_ROW_HEIGHT_PX : ROW_HEIGHT_PX] : []),
+  ];
+  const rowCenterY = (rowIndex) => {
+    let top = ROWS_TOP_PAD_PX;
+    for (let i = 0; i < rowIndex; i++) top += rowHeights[i];
+    return top + 32; // the bar sits at the vertical center of its own 64px (h-16) box
+  };
+
+  const markerBelongsToSegments = (marker, segments) => {
+    const t = new Date(marker.date).getTime();
+    return segments.some((s) => {
+      const start = new Date(s.start).getTime();
+      const end = s.end ? new Date(s.end).getTime() : Infinity;
+      return t >= start && t <= end;
+    });
+  };
+
+  const prettyTierName = (planName) => (planName ? planName.charAt(0).toUpperCase() + planName.slice(1) : planName);
+
+  // Every real transition gets a connector — not just trial->first-paid-
+  // tier. Found live: an org that went trial -> Starter -> upgraded to
+  // Growth only had a connector drawn for the FIRST hop; the Starter ->
+  // Growth upgrade (a different pair of rows) had no line at all, even
+  // though it's exactly the same kind of "I was here, then moved" moment.
+  // Built by flattening every row's own segments back into one
+  // chronological list (tagged with which physical row each one lives on),
+  // then connecting each pair of immediately-adjacent segments whose rows
+  // differ — this naturally covers trial->tier, tier->tier (up OR down),
+  // and generalizes to any future tier without special-casing which pair
+  // it is.
+  const connectors = useMemo(() => {
+    const flat = [];
+    tierGroups.forEach((g, rowIndex) => {
+      g.segments.forEach((seg) => flat.push({ ...seg, rowIndex }));
+    });
+    const trialRowIndex = tierGroups.length; // trial is always the row right after every tier row
+    trialSegments.forEach((seg) => flat.push({ ...seg, rowIndex: trialRowIndex }));
+    flat.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+    const list = [];
+    for (let i = 0; i < flat.length - 1; i++) {
+      const cur = flat[i];
+      const next = flat[i + 1];
+      if (!cur.end || cur.rowIndex === next.rowIndex) continue;
+      // Only a genuine back-to-back transition (this segment's own end IS
+      // the next one's start) earns a line — not any two segments that
+      // merely happen to be adjacent once sorted.
+      if (Math.abs(new Date(cur.end).getTime() - new Date(next.start).getTime()) > 60 * 1000) continue;
+      const p = pct(cur.end, range);
+      if (p == null) continue;
+      list.push({ pct: p, topY: rowCenterY(Math.min(cur.rowIndex, next.rowIndex)), bottomY: rowCenterY(Math.max(cur.rowIndex, next.rowIndex)) });
+    }
+    return list;
+  }, [trialSegments, tierGroups, range]);
 
   return (
     <div className="overflow-x-auto w-full">
@@ -724,15 +1040,81 @@ const BillingCalendarTimeline = ({ now, range, basePlanSegments, basePlanMarkers
         )}
 
         <div className="relative z-10 pt-5">
-          <Track
-            title="Plan"
-            segments={basePlanSegments}
-            markers={basePlanMarkers}
-            range={range}
-            isBase={true}
-            onSelectEvent={onSelectEvent}
-            trialConversion={trialEndsAt ? { now, trialEnd: trialEndsAt, onPreview: setPreviewMs } : null}
-          />
+          {/* Paid subscription — split into one row PER PLAN TIER the org
+              has ever been on, Business highest/top down to Starter lowest
+              (groupPaidSegmentsByTier), rendered ABOVE the trial's
+              historical row below. Found necessary live: a single shared
+              row put every tier end-to-end on one flat line with no visual
+              sense of "that was an upgrade" vs "that was a downgrade" —
+              real vertical LEVELS make a tier change a real jump between
+              rows, not just a color change on the same line. Never shares
+              a track with the trial (see billingCalendarSegments.js's own
+              comment on why a shared track produced overlapping trial/paid
+              segments in the first place).
+              ROW_HEIGHT_PX below MUST match this Track's own CSS (h-16 =
+              64px bar box + mb-16 = 64px gap = 128px per row; the trial
+              row is taller — mb-40 = 160px — only while its drag-to-explore
+              fork is attached) — needed to compute the connector line's
+              pixel geometry purely in JS, since sibling Tracks don't share
+              a ref to measure each other's real rendered position. Estimated
+              from the same CSS constants the rows themselves use, not
+              independently guessed — but still worth a live visual check
+              after this lands, same caveat as this file's other
+              hand-computed pixel constants (BAR_CENTER_ABS_Y etc.). */}
+          {tierGroups.map((group) => (
+            <Track
+              key={group.planName}
+              title={prettyTierName(group.planName)}
+              segments={group.segments}
+              markers={paidPlanMarkers.filter((m) => markerBelongsToSegments(m, group.segments))}
+              range={range}
+              isBase={true}
+              onSelectEvent={onSelectEvent}
+              // Upgrade/downgrade projections only ever attach to the CURRENT
+              // tier's own row (planChange.currentPlanName) — never a
+              // historical tier's row, since you can only branch a
+              // what-if from where you actually are today.
+              planChangeProjection={planChange && group.planName === planChange.currentPlanName ? { ...planChange, onPreview: setPreviewMs } : null}
+            />
+          ))}
+
+          {/* Trial — historical foundation. Always rendered if it ever
+              existed, never replaced or deleted once a paid plan exists;
+              the drag-to-explore Monthly/Annual fork only attaches here,
+              and only while the trial is still actually active (trialEndsAt
+              is null once converted or genuinely lapsed). */}
+          {trialSegments.length > 0 && (
+            <Track
+              title={tierGroups.length > 0 ? "Trial (history)" : "Plan"}
+              segments={trialSegments}
+              markers={trialMarkers}
+              range={range}
+              isBase={true}
+              onSelectEvent={onSelectEvent}
+              trialConversion={trialEndsAt ? { now, trialEnd: trialEndsAt, onPreview: setPreviewMs } : null}
+            />
+          )}
+
+          {/* Trial -> paid connector — a dashed line from the exact moment
+              the trial ended (trialSegments[0].end, which
+              buildTrialTrackSegments sets to the real conversion date when
+              that's what happened) up to whichever tier row the org
+              actually converted INTO, so the two rows read as one
+              continuous story ("I was here, then I moved up/down to
+              here") instead of two unrelated bars that happen to share a
+              modal. */}
+          {connectors.map((c, i) => (
+            <React.Fragment key={i}>
+              <div
+                className="absolute border-l-[1.5px] border-dashed border-gray-300 pointer-events-none z-0"
+                style={{ left: guidelineX(c.pct), top: `${c.topY}px`, height: `${c.bottomY - c.topY}px` }}
+              />
+              <div
+                className="absolute w-1.5 h-1.5 rounded-full bg-gray-400 pointer-events-none z-10 -translate-x-1/2 -translate-y-1/2"
+                style={{ left: guidelineX(c.pct), top: `${c.topY}px` }}
+              />
+            </React.Fragment>
+          ))}
 
           {addonLanes.map((lane) => (
             <Track

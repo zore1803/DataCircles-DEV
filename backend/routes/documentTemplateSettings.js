@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../middlewares/auth");
-const userSync = require("../middlewares/userSync");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const subscriptionGate = require("../middlewares/subscriptionGate");
 const documentTemplateSettingsController = require("../controllers/documentTemplateSettingsController");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 
 // Template choices for the organization's accounting documents.
 router.get(

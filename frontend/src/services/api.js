@@ -4,12 +4,49 @@ import axios from "axios";
 const API = axios.create({
   baseURL: `${import.meta.env.VITE_APP_API_URL}/api`,
   timeout: 30000, // 30 second timeout for production
+  // Required so the dc_session HttpOnly cookie (DataCircles application
+  // session — see backend/services/sessionService.js) is sent on
+  // cross-site requests; frontend and backend are on different domains in
+  // every environment this app deploys to.
+  withCredentials: true,
 });
 
 // Token refresh management
 let getAccessTokenSilently = null;
 let isRefreshing = false;
 let failedQueue = [];
+
+// In-memory only — never localStorage. This is the double-submit CSRF
+// token derived server-side from the session's csrfSecret
+// (backend/services/sessionService.js deriveCsrfToken); it authorizes
+// mutating requests once a DataCircles session cookie is set.
+let csrfToken = null;
+
+export const setCsrfToken = (token) => {
+  csrfToken = token;
+};
+
+/**
+ * Establishes a DataCircles application session after Auth0 login or phone
+ * OTP verification succeeds. Sets the dc_session HttpOnly cookie and
+ * returns the CSRF token for mutating requests. Surfaces a
+ * SESSION_LIMIT_REACHED error distinctly so callers can show the
+ * "maximum 2 active sessions" message instead of a generic failure.
+ */
+export const establishSession = async () => {
+  try {
+    const res = await API.post("/session/establish");
+    setCsrfToken(res.data.csrfToken);
+    return res.data;
+  } catch (error) {
+    if (error.response?.data?.code === "SESSION_LIMIT_REACHED") {
+      const limitError = new Error(error.response.data.message);
+      limitError.code = "SESSION_LIMIT_REACHED";
+      throw limitError;
+    }
+    throw error;
+  }
+};
 
 /**
  * Process the queue of failed requests after token refresh
@@ -39,6 +76,15 @@ export const configureAxios = (tokenFunction) => {
 API.interceptors.request.use(
   async (config) => {
     try {
+      // Attach the CSRF token on mutating requests once a DataCircles
+      // session has been established (see establishSession above). Safe
+      // methods don't need it; the backend's csrfCheck middleware only
+      // enforces it on routes that opt into sessionAuth.
+      const method = (config.method || "get").toLowerCase();
+      if (csrfToken && !["get", "head", "options"].includes(method)) {
+        config.headers["X-CSRF-Token"] = csrfToken;
+      }
+
       // If Authorization header is already set (e.g., tempToken), don't override it
       if (config.headers.Authorization) {
         return config;

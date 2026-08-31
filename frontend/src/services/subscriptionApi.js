@@ -24,6 +24,12 @@ export const subscriptionAPI = {
   // cached — the Calendar re-fetches on every open.
   getBillingProjection: () => API.get('/subscription/billing-projection'),
 
+  // Billing Calendar upgrade-slider preview — read-only, creates nothing
+  // (no Order/CommercialTransaction/reward reservation). asOfDate: ISO
+  // string, "preview this upgrade as if executed at this instant."
+  previewPlanUpgrade: (targetPlanId, asOfDate) =>
+    API.get('/subscription/preview-plan-upgrade', { params: { targetPlanId, asOfDate: asOfDate?.toISOString?.() || asOfDate } }),
+
   // Read-only pricing preview — BILLING_UX_SPEC.md §0/Option A. Returns the
   // same pricingBreakdown shape createSubscription/updateSubscription return
   // on success, computed by the same calculateInvoice() call, but performs

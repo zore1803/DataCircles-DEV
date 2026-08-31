@@ -12,7 +12,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, ArrowRight } from "lucide-react";
 import PublicLinkCard from "../components/forms/PublicLinkCard";
 
 // Second independent copy of this exact pattern within Forms (FormsList.jsx has the first) — per
@@ -465,6 +465,7 @@ function LabelValueRow({ label, value }) {
 
 function SubmissionDrawer({ formId, submissionId, onClose }) {
   const [submission, setSubmission] = useState(null);
+  const [resolvedFields, setResolvedFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRaw, setShowRaw] = useState(false);
 
@@ -472,7 +473,11 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
     let cancelled = false;
     setLoading(true);
     API.get(`/forms/${formId}/submissions/${submissionId}`)
-      .then((res) => { if (!cancelled) setSubmission(res.data.submission); })
+      .then((res) => {
+        if (cancelled) return;
+        setSubmission(res.data.submission);
+        setResolvedFields(res.data.resolvedFields || []);
+      })
       .catch(() => { if (!cancelled) toast.error("Failed to load submission"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -480,6 +485,12 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
 
   const fieldData = submission?.processedData || submission?.rawData || {};
   const fieldKeys = Object.keys(fieldData).filter((k) => !HIDDEN_RECORD_KEYS.has(k));
+  // processedData is keyed by fieldId, so fall back through the frozen labels from the version this
+  // was submitted against before resorting to prettifying the raw id.
+  const metaByFieldId = new Map(resolvedFields.map((f) => [f.fieldId, f]));
+  const submittedLabel = (key) => metaByFieldId.get(key)?.label || recordFieldLabel(key);
+  const isImageValue = (key, value) =>
+    metaByFieldId.get(key)?.type === "file" && typeof value === "string" && /^https?:\/\//.test(value);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -516,9 +527,18 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
             {fieldKeys.length > 0 && (
               <CollapsibleSection title="Submitted Values">
                 <div className="flex flex-col divide-y divide-gray-100">
-                  {fieldKeys.map((key) => (
-                    <LabelValueRow key={key} label={recordFieldLabel(key)} value={normalizeForCompare(fieldData[key])} />
-                  ))}
+                  {fieldKeys.map((key) =>
+                    isImageValue(key, fieldData[key]) ? (
+                      <div key={key} className="py-2 flex items-start gap-3">
+                        <span className="text-xs text-gray-500 w-32 shrink-0">{submittedLabel(key)}</span>
+                        <a href={fieldData[key]} target="_blank" rel="noreferrer" className="shrink-0">
+                          <img src={fieldData[key]} alt="" className="w-16 h-16 rounded border border-gray-200 object-contain bg-gray-50" />
+                        </a>
+                      </div>
+                    ) : (
+                      <LabelValueRow key={key} label={submittedLabel(key)} value={normalizeForCompare(fieldData[key])} />
+                    )
+                  )}
                 </div>
               </CollapsibleSection>
             )}
@@ -542,7 +562,7 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
               <CollapsibleSection title="Validation Errors">
                 <ul className="flex flex-col gap-1">
                   {submission.validationErrors.map((v, i) => (
-                    <li key={i} className="text-sm text-red-600">{recordFieldLabel(v.fieldId)}: {v.message}</li>
+                    <li key={i} className="text-sm text-red-600">{submittedLabel(v.fieldId)}: {v.message}</li>
                   ))}
                 </ul>
               </CollapsibleSection>
@@ -550,10 +570,24 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
 
             {submission.resultingRecords?.length > 0 && (
               <CollapsibleSection title="Records Created">
-                <ul className="flex flex-col gap-1">
-                  {submission.resultingRecords.map((r, i) => (
-                    <li key={i} className="text-sm text-gray-700">{r.module} record created</li>
-                  ))}
+                {/* The whole point of a form is the CRM record it produces, so this is the one link
+                    that closes the loop. resultingRecords already carries {module, recordId}; it was
+                    being rendered as dead text. */}
+                <ul className="flex flex-col gap-1.5">
+                  {submission.resultingRecords.map((r, i) => {
+                    const href = crmRecordPath(r.module, r.recordId);
+                    return (
+                      <li key={i} className="text-sm">
+                        {href ? (
+                          <Link to={href} className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                            View {r.module} <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        ) : (
+                          <span className="text-gray-700">{r.module} record created</span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </CollapsibleSection>
             )}
@@ -738,18 +772,74 @@ function SubmissionsTab({ formId, onOpenReview }) {
 const RECORD_FIELD_LABELS = {
   name: "Name", email: "Email", phone: "Phone", gstin: "GSTIN", address: "Address",
   website: "Website", industry: "Industry", profilePicture: "Profile Picture",
+  avatar: "Profile Picture", leadSource: "Lead Source", lifecycleStage: "Lifecycle Stage",
+  stageStatus: "Stage Status", socialMedia: "Social Media", additionalFields: "Custom Fields",
+  billingAddress: "Billing Address", shippingAddresses: "Shipping Addresses", balance: "Balance",
 };
 function recordFieldLabel(key) {
   return RECORD_FIELD_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-// Fields on the raw Mongoose record that are never meaningful to a human comparing two records.
+// Fields on the raw Mongoose record that are never meaningful to a human comparing two records —
+// internal refs, audit columns, and per-user preference lists (starredBy) that carry no information
+// about whether these two records are the same entity.
 const HIDDEN_RECORD_KEYS = new Set([
   "_id", "__v", "organization", "createdAt", "updatedAt", "createdBy", "lastUpdatedBy", "user", "company",
+  "starredBy", "parentCompany", "subsidiaries",
 ]);
+
+// Renders a value for display AND for equality comparison — the two must agree, or the reviewer
+// sees one thing and the diff decides another.
+//
+// Nested objects and arrays are now routine on these records (Company.billingAddress,
+// Company.shippingAddresses[], socialMedia, Vendor.address). A bare String(v) turned every one of
+// them into "[object Object]", which made two COMPLETELY DIFFERENT addresses compare equal and show
+// up as "same" — hiding a real difference from someone choosing which record to keep. Flattening to
+// the concatenated leaf values fixes both the display and the comparison.
+// Route for a created CRM record, matching the paths registered in App.jsx (/contacts/:id,
+// /companies/:id, /vendors/:id). Returns null for an unknown module rather than guessing a URL.
+const CRM_RECORD_BASE = { Contact: "/contacts", Company: "/companies", Vendor: "/vendors" };
+function crmRecordPath(module, recordId) {
+  const base = CRM_RECORD_BASE[module];
+  return base && recordId ? `${base}/${recordId}` : null;
+}
+
+// Engine signal names (duplicateDetectionService) in reviewer-facing words.
+const SIGNAL_LABELS = {
+  email: "Email",
+  phone: "Phone",
+  gstin: "GSTIN",
+  website: "Website",
+  name_fuzzy: "Name",
+};
+
+// Turn one stored matchDetail into a sentence that says what was actually compared. `weight` is the
+// engine's contribution to the score; for name_fuzzy it is the similarity scaled by that signal's
+// maximum, so it doubles as a readable strength indicator.
+function signalExplanation(d) {
+  const existing = normalizeForCompare(d.existingValue);
+  const incoming = normalizeForCompare(d.incomingValue);
+
+  if (!d.matched) {
+    if (!existing && !incoming) return "not provided on either record";
+    if (!incoming) return "not provided in this submission";
+    if (!existing) return "the existing record has no value";
+    return `different (“${existing}” vs “${incoming}”)`;
+  }
+  if (d.signal === "name_fuzzy") return `similar (“${existing}” vs “${incoming}”)`;
+  return existing && existing === incoming ? `exact match on “${existing}”` : "matches";
+}
 
 function normalizeForCompare(v) {
   if (v === undefined || v === null || v === "") return "";
+  if (Array.isArray(v)) return v.map(normalizeForCompare).filter(Boolean).join(" | ");
+  if (typeof v === "object") {
+    return Object.entries(v)
+      .filter(([k]) => k !== "_id" && k !== "__v")
+      .map(([, val]) => normalizeForCompare(val))
+      .filter(Boolean)
+      .join(", ");
+  }
   return String(v).trim();
 }
 
@@ -852,6 +942,32 @@ function DuplicateReviewModal({ reviewId, onClose, onResolved }) {
           <p className="text-sm text-gray-400 p-6">Loading…</p>
         ) : (
           <>
+            {/* The engine already records every signal it weighed — which matched, which didn't,
+                and the values it compared. Only the one-line summary above was being shown, which
+                asks the reviewer to trust a percentage without seeing what produced it. */}
+            {(review.matchDetails || []).length > 0 && (
+              <div className="px-6 pt-4 shrink-0">
+                <details open className="rounded-lg border border-gray-200 bg-gray-50/60">
+                  <summary className="px-3 py-2 text-xs font-semibold text-gray-600 cursor-pointer select-none">
+                    Why was this flagged?
+                  </summary>
+                  <div className="px-3 pb-2.5 flex flex-col gap-1.5">
+                    {review.matchDetails.map((d, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span className={d.matched ? "text-green-600" : "text-gray-300"}>{d.matched ? "✓" : "✕"}</span>
+                        <div className="min-w-0">
+                          <span className={d.matched ? "text-gray-700 font-medium" : "text-gray-400"}>
+                            {SIGNAL_LABELS[d.signal] || d.signal}
+                          </span>
+                          <span className={d.matched ? "text-gray-500" : "text-gray-400"}> — {signalExplanation(d)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+
             <div className="px-6 pt-4 pb-2 grid grid-cols-2 gap-4 text-xs shrink-0">
               <div className="flex items-center gap-1.5 text-gray-500">
                 <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0" />

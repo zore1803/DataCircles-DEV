@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../middlewares/auth");
-const userSync = require("../middlewares/userSync");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const subscriptionGate = require("../middlewares/subscriptionGate");
 const paymentTimelineController = require("../controllers/paymentTimelineController");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 
 router.get("/", requireAuth, subscriptionGate, paymentTimelineController.getPaymentsTimeline);
 router.get("/:id/receipt", requireAuth, subscriptionGate, paymentTimelineController.getPaymentReceipt);

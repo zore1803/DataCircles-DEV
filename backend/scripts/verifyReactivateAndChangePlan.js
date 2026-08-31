@@ -29,6 +29,7 @@ let passed = 0, failed = 0;
 async function test(name, fn) {
   try { await fn(); passed++; console.log(`  ok - ${name}`); }
   catch (err) { failed++; console.log(`  FAIL - ${name}:`, err); }
+  finally { await cleanup(); }
 }
 
 function mockReqRes(organizationId, body) {

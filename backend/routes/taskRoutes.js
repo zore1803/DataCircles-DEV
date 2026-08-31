@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const taskController = require("../controllers/taskController");
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const adminMiddleware = require("../middlewares/admin");
-const userSync = require("../middlewares/userSync");
 const checkPermission = require("../middlewares/checkPermission");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const restrictByPlan = require('../middlewares/restrictByPlan');
 const { getDashboardTasks } = require("../controllers/taskController");

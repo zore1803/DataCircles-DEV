@@ -30,8 +30,18 @@ import { subscriptionAPI } from "../../services/subscriptionApi";
 import { formatPrice } from "../../utils/pricingSnapshot";
 import BillingCalendarTimeline from "./BillingCalendarTimeline";
 import {
-  computeCalendarRange, buildBasePlanSegments, buildBasePlanMarkers, buildAddonLanes, findEarliestStart,
+  computeCalendarRange, buildPaidPlanSegments, buildPaidPlanMarkers,
+  buildTrialTrackSegments, buildTrialTrackMarkers, buildAddonLanes, findEarliestStart,
+  addBillingCycle,
 } from "../../utils/billingCalendarSegments";
+import { PLAN_PRIORITY } from "../../utils/subscriptionHelpers";
+
+// Reverse of PLAN_PRIORITY (rank -> planName) — used to find the ONE
+// adjacent tier immediately above/below the current plan. Matches the
+// verified backend contract (backend/utils/planTiers.js, wired into
+// previewPlanUpgrade): only an adjacent-rank move is a real upgrade/
+// downgrade in this app's 3-tier ladder, not "any higher/lower plan".
+const RANK_TO_PLAN = Object.fromEntries(Object.entries(PLAN_PRIORITY).map(([name, rank]) => [rank, name]));
 
 const prettyPlan = (name) => (name ? name.charAt(0).toUpperCase() + name.slice(1) : name);
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
@@ -186,13 +196,35 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState(false);
   const [zoomMonths, setZoomMonths] = useState(3);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  // Upgrade/downgrade projection state — separate from calendarData below
+  // since it depends on live user interaction (the slider), not just the
+  // fetched projection/history. sliderDate is null until initialized to
+  // `now` once the projection loads (can't know `now` before that).
+  const [sliderDate, setSliderDate] = useState(null);
+  const [upgradePreview, setUpgradePreview] = useState(null);
+  const [upgradePreviewLoading, setUpgradePreviewLoading] = useState(false);
+  const [downgradePreview, setDowngradePreview] = useState(null);
 
   const load = () => {
     setError(false);
     setLoading(true);
     Promise.all([
       subscriptionAPI.getBillingProjection(),
-      subscriptionAPI.getBillingTimeline({ limit: 100 }),
+      // getBillingTimeline sorts newest-first and this caps the page size —
+      // for an org with heavy billing-event volume (frequent admin trial
+      // adjustments, retried checkouts, reconciliation events, etc.), the
+      // OLDEST events — TRIAL_STARTED and the original SUBSCRIPTION_CREATED
+      // chief among them — are exactly the ones a low limit silently drops,
+      // since they're the last items in a newest-first list. Losing either
+      // one doesn't error; it just makes buildBasePlanSegments/
+      // findEarliestStart quietly render the Calendar as if the org's
+      // history started later than it actually did (found live: a
+      // trial-converted org's chart rendered with no trial segment at all,
+      // starting from today, despite the trial genuinely having happened).
+      // The Calendar needs this org's FULL history to be correct, not just
+      // its most recent slice — raised well past any realistic real-world
+      // event count rather than guessing at the "right" number.
+      subscriptionAPI.getBillingTimeline({ limit: 1000 }),
     ])
       .then(([projRes, historyRes]) => {
         setProjection(projRes.data);
@@ -208,11 +240,81 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
     setHistory([]);
     setSelectedEvent(null);
     setZoomMonths(3);
+    setSliderDate(null);
+    setUpgradePreview(null);
+    setDowngradePreview(null);
     load();
   }, [isOpen]);
 
   const p = projection?.hasSubscription || projection?.trial?.active ? projection : null;
   const isCommittedPaid = !!(p?.basePlan?.entitlementWindow || (p?.basePlan?.nextRenewal && !p?.trial?.active));
+
+  // Upgrade/downgrade eligibility — the ONE adjacent tier in either
+  // direction, from the verified rank source (subscriptionHelpers'
+  // PLAN_PRIORITY, same one the new previewPlanUpgrade endpoint's
+  // planTierRank() independently enforces server-side). Monthly-only for
+  // this pass — annual projections are explicitly out of scope until
+  // monthly is verified end-to-end.
+  const currentPlanName = p?.basePlan?.current?.planName;
+  const currentBillingCycle = p?.basePlan?.current?.billingCycle;
+  const currentRank = PLAN_PRIORITY[currentPlanName];
+  const canProject = isCommittedPaid && currentBillingCycle === 'monthly' && currentRank != null;
+  const upgradeTargetPlanName = canProject ? RANK_TO_PLAN[currentRank + 1] : null;
+  const downgradeTargetPlanName = canProject ? RANK_TO_PLAN[currentRank - 1] : null;
+
+  // Memoized on the underlying ISO-string/primitive fields, not re-derived
+  // as a fresh Date object every render — otherwise the planChange useMemo
+  // below (which depends on these) would never actually memoize anything.
+  const periodEndIso = p?.basePlan?.current?.periodEnd || p?.basePlan?.nextRenewal?.date || null;
+  const currentRenewalDate = useMemo(() => (periodEndIso ? new Date(periodEndIso) : null), [periodEndIso]);
+
+  // Slider bounds: [now, currentRenewalDate) — never before today, never at
+  // or past the renewal itself (verifyUpgradePreviewContract.js confirmed
+  // that boundary falls back to full undiscounted-diff pricing, a real but
+  // uninteresting edge case for a slider that should stay strictly inside
+  // the current term).
+  const nowIso = p?.now || null;
+  const sliderMin = useMemo(() => (nowIso ? new Date(nowIso) : null), [nowIso]);
+  const sliderMax = useMemo(
+    () => (currentRenewalDate ? new Date(currentRenewalDate.getTime() - 60 * 1000) : null),
+    [currentRenewalDate]
+  );
+
+  useEffect(() => {
+    if (sliderMin && !sliderDate) setSliderDate(sliderMin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliderMin]);
+
+  // Debounced upgrade preview fetch — never one request per pixel of drag.
+  useEffect(() => {
+    if (!upgradeTargetPlanName || !sliderDate) {
+      setUpgradePreview(null);
+      return;
+    }
+    setUpgradePreviewLoading(true);
+    const handle = setTimeout(() => {
+      subscriptionAPI.previewPlanUpgrade(upgradeTargetPlanName, sliderDate)
+        .then((res) => setUpgradePreview(res.data))
+        .catch(() => setUpgradePreview(null))
+        .finally(() => setUpgradePreviewLoading(false));
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [upgradeTargetPlanName, sliderDate]);
+
+  // Downgrade preview — NOT slider-dependent (always scheduled for the
+  // current renewal regardless of slider position), fetched once per
+  // eligible target. Reuses checkAddonCompatibility exactly the way the
+  // real downgrade confirmation modal already does (SubscriptionPlans.jsx)
+  // — same read-only call, same formula, not a second implementation.
+  useEffect(() => {
+    if (!downgradeTargetPlanName || !currentBillingCycle) {
+      setDowngradePreview(null);
+      return;
+    }
+    subscriptionAPI.checkAddonCompatibility(downgradeTargetPlanName, currentBillingCycle)
+      .then((res) => setDowngradePreview(res.data))
+      .catch(() => setDowngradePreview(null));
+  }, [downgradeTargetPlanName, currentBillingCycle]);
   // Third header state, alongside "paid" and "trialing" — a subscription
   // that has definitively ended (trial expired, or cancelled/suspended)
   // with nothing currently committed. TERMINATED_COPY above supplies the
@@ -235,14 +337,57 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
     // 7-day trial" without making the buttons lie about what they do.
     const range = computeCalendarRange(zoomMonths, now, earliestStart);
 
+    // Paid computed first — buildTrialTrackSegments needs its result to
+    // know the trial's real conversion moment (see that function's own
+    // comment for why TRIAL_ENDED alone can't tell it that).
+    const paidPlanSegments = buildPaidPlanSegments(history, p);
+    const { segments: trialSegments, convertedAt } = buildTrialTrackSegments(history, p, paidPlanSegments);
+
     return {
       now,
       range,
-      basePlanSegments: buildBasePlanSegments(history, p),
-      basePlanMarkers: buildBasePlanMarkers(history, p),
+      trialSegments,
+      trialMarkers: buildTrialTrackMarkers(history, p, convertedAt),
+      paidPlanSegments,
+      paidPlanMarkers: buildPaidPlanMarkers(history, p),
       addonLanes: buildAddonLanes(p, range.end),
     };
   }, [p, history, zoomMonths]);
+
+  // The projection layer handed to BillingCalendarTimeline — kept entirely
+  // separate from calendarData (never merged into paidPlanSegments/
+  // tierGroups), per the explicit rule: a projection must never appear in
+  // the Billing Journey strip or be mistaken for real committed history.
+  const planChange = useMemo(() => {
+    if (!canProject || !sliderDate || !sliderMin || !sliderMax) return null;
+    const downgradeEligible = downgradeTargetPlanName
+      && downgradePreview
+      && downgradePreview.downgradeValidation?.eligible !== false;
+
+    return {
+      currentPlanName,
+      currentEnd: currentRenewalDate,
+      sliderValue: sliderDate,
+      sliderMin,
+      sliderMax,
+      onSliderChange: setSliderDate,
+      upgrade: upgradeTargetPlanName ? {
+        targetPlanName: upgradeTargetPlanName,
+        dueToday: upgradePreview?.dueToday ?? '…',
+        newRenewalDate: upgradePreview?.newRenewalDate ? new Date(upgradePreview.newRenewalDate) : addBillingCycle(sliderDate, 'monthly'),
+        loading: upgradePreviewLoading,
+      } : null,
+      downgrade: downgradeEligible ? {
+        targetPlanName: downgradeTargetPlanName,
+        // Cosmetic bar length only (mirrors the trial fork's own
+        // client-side addBillingCycle use for its Monthly/Annual branch
+        // display) — the real EFFECTIVE DATE is currentRenewalDate itself,
+        // already authoritative from the projection; this only decides how
+        // far the faded bar visually extends.
+        visualEnd: addBillingCycle(currentRenewalDate, 'monthly'),
+      } : null,
+    };
+  }, [canProject, sliderDate, sliderMin, sliderMax, currentPlanName, currentRenewalDate, upgradeTargetPlanName, upgradePreview, upgradePreviewLoading, downgradeTargetPlanName, downgradePreview]);
 
   if (!isOpen) return null;
 
@@ -356,7 +501,7 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
               <div className="px-8 pt-5 pb-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Your Billing Journey</p>
                 <div className="flex flex-wrap items-center gap-1 text-sm font-semibold text-gray-500">
-                  {calendarData.basePlanSegments.filter(s => s.tone !== 'scheduled').map((seg, idx, arr) => {
+                  {[...calendarData.trialSegments, ...calendarData.paidPlanSegments].filter(s => s.tone !== 'scheduled').map((seg, idx, arr) => {
                     const isLast = idx === arr.length - 1;
                     const isCurrent = idx === arr.length - 1;
 
@@ -390,11 +535,14 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
                 <BillingCalendarTimeline
                   now={calendarData.now}
                   range={calendarData.range}
-                  basePlanSegments={calendarData.basePlanSegments}
-                  basePlanMarkers={calendarData.basePlanMarkers}
+                  trialSegments={calendarData.trialSegments}
+                  trialMarkers={calendarData.trialMarkers}
+                  paidPlanSegments={calendarData.paidPlanSegments}
+                  paidPlanMarkers={calendarData.paidPlanMarkers}
                   addonLanes={calendarData.addonLanes}
                   onSelectEvent={setSelectedEvent}
                   trialEndsAt={!isCommittedPaid && p.trial.active ? p.trial.endsAt : null}
+                  planChange={planChange}
                 />
               </div>
 
@@ -404,7 +552,7 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
               ) : (
                 <>
                   <ComingUpPanel events={p.upcomingEvents} isCommittedPaid={isCommittedPaid} trialEndsAt={p.trial?.active ? p.trial.endsAt : null} />
-                  <AdjustmentHistoryPanel markers={calendarData.basePlanMarkers} />
+                  <AdjustmentHistoryPanel markers={calendarData.trialMarkers} />
                 </>
               )}
             </div>

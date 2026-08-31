@@ -25,6 +25,8 @@ import {
   ReceiptIndianRupeeIcon,
   Ban,
   Sparkles,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
@@ -247,19 +249,36 @@ const AlertBanner = ({ type, title, message, icon: Icon }) => {
 // (or any adjustment that would end the trial immediately) requires typed
 // confirmation, matching the severity of Delete Organization, since it
 // immediately reduces a customer's access.
+// Redesigned from a single raw +/-N number input (found live: unintuitive —
+// no visual distinction between extending and shortening, and a shortening
+// large enough to end the trial looked exactly like a mild reduction until
+// you read the fine print). Now: an explicit Extend/Shorten toggle, quick-
+// pick day buttons scoped to whichever direction is selected, and a preview
+// that escalates in severity as the consequence gets more serious — ending
+// with a distinct "this ends the trial immediately" panel, not a shared
+// generic warning, once the shortening crosses today.
+const QUICK_DAYS = [1, 3, 7];
+
 const AdjustTrialModal = ({ isOpen, onClose, onConfirm, currentTrialEnd }) => {
-  const [adjustmentDays, setAdjustmentDays] = useState(7);
+  const [direction, setDirection] = useState("extend"); // "extend" | "shorten"
+  const [days, setDays] = useState(7);
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
+  const adjustmentDays = direction === "extend" ? days : -days;
   const newTrialEnd = new Date(
     new Date(currentTrialEnd).getTime() + adjustmentDays * 24 * 60 * 60 * 1000
   );
   const resultsInExpiry = newTrialEnd <= new Date();
-  const isReduction = adjustmentDays < 0;
-  const requiresTypedConfirm = isReduction || resultsInExpiry;
+  const requiresTypedConfirm = direction === "shorten" || resultsInExpiry;
+
+  const setDirectionAndReset = (dir) => {
+    setDirection(dir);
+    setDays(dir === "extend" ? 7 : 3);
+    setConfirmText("");
+  };
 
   const handleSubmit = async () => {
     if (requiresTypedConfirm && confirmText !== "CONFIRM") {
@@ -278,6 +297,8 @@ const AdjustTrialModal = ({ isOpen, onClose, onConfirm, currentTrialEnd }) => {
     }
   };
 
+  const fmt = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[100002]">
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
@@ -291,82 +312,112 @@ const AdjustTrialModal = ({ isOpen, onClose, onConfirm, currentTrialEnd }) => {
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Adjustment (Days)
-            </label>
-            <input
-              type="number"
-              min="-60"
-              max="60"
-              value={adjustmentDays}
-              onChange={(e) => {
-                const val = parseInt(e.target.value);
-                setAdjustmentDays(
-                  Number.isNaN(val) ? 0 : Math.max(-60, Math.min(60, val))
-                );
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Between -60 and 60 days. Positive extends the trial, negative
-              reduces it.
-            </p>
+          <p className="text-sm text-gray-500">
+            Current trial ends <span className="font-semibold text-gray-800">{fmt(new Date(currentTrialEnd))}</span>
+          </p>
+
+          {/* Explicit Extend / Shorten toggle — no single control doing double duty */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setDirectionAndReset("extend")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-semibold transition-colors ${
+                direction === "extend" ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <ArrowUp className="w-3.5 h-3.5" /> Extend
+            </button>
+            <button
+              type="button"
+              onClick={() => setDirectionAndReset("shorten")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-semibold transition-colors ${
+                direction === "shorten" ? "bg-white text-red-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <ArrowDown className="w-3.5 h-3.5" /> Shorten
+            </button>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start space-x-2">
-              <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-blue-900">
-                  Current Trial Ends
-                </p>
-                <p className="text-sm text-blue-700">
-                  {new Date(currentTrialEnd).toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-2 mt-3">
-              {resultsInExpiry ? (
-                <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
-              ) : (
-                <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-              )}
-              <div className="flex-1">
-                <p
-                  className={`text-sm font-medium ${
-                    resultsInExpiry ? "text-red-900" : "text-green-900"
+          {/* Quick picks scoped to the selected direction, plus custom */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              {QUICK_DAYS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDays(d)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+                    days === d
+                      ? direction === "extend"
+                        ? "bg-blue-600 border-blue-600 text-white"
+                        : "bg-red-600 border-red-600 text-white"
+                      : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
                   }`}
                 >
-                  New Trial End Date
-                </p>
-                <p
-                  className={`text-sm ${
-                    resultsInExpiry ? "text-red-700" : "text-green-700"
-                  }`}
-                >
-                  {newTrialEnd.toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
+                  {direction === "extend" ? "+" : "−"}{d}
+                </button>
+              ))}
+              <div className="flex items-center gap-1.5 ml-1">
+                <span className="text-xs text-gray-400">Custom:</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={days}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setDays(Number.isNaN(val) ? 1 : Math.max(1, Math.min(60, val)));
+                  }}
+                  className="w-16 px-2 py-1 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+                <span className="text-xs text-gray-400">days</span>
               </div>
             </div>
           </div>
+
+          {/* Live consequence preview — escalates from a mild extension to
+              the "this ends the trial right now" case as it gets serious. */}
+          {resultsInExpiry ? (
+            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-red-900">⚠ This ends the trial immediately</p>
+                  <p className="text-xs text-red-700 mt-1">
+                    Shortening by {days} day{days === 1 ? "" : "s"} moves the end date to <strong>{fmt(newTrialEnd)}</strong> — that's in the past, so the trial ends the moment you apply this, not on a future date.
+                  </p>
+                  <ul className="text-xs text-red-700 mt-2 space-y-0.5 list-disc list-inside">
+                    <li>Growth trial access ends immediately</li>
+                    <li>No paid subscription will be created</li>
+                    <li>The organization will need to choose a plan to continue</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={`rounded-lg p-4 border ${direction === "extend" ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"}`}>
+              <div className="flex items-start gap-2">
+                {direction === "extend" ? (
+                  <CheckCircle2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <Clock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                )}
+                <div>
+                  <p className={`text-sm font-semibold ${direction === "extend" ? "text-blue-900" : "text-amber-900"}`}>
+                    New trial end: {fmt(newTrialEnd)}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${direction === "extend" ? "text-blue-700" : "text-amber-700"}`}>
+                    {direction === "extend"
+                      ? `${days} extra day${days === 1 ? "" : "s"} — the trial stays active until then.`
+                      : `${days} fewer day${days === 1 ? "" : "s"} — the trial remains active, just ending sooner than originally planned.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {requiresTypedConfirm && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800 font-medium mb-1">
-                ⚠️{" "}
-                {resultsInExpiry
-                  ? "This will end the trial immediately and cut off access."
-                  : "This reduces the customer's remaining trial time."}
-              </p>
               <p className="text-xs text-yellow-700 mb-3">
                 Type{" "}
                 <span className="font-mono font-bold text-gray-900">
@@ -398,7 +449,9 @@ const AdjustTrialModal = ({ isOpen, onClose, onConfirm, currentTrialEnd }) => {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+              className={`flex-1 px-4 py-2 rounded-lg text-white disabled:opacity-50 flex items-center justify-center space-x-2 ${
+                resultsInExpiry ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
               {submitting ? (
                 <>
@@ -408,7 +461,7 @@ const AdjustTrialModal = ({ isOpen, onClose, onConfirm, currentTrialEnd }) => {
               ) : (
                 <>
                   <Timer className="w-4 h-4" />
-                  <span>Apply Adjustment</span>
+                  <span>{resultsInExpiry ? "End Trial Now" : "Apply Adjustment"}</span>
                 </>
               )}
             </button>

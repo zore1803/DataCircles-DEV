@@ -53,6 +53,7 @@ const corsOptions = {
     "Content-Type",
     "Authorization",
     "x-phone-token",
+    "X-CSRF-Token",
     "X-Requested-With",
     "Accept",
     "Origin",
@@ -65,6 +66,10 @@ app.use(cors(corsOptions));
 
 // Explicit OPTIONS handler for all routes
 app.options(/.*/, cors(corsOptions)); // Enable pre-flight for all routes
+
+// Needed to read the dc_session cookie (DataCircles application-session layer).
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
 
 // Establish a per-request context (AsyncLocalStorage) so the change-notifier
 // plugin can attribute DB writes to the current user. Must wrap all routes.
@@ -137,6 +142,9 @@ app.use('/api/public', publicDocumentRoutes);
 
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
+
+const sessionRoutes = require('./routes/session');
+app.use('/api/session', sessionRoutes);
 
 const brandingRoutes = require('./routes/brandingRoutes');
 app.use('/api/branding', brandingRoutes);

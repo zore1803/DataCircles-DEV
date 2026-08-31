@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const invoiceController = require("../controllers/invoiceController");
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const checkPermission = require("../middlewares/checkPermission");
-const userSync = require("../middlewares/userSync");
 const restrictByPlan = require("../middlewares/restrictByPlan");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // POST /api/invoices (Create - requires write permission)

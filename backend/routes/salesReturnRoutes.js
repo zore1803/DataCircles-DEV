@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../middlewares/auth");
-const userSync = require("../middlewares/userSync");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const subscriptionGate = require("../middlewares/subscriptionGate");
 const c = require("../controllers/salesReturnController");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 
 // No restrictByPlan/checkPermission gate yet — same situation as
 // purchaseReturnRoutes: "salesReturns" has no PlanConfig module entry or

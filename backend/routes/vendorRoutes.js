@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../middlewares/auth");
-const userSync = require("../middlewares/userSync");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const checkPermission = require("../middlewares/checkPermission");
 const restrictByPlan = require("../middlewares/restrictByPlan");
 const uploadMiddlewareS3 = require("../middlewares/uploadMiddlewareS3");
 const vendorController = require("../controllers/vendorController");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // Create Vendor

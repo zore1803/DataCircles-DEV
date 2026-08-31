@@ -1,12 +1,12 @@
 // routes/dealSettings.js
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middlewares/auth');
-const userSync = require('../middlewares/userSync');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const dealSettingsController = require('../controllers/dealSettings.controller');
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 
 // GET /deal-settings
 router.get('/', requireAuth, subscriptionGate, dealSettingsController.getDealSettings);

@@ -1,10 +1,21 @@
 // models/FormVersion.js
 // Immutable structural snapshot — FORMS_DOMAIN_MODEL.md §FormVersion, FORMS_SCHEMA.md §3.
 // `layout` and `schemaHash` are immutable after creation (enforced via `immutable: true` per
-// FORMS_SCHEMA_IMPLEMENTATION_NOTES.md, not a blanket pre-save hook). `resolvedFields` is the
-// one deliberate, narrow exception — may be refreshed in place on a non-structural republish
-// (FORMS_SCHEMA.md §3a) without violating the immutability guarantee, since neither `layout`
-// nor `schemaHash` change and no submission's interpretation is altered.
+// FORMS_SCHEMA_IMPLEMENTATION_NOTES.md, not a blanket pre-save hook).
+//
+// Two deliberate, narrow exceptions exist, both on the non-structural republish path
+// (FORMS_SCHEMA.md §3a) and neither altering how any existing submission is interpreted:
+//   1. `resolvedFields` — refreshed in place when field labels/options drift
+//      (formVersionService.refreshResolvedFields). Not marked immutable, hence unremarkable.
+//   2. `layout` — PRESENTATION-only properties within it (image url/size/position, heading text,
+//      divider styling, help text, button label) are refreshed in place by
+//      formVersionService.refreshLayoutPresentation, which bypasses this `immutable` flag via
+//      `overwriteImmutable` on that one update. §3a deliberately keeps presentation out of
+//      schemaHash so cosmetic edits don't mint a version and strand old submissions — without
+//      this refresh, the frozen layout would keep serving whatever it held at first publish and
+//      republishing a cosmetic change would visibly do nothing. Structural properties inside
+//      layout (type/fieldId/source/targetModule/required/validationOverrides/order) are never
+//      touched by it; changing one of those still mints a new version, as does schemaHash.
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
@@ -32,6 +43,7 @@ const frozenElementSchema = new Schema(
       enum: ["field", "heading", "paragraph", "divider", "spacer", "image", "submitButton"],
     },
     order: { type: Number, required: true },
+    layoutWidth: { type: String, enum: ["full", "half"] }, // FormDefinition.elementSchema note
     fieldId: String,
     source: { type: String, enum: ["system", "custom"] },
     // Frozen copy of the derived routing (FormDefinition.elementSchema note). Part of the
@@ -50,6 +62,7 @@ const frozenElementSchema = new Schema(
     fontSize: { type: String, enum: ["small", "normal", "large", "xlarge"] },
     fontWeight: { type: String, enum: ["normal", "bold"] },
     textAlign: { type: String, enum: ["left", "center", "right"] },
+    textColor: String,
     height: Number,
     dividerThickness: Number,
     dividerColor: String,
@@ -57,6 +70,7 @@ const frozenElementSchema = new Schema(
     dividerSpacingBottom: Number,
     url: String,
     alt: String,
+    imageWidth: Number, // percent, 10-100 (FormDefinition.elementSchema note)
     label: String,
     color: String,
     position: { type: String, enum: ["left", "center", "right"] },
@@ -71,6 +85,7 @@ const frozenSectionSchema = new Schema(
     title: String,
     description: String,
     order: { type: Number, required: true },
+    startsNewPage: Boolean, // FormDefinition.sectionSchema note
     elements: [frozenElementSchema],
   },
   { _id: false },
@@ -84,6 +99,11 @@ const resolvedFieldSchema = new Schema(
     source: { type: String, enum: ["system", "custom"], required: true },
     label: String,
     type: String,
+    // Semantic refinement of `type` where the CRM has none of its own — Contact.email is a plain
+    // String on the model, so "this is an email address" can only travel as metadata. Read by
+    // utils/fieldTypeContract.validateFieldValue. Frozen with the rest of the field's display
+    // metadata so an old submission is still judged by the rules it was collected under.
+    format: String,
     options: [String],
     baseRequired: Boolean, // the field definition's own required-ness, distinct from the
     // per-form `required` override living in `layout` — both must survive independently

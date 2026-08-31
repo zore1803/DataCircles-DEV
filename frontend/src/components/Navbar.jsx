@@ -34,6 +34,7 @@ import {
   Pin,
   PinOff,
 } from "lucide-react";
+import { useAuth0 } from "@auth0/auth0-react";
 import API from "../services/api";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
 /*
@@ -128,6 +129,7 @@ const secondary = {
 };
 
 const Navbar = () => {
+  const { logout: auth0Logout } = useAuth0();
   const isSearchOverlayOpen = useSearchOverlayOpen();
   const [profile, setProfile] = useState("");
   const [kanbanName, setKanbanName] = useState("");
@@ -332,13 +334,29 @@ const Navbar = () => {
       );
     });
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the DataCircles application session server-side (see
+    // backend/controllers/sessionController.js logout) before touching any
+    // client-side state — a merely-client-side "logout" leaves the session
+    // row (and, for Google users, the Auth0 IdP session/refresh token)
+    // valid indefinitely, which defeats session revocation entirely.
+    try {
+      await API.post("/session/logout");
+    } catch (err) {
+      // Non-fatal — proceed with client-side logout regardless.
+      console.error("Failed to revoke DataCircles session:", err);
+    }
+
     const savedPins = localStorage.getItem("pinned_companies");
     // Preserve a captured referral code across logout — a user logged into an
     // old account who clicks a referral link and then logs out to register a
     // fresh org would otherwise lose the code to localStorage.clear() before
     // registration can use it. See main.jsx (capture) / Login.jsx (consume).
     const savedReferralCode = localStorage.getItem("referralCode");
+    // A phone/password login stores its JWT here; its absence means this
+    // browser is authenticated via Auth0 (Google/Facebook/GitHub), whose
+    // IdP session/refresh token also needs to be torn down below.
+    const isAuth0Session = !localStorage.getItem("token");
 
     localStorage.clear();
 
@@ -348,7 +366,20 @@ const Navbar = () => {
     if (savedReferralCode) {
       localStorage.setItem("referralCode", savedReferralCode);
     }
-    window.location.href = "/login";
+
+    if (isAuth0Session) {
+      // Ends the Auth0 IdP session and clears its cached/rotating refresh
+      // token — auth0Logout() performs its own redirect (returnTo), so no
+      // separate window.location.href call is needed for this branch.
+      // returnTo must exactly match an entry in the Auth0 application's
+      // Allowed Logout URLs (window.location.origin, not .../login — see
+      // Profile.jsx's existing, working auth0-react logout() call for the
+      // same pattern). Changing this to a URL not on that allowlist is a
+      // dashboard config change, not something to route around in code.
+      auth0Logout({ logoutParams: { returnTo: window.location.origin } });
+    } else {
+      window.location.href = "/login";
+    }
   };
 
   useEffect(() => {

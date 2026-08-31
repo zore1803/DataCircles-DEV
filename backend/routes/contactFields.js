@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const contactFieldsController = require('../controllers/contactFieldsController');
-const authMiddleware = require('../middlewares/auth');
-const userSync = require('../middlewares/userSync');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 const checkPermission = require('../middlewares/checkPermission'); // Optional: for future use
 
 // Bundle middlewares for cleaner route definitions
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const restrictByPlan = require('../middlewares/restrictByPlan');
 

@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const performaInvoiceController = require("../controllers/performaInvoiceController.js");
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const checkPermission = require("../middlewares/checkPermission");
-const userSync = require("../middlewares/userSync");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const restrictByPlan = require('../middlewares/restrictByPlan');
 

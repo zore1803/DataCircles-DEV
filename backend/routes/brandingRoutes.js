@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const adminMiddleware = require("../middlewares/admin");
 const uploadMiddlewareS3 = require('../middlewares/uploadMiddlewareS3');
-const userSync = require('../middlewares/userSync');
 const brandingController = require('../controllers/brandingController');
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const uploadS3 = uploadMiddlewareS3(); // Initialize S3 upload middleware
 

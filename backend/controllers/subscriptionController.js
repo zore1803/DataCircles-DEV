@@ -175,6 +175,154 @@ exports.previewSubscription = async (req, res) => {
   }
 };
 
+// Read-only upgrade-projection preview for the Billing Calendar's upgrade
+// slider — "if this org upgraded to targetPlanId at asOfDate, what would
+// happen." Mirrors the REAL upgrade branch's own pricing construction
+// exactly (same calculateInvoice() Stage-5 call via adjustmentContext, same
+// coupon modifier built from the SAME frozen appliedCoupon.fullRulesSnapshot)
+// so this can never diverge from what a real upgrade will actually charge —
+// but creates NOTHING: no Order, no CommercialTransaction, no reward
+// reservation (getNextAvailableReward — the read-only candidate-select
+// already used by previewSubscription above — never reserveNextAvailableReward),
+// no Subscription write. Verified contract: scripts/verifyUpgradePreviewContract.js.
+//
+// Same billing cycle only (Growth Monthly -> Business Monthly, Growth
+// Monthly -> Starter downgrade elsewhere) — annual upgrade projections are
+// deliberately out of scope until this is verified end-to-end on monthly.
+exports.previewPlanUpgrade = async (req, res) => {
+  try {
+    const { targetPlanId, asOfDate } = req.query;
+    if (!targetPlanId) {
+      return res.status(400).json({ error: 'targetPlanId is required' });
+    }
+
+    const subscription = await Subscription.findOne({ organization: req.user.organization });
+    if (!subscription) return res.status(404).json({ error: 'No active subscription found' });
+    if (!subscription.isPaymentConfirmed) {
+      return res.status(400).json({ error: 'This organization is not on a confirmed paid subscription yet.' });
+    }
+
+    // Tier eligibility from the canonical rank source (planTiers.js) — not a
+    // fresh hardcoded {starter:1,growth:2,business:3} literal (already
+    // duplicated 4 times across the codebase; this endpoint is planTiers.js's
+    // first real consumer, per its own stated additive design).
+    const { planTierRank } = require('../utils/planTiers');
+    const currentRank = planTierRank(subscription.planName);
+    const targetRank = planTierRank(targetPlanId);
+    if (currentRank == null || targetRank == null || targetRank <= currentRank) {
+      return res.status(400).json({
+        error: `"${targetPlanId}" is not a valid upgrade target from "${subscription.planName}".`,
+        code: 'NOT_AN_UPGRADE',
+      });
+    }
+
+    const newPlan = await PlanConfig.findOne({ planId: targetPlanId, isActive: true });
+    if (!newPlan) return res.status(404).json({ error: 'Plan not found' });
+
+    // Clamp asOfDate to [now, currentPeriodEnd) — matches the slider's own
+    // bounds and the edge case verified in verifyUpgradePreviewContract.js:
+    // AT or past currentPeriodEnd, calculatePlanUpgradeProration falls back
+    // to the full undiscounted diff (real, correct behavior, but not a
+    // useful slider preview point) — never let a client-supplied date reach
+    // that branch by mistake.
+    const now = new Date();
+    const periodEnd = new Date(subscription.currentPeriodEnd);
+    let effectiveAsOf = asOfDate ? new Date(asOfDate) : now;
+    if (Number.isNaN(effectiveAsOf.getTime())) effectiveAsOf = now;
+    if (effectiveAsOf < now) effectiveAsOf = now;
+    if (effectiveAsOf >= periodEnd) effectiveAsOf = new Date(periodEnd.getTime() - 60 * 1000);
+
+    const billingCycle = subscription.billingCycle;
+    const newBasePrice = billingCycle === 'monthly' ? newPlan.monthlyPrice : newPlan.yearlyPrice;
+    if (!newBasePrice) {
+      return res.status(400).json({ error: `"${targetPlanId}" has no price configured for the ${billingCycle} cycle.` });
+    }
+
+    // Same oldTotal/newTotal construction as the real upgrade branch (line
+    // ~1441 above) — add-ons carry forward unchanged for this preview; the
+    // calendar doesn't offer carry-forward editing, that stays exclusive to
+    // the real checkout modal.
+    const oldLineItems = [
+      { key: subscription.planName, type: 'plan', amount: subscription.pricePerUser },
+      ...(subscription.activeAddons || []).map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+    ];
+    const oldCouponModifier = (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon))
+      ? buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, oldLineItems)
+      : null;
+    const oldTotal = calculateInvoice({
+      subscription,
+      resolvedModifiers: oldCouponModifier ? [oldCouponModifier] : [],
+    }).taxable;
+
+    const upgradeTargetSubscription = {
+      planName: targetPlanId,
+      billingCycle,
+      pricePerUser: newBasePrice,
+      activeAddons: subscription.activeAddons || [],
+    };
+    const newLineItems = [
+      { key: targetPlanId, type: 'plan', amount: newBasePrice },
+      ...upgradeTargetSubscription.activeAddons.map((a) => ({ key: a.addonKey, type: 'addon', amount: a.quantity * a.pricePerUnit })),
+    ];
+    const newCouponModifier = (subscription.appliedCoupon?.fullRulesSnapshot && isCouponStillEligibleForRenewal(subscription.appliedCoupon))
+      ? buildCouponModifierForLineItems(subscription.appliedCoupon.fullRulesSnapshot, newLineItems)
+      : null;
+    const newTotal = calculateInvoice({
+      subscription: upgradeTargetSubscription,
+      resolvedModifiers: newCouponModifier ? [newCouponModifier] : [],
+    }).taxable;
+
+    // Referral — READ-ONLY candidate select only. A slider preview must
+    // never reserve/mutate a RewardUsage document.
+    const { getNextAvailableReward } = require('../utils/referralRewards');
+    const availableReward = await getNextAvailableReward(req.user.organization);
+    const resolvedModifiers = availableReward ? [rewardToModifier(availableReward)] : [];
+
+    const upgradeInvoice = calculateInvoice({
+      subscription: { planName: targetPlanId, billingCycle, pricePerUser: 0, activeAddons: [] },
+      changeset: { pricePerUser: 0 },
+      asOf: effectiveAsOf,
+      adjustmentContext: {
+        type: 'plan_upgrade',
+        oldBasePrice: oldTotal,
+        newBasePrice: newTotal,
+        currentPeriodStart: subscription.currentPeriodStart,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+      },
+      resolvedModifiers,
+    });
+
+    // CORRECTION (found by user live-testing this endpoint's output, then
+    // verified directly in code): the real upgrade-settlement webhook
+    // handler (handleCAWPaymentCaptured's pendingPlanChange branch) never
+    // reassigns currentPeriodEnd/nextBillingDate anywhere — confirmed by
+    // grepping every currentPeriodEnd reference in that entire handler,
+    // all reads, zero writes. A real upgrade does NOT start a fresh billing
+    // cycle from the upgrade date; it prorates the difference for the
+    // REMAINDER of the CURRENT cycle and keeps the exact same renewal date,
+    // simply billing the new plan's full price from then on. This endpoint
+    // previously computed `addBillingCycle(asOfDate, billingCycle)` here —
+    // an invented renewal date that never matched what the real system
+    // actually does. The renewal date after an upgrade is just the
+    // subscription's own unchanged currentPeriodEnd.
+    res.json({
+      targetPlanId,
+      billingCycle,
+      asOfDate: effectiveAsOf,
+      dueToday: upgradeInvoice.total, // GST-inclusive — what would actually be charged
+      taxable: upgradeInvoice.taxable,
+      gst: upgradeInvoice.gst,
+      newBasePrice,
+      newRecurringTotal: newTotal, // pre-GST recurring baseline, from renewal onward
+      newRenewalDate: subscription.currentPeriodEnd, // unchanged — see comment above
+      couponApplied: !!newCouponModifier,
+      referralApplied: !!availableReward,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.createSubscription = async (req, res) => {
   try {
     const { planId, billingCycle, addons = [], couponCode } = req.body;

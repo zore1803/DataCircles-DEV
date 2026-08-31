@@ -240,6 +240,97 @@
   font-family: 'Inter', sans-serif !important;
 }
 
+/* ---------------------------------------------------------------------------
+   Form theme scope — consumes the design tokens emitted by themeCssVars()
+   (src/components/forms/formThemes.js). Used by the Builder canvas, the Preview
+   modal and the public form so all three render a theme identically.
+
+   The font MUST travel as the --form-font custom property rather than as an
+   inline font-family: the app-wide `* { font-family: ... !important }` rule
+   above outranks inline styles, so only a class-scoped !important rule can win.
+   --------------------------------------------------------------------------- */
+.form-theme-scope,
+.form-theme-scope * {
+  font-family: var(--form-font, 'Inter', sans-serif) !important;
+}
+
+.form-theme-scope {
+  background: var(--form-surface, #fff);
+  color: var(--form-text, #111827);
+  border-radius: var(--form-radius, 12px);
+  padding: var(--form-padding, 32px);
+  box-shadow: var(--form-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+  border: 1px solid var(--form-border, #e5e7eb);
+}
+
+/* Half-width elements stack when there isn't room for two — a 2-up "City | State" is unreadable on
+   a phone, and the public form is the one surface guaranteed to be opened on one.
+
+   Measured against the FORM's own width, not the viewport's. A viewport media query would be wrong
+   in two places: a device-preview pane 375px wide inside a desktop window would keep rendering two
+   columns (confidently showing a "Mobile" preview that lies about the one thing you opened it to
+   check), and a deliberately narrow 400px form on a desktop would stay 2-up when it shouldn't.
+   Sizing off the container is simply the more correct rule in both cases.
+
+   The media query is kept as a fallback for browsers without container-query support; where both
+   apply they say the same thing. */
+.form-theme-scope {
+  container-type: inline-size;
+  /* A single long unbroken token — a pasted URL, a long email, a long placeholder or help text —
+     otherwise sets the grid's min-content width and pushes the whole form wider than its container,
+     spilling out of the device frame in Preview and off-screen on a phone. `anywhere` (not
+     `break-word`) is the one that also shrinks min-content, which is what stops it forcing width. */
+  overflow-wrap: anywhere;
+}
+@container (max-width: 480px) {
+  .form-theme-scope .col-span-1 { grid-column: span 2 / span 2; }
+}
+@supports not (container-type: inline-size) {
+  @media (max-width: 640px) {
+    .form-theme-scope .col-span-1 { grid-column: span 2 / span 2; }
+  }
+}
+
+.form-theme-scope .form-label,
+.form-theme-scope .form-heading { color: var(--form-text, #111827); }
+.form-theme-scope .form-help { color: var(--form-muted, #6b7280); }
+.form-theme-scope hr { border-color: var(--form-border, #e5e7eb); }
+
+.form-theme-scope .form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  color: var(--form-text, #111827);
+  background: var(--form-input-bg, transparent);
+  border-style: solid;
+  border-color: var(--form-border, #e5e7eb);
+  border-width: var(--form-input-border-width, 1px);
+  border-radius: var(--form-input-radius, 8px);
+  outline: none;
+}
+.form-theme-scope .form-input:focus {
+  border-color: var(--form-primary, #2563eb);
+}
+/* The visitor's own typed text must stay legible on dark presets, where the browser's
+   default input colour would otherwise be near-invisible. */
+.form-theme-scope .form-input::placeholder { color: var(--form-muted, #9ca3af); }
+.form-theme-scope .form-input:disabled { opacity: 0.6; }
+.form-theme-scope select.form-input option { color: initial; }
+
+.form-theme-scope .form-button {
+  background: var(--form-button-bg, #0c4fcd);
+  color: var(--form-button-text, #fff);
+  border-radius: var(--form-button-radius, 8px);
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  border: 2px solid transparent;
+}
+.form-theme-scope .form-button--outline {
+  background: transparent;
+  color: var(--form-button-bg, #0c4fcd);
+  border-color: var(--form-button-bg, #0c4fcd);
+}
+.form-theme-scope .form-button--full { width: 100%; }
+
 body {
   font-family: var(--font-inter);
   font-weight: 500;
@@ -605,6 +696,90 @@ button {
 /* Add group class support for hover effects */
 .group:hover .group-hover\:translate-x-1 {
   transform: translateX(0.25rem);
+}
+
+/* Billing Calendar — trial conversion slider (BillingCalendarTimeline.jsx).
+   A native <input type="range"> has no `appearance-none` reach into its own
+   thumb; Tailwind utility classes can't target ::-webkit-slider-thumb /
+   ::-moz-range-thumb, so the visible drag handle needs real CSS here. The
+   track itself stays fully transparent — the trial bar underneath already
+   shows the draggable span, this only needs to render the handle. */
+.trial-fork-slider {
+  outline: none;
+}
+.trial-fork-slider::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.trial-fork-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 3px solid #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+  margin-top: 0;
+}
+.trial-fork-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+.trial-fork-slider::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+.trial-fork-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 3px solid #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+}
+
+/* Paid-plan upgrade/downgrade slider — same styled-thumb pattern as
+   .trial-fork-slider above (browser default thumb "was not looking that
+   good," found live), but a neutral dark-gray border instead of the
+   trial's blue — this one shared handle controls both an upgrade (violet)
+   and a downgrade (slate) branch at once, so it deliberately doesn't take
+   on either branch's own color. */
+.plan-change-slider {
+  outline: none;
+}
+.plan-change-slider::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.plan-change-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 3px solid #374151;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+  margin-top: 0;
+}
+.plan-change-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+.plan-change-slider::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+.plan-change-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 3px solid #374151;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  cursor: grab;
 }
 
 /* Progress bar hatching texture */

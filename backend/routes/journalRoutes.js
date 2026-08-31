@@ -2,11 +2,11 @@
 const express = require("express");
 const router = express.Router();
 const journalController = require("../controllers/journalController");
-const authMiddleware = require("../middlewares/auth");
-const userSync = require("../middlewares/userSync");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const subscriptionGate = require("../middlewares/subscriptionGate");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 
 // No restrictByPlan gate yet — Journals has no PlanConfig module entry on
 // any existing plan, and adding one is a separate product/billing decision

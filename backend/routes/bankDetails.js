@@ -1,13 +1,13 @@
 // routes/bankDetailsRoutes.js (updated with organization filtering)
 const express = require("express");
 const router = express.Router();
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const adminMiddleware = require("../middlewares/admin");
-const userSync = require("../middlewares/userSync");
 const checkPermission = require("../middlewares/checkPermission");
 const bankDetailsController = require("../controllers/bankDetailsController")
 
-const requireAuth = [authMiddleware, userSync]; // Combined auth middleware
+const requireAuth = [sessionAuth, csrfCheck]; // Combined auth middleware
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // Create bank details

@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middlewares/auth');
-const userSync = require('../middlewares/userSync');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const kanbanNameController = require('../controllers/kanbanNameController');
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 
 // Create kanban name
 router.post('/',

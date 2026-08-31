@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const companyController = require("../controllers/companyController");
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const checkPermission = require("../middlewares/checkPermission");
 const uploadMiddlewareS3 = require("../middlewares/uploadMiddlewareS3");
 const restrictByPlan = require("../middlewares/restrictByPlan");
@@ -9,7 +10,7 @@ const Company = require("../models/Company");
 const Subscription = require("../models/Subscription");
 const PlanConfig = require("../models/PlanConfig");
 
-const requireAuth = [authMiddleware, require("../middlewares/userSync")];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // POST /api/companies (Create with profile picture)

@@ -33,6 +33,15 @@ const elementSchema = new Schema(
     },
     order: { type: Number, required: true },
 
+    // Column layout WITHOUT a nested element tree: elements stay a flat, ordered list and each one
+    // declares how much of a 2-column grid it occupies ("half" puts two elements side by side).
+    // A nested `columns` container would have forced every consumer that walks the layout
+    // (coerceAndValidate, buildCrmPayloads, resolveFields, assertUniqueFieldIds, computeSchemaHash,
+    // and the drag-and-drop sorting) to learn about nesting, for the same visual result.
+    // Presentation-only, like fontSize — it changes how the visitor sees a field, not which field
+    // it is or where it routes, so it does NOT mint a new FormVersion.
+    layoutWidth: { type: String, enum: ["full", "half"] },
+
     // type: "field"
     fieldId: String, // stable ID (custom field ObjectId as string, or "system:module.fieldname" — §1b/§1c)
     source: { type: String, enum: ["system", "custom"] },
@@ -53,6 +62,9 @@ const elementSchema = new Schema(
     fontSize: { type: String, enum: ["small", "normal", "large", "xlarge"] },
     fontWeight: { type: String, enum: ["normal", "bold"] },
     textAlign: { type: String, enum: ["left", "center", "right"] },
+    // Per-element override of theme.textColor. Free-form CSS color (hex from the picker) rather
+    // than an enum — presentation-only, same category as fontSize/fontWeight above.
+    textColor: String,
 
     // type: "spacer"
     height: Number,
@@ -64,9 +76,14 @@ const elementSchema = new Schema(
     dividerSpacingTop: Number, // px
     dividerSpacingBottom: Number, // px
 
-    // type: "image"
+    // type: "image" — an ordinary layout element (drag/reorder/delete) like heading/paragraph, not
+    // form-wide chrome. Sizing/positioning are presentation-only, same category as heading's
+    // fontSize/textAlign: `imageWidth` is a PERCENTAGE of the form's content width (not px) so the
+    // image scales with the form on narrow screens instead of overflowing; alignment reuses the
+    // existing shared `textAlign` field rather than introducing a parallel image-only enum.
     url: String,
     alt: String,
+    imageWidth: Number, // percent, 10-100
 
     // type: "submitButton"
     label: String,
@@ -95,6 +112,17 @@ const sectionSchema = new Schema(
     title: String,
     description: String,
     order: { type: Number, required: true },
+    // Multi-page WITHOUT a new nesting level: a page is simply a run of consecutive sections, and
+    // this flags the section that starts a new one. Adding a pages-contain-sections level would
+    // have been a breaking schema change for every existing form and every consumer that walks
+    // `layout`; a boolean is additive and defaults to the current single-page behaviour.
+    //
+    // STRUCTURAL, not presentation — splitting a form across pages changes what the visitor sees
+    // and in what sequence, so it is part of computeSchemaHash and a change mints a new
+    // FormVersion. (It also could not be a presentation field: mergePresentationIntoLayout only
+    // refreshes a section's title/description, so a paging change would otherwise never reach an
+    // already-published form.)
+    startsNewPage: Boolean,
     elements: [elementSchema],
   },
   { _id: false },
@@ -102,11 +130,41 @@ const sectionSchema = new Schema(
 
 // --- Theme: presentation-only, deliberately shallow (FORMS_SCHEMA.md §1b) ---
 
+// Presentation tokens only. `preset` names a baseline token set (frontend
+// src/components/forms/formThemes.js); every other field here is an OVERRIDE of that baseline, so a
+// theme is resolved as `PRESET_TOKENS[preset]` + whatever is explicitly set below. Fields left
+// unset (or cleared to "") fall through to the preset — which is also why forms created before
+// presets existed keep rendering identically: no preset means the default one, and their own stored
+// values still win over it.
+//
+// The preset table itself deliberately lives ONLY on the frontend: theme is never frozen into
+// FormVersion (it's served live off FormDefinition, so a restyle needs no republish) and it never
+// affects submission processing, so a server-side copy would be a second source of truth with
+// nothing to gain. `preset` is stored as a free String rather than an enum so adding a preset is a
+// frontend-only change and an unknown value degrades to the default instead of failing validation.
 const themeSchema = new Schema(
   {
+    preset: String,
     logoUrl: String,
     backgroundColor: String,
     backgroundImageUrl: String,
+    // Colour tokens (overrides of the preset's palette).
+    primaryColor: String,
+    surfaceColor: String,
+    mutedTextColor: String,
+    borderColor: String,
+    // Form surface.
+    formMaxWidth: Number,
+    formPadding: Number,
+    formRadius: Number,
+    formShadow: { type: String, enum: ["none", "sm", "md", "lg"] },
+    // Inputs.
+    inputStyle: { type: String, enum: ["outlined", "filled", "underline"] },
+    inputRadius: Number,
+    // Button.
+    buttonRadius: Number,
+    buttonWidth: { type: String, enum: ["auto", "full"] },
+    buttonTextColor: String,
     fontFamily: String,
     // Global typography defaults — same category as fontFamily above (presentation-only, no
     // colors/palettes). Per-element heading/paragraph fontSize/fontWeight/textAlign overrides
@@ -114,6 +172,8 @@ const themeSchema = new Schema(
     fontSize: { type: String, enum: ["small", "normal", "large", "xlarge"] },
     fontWeight: { type: String, enum: ["normal", "bold"] },
     textAlign: { type: String, enum: ["left", "center", "right"] },
+    // Form-wide default text color; individual heading/paragraph elements may override it.
+    textColor: String,
     buttonColor: String,
     buttonPosition: { type: String, enum: ["left", "center", "right"] },
     buttonStyle: String,

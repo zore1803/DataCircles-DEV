@@ -296,7 +296,13 @@ async function getSubmission(req, res) {
     const submission = await FormSubmission.findOne({ _id: req.params.submissionId, formDefinition: form._id });
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
-    res.json({ submission });
+    // processedData is keyed by fieldId ("system:company.billingAddress.city", or a custom field's
+    // ObjectId) — meaningless as a label on its own. Ship the frozen resolvedFields from the exact
+    // version this was submitted against, so the detail panel shows the labels the visitor actually
+    // saw (including custom fields, and including labels since renamed in Settings).
+    const version = await FormVersion.findById(submission.formVersion, { resolvedFields: 1 });
+
+    res.json({ submission, resolvedFields: version ? version.resolvedFields : [] });
   } catch (err) {
     console.error("formController.getSubmission error:", err);
     res.status(500).json({ error: "Failed to load submission" });
@@ -466,11 +472,26 @@ async function deleteForm(req, res) {
   }
 }
 
+/**
+ * POST /api/forms/:id/image — receives an image the owner is placing on the form (logo, banner...).
+ * Runs after uploadMiddlewareS3().single("image"), which has already streamed the file to the org's
+ * S3 folder and set req.fileLocation. Deliberately does NOT persist the URL onto the form itself:
+ * the Builder holds unsaved layout state locally and writes it through the normal PATCH /forms/:id
+ * save, so writing it here too would clobber concurrent unsaved edits with a stale server copy.
+ */
+async function uploadFormImage(req, res) {
+  if (!req.file || !req.fileLocation) {
+    return res.status(400).json({ error: "No file uploaded." });
+  }
+  res.status(201).json({ url: req.fileLocation });
+}
+
 module.exports = {
   listForms,
   createForm,
   getForm,
   updateForm,
+  uploadFormImage,
   publishForm,
   archiveForm,
   pauseForm,

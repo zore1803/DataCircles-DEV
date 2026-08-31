@@ -73,7 +73,7 @@ const SEAT_ADDON_KEY = 'extra_seat';
  *   function does not know about "commit time," it only prices "now").
  */
 function calculateCommercialAdjustments(params = {}) {
-  const { type, oldBasePrice, newBasePrice, quantity, pricePerUnit, monthlyBasePrice, annualBasePrice, anchor, currentPeriodStart, currentPeriodEnd } = params;
+  const { type, oldBasePrice, newBasePrice, quantity, pricePerUnit, monthlyBasePrice, annualBasePrice, anchor, currentPeriodStart, currentPeriodEnd, asOf } = params;
 
   // Billing period is a fundamental invariant every proration calculation
   // depends on. Without this guard, a missing currentPeriodStart/End (e.g. a
@@ -91,7 +91,7 @@ function calculateCommercialAdjustments(params = {}) {
   let key;
   let windowStart, windowEnd, newAnnualValue, unusedMonthlyValue, monthsCompleted, monthsIntoWindow;
   if (type === 'plan_upgrade') {
-    amount = calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd);
+    amount = calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd, asOf);
     key = 'plan_upgrade_proration';
   } else if (type === 'addon_purchase') {
     amount = calculateAddonProration(quantity, pricePerUnit, currentPeriodStart, currentPeriodEnd);
@@ -129,8 +129,12 @@ function calculateCommercialAdjustments(params = {}) {
  *   read — no DB lookup for the plan's live price, so a renewal reprices
  *   exactly what the customer is actually on, not whatever PlanConfig says
  *   today.
- * @param {Date} [params.asOf] - reserved for future proration/coupon-validity
- *   use; not read internally yet (proration is a later phase).
+ * @param {Date} [params.asOf] - the instant to price a plan_upgrade
+ *   adjustmentContext AS IF executed at (threaded to
+ *   calculatePlanUpgradeProration). Omit for real wall-clock `now` — every
+ *   caller except the Billing Calendar's upgrade preview omits this.
+ *   Not read for any other adjustmentContext type yet (coupon-validity
+ *   use remains a later phase).
  * @param {Object} [params.changeset] - override `pricePerUser` and/or
  *   `activeAddons` to price a hypothetical change (upgrade/downgrade/add-on
  *   preview) WITHOUT mutating the subscription.
@@ -181,7 +185,14 @@ function calculateInvoice({ subscription, asOf, changeset = {}, resolvedModifier
   // upgrade/add-on charge itself, callers pass `pricePerUser: 0` in
   // `changeset` (there is no separately-billed recurring line in that same
   // invoice) — `adjustmentAmount` becomes the entire billable base.
-  const adjustment = adjustmentContext ? calculateCommercialAdjustments(adjustmentContext) : null;
+  // `asOf` finally wired through (was reserved above, never read) — the
+  // Billing Calendar's upgrade-date slider is the first real caller: "preview
+  // this upgrade as if executed at this exact instant" needs proration
+  // computed against a hypothetical instant, not real wall-clock `now`.
+  // Every existing caller omits `asOf` entirely, so `calculateCommercialAdjustments`
+  // falls back to real `new Date()` exactly as before — zero behavior change
+  // for signup/renewal/real-upgrade-commit.
+  const adjustment = adjustmentContext ? calculateCommercialAdjustments({ ...adjustmentContext, asOf }) : null;
   const adjustmentAmount = adjustment ? adjustment.amount : 0;
 
   // Reuse the existing, already-tested engine — this function does not

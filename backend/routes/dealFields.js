@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const dealFieldsController = require('../controllers/dealFieldsController');
-const authMiddleware = require('../middlewares/auth');
-const userSync = require('../middlewares/userSync');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 const restrictByPlan = require('../middlewares/restrictByPlan');
 
 // Bundle middlewares for cleaner route definitions
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // ==========================================

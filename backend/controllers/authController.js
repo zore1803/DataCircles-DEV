@@ -21,6 +21,8 @@ const { getAccessEntitlementEnd } = require('../utils/prorationMath');
 const { calculateInvoice } = require('../utils/invoiceEngine');
 const PlanAddon = require("../models/PlanAddon");
 const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
+const sessionService = require("../services/sessionService");
+const { setSessionCookie } = require("../utils/sessionCookie");
 
 // TempOTP Model Definition
 const TempOTP = mongoose.model(
@@ -778,7 +780,32 @@ exports.verifyOtp = async (req, res) => {
       secret,
       { expiresIn: "7d" },
     );
-    return res.json({ success: true, token, user });
+
+    // Establish the same DataCircles application session used by Google
+    // login, so both paths count toward the same 2-session limit and set
+    // the same dc_session cookie. See services/sessionService.js.
+    let sessionInfo;
+    try {
+      const { session, csrfToken } = await sessionService.establishSession({
+        userId: user._id,
+        organization: user.organization,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+      setSessionCookie(res, session.sessionId);
+      sessionInfo = { csrfToken };
+    } catch (err) {
+      if (err instanceof sessionService.SessionLimitError) {
+        return res.status(409).json({
+          code: err.code,
+          message:
+            "You've reached the maximum of 2 active sessions. Sign out of another session to continue.",
+        });
+      }
+      throw err;
+    }
+
+    return res.json({ success: true, token, user, ...sessionInfo });
   } else {
     const tempToken = jwt.sign({ sub: `temp-phone|${phone}` }, secret, {
       expiresIn: "10m",
@@ -1557,7 +1584,11 @@ exports.login = async (req, res, next) => {
         email: user.email,
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
+      // This token only needs to survive long enough to reach
+      // /api/session/establish, not to be a long-lived credential — fall
+      // back to a short, explicit expiry instead of trusting
+      // JWT_EXPIRES_IN, which produces a non-expiring token if unset.
+      { expiresIn: process.env.JWT_EXPIRES_IN || "15m" }
     );
 
     // 6. Prepare Response

@@ -12,11 +12,11 @@ const {
   clearAll
 } = require("../controllers/notificationController");
 
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const adminMiddleware = require("../middlewares/admin");
-const userSync = require("../middlewares/userSync");
 
-const requireAuth = [authMiddleware, userSync];
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 
 // Activity feed (auto-generated create/update/delete notifications).

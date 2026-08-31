@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const walletController = require('../controllers/walletController');
-const authMiddleware = require('../middlewares/auth');
+const sessionAuth = require('../middlewares/sessionAuth');
+const csrfCheck = require('../middlewares/csrfCheck');
 
 // No subscriptionGate/restrictByPlan here: the wallet is independent of the
 // subscription, so plan state must not gate access to prepaid credits.
-const requireAuth = [authMiddleware, require('../middlewares/userSync')];
+const requireAuth = [sessionAuth, csrfCheck];
 
 router.get('/', requireAuth, walletController.getWallet);
 router.get('/transactions', requireAuth, walletController.getTransactions);

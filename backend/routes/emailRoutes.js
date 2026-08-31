@@ -2,9 +2,10 @@
 const express = require("express");
 const router = express.Router();
 const emailController = require("../controllers/emailController");
-const authMiddleware = require("../middlewares/auth");
+const sessionAuth = require("../middlewares/sessionAuth");
+const csrfCheck = require("../middlewares/csrfCheck");
 const checkPermission = require("../middlewares/checkPermission");
-const requireAuth = [authMiddleware, require('../middlewares/userSync')]; // Assuming userSync is required
+const requireAuth = [sessionAuth, csrfCheck];
 const subscriptionGate = require('../middlewares/subscriptionGate');
 const restrictByPlan = require('../middlewares/restrictByPlan');
 

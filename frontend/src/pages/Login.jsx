@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import API, { configureAxios } from "../services/api";
+import API, { configureAxios, establishSession, setCsrfToken } from "../services/api";
 import logo from "/DataCircles.png";
 
 function Login() {
@@ -96,6 +96,22 @@ function Login() {
   const checkAuthStatus = async () => {
     try {
       const res = await API.get("/auth/me");
+      // Google/Auth0 login has just been confirmed against the backend —
+      // establish the DataCircles application session (dc_session cookie)
+      // that enforces the max-2-concurrent-sessions policy. This is
+      // separate from Auth0's own token and is what backend/middlewares/
+      // sessionAuth.js will check once routes migrate to it.
+      try {
+        await establishSession();
+      } catch (sessionErr) {
+        if (sessionErr.code === "SESSION_LIMIT_REACHED") {
+          setEmailError(sessionErr.message);
+          return;
+        }
+        // Non-fatal for now: no application route enforces sessionAuth
+        // yet, so don't block navigation on this failing.
+        console.error("Failed to establish DataCircles session:", sessionErr);
+      }
       navigate("/");
     } catch (err) {
       const errorData = err.response?.data;
@@ -173,11 +189,19 @@ function Login() {
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("user", JSON.stringify(res.data.user));
         configureAxios(() => Promise.resolve(localStorage.getItem("token")));
+        // The backend establishes the DataCircles session (dc_session
+        // cookie) as part of this same verify-otp response — capture the
+        // CSRF token it returns for subsequent mutating requests.
+        if (res.data.csrfToken) {
+          setCsrfToken(res.data.csrfToken);
+        }
         window.location.href = "/";
       }
     } catch (err) {
       const data = err.response?.data;
-      if (data?.error === "REGISTRATION_REQUIRED") {
+      if (data?.code === "SESSION_LIMIT_REACHED") {
+        setEmailError(data.message);
+      } else if (data?.error === "REGISTRATION_REQUIRED") {
         setTempToken(data.tempToken);
         setIsPhoneLogin(true);
         setShowOtpInput(false);
