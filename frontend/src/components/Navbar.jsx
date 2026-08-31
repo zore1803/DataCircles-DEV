@@ -1065,6 +1065,10 @@ const Navbar = () => {
           width: "1px",
           height: "64px",
           background: CHROME_BG,
+          // Dim in step with the sidebar, which darkens itself while the
+          // search overlay is open. These are separate fixed elements, so
+          // without this they stayed light and showed as a notch at the corner.
+          filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
           transition: "left 300ms ease-in-out",
         }}
       />
@@ -1079,6 +1083,7 @@ const Navbar = () => {
           background: CHROME_BG,
           WebkitMaskImage: CORNER_MASK,
           maskImage: CORNER_MASK,
+          filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
           transition: "left 300ms ease-in-out",
         }}
       />
@@ -1092,6 +1097,7 @@ const Navbar = () => {
           height: "16px",
           borderTopLeftRadius: "16px",
           boxShadow: "-1px -1px 0 0 #E1E4EA",
+          filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
           transition: "left 300ms ease-in-out",
         }}
       />
