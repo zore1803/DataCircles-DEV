@@ -26,6 +26,8 @@ import Skeleton from "../components/common/Skeleton";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 
 import SearchIcon from "../components/common/SearchIcon";
+import TaskDetailsModal from "../components/Task/TaskDetailsModal";
+import MeetingDetailsModal from "../components/company/MeetingDetailsModal";
 import HighlightText from "../components/common/HighlightText";
 import FilterIcon from "../components/common/FilterIcon";
 // --- Components ---
@@ -278,6 +280,22 @@ const WeekView = ({ currentDate, meetings, tasks, onEventClick }) => {
   );
 };
 
+// Week view showed just "August 2026", which says nothing about which week
+// you're on - and is plainly wrong for a week that straddles two months.
+const formatWeekRange = (date) => {
+  const offset = date.getDay() === 0 ? 6 : date.getDay() - 1; // weeks start Monday
+  const start = new Date(date);
+  start.setDate(date.getDate() - offset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  const sameMonth = start.getMonth() === end.getMonth();
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startFmt = { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) };
+
+  return `${start.toLocaleDateString(undefined, sameMonth && sameYear ? { day: "numeric" } : startFmt)} – ${end.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+};
+
 const AdminCalendar = () => {
   // State
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -431,6 +449,10 @@ const AdminCalendar = () => {
   );
 
   // --- Handlers ---
+  // "+N more" opens the full list for that day, rather than the two items
+  // the cell has room for.
+  const [dayDetail, setDayDetail] = useState(null); // { date, meetings, tasks }
+
   const handleDayClick = (e, date) => {
     // Open quick add menu at click position
     if (!quickAddPos) {
@@ -571,8 +593,13 @@ const AdminCalendar = () => {
           <div
             className="relative box-border flex flex-row items-center flex-shrink transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:hover:bg-white"
             style={{
-              padding: "10px 14px",
-              gap: 10,
+              // Collapsed, this is a 40px circle holding a 16px icon: 14px of
+              // side padding left only 10px of content box, so the icon
+              // overflowed and sat left of centre. No padding + centring while
+              // collapsed; the input's padding comes back when it expands.
+              padding: isSearchExpanded ? "10px 14px" : 0,
+              justifyContent: isSearchExpanded ? "flex-start" : "center",
+              gap: isSearchExpanded ? 10 : 0,
               width: isSearchExpanded ? 416 : 40,
               maxWidth: "40vw",
               minWidth: isSearchExpanded ? 120 : 40,
@@ -599,7 +626,11 @@ const AdminCalendar = () => {
               onBlur={() => {
                 if (!searchTerm) setIsSearchExpanded(false);
               }}
-              className={`flex-1 bg-transparent focus:outline-none truncate transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "opacity-100 focus:cursor-text" : "opacity-0"}`}
+              // Collapsed, the input is taken out of the layout entirely
+              // (w-0 + flex-none), not just faded: as a flex-1 child at
+              // opacity 0 it still claimed the row's width and shoved the
+              // icon out of the 40px circle to its left.
+              className={`bg-transparent focus:outline-none truncate transition-opacity duration-200 cursor-pointer ${isSearchExpanded ? "flex-1 opacity-100 focus:cursor-text" : "w-0 flex-none p-0 opacity-0 pointer-events-none"}`}
               style={{
                 fontFamily: "Inter",
                 fontWeight: 400,
@@ -785,6 +816,8 @@ const AdminCalendar = () => {
               >
                 {view === "day"
                   ? currentDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                  : view === "week"
+                  ? formatWeekRange(currentDate)
                   : currentDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
               </span>
               )}
@@ -1050,7 +1083,13 @@ const AdminCalendar = () => {
                       {visibleMeetings.map((m) => (
                         <div
                           key={m._id}
-                          className="box-border flex flex-row items-center justify-between w-full"
+                          // Opens the meeting panel. stopPropagation because
+                          // the cell behind it opens the quick-add menu.
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEventClick(m, "meeting");
+                          }}
+                          className="box-border flex flex-row items-center justify-between w-full cursor-pointer hover:brightness-95 transition-all"
                           style={{
                             padding: "10px 8px",
                             height: 24,
@@ -1088,7 +1127,11 @@ const AdminCalendar = () => {
                       {visibleTasks.map((t) => (
                         <div
                           key={t._id}
-                          className="box-border flex flex-row items-center justify-between w-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEventClick(t, "task");
+                          }}
+                          className="box-border flex flex-row items-center justify-between w-full cursor-pointer hover:brightness-95 transition-all"
                           style={{
                             padding: "10px 8px",
                             height: 24,
@@ -1112,8 +1155,19 @@ const AdminCalendar = () => {
                         </div>
                       ))}
                       {(overflowCount > 0 || taskOverflowCount > 0) && (
-                        <div
-                          className="flex flex-row justify-center items-center"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            // Stops the cell's own click, which opens the
+                            // quick-add menu.
+                            e.stopPropagation();
+                            setDayDetail({
+                              date: dayObj.date,
+                              meetings: dayMeetings,
+                              tasks: dayTasks,
+                            });
+                          }}
+                          className="flex flex-row justify-center items-center hover:bg-[#E9EAEB] transition-colors"
                           style={{
                             padding: "2px 8px",
                             gap: 4,
@@ -1132,7 +1186,7 @@ const AdminCalendar = () => {
                           >
                             +{overflowCount + taskOverflowCount} more
                           </span>
-                        </div>
+                        </button>
                       )}
                     </div>
                     )}
@@ -1143,6 +1197,115 @@ const AdminCalendar = () => {
             );
           })}
       </div>
+
+      {/* Everything on one day, opened from a cell's "+N more" — the cell
+          itself only has room for two items. Same shape as the company
+          calendar's day popup: meetings, then tasks, each row opening the
+          item in the existing view modal. */}
+      {dayDetail && (
+        <div
+          className="fixed inset-0 bg-black/20 flex items-center justify-center z-[10000] p-4"
+          onClick={() => setDayDetail(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl p-4 w-full max-w-sm border border-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-900">
+                {dayDetail.date.toLocaleDateString(undefined, {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </h3>
+              <button
+                onClick={() => setDayDetail(null)}
+                className="p-1 text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto">
+              <h4 className="text-xs font-medium text-gray-700 mb-2">
+                Meetings ({dayDetail.meetings.length})
+              </h4>
+              {dayDetail.meetings.length === 0 ? (
+                <p className="text-xs text-gray-500 mb-3">No meetings scheduled.</p>
+              ) : (
+                <div className="mb-3">
+                  {dayDetail.meetings.map((m) => (
+                    <div
+                      key={m._id}
+                      onClick={() => {
+                        setDayDetail(null);
+                        handleEventClick(m, "meeting");
+                      }}
+                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                    >
+                      <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                      <span className="truncate flex-1">{m.title}</span>
+                      {m.scheduledAt && (
+                        <span className="text-[11px] text-gray-500 flex-shrink-0">
+                          {new Date(m.scheduledAt).toLocaleTimeString(undefined, {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <h4 className="text-xs font-medium text-gray-700 mb-2">
+                Tasks ({dayDetail.tasks.length})
+              </h4>
+              {dayDetail.tasks.length === 0 ? (
+                <p className="text-xs text-gray-500">No tasks scheduled.</p>
+              ) : (
+                dayDetail.tasks.map((t) => (
+                  <div
+                    key={t._id}
+                    onClick={() => {
+                      setDayDetail(null);
+                      handleEventClick(t, "task");
+                    }}
+                    className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
+                  >
+                    <CheckCircle2 className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                    <span className="truncate flex-1">{t.title}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clicking any meeting or task — in a day cell, or in the "+N more"
+          card — slides it in from the right. These are the same panels the
+          Tasks page and the company calendar use, so an item looks identical
+          wherever it's opened from. modalOpen/modalType/selectedItem already
+          existed here, but nothing rendered them: clicking an event set the
+          state and produced no visible result. */}
+      <MeetingDetailsModal
+        open={modalOpen && modalType === "meeting"}
+        meetingData={selectedItem}
+        users={users}
+        onClose={() => setModalOpen(false)}
+        onDelete={(id) => handleDelete(id, "meeting")}
+      />
+      <TaskDetailsModal
+        open={modalOpen && modalType === "task"}
+        taskData={selectedItem}
+        users={users}
+        onClose={() => setModalOpen(false)}
+        onDelete={(id) => handleDelete(id, "task")}
+      />
     </div>
   );
 };
