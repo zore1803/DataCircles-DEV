@@ -471,7 +471,7 @@ function Login() {
             "This company already has the maximum number of users allowed. You cannot join this account. Please go back and join a different company, or create a new one."
         );
       } else {
-        setEmailError(data?.message || "Failed to complete setup");
+        setEmailError(data?.message || data?.error || "Failed to complete setup");
       }
     } finally {
       setIsSubmitting(false);

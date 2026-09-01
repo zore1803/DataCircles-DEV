@@ -1148,7 +1148,16 @@ exports.completeRegistration = async (req, res) => {
       await Invited.deleteOne({ _id: invited._id });
     } else if (req.body.code) {
       // User is joining via company code - MUST check seat limits
-      const org = await Organization.findOne({ code: req.body.code });
+      // Trimmed and case-insensitive: codes get copy-pasted out of chat and
+      // email, which picks up whitespace, and reset-code emits lowercase hex
+      // while older codes are uppercase — an exact match rejected a code the
+      // user had typed correctly. Anchored + escaped so it stays an exact
+      // comparison, not a substring one.
+      const rawCode = String(req.body.code || "").trim();
+      const escaped = rawCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const org = await Organization.findOne({
+        code: new RegExp("^" + escaped + "$", "i"),
+      });
       if (!org) {
         return res.status(400).json({ message: "Invalid company code" });
       }
@@ -1378,7 +1387,10 @@ exports.completeRegistration = async (req, res) => {
     }
   } catch (error) {
     console.error("Registration error:", error);
-    res.status(500).json({ error: error.message });
+    // Both fields: clients read `message`, so returning only `error` meant a
+    // real failure surfaced as a generic "Failed to complete setup" with the
+    // cause visible nowhere but the server log.
+    res.status(500).json({ error: error.message, message: error.message });
   }
 };
 
