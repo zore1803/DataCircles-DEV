@@ -2060,10 +2060,16 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                 <FolderIcon className="w-7 h-7 mb-3 text-gray-400" />
                 <button
                   type="button"
-                  onClick={() => {
-                    setInlineEditingId("NEW");
-                    setInlineEditingName("New Folder");
-                  }}
+                  // The inline "NEW" card lives in the populated-grid branch,
+                  // which never renders while there are no folders — so this
+                  // opens the same dialog the list view's empty state uses.
+                  onClick={() =>
+                    setModalState({
+                      isOpen: true,
+                      editingId: null,
+                      initialName: "",
+                    })
+                  }
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus size={16} />

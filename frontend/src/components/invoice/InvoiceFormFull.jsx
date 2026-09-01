@@ -277,12 +277,19 @@ const ItemSearchSelect = ({
                 </div>
               ) : (
                 <div className="max-h-48 overflow-y-auto">
-                  {visibleItems.map((item) => (
+                  {visibleItems.map((item) => {
+                    const outOfStock =
+                      item.type === "product" && Number(item.stock) <= 0;
+                    return (
                     <button
                       key={item._id}
                       type="button"
+                      disabled={outOfStock}
                       onClick={() => handleItemSelect(item)}
-                      className="w-full text-left p-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-b-0"
+                      className={`w-full text-left p-3 transition-colors border-b border-slate-50 last:border-b-0 ${outOfStock
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:bg-slate-50"
+                        }`}
                       aria-label={`Select ${item.displayName}`}
                     >
                       <div className="flex justify-between items-start">
@@ -323,15 +330,19 @@ const ItemSearchSelect = ({
                           <div className="text-xs text-slate-500">
                             {item.primaryUnit}
                             {item.type === "product" && (
-                              <span className="ml-1 font-medium text-slate-600">
-                                • Stock: {item.stock ?? 0}
+                              <span
+                                className={`ml-1 font-medium ${outOfStock ? "text-red-600" : "text-slate-600"
+                                  }`}
+                              >
+                                • {outOfStock ? "Out of stock" : `Stock: ${item.stock ?? 0}`}
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -343,6 +354,19 @@ const ItemSearchSelect = ({
 };
 
 const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
+// Stock is only enforced server-side at save, which meant a sold-out product
+// could sit in the bill until the very end. Products (and their variants)
+// carry a numeric stock; services don't, and are never blocked.
+const stockBlockReason = (item, qty) => {
+  if (!item || item.type !== "product") return null;
+  const stock = Number(item.stock);
+  if (!Number.isFinite(stock)) return null;
+  const name = item.displayName || item.name || "This product";
+  if (stock <= 0) return `${name} is out of stock.`;
+  if (qty > stock) return `Only ${stock} left in stock for ${name}.`;
+  return null;
+};
 
 const InvoiceFormFull = ({
   deals,
@@ -946,7 +970,13 @@ const InvoiceFormFull = ({
       toast.error("Search and select a product first.");
       return;
     }
-    const newItem = { ...quickAddItem, quantity: parseInt(quickAddQty) || 1 };
+    const qty = parseInt(quickAddQty) || 1;
+    const blocked = stockBlockReason(quickAddItem, qty);
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
+    const newItem = { ...quickAddItem, quantity: qty };
     setForm((prev) => {
       const isBlankStarterRow =
         prev.items.length === 1 && !prev.items[0].name && !prev.items[0]._id;

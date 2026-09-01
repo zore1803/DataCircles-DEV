@@ -322,6 +322,19 @@ const ItemSearchSelect = ({
 
 const styles = ["Classic", "Modern", "Minimal", "Elegant"];
 
+// Stock is only enforced server-side at save, which meant a sold-out product
+// could sit in the bill until the very end. Products (and their variants)
+// carry a numeric stock; services don't, and are never blocked.
+const stockBlockReason = (item, qty) => {
+  if (!item || item.type !== "product") return null;
+  const stock = Number(item.stock);
+  if (!Number.isFinite(stock)) return null;
+  const name = item.displayName || item.name || "This product";
+  if (stock <= 0) return `${name} is out of stock.`;
+  if (qty > stock) return `Only ${stock} left in stock for ${name}.`;
+  return null;
+};
+
 const InvoiceForm = ({
   deals,
   isOpen,
@@ -810,7 +823,13 @@ const InvoiceForm = ({
       toast.error("Search and select a product first.");
       return;
     }
-    const newItem = { ...quickAddItem, quantity: parseInt(quickAddQty) || 1 };
+    const qty = parseInt(quickAddQty) || 1;
+    const blocked = stockBlockReason(quickAddItem, qty);
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
+    const newItem = { ...quickAddItem, quantity: qty };
     setForm((prev) => {
       const isBlankStarterRow =
         prev.items.length === 1 && !prev.items[0].name && !prev.items[0]._id;
@@ -2496,6 +2515,7 @@ const CreateInvoicePanel = ({
                 hsnSac: v.hsnSac || item.hsnSac || "",
                 isVariant: true,
                 parentItemId: item._id,
+                type: item.type,
                 stock: v.stock ?? item.inventory?.currentStock ?? 0,
                 // Discount only lives on the parent Item (variants have no
                 // discount field of their own) — same catalog default for
@@ -2513,6 +2533,7 @@ const CreateInvoicePanel = ({
                 hsnSac: item.hsnSac || "",
                 isVariant: false,
                 parentItemId: null,
+                type: item.type,
                 stock: item.inventory?.currentStock ?? 0,
                 discount: item.discount,
               },
@@ -2643,6 +2664,8 @@ const CreateInvoicePanel = ({
     if (resolvedId) {
       const picked = catalogue.find((c) => c._id === resolvedId);
       if (!picked) return toast.error("Product not found in catalogue.");
+      const blocked = stockBlockReason(picked, parseInt(quickAddQty) || 1);
+      if (blocked) return toast.error(blocked);
       newItem = {
         _id: picked._id,
         // displayName is "Item - Variant" for a variant (just the item name

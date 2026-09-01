@@ -769,7 +769,7 @@ export default function Journals() {
           <button 
             type="button" 
             onClick={() => setLedgerJournalId(j._id)}
-            className="text-sm font-semibold text-blue-600 hover:text-blue-800 text-left truncate transition-colors cursor-pointer"
+            className="text-sm font-semibold text-[#0085FF] hover:underline hover:text-[#004CFF] text-left truncate transition-all duration-150 ease-out cursor-pointer"
           >
             <HighlightText text={j.name} query={searchTerm} />
           </button>

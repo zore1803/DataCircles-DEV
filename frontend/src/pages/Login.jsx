@@ -4,6 +4,28 @@ import { useNavigate, useLocation } from "react-router-dom";
 import API, { configureAxios } from "../services/api";
 import logo from "/DataCircles.png";
 
+// The auth middleware's raw replies ("No token provided", "Invalid token",
+// ...) are internal plumbing, not something a person signing in can act on.
+// Anything that leaks through gets a plain-language message instead.
+const INTERNAL_AUTH_MESSAGES = [
+  "no token provided",
+  "invalid token",
+  "token expired",
+  "jwt expired",
+  "jwt malformed",
+  "unauthorized",
+  "authentication failed",
+];
+
+const friendlyServerError = (raw, fallback) => {
+  const text = String(raw || "").trim();
+  if (!text) return fallback;
+  if (INTERNAL_AUTH_MESSAGES.some((m) => text.toLowerCase().includes(m))) {
+    return "Your session has expired. Please sign in again.";
+  }
+  return text;
+};
+
 function Login() {
   const {
     loginWithRedirect,
@@ -118,7 +140,7 @@ function Login() {
       } else if (errorData?.error === "REGISTRATION_REQUIRED") {
         setShowSetupForm(true);
       } else {
-        setEmailError(errorData?.message || "Authentication failed");
+        setEmailError(friendlyServerError(errorData?.message, "Authentication failed"));
       }
     }
   };
@@ -146,7 +168,7 @@ function Login() {
       setShowOtpInput(true);
       setOtpTimer(300); // 5 minutes
     } catch (err) {
-      setEmailError(err.response?.data?.error || "Failed to send OTP");
+      setEmailError(friendlyServerError(err.response?.data?.error, "Failed to send OTP"));
     } finally {
       setIsSubmitting(false);
     }
@@ -187,7 +209,7 @@ function Login() {
           provider: "phone",
         });
       } else {
-        setEmailError(data?.message || "Invalid OTP");
+        setEmailError(friendlyServerError(data?.message, "Invalid OTP"));
       }
     } finally {
       setIsSubmitting(false);
@@ -248,7 +270,7 @@ function Login() {
       } else if (data?.message === "Invalid session or user ID") {
         setEmailError("Session expired. Please try logging in again.");
       } else {
-        setEmailError(data?.message || "Failed to complete registration");
+        setEmailError(friendlyServerError(data?.message, "Failed to complete registration"));
       }
     } finally {
       setIsSubmitting(false);
@@ -280,7 +302,7 @@ function Login() {
         window.location.href = "/";
       }
     } catch (err) {
-      setEmailError(err.response?.data?.message || "Login failed");
+      setEmailError(friendlyServerError(err.response?.data?.message, "Login failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -311,7 +333,7 @@ function Login() {
         setEmailError("");
       }
     } catch (err) {
-      setEmailError(err.response?.data?.message || "Failed to send OTP");
+      setEmailError(friendlyServerError(err.response?.data?.message, "Failed to send OTP"));
     } finally {
       setIsSubmitting(false);
     }
@@ -339,7 +361,7 @@ function Login() {
         setEmailOtp("");
       }
     } catch (err) {
-      setEmailError(err.response?.data?.message || "Invalid OTP");
+      setEmailError(friendlyServerError(err.response?.data?.message, "Invalid OTP"));
     } finally {
       setIsSubmitting(false);
     }
@@ -376,7 +398,7 @@ function Login() {
       } else if (data?.message === "Invalid session or user ID") {
         setEmailError("Session expired. Please try logging in again.");
       } else {
-        setEmailError(data?.message || "Failed to complete registration");
+        setEmailError(friendlyServerError(data?.message, "Failed to complete registration"));
       }
     } finally {
       setIsSubmitting(false);
@@ -471,7 +493,7 @@ function Login() {
             "This company already has the maximum number of users allowed. You cannot join this account. Please go back and join a different company, or create a new one."
         );
       } else {
-        setEmailError(data?.message || data?.error || "Failed to complete setup");
+        setEmailError(friendlyServerError(data?.message || data?.error, "Failed to complete setup"));
       }
     } finally {
       setIsSubmitting(false);
@@ -688,6 +710,11 @@ function Login() {
                 type="text"
                 required
                 maxLength={4}
+                name="otp-nofill"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={userOtp}
                 onChange={(e) =>
                   setUserOtp(e.target.value.replace(/\D/g, "").slice(0, 4))
@@ -1114,6 +1141,16 @@ function Login() {
                 id="setupInput"
                 type="text"
                 required
+                // Chrome was offering every company code typed on this device
+                // in a history dropdown. "off" alone is ignored for named text
+                // fields, so the field is also anonymised per render.
+                name={`setup-${setupType}-nofill`}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={setupType === "join" ? code : orgName}
                 onChange={(e) =>
                   setupType === "join"
