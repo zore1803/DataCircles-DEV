@@ -32,7 +32,7 @@ const proformaInvoiceSchema = new mongoose.Schema({
       min: 0,
     },
   },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', ''], default: '' },
+  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', 'Vintage', 'Professional', 'Landscape', 'Service', ''], default: '' },
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
