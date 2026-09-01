@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { X, BookText, ArrowDownCircle, ArrowUpCircle, Trash2, FileSpreadsheet, FileText } from "lucide-react";
+import { X, BookText, ArrowDownCircle, ArrowUpCircle, Trash2, FileSpreadsheet, FileText, Lock, Unlock } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import API from "../../services/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import ConfirmDialog from "../common/ConfirmDialog";
 
 const money = (n) =>
   `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -32,12 +33,13 @@ const formatDateTime = (d) => {
 // Balance) for one Journal, and lets the user record a new Pay In/Pay Out
 // straight from here (via onOpenPayIn/onOpenPayOut, opened by the caller so
 // there's a single PayInOutModal instance instead of one per drawer).
-const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPayIn, onOpenPayOut }) => {
+const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPayIn, onOpenPayOut, onJournalClosed, onJournalReopened }) => {
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [closeConfirm, setCloseConfirm] = useState({ open: false });
   const [currentPage, setCurrentPage] = useState(1);
   const limit = 10;
   
@@ -106,6 +108,32 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
       toast.error(err.response?.data?.error || "Failed to delete entry");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const executeCloseJournal = async () => {
+    if (!journalId) return;
+    try {
+      await API.post(`/journals/${journalId}/close`);
+      toast.success("Journal closed successfully");
+      setCloseConfirm({ open: false });
+      if (onJournalClosed) onJournalClosed();
+      fetchLedger();
+      // Wait for table to reload before closing if needed, but fetchLedger will re-render
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to close journal");
+    }
+  };
+
+  const executeReopenJournal = async () => {
+    if (!journalId) return;
+    try {
+      await API.post(`/journals/${journalId}/reopen`);
+      toast.success("Journal reopened successfully");
+      if (onJournalReopened) onJournalReopened();
+      fetchLedger();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to reopen journal");
     }
   };
 
@@ -246,6 +274,22 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
             >
               <FileText className="w-3.5 h-3.5" /> Download PDF
             </button>
+            {journal?.status === "active" && (
+              <button 
+                onClick={() => setCloseConfirm({ open: true })}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-full border border-orange-200 text-orange-600 hover:bg-orange-50 text-xs font-semibold transition-colors"
+              >
+                <Lock className="w-3.5 h-3.5" /> Close Journal
+              </button>
+            )}
+            {(journal?.status === "cancelled" || journal?.status === "settled") && (
+              <button 
+                onClick={executeReopenJournal}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-full border border-green-200 text-green-600 hover:bg-green-50 text-xs font-semibold transition-colors"
+              >
+                <Unlock className="w-3.5 h-3.5" /> Reopen Journal
+              </button>
+            )}
             <button
               type="button"
               onClick={handleClose}
@@ -357,29 +401,52 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                         // The Opening Balance row is synthesized (its _id is a string like
                         // "<journalId>-opening", never a real ObjectId) — it can't be deleted.
                         const isOpeningRow = row._id === `${journal?._id}-opening`;
+                        
+                        let rowBgClass = "";
+                        let amountColorClass = "";
+                        let paymentTypeClass = "";
+                        let paymentTypeText = "";
+
+                        if (isOpeningRow) {
+                          amountColorClass = "";
+                        } else if (row.isClosingEntry) {
+                          // For closing entries, a payout means we had a positive balance (profit) -> Green
+                          // A payin means we had a negative balance (debt) -> Red
+                          const isProfit = row.type === "payout";
+                          rowBgClass = isProfit ? "bg-emerald-50" : "bg-red-50";
+                          amountColorClass = isProfit ? "text-emerald-600" : "text-red-600";
+                          paymentTypeClass = isProfit ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800";
+                          paymentTypeText = isProfit ? "Settled (Credit)" : "Settled (Debit)";
+                        } else {
+                          const isPayin = row.type === "payin";
+                          amountColorClass = isPayin ? "text-emerald-600" : "text-red-600";
+                          paymentTypeClass = isPayin ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700";
+                          paymentTypeText = isPayin ? "You Received" : "You Gave";
+                        }
+
                         return (
-                          <tr key={row._id}>
+                          <tr key={row._id} className={rowBgClass}>
                             <td className="px-3 py-1.5 text-sm text-gray-600 whitespace-nowrap">{formatDateTime(row.createdAt || row.date)}</td>
                             <td className="px-3 py-1.5 text-sm text-gray-900 font-medium truncate max-w-[150px]" title={row.notes || row.description}>{row.notes || row.description}</td>
                             <td className="px-3 py-1.5 text-sm text-gray-700 whitespace-nowrap">{row.partyName || "—"}</td>
                             <td className="px-3 py-1.5 text-sm text-gray-600 text-center whitespace-nowrap">{row.paymentType || "—"}</td>
-                            <td className={`px-3 py-1.5 text-sm font-semibold text-right whitespace-nowrap ${isOpeningRow ? "" : (row.type === "payin" ? "text-emerald-600" : "text-red-600")}`}>
+                            <td className={`px-3 py-1.5 text-sm font-semibold text-right whitespace-nowrap ${amountColorClass}`}>
                               {isOpeningRow ? "—" : money(row.amount)}
                             </td>
                             <td className="px-3 py-1.5 text-center whitespace-nowrap">
                               {isOpeningRow ? (
                                 <span className="text-sm text-gray-400">—</span>
                               ) : (
-                                <span className={`px-2 py-1 rounded text-xs font-semibold ${row.type === "payin" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-                                  {row.type === "payin" ? "You Received" : "You Gave"}
+                                <span className={`px-2 py-1 rounded text-xs font-semibold ${paymentTypeClass}`}>
+                                  {paymentTypeText}
                                 </span>
                               )}
                             </td>
-                            <td className={`px-3 py-1.5 text-sm font-bold text-right whitespace-nowrap ${row.balance < 0 ? "text-red-600" : "text-gray-900"}`}>
+                            <td className={`px-3 py-1.5 text-sm font-bold text-right whitespace-nowrap ${row.balance < 0 ? "text-red-600" : (row.balance > 0 ? "text-emerald-600" : "text-gray-900")}`}>
                               {money(row.balance)}
                             </td>
                             <td className="px-1 py-1.5 text-right">
-                              {!isOpeningRow && (
+                              {!isOpeningRow && !row.isClosingEntry && journal?.status === "active" && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteEntry(row._id)}
@@ -411,7 +478,7 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
         {data && (
           <div className="flex-shrink-0 flex justify-between items-center px-6 py-4 border-t border-[#D9D9D9] bg-white">
             <div className="flex gap-2">
-              {journal?.status !== "cancelled" && (onOpenPayIn || onOpenPayOut) && (
+              {journal?.status === "active" && (onOpenPayIn || onOpenPayOut) && (
                 <>
                   {onOpenPayIn && (
                     <button
@@ -456,6 +523,22 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
         )}
         </div>
       </div>
+
+      {closeConfirm.open && journal && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Close Journal"
+          message={
+            journal.currentBalance !== 0
+              ? `Are you sure you want to close this journal? This will create a final settlement entry of ₹${Math.abs(journal.currentBalance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${journal.currentBalance > 0 ? "You Receive" : "You Give"}) and move the journal to the Closed section.`
+              : "Are you sure you want to close this journal? The balance is ₹0.00. This will move the journal to the Closed section."
+          }
+          confirmLabel="Close Journal"
+          cancelLabel="Cancel"
+          onConfirm={executeCloseJournal}
+          onCancel={() => setCloseConfirm({ open: false })}
+        />
+      )}
     </>
   );
 };

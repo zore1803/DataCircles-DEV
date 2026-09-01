@@ -1,6 +1,5 @@
 const DocumentTemplateSettings = require("../models/DocumentTemplateSettings");
-
-const TEMPLATES = [
+const TEMPLATES = DocumentTemplateSettings.TEMPLATES || [
   "Classic",
   "Modern",
   "Minimal",
@@ -9,6 +8,8 @@ const TEMPLATES = [
   "Corporate",
   "Vibrant",
   "Mono",
+  "Vintage",
+  "Professional",
 ];
 const DOC_TYPES = ["tax", "performa", "quotation", "deliveryChallan", "salesReturn"];
 

@@ -17,6 +17,10 @@ const TEMPLATES = [
   "Corporate",
   "Vibrant",
   "Mono",
+  "Vintage",
+  "Professional",
+  "Landscape",
+  "Service",
 ];
 
 const templateField = {

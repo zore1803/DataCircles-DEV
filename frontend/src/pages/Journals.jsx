@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { createPortal } from "react-dom";
 import {
   BookOpen, Plus, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, MoreVertical, Pin, PinOff,
-  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Download, Loader2, FileText
+  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Download, Loader2, FileText, Lock, Unlock
 } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
@@ -93,7 +93,12 @@ export default function Journals() {
   const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isClosingBulk, setIsClosingBulk] = useState(false);
+  const [isCancellingBulk, setIsCancellingBulk] = useState(false);
+  const [isReopeningBulk, setIsReopeningBulk] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, target: null });
+  const [closeConfirm, setCloseConfirm] = useState({ open: false, journal: null });
+  const [cancelConfirm, setCancelConfirm] = useState({ open: false, journal: null });
 
   useEffect(() => {
     const active = selectedJournals.length > 0;
@@ -114,7 +119,7 @@ export default function Journals() {
      paginate server-side; the whole org's list is small enough to fetch in
      one call), same edge-to-edge bottom-bar treatment as PaymentsTimeline.jsx/
      Inventory.jsx/PurchasePage.jsx. */
-  const [journalsPagination, setJournalsPagination] = useState({ currentPage: 1, limit: 20 });
+  const [journalsPagination, setJournalsPagination] = useState({ currentPage: 1, limit: 50 });
   const [editingJournalsPage, setEditingJournalsPage] = useState(false);
   const [journalsPageInput, setJournalsPageInput] = useState("");
 
@@ -176,6 +181,72 @@ export default function Journals() {
     } catch (err) {
       toast.error(err.response?.data?.error || "Error updating some journals.");
       fetchJournals();
+    }
+  };
+
+  const handleBulkClose = async () => {
+    setIsClosingBulk(true);
+    let successCount = 0;
+    try {
+      await Promise.all(
+        selectedJournals.map(async (id) => {
+          await API.post(`/journals/${id}/close`);
+          successCount++;
+        })
+      );
+      toast.success(`Successfully closed ${successCount} journal(s).`);
+      setSelectedJournals([]);
+      fetchJournals();
+      setActiveTab("settled");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error closing some journals.");
+      fetchJournals();
+    } finally {
+      setIsClosingBulk(false);
+    }
+  };
+
+  const handleBulkCancel = async () => {
+    setIsCancellingBulk(true);
+    let successCount = 0;
+    try {
+      await Promise.all(
+        selectedJournals.map(async (id) => {
+          await API.post(`/journals/${id}/cancel`);
+          successCount++;
+        })
+      );
+      toast.success(`Successfully cancelled ${successCount} journal(s).`);
+      setSelectedJournals([]);
+      fetchJournals();
+      setActiveTab("cancelled");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error cancelling some journals.");
+      fetchJournals();
+    } finally {
+      setIsCancellingBulk(false);
+    }
+  };
+
+  const handleBulkReopen = async () => {
+    setIsReopeningBulk(true);
+    let successCount = 0;
+    try {
+      await Promise.all(
+        selectedJournals.map(async (id) => {
+          await API.post(`/journals/${id}/reopen`);
+          successCount++;
+        })
+      );
+      toast.success(`Successfully reopened ${successCount} journal(s).`);
+      setSelectedJournals([]);
+      fetchJournals();
+      setActiveTab("active");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error reopening some journals.");
+      fetchJournals();
+    } finally {
+      setIsReopeningBulk(false);
     }
   };
 
@@ -460,7 +531,11 @@ export default function Journals() {
 
   /* ── filtered + sorted list ───────────────────────────────────────── */
   const filteredJournals = useMemo(() => {
-    let list = journals.filter((j) => (activeTab === "cancelled" ? j.status === "cancelled" : j.status !== "cancelled"));
+    let list = journals.filter((j) => {
+      if (activeTab === "cancelled") return j.status === "cancelled";
+      if (activeTab === "settled") return j.status === "settled";
+      return j.status === "active";
+    });
     const q = searchTerm.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -526,6 +601,53 @@ export default function Journals() {
     }
   };
 
+  const handleCloseJournal = (j) => {
+    setCloseConfirm({ open: true, journal: j });
+  };
+
+  const executeCloseJournal = async () => {
+    const j = closeConfirm.journal;
+    if (!j) return;
+    try {
+      await API.post(`/journals/${j._id}/close`);
+      toast.success("Journal closed successfully");
+      setCloseConfirm({ open: false, journal: null });
+      fetchJournals();
+      setActiveTab("settled");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to close journal");
+    }
+  };
+
+  const handleReopenJournal = async (j) => {
+    try {
+      await API.post(`/journals/${j._id}/reopen`);
+      toast.success("Journal reopened successfully");
+      fetchJournals();
+      setActiveTab("active");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to reopen journal");
+    }
+  };
+
+  const handleCancelJournal = (j) => {
+    setCancelConfirm({ open: true, journal: j });
+  };
+
+  const executeCancelJournal = async () => {
+    const j = cancelConfirm.journal;
+    if (!j) return;
+    try {
+      await API.post(`/journals/${j._id}/cancel`);
+      toast.success("Journal cancelled successfully");
+      setCancelConfirm({ open: false, journal: null });
+      fetchJournals();
+      setActiveTab("cancelled");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to cancel journal");
+    }
+  };
+
   /* ── row action menu ─────────────────────────────────────────────── */
   const renderActionMenu = (j) => {
     const isOpen = openActionMenuId === j._id;
@@ -539,7 +661,7 @@ export default function Journals() {
             if (isOpen) { closeMenu(); return; }
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 176;
-            const MENU_H = 210;
+            const MENU_H = j.status === "cancelled" ? 210 : 250;
             const MARGIN = 8;
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -584,6 +706,30 @@ export default function Journals() {
                 <Eye className="w-4 h-4 text-gray-400" /> Ledger
               </button>
               <div className="h-px bg-gray-100 my-1" />
+              {j.status === "active" && (
+                <>
+                  <button
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => { closeMenu(); handleCloseJournal(j); }}
+                  >
+                    <Lock className="w-4 h-4 text-orange-500" /> Close Journal
+                  </button>
+                  <button
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => { closeMenu(); handleCancelJournal(j); }}
+                  >
+                    <EyeOff className="w-4 h-4 text-gray-400" /> Cancel Journal
+                  </button>
+                </>
+              )}
+              {(j.status === "cancelled" || j.status === "settled") && (
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={() => { closeMenu(); handleReopenJournal(j); }}
+                >
+                  <Unlock className="w-4 h-4 text-green-500" /> Reopen Journal
+                </button>
+              )}
               <button
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                 onClick={() => { closeMenu(); handleDeleteJournal(j); }}
@@ -602,13 +748,22 @@ export default function Journals() {
   const renderCell = (colId, j, isRightmost) => {
     let content;
     switch (colId) {
-      case "balance":
+      case "balance": {
+        const isClosed = j.status === "settled" || j.status === "cancelled";
+        const displayBalance = isClosed && j.closingBalance != null ? j.closingBalance : j.currentBalance;
+        const balValue = Number(displayBalance) || 0;
+        let colorClass = balValue < 0 ? "text-red-600" : "text-gray-900";
+        if (isClosed && balValue > 0) {
+          colorClass = "text-green-600";
+        }
+        
         content = (
-          <span className={`text-sm font-bold ${Number(j.currentBalance) < 0 ? "text-red-600" : "text-gray-900"}`}>
-            {money(j.currentBalance)}
+          <span className={`text-sm font-bold ${colorClass}`}>
+            {money(displayBalance)}
           </span>
         );
         break;
+      }
       case "name":
         content = (
           <button 
@@ -735,7 +890,8 @@ export default function Journals() {
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
         {[
-          { key: "active", label: "Active Journals", count: journals.filter((j) => j.status !== "cancelled").length },
+          { key: "active", label: "Active Journals", count: journals.filter((j) => j.status === "active").length },
+          { key: "settled", label: "Closed", count: journals.filter((j) => j.status === "settled").length },
           { key: "cancelled", label: "Cancelled", count: journals.filter((j) => j.status === "cancelled").length },
         ].map((tab) => (
           <button
@@ -771,7 +927,45 @@ export default function Journals() {
         onClose={() => setLedgerJournalId(null)}
         onOpenPayIn={(journal) => setPayModal({ open: true, journal, type: "payin" })}
         onOpenPayOut={(journal) => setPayModal({ open: true, journal, type: "payout" })}
+        onJournalClosed={() => {
+          setLedgerJournalId(null);
+          fetchJournals();
+          setActiveTab("settled");
+        }}
+        onJournalReopened={() => {
+          setLedgerJournalId(null);
+          fetchJournals();
+          setActiveTab("active");
+        }}
       />
+
+      {closeConfirm.open && closeConfirm.journal && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Close Journal"
+          message={
+            closeConfirm.journal.currentBalance !== 0
+              ? `Are you sure you want to close this journal? This will create a final settlement entry of ₹${Math.abs(closeConfirm.journal.currentBalance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${closeConfirm.journal.currentBalance > 0 ? "You Receive" : "You Give"}) and move the journal to the Closed section.`
+              : "Are you sure you want to close this journal? The balance is ₹0.00. This will move the journal to the Closed section."
+          }
+          confirmLabel="Close Journal"
+          cancelLabel="Cancel"
+          onConfirm={executeCloseJournal}
+          onCancel={() => setCloseConfirm({ open: false, journal: null })}
+        />
+      )}
+
+      {cancelConfirm.open && cancelConfirm.journal && (
+        <ConfirmDialog
+          isOpen={true}
+          title="Cancel Journal"
+          message="Are you sure you want to cancel this journal? It will be moved to the Cancelled section without creating any settlement entries."
+          confirmLabel="Cancel Journal"
+          cancelLabel="Close"
+          onConfirm={executeCancelJournal}
+          onCancel={() => setCancelConfirm({ open: false, journal: null })}
+        />
+      )}
 
       <PayInOutModal
         isOpen={payModal.open}
@@ -850,6 +1044,36 @@ export default function Journals() {
                 {isDeleting ? <Loader2 className="w-4 h-4 animate-spin text-red-600" /> : <Trash2 className="w-4 h-4 text-red-600" />}
                 Delete
               </button>
+              {activeTab === "active" && (
+                <>
+                  <button
+                    onClick={handleBulkClose}
+                    disabled={isClosingBulk}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+                  >
+                    {isClosingBulk ? <Loader2 className="w-4 h-4 animate-spin text-orange-600" /> : <Lock className="w-4 h-4 text-orange-600" />}
+                    Close All
+                  </button>
+                  <button
+                    onClick={handleBulkCancel}
+                    disabled={isCancellingBulk}
+                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+                  >
+                    {isCancellingBulk ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                    Cancel All
+                  </button>
+                </>
+              )}
+              {(activeTab === "cancelled" || activeTab === "settled") && (
+                <button
+                  onClick={handleBulkReopen}
+                  disabled={isReopeningBulk}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+                >
+                  {isReopeningBulk ? <Loader2 className="w-4 h-4 animate-spin text-green-600" /> : <Unlock className="w-4 h-4 text-green-600" />}
+                  Reopen All
+                </button>
+              )}
               <button
                 onClick={() => setSelectedJournals([])}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-r-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"

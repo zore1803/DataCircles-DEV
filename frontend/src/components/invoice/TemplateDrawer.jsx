@@ -31,13 +31,17 @@ import SignatureModal from "../settings/SignatureModal";
 
 const TEMPLATE_BLURBS = {
   Classic: "Formal, fully ruled GST layout",
-  Modern: "Colour header band with striped rows",
+  Modern: "Airy, blue-accented sans-serif template",
   Minimal: "Hairline rules and generous spacing",
   Elegant: "Serif type with a centred masthead",
   Compact: "Dense layout that fits long item lists",
   Corporate: "Dark masthead with navy table headings",
   Vibrant: "Emerald accents and rounded sections",
   Mono: "Typewriter face, pure black and white",
+  Vintage: "Dense grid invoice with per-item discount and a bold amount-payable summary.",
+  Professional: "Clean header with blue accent bar and a dedicated details section.",
+  Landscape: "Wide, fully-ruled boxed grid layout with complete cell borders.",
+  Service: "Clean, borderless service billing receipt with solid blue header band.",
 };
 
 /* Small representative document so every thumbnail shows the same content. */
@@ -83,6 +87,7 @@ const TemplatePreviewCard = ({
   orgDetails,
   bankDetails,
   type,
+  defaultSigUrl,
 }) => {
   // The sheet is authored at THUMB_W; scale it down to whatever width the card
   // gets so the thumbnail always fills its page, whatever the grid does.
@@ -99,7 +104,7 @@ const TemplatePreviewCard = ({
   }, []);
   const scale = frameW ? frameW / THUMB_W : 0;
 
-  const html = buildDocumentHtml(SAMPLE_DOC, {
+  const html = buildDocumentHtml({ ...SAMPLE_DOC, signature: defaultSigUrl }, {
     type,
     template,
     orgDetails,
@@ -443,6 +448,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                       onSelect={handleSelectTemplate}
                       orgDetails={orgDetails}
                       bankDetails={bankDetails}
+                      defaultSigUrl={signatures.find((s) => s.isDefault)?.dataUrl || signatures[0]?.dataUrl}
                     />
                   ))}
             </div>
