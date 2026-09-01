@@ -794,7 +794,13 @@ const Navbar = () => {
           )}
         </div>
         <nav style={{ background: CHROME_BG }} className="flex-1 min-h-0 overflow-y-auto pt-1 pb-2 flex flex-col">
-          <ul className="flex-1 flex flex-col justify-evenly px-2  text-black">
+          {/* Fixed spacing instead of justify-evenly: with every module shown
+              the items were squeezed together to fit the viewport. They now
+              keep a consistent gap and the nav scrolls when they don't fit. */}
+          <ul
+            className={`flex flex-col px-2 text-black ${isHovered || isMobileOpen ? "gap-1" : "gap-2.5"
+              }`}
+          >
             {(isSuperAdmin ? superAdminNavigation : navigation).map(
               (item, index) =>
                 item.separator ? (

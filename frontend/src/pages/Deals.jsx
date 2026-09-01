@@ -29,7 +29,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
-import DealsForm from "../components/deal/DealsForm";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import ImportDeals from "../components/deal/ImportDeals";
 import BulkActions from "../components/BulkActions";

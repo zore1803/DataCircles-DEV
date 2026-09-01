@@ -8,7 +8,7 @@ import QuickCompanyForm from "../company/QuickCompanyForm";
 import { Plus, X, Paperclip } from "lucide-react";
 import toast from "react-hot-toast";
 
-const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onRequestClose, initialCompanyId = "", editContact = null }) => {
+const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, onRequestClose, initialCompanyId = "", editContact = null }) => {
   const isEditing = !!editContact;
   const [form, setForm] = useState({
     name: "",
@@ -55,6 +55,13 @@ const QuickContactForm = ({ companies, onContactCreated, onContactUpdated, onReq
     setTimeout(() => setIsOpen(true), 10);
     fetchFieldDefinitions();
     setLocalCompanies(companies);
+    // Callers that don't already hold a company list (e.g. the contact quick
+    // view) get one here, so the Company picker is never empty.
+    if (!companies || companies.length === 0) {
+      API.get("/companies")
+        .then((res) => setLocalCompanies(res.data?.companies || res.data || []))
+        .catch(() => {});
+    }
     return () => {
       setIsOpen(false);
     };

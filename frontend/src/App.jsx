@@ -35,8 +35,6 @@ import ContactDetailsPage from "./pages/ContactDetails";
 import Insights from "./pages/Insights";
 import VendorDetailsPageNew from "./pages/VendorDetailsPageNew";
 import VendorsHub from "./pages/VendorsHub";
-import AllTasks from "./pages/AllTasks";
-import AllMeetings from "./pages/AllMeetings";
 import PurchaseOrderPage from "./pages/PurchaseOrderPage";
 import PurchasePage from "./pages/PurchasePage";
 import ProductsServices from "./pages/ProductsServices";
@@ -589,22 +587,6 @@ function App() {
               element={
                 <PrivateRoute>
                   <VendorDetailsPageNew />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/all-tasks"
-              element={
-                <PrivateRoute>
-                  <AllTasks />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/all-meetings"
-              element={
-                <PrivateRoute>
-                  <AllMeetings />
                 </PrivateRoute>
               }
             />

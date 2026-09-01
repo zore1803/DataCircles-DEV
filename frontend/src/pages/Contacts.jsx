@@ -47,7 +47,6 @@ import ContactFolder from "../components/contact/ContactFolder";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import BulkActions from "../components/BulkActions";
 import { Link, useNavigate } from "react-router-dom";
-import ContactForm from "../components/contact/ContactForm";
 import QuickContactForm from "../components/contact/QuickContactForm";
 import { useLocation } from "react-router-dom";
 import CallLogForm from "../components/contact/CallLogForm";

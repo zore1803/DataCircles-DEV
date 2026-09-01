@@ -291,11 +291,83 @@ const GenericSkeleton = () => (
   </div>
 );
 
+// Matches the record-detail pages (company / contact / deal) top-to-bottom:
+// the 40px header row (name block on the left, action buttons on the right),
+// the full-bleed separator, the pill tab bar, the second separator, the
+// six-tile KPI strip, then the tab body. Laid out with the same spacing the
+// real pages use, so nothing jumps when the content replaces it.
+const RecordDetailSkeleton = ({ tabWidths = [80, 88, 76, 72, 96, 92] }) => (
+  <div className="bg-white -m-6 pt-6 px-6 min-h-full">
+    {/* Header row */}
+    <div className="flex items-center justify-between mb-2" style={{ height: 40 }}>
+      <div className="flex items-center gap-3 min-w-0">
+        <Skeleton shape="circle" width={28} height={28} className="flex-shrink-0" />
+        <div className="space-y-1.5">
+          <Skeleton width={180} height={16} />
+          <Skeleton width={110} height={11} />
+        </div>
+        <Skeleton shape="circle" width={28} height={28} className="flex-shrink-0" />
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Skeleton shape="circle" width={32} height={32} className="hidden lg:block" />
+        <Skeleton shape="circle" width={32} height={32} className="hidden lg:block" />
+        <Skeleton shape="circle" width={32} height={32} />
+        <Skeleton width={104} height={32} className="rounded-full hidden lg:block" />
+        <Skeleton width={72} height={32} className="rounded-full hidden lg:block" />
+      </div>
+    </div>
+
+    {/* Separator */}
+    <div className="border-b border-gray-200 mb-4 -mx-6" />
+
+    {/* Pill tab bar - one pill per real tab, so the bar doesn't resize */}
+    <div className="flex items-center mb-4">
+      <div className="inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full">
+        {tabWidths.map((w, i) => (
+          <Skeleton key={i} width={w} height={32} className="rounded-full flex-shrink-0" />
+        ))}
+      </div>
+    </div>
+
+    <div className="border-b border-gray-200 mb-4 -mx-6" />
+
+    {/* KPI strip - same 2/3/6-col grid as the real StatTile row */}
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-[56px] w-full flex items-center gap-2 px-3 bg-gray-50 border border-gray-200 rounded-xl"
+        >
+          <Skeleton shape="circle" width={20} height={20} className="flex-shrink-0" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Skeleton width="70%" height={10} />
+            <Skeleton width="45%" height={14} />
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Tab body */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Skeleton shape="rect" width={32} height={32} className="rounded-lg" />
+            <Skeleton width={120} height={14} />
+          </div>
+          <Skeleton width="55%" height={20} />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 const VARIANTS = {
   table: TableSkeleton,
   kanban: KanbanSkeleton,
   cards: CardsSkeleton,
   profile: ProfileSkeleton,
+  recordDetail: RecordDetailSkeleton,
   generic: GenericSkeleton,
   insights: InsightsSkeleton,
   settings: SettingsSkeleton,

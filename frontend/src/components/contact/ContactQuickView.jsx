@@ -20,7 +20,7 @@ import Calendar from "./Calender";
 import MeetingsTable from "./MeetingsTable";
 import ContactTasksTable from "./ContactTasksTable";
 import ProfilePicture from "./ProfilePicture";
-import ContactForm from "./ContactForm";
+import QuickContactForm from "./QuickContactForm";
 import useContactStore from "../../store/useContactStore";
 import { Link } from "react-router-dom";
 
@@ -337,28 +337,13 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
 
       {/* Edit Form Overlay */}
       {showEditForm && contact && (
-        <ContactForm
-          form={{
-            _id: contact._id,
-            name: contact.name,
-            email: contact.email,
-            phone: contact.phone,
-            lifecycleStage: contact.lifecycleStage,
-            stageStatus: contact.stageStatus,
-            company: contact.company?._id || "",
-            avatar: contact.avatar,
-            socialMedia: contact.socialMedia || {},
-          }}
-          setForm={() => {}}
-          additionalValues={{}}
-          setAdditionalValues={() => {}}
-          contactFieldList={[]}
+        <QuickContactForm
           companies={[]}
-          loading={false}
-          setLoading={() => {}}
-          setError={(msg) => toast.error(msg)}
-          setSuccess={(msg) => toast.success(msg)}
-          fetchContacts={() => loadContact(contactId)}
+          editContact={contact}
+          onContactUpdated={() => {
+            setShowEditForm(false);
+            loadContact(contactId);
+          }}
           onRequestClose={() => setShowEditForm(false)}
         />
       )}

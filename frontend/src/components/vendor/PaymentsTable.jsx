@@ -22,7 +22,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { formatNumberFixed } from "../../utils/numberFormatter";
-import VendorForm from "../vendor/VendorForm";
+import QuickVendorForm from "../vendor/QuickVendorForm";
 import VendorPaymentForm from "../vendor/VendorPaymentForm";
 import PaymentPreview from "../vendor/venerPaymentPreview";
 import DataTable from "../common/DataTable";
@@ -877,17 +877,13 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       />
 
       {showUpdateModal && (
-        <VendorForm
-          form={selectedVendor}
-          setForm={(updatedForm) => setSelectedVendor(updatedForm)}
-          additionalFieldValues={additionalFieldValues}
-          setAdditionalFieldValues={setAdditionalFieldValues}
-          vendorFields={vendorFields}
-          loading={loading}
-          setLoading={setLoading}
-          setError={setError}
-          setSuccess={setSuccess}
-          fetchVendors={() => { }}
+        <QuickVendorForm
+          editVendor={selectedVendor}
+          onVendorUpdated={() => {
+            setShowUpdateModal(false);
+            setSelectedVendor(null);
+            setAdditionalFieldValues({});
+          }}
           onRequestClose={() => {
             setShowUpdateModal(false);
             setSelectedVendor(null);

@@ -34,7 +34,6 @@ import {
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
 import { formatNumberFixed } from "../utils/numberFormatter";
-import VendorForm from "../components/vendor/VendorForm";
 import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import VendorPaymentForm from "../components/vendor/VendorPaymentForm";
 import { useLocation } from "react-router-dom";

@@ -32,7 +32,6 @@ import CompanyNotesTab from "../components/company/CompanyNotesTab";
 import CompanyTasksTab from "../components/company/CompanyTasksTab";
 import CompanyMeetingsTab from "../components/company/CompanyMeetingsTab";
 import CompanyCalendar from "../components/company/CompanyCalendar";
-import ProfilePicture from "../components/contact/ProfilePicture";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import StatTile from "../components/common/StatTile";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
@@ -321,7 +320,7 @@ function DealDetail() {
   }
 
   if (!deal) {
-    return <PageSkeleton variant="profile" />;
+    return <PageSkeleton variant="recordDetail" />;
   }
 
   const companyId = deal.company?._id || deal.company;
@@ -358,12 +357,6 @@ function DealDetail() {
                 <ChevronLeft className="w-4 h-4" />
               </button>
             )}
-
-            <ProfilePicture
-              contact={{ name: deal.title }}
-              size="w-9 h-9"
-              textSize="text-sm"
-            />
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">

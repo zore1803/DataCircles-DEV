@@ -43,7 +43,6 @@ import {
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
 import BulkActions from "../components/BulkActions";
-import CompanyForm from "../components/company/CompanyForm";
 import QuickCompanyForm from "../components/company/QuickCompanyForm";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import VideoTutorialModal from "../components/VideoTutorialModal";

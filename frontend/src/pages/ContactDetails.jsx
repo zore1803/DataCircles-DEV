@@ -353,7 +353,12 @@ const ContactDetailsPage = () => {
   ];
 
   if (!contact) {
-    return <PageSkeleton variant="profile" />;
+    return (
+      <PageSkeleton
+        variant="recordDetail"
+        tabWidths={[80, 100, 76, 72, 96, 92]}
+      />
+    );
   }
 
   return (

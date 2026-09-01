@@ -11,7 +11,7 @@ import NoteSection from "../components/vendor/NoteSection";
 import VendorTasksTable from "../components/vendor/VendorTasksTable";
 import VendorMeetingsTable from "../components/vendor/VendorMeetingsTable";
 import VendorCalendar from "../components/vendor/VendorCalendar";
-import VendorForm from "../components/vendor/VendorForm";
+import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import PageSkeleton from "../components/common/PageSkeleton";
 import toast from "react-hot-toast";
 import {
@@ -761,17 +761,12 @@ const VendorDetailsPageNew = () => {
     <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 overflow-x-hidden">
       {/* ── Edit Form Modal ── */}
       {showForm && (
-        <VendorForm
-          form={form}
-          setForm={setForm}
-          additionalFieldValues={additionalFieldValues}
-          setAdditionalFieldValues={setAdditionalFieldValues}
-          vendorFields={vendorFieldList}
-          loading={formLoading}
-          setLoading={setFormLoading}
-          setError={(message) => toast.error(message || "Failed to save vendor")}
-          setSuccess={(message) => toast.success(message || "Vendor saved successfully")}
-          fetchVendors={fetchVendorDetails}
+        <QuickVendorForm
+          editVendor={vendor}
+          onVendorUpdated={() => {
+            setShowForm(false);
+            fetchVendorDetails();
+          }}
           onRequestClose={() => setShowForm(false)}
         />
       )}

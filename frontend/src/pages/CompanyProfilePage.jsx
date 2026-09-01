@@ -55,7 +55,6 @@ import {
   YAxis,
   Tooltip,
 } from "recharts";
-import CompanyForm from "../components/company/CompanyForm";
 import QuickCompanyForm from "../components/company/QuickCompanyForm";
 import SubsidiaryModal from "../components/company/SubsidiaryModal";
 import MergeCompanyModal from "../components/company/MergeCompanyModal";
