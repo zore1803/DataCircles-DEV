@@ -3006,49 +3006,28 @@ function Tasks() {
           </div>
         ) : (
         <>
-        <div className="flex flex-row items-center flex-shrink-0" style={{ height: 44 }}>
-          <button
-            onClick={() => setActiveTab("tasks")}
-            className="flex flex-row justify-center items-center flex-shrink-0"
-            style={{
-              boxSizing: "border-box",
-              padding: "0px 16px",
-              gap: 10,
-              height: 44,
-              borderBottom: activeTab === "tasks" ? "3px solid #0085FF" : "3px solid transparent",
-              fontFamily: "Inter",
-              fontWeight: 600,
-              fontSize: 14,
-              lineHeight: "150%",
-              letterSpacing: "-0.02em",
-              color: activeTab === "tasks" ? "#0085FF" : "#44444A",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Tasks
-          </button>
-          <button
-            onClick={() => setActiveTab("meetings")}
-            className="flex flex-row justify-center items-center flex-shrink-0"
-            style={{
-              boxSizing: "border-box",
-              padding: "0px 16px",
-              gap: 10,
-              height: 44,
-              borderBottom: activeTab === "meetings" ? "3px solid #0085FF" : "3px solid transparent",
-              fontFamily: "Inter",
-              fontWeight: 600,
-              fontSize: 14,
-              lineHeight: "150%",
-              letterSpacing: "-0.02em",
-              color: activeTab === "meetings" ? "#0085FF" : "#44444A",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Meetings
-          </button>
-          
-        </div>
+        {/* Same pill switcher as the Contacts tabs — grey track, white
+            active pill — replacing the underline tabs this page used. */}
+        <nav className="inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar flex-shrink-0">
+          {[
+            { id: "tasks", label: "Tasks" },
+            { id: "meetings", label: "Meetings" },
+          ].map(({ id, label }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
+                }`}
+                style={isActive ? { color: "var(--btn-primary)" } : undefined}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </nav>
 
         <div className="relative flex-1 min-w-0 flex items-center justify-end">
           <div
@@ -3803,6 +3782,7 @@ function Tasks() {
           companies={companies}
           vendors={vendors}
           mode={meetingModalMode}
+          startInEditMode={meetingModalMode === "view" && !!selectedMeeting}
           onSave={handleMeetingSave}
           onDelete={handleMeetingDelete}
         />

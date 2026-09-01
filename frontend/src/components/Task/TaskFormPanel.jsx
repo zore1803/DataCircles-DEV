@@ -54,7 +54,21 @@ const SearchableEntityDropdown = ({ options, value, onChange, displayKey, placeh
         onClick={(e) => {
           const next = !isOpen;
           setIsOpen(next);
-          if (next) setTimeout(() => e.currentTarget.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+          if (next) {
+            // Scroll only by however much the open panel overflows the form,
+            // instead of yanking the field to the top of the panel.
+            const el = e.currentTarget;
+            setTimeout(() => {
+              let scroller = el.parentElement;
+              while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
+                scroller = scroller.parentElement;
+              }
+              if (!scroller) return;
+              const overflow =
+                el.getBoundingClientRect().bottom + 220 - scroller.getBoundingClientRect().bottom;
+              if (overflow > 0) scroller.scrollBy({ top: overflow + 8, behavior: "smooth" });
+            }, 0);
+          }
         }}
         className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
       >
@@ -124,56 +138,24 @@ const SearchableEntityDropdown = ({ options, value, onChange, displayKey, placeh
 };
 
 // Pill-shaped select used for the entity-type / Status / Priority fields.
-const SingleSelectDropdown = ({ options, value, onChange, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedOption = options.find((opt) => opt.value === value) || options[0];
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={(e) => {
-          const next = !isOpen;
-          setIsOpen(next);
-          if (next) setTimeout(() => e.currentTarget.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-        }}
-        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937] disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
-      >
-        <div className="flex items-center gap-1.5">
-          {selectedOption.icon && <selectedOption.icon className="w-3.5 h-3.5" />}
-          <span className="capitalize">{selectedOption.label}</span>
-        </div>
-        {!disabled && <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in duration-200">
-            {options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option.value ? "bg-blue-50/50 text-blue-600" : "text-gray-600"}`}
-              >
-                <div className={`p-1.5 rounded-lg ${option.className} border-none`}>
-                  {option.icon && <option.icon className="w-3.5 h-3.5" />}
-                </div>
-                <span className="font-medium text-left flex-1">{option.label}</span>
-                {value === option.value && <CheckIcon className="w-4 h-4 ml-auto text-blue-600" />}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
+// Native <select> so it matches the Category/Priority fields on the meeting form.
+const SingleSelectDropdown = ({ options, value, onChange, disabled }) => (
+  <div className="relative">
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="w-full appearance-none border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] bg-white font-inter focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+    {!disabled && (
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#1F2937] opacity-50" />
+    )}
+  </div>
+);
 
 const statusOptions = [
   { value: "Pending", label: "Pending", icon: Clock, className: "bg-amber-50 text-amber-600" },

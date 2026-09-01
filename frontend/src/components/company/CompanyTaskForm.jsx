@@ -196,7 +196,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, onOpenChange
                   onChange(option.value);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 ${value === option.value ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-[13px] transition-colors hover:bg-gray-50 ${value === option.value ? 'bg-blue-50/50 text-blue-600' : 'text-gray-600'
                   }`}
               >
                 <div className={`p-1.5 rounded-lg ${option.className} border-none`}>

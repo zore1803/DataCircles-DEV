@@ -2,13 +2,15 @@ const Company = require("../models/Company");
 const Contact = require("../models/Contact");
 const Deal = require("../models/Deal");
 const Vendor = require("../models/Vendor");
+const Note = require("../models/Note");
+const Invoice = require("../models/Invoice");
 const { cacheGetOrSet } = require("../cacheHelper");
 
 exports.globalSearch = async (req, res) => {
   try {
     const { search, lifecycleStage, stageStatus } = req.query;
     const orgId = req.user.organization;
-    const cacheKey = `globalSearch:v1:${orgId}:${search || ""}:${
+    const cacheKey = `globalSearch:v2:${orgId}:${search || ""}:${
       lifecycleStage || ""
     }:${stageStatus || ""}`;
 
@@ -59,18 +61,50 @@ exports.globalSearch = async (req, res) => {
         ];
       }
 
-      // Run all queries in parallel
-      const [companies, contacts, deals, vendors] = await Promise.all([
-        Company.find(companyQuery),
-        Contact.find(contactQuery).populate("company"),
-        Deal.find(dealQuery)
-          .populate("company")
-          .populate("contact")
-          .populate("user"),
-        Vendor.find(vendorQuery),
-      ]);
+      // Notes match on their title and body text, plus the note type, so
+      // searching e.g. "call summary" finds notes filed under that type.
+      const noteQuery = { organization: orgId };
+      if (search) {
+        noteQuery.$or = [
+          { title: { $regex: search, $options: "i" } },
+          { note: { $regex: search, $options: "i" } },
+          { noteType: { $regex: search, $options: "i" } },
+        ];
+      }
 
-      return { companies, contacts, deals, vendors };
+      // Tax invoices only — pro formas, quotations and delivery challans are
+      // separate collections and separate Accounting tabs; folding them into
+      // one "Invoices" row would make the count mean something the user can't
+      // act on from a single "View all".
+      const invoiceQuery = { organization: orgId };
+      if (search) {
+        invoiceQuery.$or = [
+          { invoiceNumber: { $regex: search, $options: "i" } },
+          { status: { $regex: search, $options: "i" } },
+          { receiverGSTIN: { $regex: search, $options: "i" } },
+          { "items.name": { $regex: search, $options: "i" } },
+        ];
+      }
+
+      // Run all queries in parallel
+      const [companies, contacts, deals, vendors, notes, invoices] =
+        await Promise.all([
+          Company.find(companyQuery),
+          Contact.find(contactQuery).populate("company"),
+          Deal.find(dealQuery)
+            .populate("company")
+            .populate("contact")
+            .populate("user"),
+          Vendor.find(vendorQuery),
+          // Notes carry no display name of their own beyond title/body, so the
+          // company comes along to label the row in the search panel.
+          Note.find(noteQuery).populate("company", "name"),
+          Invoice.find(invoiceQuery).select(
+            "invoiceNumber status amount date deal organization createdAt updatedAt"
+          ),
+        ]);
+
+      return { companies, contacts, deals, vendors, notes, invoices };
     });
 
     res.json(data);

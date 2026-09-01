@@ -1573,7 +1573,7 @@ export default function CompanyDealsKanban({
               </span>
             )}
           </button>
-          <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+          <div className="relative flex items-center gap-1.5 p-1 bg-[#F1F1F5] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
             <span
               className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
               style={{ left: viewMode === "list" ? 46 : 4 }}
@@ -1718,8 +1718,14 @@ export default function CompanyDealsKanban({
         </div>
       ) : (
         <>
+          {/* overflow-hidden is what makes the 8px radius actually clip: the
+              border sits on this wrapper while the scrolling happens in the
+              child below, so without it the rows (and the sticky cells in
+              particular) paint straight over the rounded corners and past the
+              left edge. The other tab tables put the border on the scroll
+              container itself, which clips for free. */}
           <div
-            className="box-border flex flex-col items-stretch bg-white self-stretch"
+            className="box-border flex flex-col items-stretch bg-white self-stretch overflow-hidden"
             style={{ border: "1px solid #E1E4EA", borderRadius: "8px" }}
           >
             <div ref={fillContainerRef} style={fillStyle} className="w-full overflow-x-auto overflow-y-auto">

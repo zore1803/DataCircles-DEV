@@ -107,21 +107,21 @@ const SearchableDropdown = ({
 
       {isOpen && (
         <div className="absolute z-[10010] w-full mt-2 bg-white border border-[#E0E0E1] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
-          <div className="p-3 border-b border-[#F2F2F7]">
+          <div className="p-2 border-b border-[#F2F2F7]">
             <input
               type="text"
               placeholder={`Search ${placeholder.toLowerCase()}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-10 px-3 text-[14px] border border-[#E0E0E1] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter placeholder:text-[#A0A0A0]"
+              className="w-full h-8 px-3 text-[13px] border border-[#E0E0E1] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter placeholder:text-[#A0A0A0]"
               autoFocus
             />
           </div>
-          <div className="max-h-60 overflow-y-auto py-1">
+          <div className="max-h-52 overflow-y-auto py-1">
             {filteredOptions.length > 0 ? (
               <>
                 <div
-                  className="px-4 py-2.5 text-[14px] text-gray-400 hover:bg-[#F2F2F7] cursor-pointer transition-colors italic border-b border-[#F2F2F7]"
+                  className="px-3 py-1.5 text-[13px] text-gray-400 hover:bg-[#F2F2F7] cursor-pointer transition-colors italic border-b border-[#F2F2F7]"
                   onClick={handleClear}
                 >
                   Clear selection
@@ -129,7 +129,7 @@ const SearchableDropdown = ({
                 {filteredOptions.map((option) => (
                   <div
                     key={option[valueKey]}
-                    className={`px-4 py-2.5 text-[14px] cursor-pointer hover:bg-[#F2F2F7] transition-all font-inter ${option[valueKey] === value
+                    className={`px-3 py-1.5 text-[13px] cursor-pointer hover:bg-[#F2F2F7] transition-all font-inter ${option[valueKey] === value
                         ? "bg-[#F2F2F7] text-blue-600 font-bold"
                         : "text-gray-700"
                       }`}
@@ -140,7 +140,7 @@ const SearchableDropdown = ({
                 ))}
               </>
             ) : (
-              <div className="px-4 py-6 text-[14px] text-gray-400 text-center font-inter italic">
+              <div className="px-3 py-4 text-[13px] text-gray-400 text-center font-inter italic">
                 No options found
               </div>
             )}

@@ -14,17 +14,20 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
     vendors: [],
     jobs: [],
     deals: [],
+    notes: [],
+    invoices: [],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   // Panel variant: results sit inside per-category dropdown rows (Companies,
-  // Contacts, Deals, Vendors) rather than one flat list — collapsed by
-  // default, so a category with matches is opened deliberately rather than
-  // the panel dumping every result on screen at once. Invoices isn't here
-  // because the /search endpoint (globalSearchController.js) doesn't query
-  // invoices yet — adding it needs a backend change, not just a UI row.
+  // Contacts, Deals, Vendors) rather than one flat list. Every category that
+  // actually matched opens as soon as results land — the hits are the point
+  // of the search, so making the user click each row to see them just hides
+  // the answer behind an extra step — and any row can be clicked shut again.
+  // Notes and Invoices ride along the same way — the /search endpoint queries
+  // both (globalSearchController.js).
   const [openCategories, setOpenCategories] = useState(() => new Set());
   const toggleCategory = (key) =>
     setOpenCategories((prev) => {
@@ -57,7 +60,21 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
             vendors: Array.isArray(data.vendors) ? data.vendors : [],
             jobs: [], // Not implemented in API yet
             deals: Array.isArray(data.deals) ? data.deals : [],
+            notes: Array.isArray(data.notes) ? data.notes : [],
+            invoices: Array.isArray(data.invoices) ? data.invoices : [],
           });
+          // Open every category that matched, so a fresh search shows its
+          // hits straight away. Recomputed per search rather than merged
+          // with the previous set, so rows that no longer match don't stay
+          // open as empty sections.
+          setOpenCategories(
+            new Set(
+              ["companies", "contacts", "deals", "vendors", "notes", "invoices"].filter((key) => {
+                const list = data[key];
+                return Array.isArray(list) && list.length > 0;
+              })
+            )
+          );
           setLoading(false);
         })
         .catch((err) => {
@@ -74,7 +91,10 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
         vendors: [],
         jobs: [],
         deals: [],
+        notes: [],
+        invoices: [],
       });
+      setOpenCategories(new Set());
       setError(null);
     }
   }, [searchQuery]);
@@ -92,6 +112,16 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
         break;
       case "deals":
         navigate(`/deals/${item._id || item.id}`);
+        break;
+      case "notes": {
+        // No notes detail route — a note is read where it lives, on its
+        // company's Notes tab.
+        const companyId = item.company?._id || item.company;
+        if (companyId) navigate(`/companies/${companyId}?tab=Notes`);
+        break;
+      }
+      case "invoices":
+        navigate(`/accounting?tab=tax&search=${encodeURIComponent(itemLabel(item))}`);
         break;
       default:
         console.log(`Clicked ${type}:`, item);
@@ -128,9 +158,19 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
     { key: "contacts", label: "Contacts" },
     { key: "deals", label: "Deals" },
     { key: "vendors", label: "Vendors" },
+    { key: "notes", label: "Notes" },
+    { key: "invoices", label: "Invoices" },
   ];
 
-  const itemLabel = (item) => item.name || item.title || item.companyName;
+  // Notes and invoices have no `name`: a note is labelled by its title (or
+  // the first line of its body when untitled), an invoice by its number.
+  const itemLabel = (item) =>
+    item.name ||
+    item.title ||
+    item.companyName ||
+    item.invoiceNumber ||
+    (item.note ? item.note.split(/\r?\n/)[0].slice(0, 80) : "") ||
+    "Untitled";
 
   // Base list route per category, for "View all" — it hands off to the real
   // module list rather than trying to replicate pagination/filtering here.
@@ -139,6 +179,9 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
     contacts: "/contacts",
     deals: "/deals",
     vendors: "/vendors",
+    // Invoices live as the tax tab of Accounting; there is no standalone
+    // notes list page, so Notes has no "View all" target.
+    invoices: "/accounting?tab=tax",
   };
 
   const RESULTS_LIMIT = 5;
@@ -165,10 +208,10 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
               <button
                 type="button"
                 onClick={() => toggleCategory(key)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left bg-gray-100 hover:bg-gray-200 transition-colors"
               >
                 <span className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold text-gray-900">{label}</span>
+                  <span className="font-semibold text-gray-700">{label}</span>
                   {hasQuery && (
                     <span className="flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-white border border-gray-200 text-xs font-bold text-gray-500 flex-shrink-0">
                       {items.length}
@@ -176,7 +219,7 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
                   )}
                 </span>
                 <span className="flex items-center gap-3 flex-shrink-0">
-                  {hasQuery && hasMore && (
+                  {hasQuery && hasMore && CATEGORY_ROUTES[key] && (
                     <span
                       role="link"
                       onClick={(e) => {
@@ -186,7 +229,9 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
                         // into its own search box, so "View all" lands on a
                         // list already filtered to this search, not the full
                         // unfiltered table.
-                        navigate(`${CATEGORY_ROUTES[key]}?search=${encodeURIComponent(searchQuery)}`);
+                        const base = CATEGORY_ROUTES[key];
+                        const joiner = base.includes("?") ? "&" : "?";
+                        navigate(`${base}${joiner}search=${encodeURIComponent(searchQuery)}`);
                         onClose();
                       }}
                       className="text-sm font-medium text-blue-600 hover:underline"
@@ -308,9 +353,9 @@ const SearchResults = ({ isOpen, onClose, searchQuery, variant = "full" }) => {
           </div>
         ) : (
           // Companies / Contacts / Deals / Vendors as standing dropdown rows,
-          // always present — matches (once you search) land inside their own
-          // category and stay collapsed until that row is opened, rather than
-          // the panel dumping every hit into one flat list up front.
+          // always present — matches land inside their own category, with the
+          // matching rows opened for you, rather than the panel dumping every
+          // hit into one flat list up front.
           renderCategoryAccordion()
         )}
       </div>

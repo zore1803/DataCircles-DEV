@@ -764,10 +764,19 @@ const Accounting = () => {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab");
     const status = params.get("status");
+    // `?search=` arrives from the global search panel's Invoices row — it
+    // hands the query off rather than replicating the table's own filtering.
+    const search = params.get("search");
     if (tab && TABS.some((t) => t.key === tab)) setActiveTab(tab);
+    const key = tab && TABS.some((t) => t.key === tab) ? tab : "tax";
     if (status) {
-      const key = tab && TABS.some((t) => t.key === tab) ? tab : "tax";
       setFilterStatuses((prev) => ({ ...prev, [key]: status }));
+    }
+    if (search) {
+      setSearchTerms((prev) => ({ ...prev, [key]: search }));
+      // The search box is collapsed to an icon by default — open it, or the
+      // term filtering the table would be invisible on arrival.
+      setIsSearchExpanded(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
@@ -2555,7 +2564,7 @@ const Accounting = () => {
           {/* Left Side: Tabs Container — same pill selector as the Company tabs.
               Never skeletoned: the tabs are navigation, not data, so they stay
               mounted and clickable while the table loads. */}
-          <div className="relative flex-shrink-0 hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
+          <div className="relative flex-shrink-0 hidden lg:inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}

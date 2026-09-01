@@ -77,7 +77,7 @@ const StatusDropdown = ({ contact, onUpdate, isOpen, onToggle }) => {
                                 <button
                                     key={status}
                                     onClick={(e) => handleSelect(e, status)}
-                                    className={`w-full text-left px-4 py-2 text-xs transition-colors hover:bg-gray-50 flex items-center justify-between ${currentStatus === status
+                                    className={`w-full text-left px-3 py-1.5 text-[13px] transition-colors hover:bg-gray-50 flex items-center justify-between ${currentStatus === status
                                         ? "bg-blue-50 text-blue-700 font-bold"
                                         : "text-gray-700"
                                         }`}

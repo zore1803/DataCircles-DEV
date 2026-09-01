@@ -1105,13 +1105,13 @@ function Contacts() {
 
             if (vc.key === "name") {
               baseContent = (
+                // No avatar in the table row: it forced the row taller than
+                // the 37px every other list uses, and the name column already
+                // identifies the contact. Kept in the card/grid views.
                 <div className="flex items-center space-x-3 truncate w-full">
-                  <div className="flex-shrink-0">
-                    <ProfilePicture contact={contact} />
-                  </div>
                   <Link
                     to={`/contacts/${contact._id}`}
-                    className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
+                    className="text-sm font-semibold text-[#0085FF] truncate hover:underline hover:text-[#004CFF] transition-all duration-150 ease-out"
                     title={contact.name}
                   >
                     <HighlightText text={contact.name} query={searchTerm} />

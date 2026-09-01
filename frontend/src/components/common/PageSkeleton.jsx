@@ -188,7 +188,7 @@ const InsightsSkeleton = () => (
       {/* One pill per real tab (Overview, Contacts, Companies, Deals, Vendors,
           Purchase Orders, Purchases, Invoices) so the strip doesn't visibly
           grow once the real pills replace it. */}
-      <div className="inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto max-w-full">
+      <div className="inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto max-w-full">
         {[76, 84, 96, 68, 82, 128, 92, 84].map((w, i) => (
           <Skeleton key={i} width={w} height={36} className="rounded-full flex-shrink-0" />
         ))}

@@ -1181,7 +1181,7 @@ const CompanyProfilePage = () => {
 
         {/* Tab Row: pill tab selector */}
         <div className="flex items-center justify-between mb-4 gap-3">
-          <div ref={tabTrackRef} className="relative inline-flex items-center gap-1 h-11 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto">
+          <div ref={tabTrackRef} className="relative inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto overflow-y-hidden no-scrollbar">
             <span
               className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
               style={{ left: tabIndicator.left, width: tabIndicator.width }}
@@ -1191,7 +1191,7 @@ const CompanyProfilePage = () => {
                 key={tab}
                 ref={(el) => (tabRefs.current[tab] = el)}
                 onClick={() => setActiveTab(tab)}
-                className={`relative z-10 flex items-center justify-center h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
+                className={`relative z-10 flex flex-shrink-0 items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
                   ? "text-[#0085FF]"
                   : "text-gray-700 hover:text-gray-900"
                   }`}

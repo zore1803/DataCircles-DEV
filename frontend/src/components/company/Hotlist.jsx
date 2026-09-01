@@ -628,7 +628,7 @@ const Hotlist = () => {
             </div>
 
             {/* List / Card Toggle — same pill pattern as Deals' List/Kanban toggle */}
-            <div className="relative flex items-center bg-gray-100 rounded-full p-1 flex-shrink-0 overflow-hidden">
+            <div className="relative flex items-center bg-[#F1F1F5] gap-1.5 rounded-full p-1 flex-shrink-0 overflow-hidden">
               <span
                 className="absolute top-1 w-8 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
                 style={{ left: folderViewMode === "list" ? 36 : 4 }}

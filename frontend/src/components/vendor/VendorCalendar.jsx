@@ -367,6 +367,26 @@ const VendorCalendar = ({ vendorId }) => {
     return d;
   });
 
+  // Whether the period on screen is the one containing today — drives the
+  // "Today" button's active styling, so it reads as where-you-are rather than
+  // a button that always looks clickable. Scoped to the current view: in
+  // month view any day this month counts, in week view any day this week, in
+  // day view only today itself.
+  const isViewingToday = (() => {
+    const now = new Date();
+    if (viewMode === "month")
+      return (
+        currentDate.getMonth() === now.getMonth() &&
+        currentDate.getFullYear() === now.getFullYear()
+      );
+    if (viewMode === "week") {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      return now >= weekStart && now < weekEnd;
+    }
+    return currentDate.toDateString() === now.toDateString();
+  })();
+
   const periodLabel = (() => {
     if (viewMode === "month") return `${months[month]} ${year}`;
     if (viewMode === "week") {
@@ -579,7 +599,7 @@ const VendorCalendar = ({ vendorId }) => {
           </button>
         </div>
 
-        <div className="relative flex items-center bg-gray-100 rounded-full p-0.5 lg:p-1 flex-shrink-0 overflow-hidden">
+        <div className="relative flex items-center bg-[#F1F1F5] gap-1.5 rounded-full p-1 flex-shrink-0 overflow-hidden">
           <span
             className="absolute top-0.5 lg:top-1 bottom-0.5 lg:bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
             style={{ left: viewIndicator.left, width: viewIndicator.width }}
@@ -601,7 +621,11 @@ const VendorCalendar = ({ vendorId }) => {
 
         <button
           onClick={() => setCurrentDate(new Date())}
-          className="px-2.5 lg:px-3 py-1 lg:py-1.5 border border-gray-200 rounded-full text-[11px] lg:text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
+          className={`px-2.5 lg:px-3 py-1 lg:py-1.5 border rounded-full text-[11px] lg:text-sm font-medium transition-colors flex-shrink-0 ${
+            isViewingToday
+              ? "border-[#0085FF] bg-blue-50 text-[#0085FF]"
+              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+          }`}
         >
           Today
         </button>

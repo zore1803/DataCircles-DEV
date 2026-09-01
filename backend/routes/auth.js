@@ -30,6 +30,9 @@ router.post("/login", authController.login);
 // Get current user
 router.get("/me", requireAuth, authController.getCurrentUser);
 
+// Intercom Messenger identity verification JWT
+router.get("/intercom-jwt", requireAuth, authController.getIntercomJwt);
+
 // Delete user
 router.delete(
   "/delete/:id",

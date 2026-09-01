@@ -23,7 +23,7 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
         const rect = btn.getBoundingClientRect();
         const viewportH = window.innerHeight / zoom;
         const viewportW = window.innerWidth / zoom;
-        const MAX_MENU_H = 240; // matches max-h-60
+        const MAX_MENU_H = 208; // matches max-h-52
         const MARGIN = 8;
 
         const top = rect.bottom / zoom;
@@ -145,13 +145,13 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Search..."
-                                className="w-full border border-[#E0E0E1] rounded-lg px-3 h-9 text-[13px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-[#A0A0A0] font-inter"
+                                className="w-full border border-[#E0E0E1] rounded-lg px-3 h-8 text-[13px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-[#A0A0A0] font-inter"
                             />
                         </div>
                     )}
-                    <div className="overflow-y-auto py-2">
+                    <div className="overflow-y-auto py-1">
                         {filteredOptions.length === 0 ? (
-                            <div className="px-4 py-2.5 text-[13px] text-gray-400 font-inter">No results</div>
+                            <div className="px-3 py-1.5 text-[13px] text-gray-400 font-inter">No results</div>
                         ) : (
                             filteredOptions.map((option, index) => {
                                 const isSelected = option === value;
@@ -163,7 +163,7 @@ const CustomDropdown = ({ options, value, onChange, placeholder, className = "",
                                             onChange(option);
                                             setIsOpen(false);
                                         }}
-                                        className={`w-full px-4 py-2.5 text-[14px] text-left hover:bg-[#F2F2F7] transition-colors font-inter ${isSelected ? "bg-[#F2F2F7] text-blue-600 font-bold" : "text-gray-700"
+                                        className={`w-full px-3 py-1.5 text-[13px] text-left hover:bg-[#F2F2F7] transition-colors font-inter ${isSelected ? "bg-[#F2F2F7] text-blue-600 font-bold" : "text-gray-700"
                                             }`}
                                     >
                                         {option}

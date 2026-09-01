@@ -667,7 +667,7 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
               </span>
             )}
           </button>
-          <div className="relative flex items-center gap-1.5 p-1 bg-[#E9EAEB] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
+          <div className="relative flex items-center gap-1.5 p-1 bg-[#F1F1F5] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
             <span
               className="absolute top-1 w-9 h-9 rounded-full bg-white shadow-[0px_0px_6px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out pointer-events-none"
               style={{ left: viewMode === "table" ? 46 : 4 }}

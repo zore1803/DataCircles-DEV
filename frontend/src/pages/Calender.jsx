@@ -519,6 +519,30 @@ const AdminCalendar = () => {
   };
 
   // --- Stats Calculation ---
+  // Whether the period on screen is the one containing today — drives the
+  // "Today" button's active styling (and disables it, since there is nowhere
+  // to jump to). Scoped to the active view, matching the other calendars:
+  // month view counts any day this month, week view any day this week,
+  // day view only today itself.
+  const isViewingToday = (() => {
+    const now = new Date();
+    if (view === "month")
+      return (
+        currentDate.getMonth() === now.getMonth() &&
+        currentDate.getFullYear() === now.getFullYear()
+      );
+    if (view === "week") {
+      const startDay = currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1;
+      const weekStart = new Date(currentDate);
+      weekStart.setDate(currentDate.getDate() - startDay);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      return now >= weekStart && now < weekEnd;
+    }
+    return currentDate.toDateString() === now.toDateString();
+  })();
+
   const totalMeetings = Object.values(meetings).flat().length;
   const totalTasks = Object.values(tasks).flat().length;
   const highPriorityMeetings = Object.values(meetings).flat().filter(m => m.priority === 'High').length;
@@ -841,6 +865,31 @@ const AdminCalendar = () => {
               <ChevronRight size={20} style={{ color: "#111216" }} />
             </button>
           </div>
+
+          {/* Jump back to the current period. Sits outside the prev/next
+              group as its own pill, and lights up while the view already
+              shows today so it reads as where-you-are, not just a control. */}
+          <button
+            onClick={() => setCurrentDate(new Date())}
+            disabled={loading || isViewingToday}
+            className="box-border flex flex-row justify-center items-center flex-shrink-0 transition-colors"
+            style={{
+              padding: "0px 16px",
+              height: 32,
+              marginLeft: 12,
+              fontFamily: "'SF Pro Display', Inter, sans-serif",
+              fontWeight: 500,
+              fontSize: 14,
+              lineHeight: "17px",
+              border: `1px solid ${isViewingToday ? "#0085FF" : "#E0E0E1"}`,
+              background: isViewingToday ? "#EFF6FF" : "#FFFFFF",
+              color: isViewingToday ? "#0085FF" : "#111216",
+              borderRadius: 95,
+              cursor: isViewingToday ? "default" : "pointer",
+            }}
+          >
+            Today
+          </button>
 
           {/* View switcher */}
           <div
