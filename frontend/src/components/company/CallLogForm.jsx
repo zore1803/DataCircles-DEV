@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 // Matches the quick-drawer style shared by CompanyTaskForm / CompanyForm:
 // a right-anchored slide-in panel (dc-panel-card + dc-panel-w) with a
 // compact pill-shaped header/footer/inputs, instead of a centered modal.
-const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId }) => {
+const CallLogForm = ({ companyId, contactId, editLog, isOpen, onClose, onSuccess, userId }) => {
   const [formData, setFormData] = useState({
     purpose: "",
     callType: "Outbound",
@@ -67,7 +67,10 @@ const CallLogForm = ({ companyId, editLog, isOpen, onClose, onSuccess, userId })
       const payload = {
         ...formData,
         duration: formData.duration ? Math.round(Number(formData.duration) * 60) : undefined,
-        company: companyId,
+        // Contact page: send the contact and let the backend fill in the
+        // company from it (createCallLog does this), so a log made there is
+        // still queryable from the company's own tab.
+        ...(contactId ? { contact: contactId } : { company: companyId }),
         user: userId,
       };
       if (editLog) {

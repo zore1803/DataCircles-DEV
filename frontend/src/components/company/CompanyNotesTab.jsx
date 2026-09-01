@@ -86,8 +86,15 @@ const LastUpdatedIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyNotesTab({ showStats = true, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
-  const { id } = useParams();
+// Also drives the contact profile's Notes tab: pass `contactId` (plus that
+// contact's `companyId`, since a Note always belongs to a company in the data
+// model) and it scopes itself to notes tagged with that contact. Same table,
+// editor, filters and bulk strip either way.
+export default function CompanyNotesTab({ showStats = true, autoOpenCreate = false, onAutoOpenCreateConsumed, contactId, companyId: contactCompanyId }) {
+  const { id: routeId } = useParams();
+  // The company a new note is filed under: the contact's company when this is
+  // the contact page, otherwise the company whose page we're on.
+  const id = contactId ? contactCompanyId : routeId;
 
   // Notes fetch their own data on mount, so the loading flag is local — the
   // parent's showRecordsSkeleton tracks a different request and would only
@@ -428,7 +435,9 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
 
   const fetchNotes = useCallback(async () => {
     try {
-      const res = await API.get(`/notes/company/${id}`);
+      const res = await API.get(
+        contactId ? `/notes/contact/${contactId}` : `/notes/company/${id}`,
+      );
       const sorted = res.data.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       );
@@ -440,7 +449,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
       // leaving it pulsing forever behind the error toast.
       setIsNotesLoading(false);
     }
-  }, [id]);
+  }, [id, contactId]);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -456,6 +465,9 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
     fetchContacts();
   }, [fetchNotes, fetchContacts]);
 
+  const withContactTagged = (ids) =>
+    contactId && !ids.includes(contactId) ? [...ids, contactId] : ids;
+
   const resetForm = () => {
     setEditingNoteId(null);
     setNoteTitle("");
@@ -470,6 +482,12 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
   };
 
   const handleAddOrUpdateNote = async () => {
+    // Guarded here as well as by the editor's disabled Save button — this is
+    // also reachable from the editor's Enter-to-submit path.
+    if (!noteTitle.trim()) {
+      toast.error("Note title is required");
+      return;
+    }
     if (!noteContent.trim() || noteContent === "<p><br></p>") {
       toast.error("Note content is required");
       return;
@@ -480,7 +498,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         await API.put(`/notes/${editingNoteId}`, {
           title: noteTitle,
           note: noteContent,
-          taggedContacts: taggedContacts.map((c) => c.value),
+          taggedContacts: withContactTagged(taggedContacts.map((c) => c.value)),
           noteType,
           visibility,
         });
@@ -490,7 +508,10 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
           title: noteTitle,
           note: noteContent,
           company: id,
-          taggedContacts: taggedContacts.map((c) => c.value),
+          // On the contact page the contact must stay tagged: the
+          // contact-scoped fetch matches on taggedContacts, so an untagged
+          // note would vanish the moment it was saved.
+          taggedContacts: withContactTagged(taggedContacts.map((c) => c.value)),
           noteType,
           visibility,
         });
@@ -547,7 +568,9 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         title: note.title ? `${note.title} (Copy)` : "",
         note: note.note,
         company: id,
-        taggedContacts: (note.taggedContacts || []).map((c) => c._id || c),
+        taggedContacts: withContactTagged(
+          (note.taggedContacts || []).map((c) => c._id || c),
+        ),
         noteType: note.noteType || noteTypes[0] || "General Note",
         visibility: note.visibility || "Team",
       });

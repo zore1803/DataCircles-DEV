@@ -288,6 +288,7 @@ const CompanyTaskForm = ({
   mode,
   taskData,
   companyId,
+  contactId,
   calendarDate,
   users,
   onSave,
@@ -478,14 +479,16 @@ const CompanyTaskForm = ({
       };
 
       // Convert to new relatedEntities array format
-      const relatedEntities = [
-        {
-          entityModel: "Company",
-          entityId: companyId,
-        },
-      ];
-      if (relatedContactId) {
-        relatedEntities.push({ entityModel: "Contact", entityId: relatedContactId });
+      const relatedEntities = [];
+      if (companyId) {
+        relatedEntities.push({ entityModel: "Company", entityId: companyId });
+      }
+      // On the contact page the contact is the task's subject, so it stays
+      // linked whatever the picker says — the contact-scoped list matches on
+      // this entry, and a task saved without it would vanish from the tab.
+      const linkedContactId = relatedContactId || contactId;
+      if (linkedContactId) {
+        relatedEntities.push({ entityModel: "Contact", entityId: linkedContactId });
       }
       if (relatedDealId) {
         relatedEntities.push({ entityModel: "Deal", entityId: relatedDealId });

@@ -1,105 +1,154 @@
-import React, { useEffect, useState } from "react";
-import ConfirmDialog from "../components/common/ConfirmDialog";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
+import { useParams, Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import API from "../services/api";
 import BasicDetails from "../components/contact/BasicDetails";
-import NoteSection from "../components/contact/NoteSection";
-import CallLogs from "../components/contact/CallLogs";
-import Calendar from "../components/contact/Calender";
-import MeetingsTable from "../components/contact/MeetingsTable";
-import ContactTasksTable from "../components/contact/ContactTasksTable";
+import CompanyNotesTab from "../components/company/CompanyNotesTab";
+import CompanyCallLogsTab from "../components/company/CompanyCallLogsTab";
+import CompanyCalendar from "../components/company/CompanyCalendar";
+import CompanyMeetingsTab from "../components/company/CompanyMeetingsTab";
+import CompanyTasksTab from "../components/company/CompanyTasksTab";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import ContactMeetingForm from "../components/contact/ContactMeetingForm";
-import logo from "/DataCircles.png";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import {
-  Mail,
-  Phone,
-  Building2,
-  Maximize2,
-  Minimize2,
+  MapPin,
   Twitter,
   Linkedin,
-  Facebook,
+  Instagram,
   Edit2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  MessageCircle,
+  BriefcaseBusiness,
+  Eye,
+  Plus,
+  CheckSquare,
+  Phone,
+  MoreVertical,
+  StickyNote,
+  Calendar,
   CopyPlus,
   Trash2,
-  Plus,
-  Video,
-  CalendarClock,
-  MapPin,
+  Clock,
   Target,
 } from "lucide-react";
-import ContactForm from "../components/contact/ContactForm";
 import QuickContactForm from "../components/contact/QuickContactForm";
 import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 import useContactStore from "../store/useContactStore";
 import MergeContactModal from "../components/contact/MergeContactModal";
-import { formatNumberToIndian } from "../utils/numberFormatter";
+import StatTile from "../components/common/StatTile";
+import StatTileSkeleton from "../components/common/StatTileSkeleton";
+import Skeleton from "../components/common/Skeleton";
+import PageSkeleton from "../components/common/PageSkeleton";
 
-const CorporateFareIcon = (props) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M2 21V3h10v4h10v14H2zm2-2h2v-2H4v2zm0-4h2v-2H4v2zm0-4h2V9H4v2zm0-4h2V5H4v2zm4 12h2v-2H8v2zm0-4h2v-2H8v2zm0-4h2V9H8v2zm0-4h2V5H8v2zm4 12h8V9h-8v2h2v2h-2v2h2v2h-2v2zm4-8h2v2h-2v-2zm0 4h2v2h-2v-2z" />
-  </svg>
-);
+// The contact page mirrors CompanyProfilePage's shape (header strip, one pill
+// tab bar, KPI row, full-width tab bodies) so moving between a company and one
+// of its contacts doesn't change how the page works. The tab set is the
+// contact's own — a contact has no sub-contacts, invoices or folders of its
+// own, so those company tabs have no counterpart here.
+const tabs = ["Details", "Call Logs", "Notes", "Tasks", "Meetings", "Calendar"];
 
-const tabsLeft = ["Details", "Call Logs"];
-const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
-import { FaWhatsapp } from "react-icons/fa";
-// Array of cool loading messages
-const loadingMessages = [
-  "Pulling up your contact's full story…",
-  "Fetching phone, email, and every little detail…",
-  "Getting those connections ready for you…",
-  "Just a sec — organizing this contact's info…",
-  "Bringing your contact into focus…",
-  "Loading notes, interactions, and insights…",
-  "Piecing together everything about this person…",
-  "Almost there — preparing your contact view…",
-  "Syncing communication history and details…",
-  "Loading contact data — precision meets connection."
+const newEntryOptions = [
+  { label: "New Deal", icon: BriefcaseBusiness, create: "deal" },
+  { label: "New Notes", icon: StickyNote, tab: "Notes" },
+  { label: "New Task", icon: CheckSquare, tab: "Tasks" },
+  { label: "New Meetings", icon: Calendar, create: "meeting" },
+  { label: "New Call Log", icon: Phone, tab: "Call Logs" },
 ];
-
-// Select a random message
-const randomMessage = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
 
 const ContactDetailsPage = () => {
   const { id } = useParams(); // contact ID
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [contact, setContact] = useState(null);
   const [company, setCompany] = useState(null);
-  const [deals, setDeals] = useState([]); // Changed from null to []
-  const [activeTabLeft, setActiveTabLeft] = useState("Details");
-  const [activeTabRight, setActiveTabRight] = useState("Notes");
-  const [isExpanded, setIsExpanded] = useState(false);
-  const navigate = useNavigate();
+  const [deals, setDeals] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [callLogs, setCallLogs] = useState([]);
+  const [callLogsLoading, setCallLogsLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // Tab lives in the URL (?tab=Notes) exactly as on the company page, so a
+  // refresh or a shared link lands back on the same tab.
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTabState] = useState(
+    tabs.includes(tabFromUrl) ? tabFromUrl : "Details",
+  );
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      // Carry location.state across, or the prev/next contact arrows lose the
+      // list they were navigating.
+      { replace: true, state: location.state },
+    );
+  };
+
+  const contactLoaded = !!contact;
+
+  // Sliding pill indicator for the section-switcher tab bar
+  const tabRefs = useRef({});
+  const tabTrackRef = useRef(null);
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = tabRefs.current[activeTab];
+      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    measure();
+    // Skeleton-to-real-content swaps change tab widths without activeTab
+    // changing, so watch the whole track rather than only re-measuring on tab
+    // switches — otherwise the pill strands itself wherever it first measured.
+    const ro = new ResizeObserver(measure);
+    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+    // `contactLoaded` matters because this page returns a full-page skeleton
+    // until the contact arrives: on the first pass the tab bar isn't mounted,
+    // so there is nothing to measure and nothing for the observer to watch.
+    // activeTab doesn't change when the real page appears, so without this the
+    // effect never re-ran and the indicator stayed at width 0 — no pill.
+  }, [activeTab, contactLoaded]);
 
   const { currentContactIds } = useContactStore();
 
   const [showForm, setShowForm] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
+  const [allCompanies, setAllCompanies] = useState([]); // for the edit form's company dropdown
   const [contactFieldList, setContactFieldList] = useState([]);
-  const [allCompanies, setAllCompanies] = useState([]); // Needed for the dropdown in the edit form
-  const [additionalValues, setAdditionalValues] = useState({});
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showDealForm, setShowDealForm] = useState(false);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    lifecycleStage: "Lead",
-    stageStatus: "New",
-    company: "",
-    avatar: "",
-    socialMedia: {
-      twitter: "",
-      linkedin: "",
-      facebook: "",
-    },
-  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showStats, setShowStats] = useState(true);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showNewEntryMenu, setShowNewEntryMenu] = useState(false);
+  const [showLastUpdatedTooltip, setShowLastUpdatedTooltip] = useState(false);
+  const actionsMenuRef = useRef(null);
+  const newEntryRef = useRef(null);
+
+  // Close the header dropdowns on an outside click, same as the company page.
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target))
+        setShowActionsMenu(false);
+      if (newEntryRef.current && !newEntryRef.current.contains(e.target))
+        setShowNewEntryMenu(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   const currentIndex = currentContactIds.indexOf(id);
   const hasPrev = currentIndex > 0;
@@ -138,35 +187,66 @@ const ContactDetailsPage = () => {
     setContact(null);
     setCompany(null);
     setDeals([]);
+    setTasks([]);
+    setMeetings([]);
+    setCallLogs([]);
+    setCallLogsLoading(true);
+    setStatsLoading(true);
 
     const fetchData = async () => {
       await fetchContactDetails();
       try {
-        const resContact = await API.get(`/contacts/${id}`);
-        setContact(resContact.data);
-
-        if (resContact.data.company) {
-          const resCompany = await API.get(`/companies/${resContact?.data?.company._id}`);
-          setCompany(resCompany.data);
-        }
-        const resDeals = await API.get(`/deals/`);
+        const resDeals = await API.get("/deals/");
+        setDeals(resDeals.data.filter((deal) => deal?.contact?._id == id));
 
         const resCompanies = await API.get("/companies");
         setAllCompanies(resCompanies.data.companies || resCompanies.data);
 
-        const filterDeals = resDeals.data.filter((deal) => deal?.contact?._id == id);
-        setDeals(filterDeals);
-
-        // 👉 FIXED: Use /latest to get the Organization's master template, not just the user's
+        // Use /latest to get the organization's master template, not just the
+        // current user's copy.
         const resFields = await API.get("/contact-fields/latest");
-        const fieldData = resFields.data?.fields || [];
-        setContactFieldList(fieldData);
+        setContactFieldList(resFields.data?.fields || []);
       } catch (err) {
         console.error("Failed to load contact profile:", err);
       }
     };
 
+    // Tasks and meetings back the KPI row here. The Tasks/Meetings tabs fetch
+    // their own copies for their tables, so a failure on either side only
+    // costs the counts, not the tab.
+    const fetchStats = async () => {
+      try {
+        const [resTasks, resMeetings] = await Promise.all([
+          API.get(`/tasks/contact/${id}`).catch(() => ({ data: [] })),
+          API.get("/meetings", { params: { contactId: id } }).catch(() => ({
+            data: {},
+          })),
+        ]);
+        setTasks(Array.isArray(resTasks.data) ? resTasks.data : []);
+        const m = resMeetings.data?.meetings ?? resMeetings.data;
+        setMeetings(Array.isArray(m) ? m : []);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    // The Call Logs tab is the shared company component, and that one takes
+    // its rows from the page rather than fetching its own — same arrangement
+    // as CompanyProfilePage.
+    const fetchCallLogs = async () => {
+      try {
+        const res = await API.get(`/call-logs/contact/${id}`);
+        setCallLogs(res.data || []);
+      } catch (err) {
+        console.error("Failed to load call logs:", err);
+      } finally {
+        setCallLogsLoading(false);
+      }
+    };
+
     fetchData();
+    fetchStats();
+    fetchCallLogs();
   }, [id]);
 
   const handleEdit = () => {
@@ -174,59 +254,30 @@ const ContactDetailsPage = () => {
     setShowForm(true);
   };
 
-  // Handle contact updates from child components
-  const handleContactUpdate = (updatedContact) => {
-    setContact(updatedContact);
-  };
-
-  // Handle deal creation - ADD THIS FUNCTION
   const handleDealCreated = (newDeal) => {
-    setDeals(prev => [newDeal, ...prev]);
+    setDeals((prev) => [newDeal, ...prev]);
     toast.success("Deal created successfully!");
     setShowDealForm(false);
+  };
+
+  const handleContactUpdate = (updatedContact) => {
+    setContact(updatedContact);
   };
 
   const handleMeetingSave = async (form) => {
     const loadingToast = toast.loading("Saving meeting...");
     try {
-      await API.post("/meetings", { ...form, contactId: id, linkedTo: "contact" });
+      await API.post("/meetings", {
+        ...form,
+        contactId: id,
+        linkedTo: "contact",
+      });
       toast.success("Meeting saved", { id: loadingToast });
       setShowMeetingForm(false);
-    } catch (err) {
+    } catch {
       toast.error("Failed to save meeting", { id: loadingToast });
     }
   };
-
-  // Helper function to check if social media link exists
-  const hasSocialLink = (platform) => {
-    return contact?.socialMedia?.[platform] && contact.socialMedia[platform].trim() !== '';
-  };
-
-  // Helper function to open social media link
-  // Helper function to open social media link
-  const openSocialLink = (platform) => {
-    const urlOrNumber = contact?.socialMedia?.[platform];
-    if (urlOrNumber && urlOrNumber.trim() !== '') {
-      if (platform === 'whatsapp') {
-        // Strip out non-numeric characters (except '+') for the WhatsApp API
-        const cleanNumber = urlOrNumber.replace(/[^\d+]/g, '');
-        window.open(`https://wa.me/${cleanNumber}`, '_blank', 'noopener,noreferrer');
-      } else {
-        window.open(urlOrNumber, '_blank', 'noopener,noreferrer');
-      }
-    }
-  };
-
-  if (!contact) {
-    return (
-      <PageSkeleton variant="profile" />
-    );
-  }
-
-  // window.confirm renders the browser's own dialog — unstyleable, and it
-  // announces the origin ("localhost:5173") above the message, which reads
-  // like a security prompt rather than part of the app.
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDeleteContact = async () => {
     setShowDeleteConfirm(false);
@@ -240,246 +291,73 @@ const ContactDetailsPage = () => {
     }
   };
 
+  const hasSocialLink = (platform) =>
+    contact?.socialMedia?.[platform] &&
+    contact.socialMedia[platform].trim() !== "";
+
+  const openSocialLink = (platform) => {
+    const urlOrNumber = contact?.socialMedia?.[platform];
+    if (urlOrNumber && urlOrNumber.trim() !== "") {
+      if (platform === "whatsapp") {
+        // Strip out non-numeric characters (except '+') for the WhatsApp API
+        const cleanNumber = urlOrNumber.replace(/[^\d+]/g, "");
+        window.open(
+          `https://wa.me/${cleanNumber}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      } else {
+        window.open(urlOrNumber, "_blank", "noopener,noreferrer");
+      }
+    }
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    return new Date(value).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const openDealsCount = deals.filter((d) => d.status === "Open").length;
+  const closedDealsCount = deals.filter(
+    (d) => d.status === "Won" || d.status === "Lost",
+  ).length;
+  const upcomingTasksCount = tasks.filter((t) => t.status !== "Completed").length;
+  const upcomingMeetingsCount = meetings.filter(
+    (m) => m.scheduledAt && new Date(m.scheduledAt) >= new Date(),
+  ).length;
+  const dealValue = deals.reduce((sum, d) => sum + (d.amount || 0), 0);
+
+  // The company page's tiles are revenue-led (invoices belong to a company,
+  // not a contact), so these are the contact-level equivalents.
+  const statTiles = [
+    {
+      label: "Deal Value",
+      value: `₹${dealValue.toLocaleString("en-IN")}`,
+      icon: BriefcaseBusiness,
+    },
+    { label: "Open Deals", value: openDealsCount, icon: BriefcaseBusiness },
+    { label: "Closed Deals", value: closedDealsCount, icon: CheckSquare },
+    { label: "Upcoming Tasks", value: upcomingTasksCount, icon: CheckSquare },
+    { label: "Upcoming Meetings", value: upcomingMeetingsCount, icon: Calendar },
+    {
+      label: "Lifecycle Stage",
+      value: contact?.lifecycleStage || "—",
+      icon: Target,
+    },
+  ];
+
+  if (!contact) {
+    return <PageSkeleton variant="profile" />;
+  }
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
-      <div
-        className="box-border flex items-center justify-between bg-white border-b border-[#E1E4EA] gap-2 fixed top-[54px] lg:top-16"
-        style={{ padding: "12px 16px", left: "var(--sidebar-width, 0px)", right: 0, zIndex: 40 }}
-      >
-        <div className="flex items-center min-w-0" style={{ gap: "12px" }}>
-          <button
-            onClick={() => navigate("/contacts")}
-            className="flex items-center justify-center bg-white border border-[#E5E5E5] rounded flex-shrink-0"
-            style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box" }}
-            title="Back to Contacts"
-          >
-            <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0 4.13806L4.13805 8.27613L5.08085 7.33333L1.88561 4.13806L5.08085 0.942807L4.13805 0L0 4.13806ZM3.76659 4.13806L7.90465 8.27613L8.84745 7.33333L5.65219 4.13806L8.84745 0.942807L7.90465 0L3.76659 4.13806Z" fill="#0A0A0A" />
-            </svg>
-          </button>
-          <span
-            className="truncate"
-            style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "16px", lineHeight: "120%", letterSpacing: "-0.5px", color: "#0E121B" }}
-          >
-            {contact.name}
-          </span>
-          {currentContactIds.length > 0 && (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <button
-                type="button"
-                onClick={goToPrev}
-                disabled={!hasPrev}
-                title="Previous contact"
-                aria-label="Previous contact"
-                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={goToNext}
-                disabled={!hasNext}
-                title="Next contact"
-                aria-label="Next contact"
-                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={handleEdit}
-            title="Edit"
-            className="flex items-center justify-center gap-2 bg-white rounded-full flex-shrink-0 w-8 sm:w-[75px]"
-            style={{ minHeight: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
-          >
-            <svg width="14" height="15" viewBox="0 0 17 18" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-              <path d="M0 17.58V15.08H16.6667V17.58H0ZM3.33333 11.2579H4.36375L11.2804 4.35396L10.7565 3.82208L10.2373 3.31083L3.33333 10.2275V11.2579ZM2.08333 12.5079V9.69542L11.4248 0.366876C11.5455 0.246182 11.6825 0.154862 11.8358 0.0929171C11.989 0.0309727 12.1485 0 12.3142 0C12.48 0 12.6406 0.0309727 12.7958 0.0929171C12.9511 0.154862 13.0934 0.250487 13.2227 0.379793L14.2244 1.39417C14.3537 1.51486 14.4472 1.65313 14.5048 1.80896C14.5624 1.96465 14.5913 2.12563 14.5913 2.29188C14.5913 2.44771 14.562 2.60264 14.5035 2.75667C14.4451 2.91083 14.352 3.05174 14.2244 3.17938L4.89583 12.5079H2.08333ZM11.2804 4.35396L10.7565 3.82208L10.2373 3.31083L11.2804 4.35396Z" fill="#1C1B1F" />
-            </svg>
-            <span className="hidden sm:inline" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#1F2937", whiteSpace: "nowrap" }}>
-              Edit
-            </span>
-          </button>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            title="Delete Contact"
-            className="flex items-center justify-center gap-2 rounded-full flex-shrink-0 w-8 sm:w-[139px]"
-            style={{ minHeight: "32px", padding: 0, boxSizing: "border-box", background: "rgba(232, 34, 34, 0.1)", border: "1px solid rgba(232, 34, 34, 0.3)" }}
-          >
-            <Trash2 className="w-3.5 h-3.5 text-[#E82222] flex-shrink-0" />
-            <span className="hidden sm:inline" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#E82222", whiteSpace: "nowrap" }}>
-              Delete Contact
-            </span>
-          </button>
-        </div>
-      </div>
-      {/* Spacer to offset the fixed header strip above */}
-      <div style={{ height: 56 }} />
-
-      <div
-        className="box-border flex flex-col lg:flex-row items-start bg-white w-full"
-        style={{
-          padding: "18px 24px",
-          gap: "18px",
-          minHeight: "216px",
-          borderRight: "1px solid #F1F1F5",
-          boxShadow: "0px 38px 23px rgba(0, 0, 0, 0.01), 0px 17px 17px rgba(0, 0, 0, 0.02), 0px 4px 9px rgba(0, 0, 0, 0.02)",
-        }}
-      >
-        <div
-          className="flex flex-col items-start w-full lg:w-[345px]"
-          style={{ gap: "17px" }}
-        >
-          <div className="flex items-center gap-3">
-            <ProfilePicture contact={contact} />
-            <span
-              style={{ fontFamily: "Inter", fontWeight: 700, fontSize: "20px", lineHeight: "120%", color: "#0E121B" }}
-            >
-              {contact.name}
-            </span>
-          </div>
-
-          <div
-            className="box-border flex flex-row items-center justify-between rounded-[10px] w-full lg:w-[345px]"
-            style={{
-              height: "67px",
-              padding: "16px",
-              gap: "10px",
-              border: "1px solid #E5E5EC",
-              background: "linear-gradient(94.22deg, rgba(255, 255, 255, 0) -7.06%, rgba(179, 204, 255, 0.2) 101.14%), #FFFFFF",
-            }}
-          >
-            <div className="flex flex-col justify-center" style={{ gap: "2px" }}>
-              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "rgba(82, 88, 102, 0.8)" }}>
-                Recent Deal Created
-              </span>
-              <span style={{ fontFamily: "Inter", fontWeight: 600, fontSize: "22px", lineHeight: "150%", letterSpacing: "-0.03em", color: "#0E121B" }}>
-                {deals.length > 0 ? `₹${formatNumberToIndian(deals[0].amount || 0)}` : "—"}
-              </span>
-            </div>
-            {deals.length > 0 && (
-              <Link
-                to={`/deals/${deals[0]._id}`}
-                style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "15px", letterSpacing: "-0.02em", color: "#0085FF", flexShrink: 0 }}
-              >
-                View
-              </Link>
-            )}
-          </div>
-
-          <div className="flex items-center w-full lg:w-[254px]" style={{ gap: "8px", height: "32px" }}>
-            <button
-              onClick={() => setShowDealForm(true)}
-              className="flex items-center justify-center gap-1.5 rounded-full flex-shrink-0"
-              style={{ width: "174px", height: "32px", padding: 0, boxSizing: "border-box", background: "#0085FF" }}
-            >
-              <Plus className="w-4 h-4 text-white flex-shrink-0" />
-              <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "20px", color: "#FFFFFF", whiteSpace: "nowrap" }}>
-                Create New Deal
-              </span>
-            </button>
-            <button
-              onClick={() => setShowMeetingForm(true)}
-              className="flex items-center justify-center rounded-full bg-white flex-shrink-0"
-              style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
-              title="Schedule Video Call"
-            >
-              <Video className="w-4 h-4 text-[#525252]" />
-            </button>
-            <button
-              onClick={() => setShowMeetingForm(true)}
-              className="flex items-center justify-center rounded-full bg-white flex-shrink-0"
-              style={{ width: "32px", height: "32px", padding: 0, boxSizing: "border-box", border: "1px solid rgba(31, 41, 55, 0.3)" }}
-              title="Schedule Meeting"
-            >
-              <CalendarClock className="w-4 h-4 text-[#525252]" />
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="box-border flex-shrink-0 flex flex-col items-start w-full lg:w-auto"
-          style={{ borderRadius: "10px" }}
-        >
-          <div className="flex flex-col items-start" style={{ gap: "8px" }}>
-            <div
-              className="flex flex-row justify-center items-center self-stretch"
-              style={{ padding: "8px 0", gap: "16px", height: "33px", borderRadius: "8px" }}
-            >
-              <div className="flex items-center flex-1" style={{ gap: "8px", height: "17px" }}>
-                <span style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "14px", lineHeight: "120%", color: "#0A0A0A" }}>
-                  Contact Details
-                </span>
-              </div>
-            </div>
-
-            <div className="self-stretch" style={{ height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
-
-            <div className="grid grid-cols-2 lg:grid-cols-3" style={{ rowGap: "8px", columnGap: "16px", gridTemplateColumns: undefined }}>
-              {[
-                { icon: Mail, label: "Email", value: contact.email },
-                { icon: Phone, label: "Phone", value: contact.phone },
-                { icon: CorporateFareIcon, label: "Company", value: company?.name },
-                { icon: MapPin, label: "Location", value: contact.address },
-                { icon: Target, label: "Status", value: contact.stageStatus },
-              ].map(({ icon: Icon, label, value }) => (
-                <div
-                  key={label}
-                  className="flex flex-row items-center min-w-0"
-                  style={{ height: "44px", padding: "8px", gap: "16px", borderRadius: "8px" }}
-                >
-                  <div className="flex items-center flex-1 min-w-0" style={{ gap: "8px", height: "28px" }}>
-                    <Icon className="w-5 h-5 text-[#525252] flex-shrink-0" />
-                    <div className="flex flex-col justify-center items-start min-w-0" style={{ gap: "2px" }}>
-                      <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "10px", lineHeight: "120%", color: "rgba(107, 114, 128, 0.5)" }}>
-                        {label}
-                      </span>
-                      <span className="truncate w-full" style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}>
-                        {value || "—"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="flex flex-col items-start flex-1 min-w-0"
-          style={{ gap: "18px" }}
-        >
-          <div className="flex flex-col items-start self-stretch" style={{ height: "94px", gap: "8px" }}>
-            <div
-              className="flex flex-row justify-center items-center self-stretch"
-              style={{ padding: "8px 0", gap: "16px", height: "33px", borderRadius: "8px" }}
-            >
-              <div className="flex items-center flex-1" style={{ gap: "8px", height: "17px" }}>
-                <span style={{ fontFamily: "'Inter Tight', Inter, sans-serif", fontWeight: 500, fontSize: "14px", lineHeight: "120%", color: "#0A0A0A" }}>
-                  Associated Contacts
-                </span>
-              </div>
-            </div>
-
-            <div className="self-stretch" style={{ height: "1px", background: "rgba(31, 41, 55, 0.2)" }} />
-
-            <div className="flex flex-col items-start self-stretch" style={{ height: "44px" }}>
-              <div
-                className="flex flex-row items-center self-stretch"
-                style={{ padding: "8px", gap: "16px", height: "44px", borderRadius: "8px" }}
-              >
-                <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: "12px", color: "rgba(107, 114, 128, 0.8)" }}>
-                  No associated contacts
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-6">
       {showForm && (
         <QuickContactForm
           companies={allCompanies}
@@ -491,6 +369,432 @@ const ContactDetailsPage = () => {
           onRequestClose={() => setShowForm(false)}
         />
       )}
+
+      <div className="mx-auto">
+        {/* Header Section — 48px total (40px content + mb-2) so the strip's
+            bottom edge lands on the same line as the sidebar switcher's
+            bottom border, matching the company page. */}
+        <div className="flex items-center justify-between mb-2">
+          {/* LEFT: Avatar + Name + Company/Address */}
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Prev/next through whatever contact list (search/filter results)
+                the user arrived from — absent on a direct link. */}
+            {currentContactIds.length > 0 && (
+              <button
+                type="button"
+                onClick={goToPrev}
+                disabled={!hasPrev}
+                title="Previous contact"
+                aria-label="Previous contact"
+                className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+
+            <ProfilePicture
+              contact={contact}
+              size="w-9 h-9"
+              textSize="text-sm"
+            />
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-base font-semibold text-gray-900 truncate">
+                  {contact.name}
+                </h1>
+                {company && (
+                  <Link
+                    to={`/companies/${company._id}`}
+                    className="flex-shrink-0 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 hover:bg-blue-100 transition-colors truncate max-w-[160px]"
+                    title={`Contact at ${company.name}`}
+                  >
+                    {company.name}
+                  </Link>
+                )}
+              </div>
+              {contact.email ? (
+                <p className="text-xs text-gray-500 truncate">{contact.email}</p>
+              ) : (
+                <Skeleton width={100} height={11} />
+              )}
+            </div>
+
+            {currentContactIds.length > 0 && (
+              <button
+                type="button"
+                onClick={goToNext}
+                disabled={!hasNext}
+                title="Next contact"
+                aria-label="Next contact"
+                className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* RIGHT: Social icons (desktop) + actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Last updated / created — hover for both timestamps. */}
+            <div
+              className="relative hidden lg:block"
+              onMouseEnter={() => setShowLastUpdatedTooltip(true)}
+              onMouseLeave={() => setShowLastUpdatedTooltip(false)}
+            >
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+              >
+                <Clock size={16} strokeWidth={2} />
+              </button>
+              {showLastUpdatedTooltip && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 z-50 text-left">
+                  <div className="mb-2">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                      Last updated
+                    </p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(contact.updatedAt)}
+                      {contact.lastUpdatedBy?.name
+                        ? ` by ${contact.lastUpdatedBy.name}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                      Created on
+                    </p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(contact.createdAt)}
+                      {contact.createdBy?.name
+                        ? ` by ${contact.createdBy.name}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Twitter/X */}
+            <button
+              disabled={!hasSocialLink("twitter")}
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+                ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+                : "border-gray-200 text-gray-300 cursor-not-allowed"
+                }`}
+              onClick={() => openSocialLink("twitter")}
+              title={
+                hasSocialLink("twitter")
+                  ? "View Twitter/X profile"
+                  : "No Twitter/X link available"
+              }
+            >
+              <Twitter size={16} strokeWidth={2} />
+            </button>
+
+            {/* LinkedIn */}
+            <button
+              disabled={!hasSocialLink("linkedin")}
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+                ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+                : "border-gray-200 text-gray-300 cursor-not-allowed"
+                }`}
+              onClick={() => openSocialLink("linkedin")}
+              title={
+                hasSocialLink("linkedin")
+                  ? "View LinkedIn profile"
+                  : "No LinkedIn link available"
+              }
+            >
+              <Linkedin size={16} strokeWidth={2} />
+            </button>
+
+            {/* Instagram — maps to the contact's "facebook" social field, the
+                same stand-in the company page uses (no instagram field yet). */}
+            <button
+              disabled={!hasSocialLink("facebook")}
+              className={`hidden lg:flex w-8 h-8 items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+                ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+                : "border-gray-200 text-gray-300 cursor-not-allowed"
+                }`}
+              onClick={() => openSocialLink("facebook")}
+              title={
+                hasSocialLink("facebook")
+                  ? "View Instagram profile"
+                  : "No Instagram link available"
+              }
+            >
+              <Instagram size={16} strokeWidth={2} />
+            </button>
+
+            {/* Actions Menu */}
+            <div className="relative" ref={actionsMenuRef}>
+              <button
+                onClick={() => setShowActionsMenu((prev) => !prev)}
+                title="More actions"
+                className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${showActionsMenu
+                  ? "bg-gray-50 border-gray-200 text-gray-800"
+                  : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
+                  }`}
+              >
+                <MoreVertical size={16} strokeWidth={2.5} />
+              </button>
+              {showActionsMenu && (
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                  <button
+                    onClick={() => {
+                      setShowStats((prev) => !prev);
+                      setShowActionsMenu(false);
+                    }}
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Eye size={12} className="text-gray-400 lg:hidden" />
+                    <Eye size={14} className="text-gray-400 hidden lg:block" />
+                    {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                  </button>
+                  {/* Edit: mobile-only entry, folded in here instead of its own button */}
+                  <button
+                    onClick={() => {
+                      handleEdit();
+                      setShowActionsMenu(false);
+                    }}
+                    className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Edit2 size={12} className="text-gray-400" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMergeModal(true);
+                      setShowActionsMenu(false);
+                    }}
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <CopyPlus size={12} className="text-gray-400 lg:hidden" />
+                    <CopyPlus size={14} className="text-gray-400 hidden lg:block" />
+                    Merge Contact
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(true);
+                      setShowActionsMenu(false);
+                    }}
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-red-600 hover:bg-red-50 text-left"
+                  >
+                    <Trash2 size={12} className="text-red-400 lg:hidden" />
+                    <Trash2 size={14} className="text-red-400 hidden lg:block" />
+                    Delete Contact
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* New Entry Dropdown — icon-only (+) on mobile */}
+            <div className="relative" ref={newEntryRef}>
+              <button
+                onClick={() => setShowNewEntryMenu((prev) => !prev)}
+                title="New Entry"
+                className="flex items-center justify-center gap-1.5 h-8 w-8 lg:w-auto px-0 lg:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
+              >
+                <Plus size={14} className="lg:hidden" />
+                <span className="hidden lg:inline">New Entry</span>
+                <ChevronDown size={14} className="hidden lg:inline" />
+              </button>
+              {showNewEntryMenu && (
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                  {newEntryOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        // Deals and meetings open their own modal from here
+                        // (the contact page owns those forms); the rest just
+                        // switch to the tab that hosts the record's own
+                        // "add" control.
+                        if (option.create === "deal") setShowDealForm(true);
+                        else if (option.create === "meeting") setShowMeetingForm(true);
+                        else if (option.tab) setActiveTab(option.tab);
+                        setShowNewEntryMenu(false);
+                      }}
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <option.icon size={12} className="text-gray-400 lg:hidden" />
+                      <option.icon size={14} className="text-gray-400 hidden lg:block" />
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              title="Edit"
+              onClick={handleEdit}
+              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+            >
+              <Edit2 size={13} />
+              Edit
+            </button>
+          </div>
+        </div>
+
+        {/* Social Icons — mobile only, shown below the name, left-aligned
+            under the name text (past the avatar), not the avatar itself */}
+        <div className="flex lg:hidden items-center gap-1.5 mb-3 ml-12">
+          <button
+            disabled={!hasSocialLink("twitter")}
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("twitter")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("twitter")}
+            title={
+              hasSocialLink("twitter")
+                ? "View Twitter/X profile"
+                : "No Twitter/X link available"
+            }
+          >
+            <Twitter size={12} strokeWidth={2} />
+          </button>
+          <button
+            disabled={!hasSocialLink("linkedin")}
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("linkedin")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("linkedin")}
+            title={
+              hasSocialLink("linkedin")
+                ? "View LinkedIn profile"
+                : "No LinkedIn link available"
+            }
+          >
+            <Linkedin size={12} strokeWidth={2} />
+          </button>
+          <button
+            disabled={!hasSocialLink("facebook")}
+            className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors ${hasSocialLink("facebook")
+              ? "border-gray-200 text-gray-800 hover:bg-gray-50 cursor-pointer"
+              : "border-gray-200 text-gray-300 cursor-not-allowed"
+              }`}
+            onClick={() => openSocialLink("facebook")}
+            title={
+              hasSocialLink("facebook")
+                ? "View Instagram profile"
+                : "No Instagram link available"
+            }
+          >
+            <Instagram size={12} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Location */}
+        {contact?.address && (
+          <div className="flex items-center gap-2 text-gray-600 mb-3">
+            <MapPin size={16} className="text-gray-400" />
+            <span className="text-xs">{contact.address}</span>
+          </div>
+        )}
+
+        {/* Separator */}
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
+        {/* Tab Row: pill tab selector */}
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <div
+            ref={tabTrackRef}
+            className="relative inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto overflow-y-hidden no-scrollbar"
+          >
+            <span
+              className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: tabIndicator.left, width: tabIndicator.width }}
+            />
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                ref={(el) => (tabRefs.current[tab] = el)}
+                onClick={() => setActiveTab(tab)}
+                className={`relative z-10 flex flex-shrink-0 items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
+                  ? "text-[#0085FF]"
+                  : "text-gray-700 hover:text-gray-900"
+                  }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
+        {/* Summary Stats Row — on Details, mirroring the company page's
+            Overview-only KPI strip. */}
+        {showStats && activeTab === "Details" && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+            {statsLoading
+              ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
+              : statTiles.map((tile) => <StatTile key={tile.label} tile={tile} />)}
+          </div>
+        )}
+
+        {/* Tab Content */}
+        <div className="min-h-[400px]">
+          {activeTab === "Details" && (
+            <BasicDetails
+              contact={contact}
+              company={company}
+              deals={deals}
+              contactFieldList={contactFieldList}
+              onContactUpdate={handleContactUpdate}
+              onDealCreated={handleDealCreated}
+            />
+          )}
+          {activeTab === "Call Logs" && (
+            <div className="animate-in fade-in duration-300">
+              <CompanyCallLogsTab
+                contactId={id}
+                callLogs={callLogs}
+                setCallLogs={setCallLogs}
+                showStats={showStats}
+                isLoading={callLogsLoading}
+              />
+            </div>
+          )}
+          {activeTab === "Notes" && (
+            <CompanyNotesTab
+              contactId={id}
+              companyId={company?._id}
+              showStats={showStats}
+            />
+          )}
+          {activeTab === "Tasks" && (
+            <CompanyTasksTab
+              contactId={id}
+              companyId={company?._id}
+              tasks={tasks}
+              setTasks={setTasks}
+              showStats={showStats}
+              isLoading={statsLoading}
+            />
+          )}
+          {activeTab === "Meetings" && (
+            <CompanyMeetingsTab
+              contactId={id}
+              contactName={contact.name}
+              companyId={company?._id}
+              companyName={company?.name}
+              meetings={meetings}
+              setMeetings={setMeetings}
+              showStats={showStats}
+              isLoading={statsLoading}
+            />
+          )}
+          {activeTab === "Calendar" && (
+            <CompanyCalendar contactId={id} companyId={company?._id} />
+          )}
+        </div>
+      </div>
 
       {showDealForm && (
         <QuickDealForm
@@ -512,6 +816,15 @@ const ContactDetailsPage = () => {
         />
       )}
 
+      <MergeContactModal
+        primaryContact={contact}
+        isOpen={showMergeModal}
+        onClose={() => setShowMergeModal(false)}
+        onSuccess={() => {
+          fetchContactDetails();
+        }}
+      />
+
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         title="Delete contact"
@@ -520,9 +833,10 @@ const ContactDetailsPage = () => {
         onConfirm={handleDeleteContact}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      <AppToaster />
     </div>
   );
 };
 
 export default ContactDetailsPage;
-import PageSkeleton from "../components/common/PageSkeleton";

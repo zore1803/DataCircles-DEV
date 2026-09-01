@@ -69,7 +69,10 @@ const ConnectedCallsIcon = ({ size = 20, ...props }) => <PhoneIncoming size={siz
 const MissedCallsIcon = ({ size = 20, ...props }) => <PhoneOutgoing size={size} strokeWidth={1.5} {...props} />;
 const TalkTimeIcon = ({ size = 20, ...props }) => <Clock size={size} strokeWidth={1.5} {...props} />;
 
-const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats = true, isLoading = false, pendingCreate, onPendingCreateConsumed }) => {
+// Also drives the contact profile's Call Logs tab: pass `contactId` instead of
+// `companyId` and it scopes itself to that contact. Same table, filters, bulk
+// strip and detail view either way — the two pages were never meant to differ.
+const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, showStats = true, isLoading = false, pendingCreate, onPendingCreateConsumed }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const {
     containerRef: fillContainerRef,
@@ -356,7 +359,11 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
 
   const refetchCallLogs = async () => {
     try {
-      const res = await API.get(`/call-logs/company/${companyId}`);
+      const res = await API.get(
+        contactId
+          ? `/call-logs/contact/${contactId}`
+          : `/call-logs/company/${companyId}`,
+      );
       setCallLogs?.(res.data || []);
     } catch (err) {
       console.error("Failed to refetch call logs:", err);
@@ -702,6 +709,7 @@ const CompanyCallLogsTab = ({ companyId, callLogs = [], setCallLogs, showStats =
       {showForm && (
         <CallLogForm
           companyId={companyId}
+          contactId={contactId}
           editLog={editLog}
           isOpen={showForm}
           onClose={handleCloseForm}

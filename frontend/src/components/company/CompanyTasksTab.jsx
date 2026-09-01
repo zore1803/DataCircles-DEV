@@ -124,7 +124,11 @@ const BriefcaseIcon = ({ size = 14, ...props }) => (
   </svg>
 );
 
-export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showStats = true, isLoading = false }) {
+// Also drives the contact profile's Tasks tab: pass `contactId` (plus that
+// contact's `companyId`, which the task form needs for its contact/deal
+// pickers) and it scopes itself to that contact's tasks. Same table, filters,
+// bulk strip and form either way.
+export default function CompanyTasksTab({ companyId, contactId, tasks = [], setTasks, showStats = true, isLoading = false }) {
   // Keeps the table box a fixed height ending at the bottom of the screen, so
   // changing rows-per-page scrolls internally instead of growing the page.
   const {
@@ -443,7 +447,9 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
 
   const refetchTasks = async () => {
     try {
-      const res = await API.get(`/tasks/company/${companyId}`);
+      const res = await API.get(
+        contactId ? `/tasks/contact/${contactId}` : `/tasks/company/${companyId}`,
+      );
       setTasks(res.data || []);
     } catch (err) {
       console.error("Failed to refetch tasks:", err);
@@ -1508,6 +1514,7 @@ export default function CompanyTasksTab({ companyId, tasks = [], setTasks, showS
         startInEditMode={!!editingTask}
         taskData={editingTask}
         companyId={companyId}
+        contactId={contactId}
         users={users}
         onSave={handleTaskSave}
         onUpdate={async () => {

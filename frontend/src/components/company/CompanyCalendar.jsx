@@ -202,7 +202,10 @@ const ActivityListPopup = ({
   );
 };
 
-const CompanyCalendar = ({ companyId }) => {
+// Also drives the contact profile's Calendar tab: pass `contactId` (plus that
+// contact's `companyId` so the participant pickers still populate) and the
+// grid, event panels and add-forms all scope to that contact.
+const CompanyCalendar = ({ companyId, contactId }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState("month");
   // Sliding pill indicator for the month/week/day switcher
@@ -263,7 +266,9 @@ const CompanyCalendar = ({ companyId }) => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const meetingsRes = await API.get("/meetings", { params: { companyId } });
+      const meetingsRes = await API.get("/meetings", {
+        params: contactId ? { contactId } : { companyId },
+      });
       const meetingsWithNames = await Promise.all(
         meetingsRes.data.meetings.map(async (meeting) => {
           if (meeting.assignedTo) {
@@ -288,7 +293,9 @@ const CompanyCalendar = ({ companyId }) => {
       });
       setMeetings(meetingsByDate);
 
-      const tasksRes = await API.get(`/tasks/company/${companyId}`);
+      const tasksRes = await API.get(
+        contactId ? `/tasks/contact/${contactId}` : `/tasks/company/${companyId}`,
+      );
       const tasksByDate = {};
       tasksRes.data.forEach((task) => {
         if (task.selectedDate) {
@@ -303,7 +310,7 @@ const CompanyCalendar = ({ companyId }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [companyId]);
+  }, [companyId, contactId]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -530,11 +537,12 @@ const CompanyCalendar = ({ companyId }) => {
       if (type === "meeting") {
         await API.post("/meetings", {
           ...form,
-          companyId,
-          linkedTo: "company",
+          ...(contactId
+            ? { contactId, linkedTo: "contact" }
+            : { companyId, linkedTo: "company" }),
         });
       } else {
-        await API.post("/tasks", { ...form, companyId });
+        await API.post("/tasks", { ...form, companyId, contactId });
       }
       toast.success(`${type} saved`, { id: loadingToast });
       setModalOpen(false);
@@ -974,6 +982,7 @@ const CompanyCalendar = ({ companyId }) => {
           meetingData={modalMode === "view" ? selectedMeeting : undefined}
           calendarDate={calendarDate}
           companyId={companyId}
+          contactId={contactId}
           users={users}
           onSave={(form) => handleSave(form, "meeting")}
           onDelete={
@@ -992,6 +1001,7 @@ const CompanyCalendar = ({ companyId }) => {
           startInEditMode={modalMode === "view"}
           taskData={modalMode === "view" ? selectedTask : undefined}
           companyId={companyId}
+          contactId={contactId}
           calendarDate={calendarDate}
           users={taskUsers}
           onSave={(form) => handleSave(form, "task")}

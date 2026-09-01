@@ -1293,8 +1293,8 @@ export const NoteEditor = ({
             }`}
           >
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Note Title
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Note Title <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="text"
@@ -1308,8 +1308,8 @@ export const NoteEditor = ({
 
             {/* Editor Area */}
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Note
+              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Note <span className="text-[#FF4935]">*</span>
               </label>
               <div className="border border-[#1F2937]/10 rounded-2xl overflow-hidden dc-note-editor-compact">
                 <QuillToolbar />
@@ -1352,7 +1352,7 @@ export const NoteEditor = ({
 
             <div>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Link Contact <span className="text-[#FF4935]">*</span>
+                Link Contact
               </label>
               <div className="flex items-center gap-3">
                 <EntityPickerDropdown
@@ -1403,7 +1403,7 @@ export const NoteEditor = ({
 
             <div>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Link Deal <span className="text-[#FF4935]">*</span>
+                Link Deal
               </label>
               <div className="flex items-center gap-3">
                 <EntityPickerDropdown
@@ -1454,7 +1454,7 @@ export const NoteEditor = ({
 
             <div>
               <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Link Invoice <span className="text-[#FF4935]">*</span>
+                Link Invoice
               </label>
               <div className="flex items-center gap-3">
                 <EntityPickerDropdown
@@ -1527,7 +1527,7 @@ export const NoteEditor = ({
 
             <button
               type="submit"
-              disabled={loading || !noteContent.trim() || noteContent === '<p><br></p>'}
+              disabled={loading || !noteTitle.trim() || !noteContent.trim() || noteContent === '<p><br></p>'}
               className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Saving...' : 'Save Note'}

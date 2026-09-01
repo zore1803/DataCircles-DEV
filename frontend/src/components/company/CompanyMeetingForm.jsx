@@ -298,6 +298,9 @@ const CompanyMeetingForm = ({
   meetingData,
   calendarDate,
   companyId,
+  // Set when the form is opened from a contact's calendar: the meeting is
+  // filed against the contact instead of the company.
+  contactId,
   users,
   staffUsers = [],
   onSave,
@@ -361,7 +364,7 @@ const CompanyMeetingForm = ({
 
       const res = await API.get("/meetings", {
         params: {
-          companyId,
+          ...(contactId ? { contactId } : { companyId }),
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         }
@@ -371,7 +374,7 @@ const CompanyMeetingForm = ({
       console.error("Error fetching meetings:", error);
       setExistingMeetings([]);
     }
-  }, [companyId]);
+  }, [companyId, contactId]);
 
   const checkTimeConflict = useCallback((selectedDate, selectedTime, duration) => {
     if (!selectedDate || !selectedTime) return null;
@@ -541,8 +544,9 @@ const CompanyMeetingForm = ({
       const payload = {
         ...form,
         scheduledAt: getScheduledAt(),
-        companyId,
-        linkedTo: "company",
+        ...(contactId
+          ? { contactId, linkedTo: "contact" }
+          : { companyId, linkedTo: "company" }),
       };
 
       if (isEditMode && mode === "view") {

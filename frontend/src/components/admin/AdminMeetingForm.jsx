@@ -577,6 +577,10 @@ const AdminMeetingForm = ({
   // Display-only label shown in place of the hidden Entity Type/Company
   // picker when initialCompanyId is set.
   companyName = "",
+  // Same idea for the contact profile's Meetings tab: the meeting is scoped
+  // to one contact, so the pickers give way to a read-only label.
+  initialContactId = null,
+  contactName = "",
 }) => {
   const [form, setForm] = useState(initialState);
   // Org's MeetingFields definitions — drives the Custom Fields section below.
@@ -751,8 +755,9 @@ const AdminMeetingForm = ({
         const initialFormData = {
           ...initialState,
           date: calendarDate || "",
-          linkedTo: "company",
+          linkedTo: initialContactId ? "contact" : "company",
           companyId: initialCompanyId || null,
+          contactId: initialContactId || null,
         };
         setForm(initialFormData);
         setCompanyContacts([]);
@@ -772,7 +777,7 @@ const AdminMeetingForm = ({
       setTimeout(() => setShouldRender(false), 300);
       setTimeConflict(null);
     }
-  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate, fetchCompanyContacts, startInEditMode]);
+  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate, fetchCompanyContacts, startInEditMode, initialContactId, initialCompanyId]);
 
   const handleChange = (key, val) => {
     setForm(f => {
@@ -1138,11 +1143,22 @@ const AdminMeetingForm = ({
                   </div>
                 )}
 
+                {/* Same, for a contact-scoped meeting. */}
+                {initialContactId && contactName && (
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Contact</label>
+                    <div className="w-full flex items-center gap-1.5 px-3 h-8 rounded-full border border-[#1F2937]/10 bg-[#F9F9FB] text-[12px] text-[#1F2937]">
+                      <User className="w-3.5 h-3.5 flex-shrink-0 opacity-50" />
+                      <span className="truncate">{contactName}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Entity Type / related record — hidden when the form is
                     already scoped to a single company (opened from that
                     company's own Meetings tab), since picking one again
                     would be redundant. */}
-                {!initialCompanyId && (
+                {!initialCompanyId && !initialContactId && (
                   <div className="grid grid-cols-2 gap-4">
                     <div ref={linkedToRef}>
                       <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Entity Type</label>

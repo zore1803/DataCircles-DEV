@@ -91,7 +91,11 @@ const MoreVertIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-export default function CompanyMeetingsTab({ companyId, companyName, meetings = [], setMeetings, showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
+// Also drives the contact profile's Meetings tab: pass `contactId` /
+// `contactName` (plus that contact's `companyId`, which the Client Contacts
+// picker needs) and it scopes itself to that contact's meetings. Same table,
+// filters, bulk strip, form and details modal either way.
+export default function CompanyMeetingsTab({ companyId, companyName, contactId, contactName, meetings = [], setMeetings, showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
   const [searchTerm, setSearchTerm] = useState("");
   const {
     containerRef: fillContainerRef,
@@ -435,7 +439,9 @@ export default function CompanyMeetingsTab({ companyId, companyName, meetings = 
 
   const refetchMeetings = async () => {
     try {
-      const res = await API.get("/meetings", { params: { companyId } });
+      const res = await API.get("/meetings", {
+        params: contactId ? { contactId } : { companyId },
+      });
       setMeetings(res.data.meetings);
     } catch (err) {
       console.error("Failed to refetch meetings:", err);
@@ -2084,8 +2090,10 @@ export default function CompanyMeetingsTab({ companyId, companyName, meetings = 
           mode={editingMeeting ? "view" : "create"}
           startInEditMode={!!editingMeeting}
           meetingData={editingMeeting}
-          initialCompanyId={companyId}
+          initialCompanyId={contactId ? null : companyId}
           companyName={companyName}
+          initialContactId={contactId}
+          contactName={contactName}
           users={staffUsers}
           companies={[{ _id: companyId, name: companyName }]}
           onSave={handleMeetingSave}
