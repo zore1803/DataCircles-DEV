@@ -289,6 +289,7 @@ const CompanyTaskForm = ({
   taskData,
   companyId,
   contactId,
+  dealId,
   calendarDate,
   users,
   onSave,
@@ -490,8 +491,11 @@ const CompanyTaskForm = ({
       if (linkedContactId) {
         relatedEntities.push({ entityModel: "Contact", entityId: linkedContactId });
       }
-      if (relatedDealId) {
-        relatedEntities.push({ entityModel: "Deal", entityId: relatedDealId });
+      // Same reasoning as the contact above: on a deal's own tab the deal is
+      // the task's subject and the deal-scoped list matches on this entry.
+      const linkedDealId = relatedDealId || dealId;
+      if (linkedDealId) {
+        relatedEntities.push({ entityModel: "Deal", entityId: linkedDealId });
       }
 
       const payload = {

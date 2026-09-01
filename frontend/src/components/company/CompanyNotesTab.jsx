@@ -90,11 +90,11 @@ const LastUpdatedIcon = ({ size = 20, ...props }) => (
 // contact's `companyId`, since a Note always belongs to a company in the data
 // model) and it scopes itself to notes tagged with that contact. Same table,
 // editor, filters and bulk strip either way.
-export default function CompanyNotesTab({ showStats = true, autoOpenCreate = false, onAutoOpenCreateConsumed, contactId, companyId: contactCompanyId }) {
+export default function CompanyNotesTab({ showStats = true, autoOpenCreate = false, onAutoOpenCreateConsumed, contactId, dealId, companyId: scopedCompanyId }) {
   const { id: routeId } = useParams();
-  // The company a new note is filed under: the contact's company when this is
-  // the contact page, otherwise the company whose page we're on.
-  const id = contactId ? contactCompanyId : routeId;
+  // The company a new note is filed under: the scoped record's company on the
+  // contact/deal pages, otherwise the company whose page we're on.
+  const id = contactId || dealId ? scopedCompanyId : routeId;
 
   // Notes fetch their own data on mount, so the loading flag is local — the
   // parent's showRecordsSkeleton tracks a different request and would only
@@ -102,7 +102,20 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
   // NOTE: the existing `loading` state below belongs to the save/submit path;
   // this is deliberately separate.
   const [isNotesLoading, setIsNotesLoading] = useState(true);
-  const showNotesSkeleton = isNotesLoading;
+  // Only surface the skeleton if the fetch is actually slow. Switching tabs
+  // remounts this component, so a fast request made the skeleton flash for a
+  // frame or two on every visit — more distracting than the wait it was
+  // covering, and it read as a loader appearing out of nowhere.
+  const [skeletonDelayPassed, setSkeletonDelayPassed] = useState(false);
+  useEffect(() => {
+    if (!isNotesLoading) {
+      setSkeletonDelayPassed(false);
+      return;
+    }
+    const t = setTimeout(() => setSkeletonDelayPassed(true), 250);
+    return () => clearTimeout(t);
+  }, [isNotesLoading]);
+  const showNotesSkeleton = isNotesLoading && skeletonDelayPassed;
 
   // Keeps the list-view table box a fixed height ending at the bottom of the
   // screen, so changing rows-per-page scrolls internally.
@@ -436,7 +449,11 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
   const fetchNotes = useCallback(async () => {
     try {
       const res = await API.get(
-        contactId ? `/notes/contact/${contactId}` : `/notes/company/${id}`,
+        contactId
+          ? `/notes/contact/${contactId}`
+          : dealId
+            ? `/notes/deal/${dealId}`
+            : `/notes/company/${id}`,
       );
       const sorted = res.data.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
@@ -449,7 +466,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
       // leaving it pulsing forever behind the error toast.
       setIsNotesLoading(false);
     }
-  }, [id, contactId]);
+  }, [id, contactId, dealId]);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -508,6 +525,9 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
           title: noteTitle,
           note: noteContent,
           company: id,
+          // The deal-scoped fetch matches on Note.deal, so a note created from
+          // a deal's tab has to record it or it vanishes on save.
+          ...(dealId ? { deal: dealId } : {}),
           // On the contact page the contact must stay tagged: the
           // contact-scoped fetch matches on taggedContacts, so an untagged
           // note would vanish the moment it was saved.
@@ -568,6 +588,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
         title: note.title ? `${note.title} (Copy)` : "",
         note: note.note,
         company: id,
+        ...(dealId ? { deal: dealId } : {}),
         taggedContacts: withContactTagged(
           (note.taggedContacts || []).map((c) => c._id || c),
         ),

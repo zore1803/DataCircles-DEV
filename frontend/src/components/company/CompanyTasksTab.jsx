@@ -128,7 +128,7 @@ const BriefcaseIcon = ({ size = 14, ...props }) => (
 // contact's `companyId`, which the task form needs for its contact/deal
 // pickers) and it scopes itself to that contact's tasks. Same table, filters,
 // bulk strip and form either way.
-export default function CompanyTasksTab({ companyId, contactId, tasks = [], setTasks, showStats = true, isLoading = false }) {
+export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = [], setTasks, showStats = true, isLoading = false }) {
   // Keeps the table box a fixed height ending at the bottom of the screen, so
   // changing rows-per-page scrolls internally instead of growing the page.
   const {
@@ -448,7 +448,11 @@ export default function CompanyTasksTab({ companyId, contactId, tasks = [], setT
   const refetchTasks = async () => {
     try {
       const res = await API.get(
-        contactId ? `/tasks/contact/${contactId}` : `/tasks/company/${companyId}`,
+        contactId
+          ? `/tasks/contact/${contactId}`
+          : dealId
+            ? `/tasks/deal/${dealId}`
+            : `/tasks/company/${companyId}`,
       );
       setTasks(res.data || []);
     } catch (err) {
@@ -1515,6 +1519,7 @@ export default function CompanyTasksTab({ companyId, contactId, tasks = [], setT
         taskData={editingTask}
         companyId={companyId}
         contactId={contactId}
+        dealId={dealId}
         users={users}
         onSave={handleTaskSave}
         onUpdate={async () => {

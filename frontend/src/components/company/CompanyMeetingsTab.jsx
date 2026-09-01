@@ -95,7 +95,7 @@ const MoreVertIcon = ({ size = 20, ...props }) => (
 // `contactName` (plus that contact's `companyId`, which the Client Contacts
 // picker needs) and it scopes itself to that contact's meetings. Same table,
 // filters, bulk strip, form and details modal either way.
-export default function CompanyMeetingsTab({ companyId, companyName, contactId, contactName, meetings = [], setMeetings, showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
+export default function CompanyMeetingsTab({ companyId, companyName, contactId, contactName, dealId, dealName, meetings = [], setMeetings, showStats = true, isLoading = false, autoOpenCreate = false, onAutoOpenCreateConsumed }) {
   const [searchTerm, setSearchTerm] = useState("");
   const {
     containerRef: fillContainerRef,
@@ -440,7 +440,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
   const refetchMeetings = async () => {
     try {
       const res = await API.get("/meetings", {
-        params: contactId ? { contactId } : { companyId },
+        params: contactId ? { contactId } : dealId ? { dealId } : { companyId },
       });
       setMeetings(res.data.meetings);
     } catch (err) {
@@ -2090,10 +2090,12 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
           mode={editingMeeting ? "view" : "create"}
           startInEditMode={!!editingMeeting}
           meetingData={editingMeeting}
-          initialCompanyId={contactId ? null : companyId}
+          initialCompanyId={contactId || dealId ? null : companyId}
           companyName={companyName}
           initialContactId={contactId}
           contactName={contactName}
+          initialDealId={dealId}
+          dealName={dealName}
           users={staffUsers}
           companies={[{ _id: companyId, name: companyName }]}
           onSave={handleMeetingSave}

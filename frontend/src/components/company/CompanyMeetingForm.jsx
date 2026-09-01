@@ -301,6 +301,9 @@ const CompanyMeetingForm = ({
   // Set when the form is opened from a contact's calendar: the meeting is
   // filed against the contact instead of the company.
   contactId,
+  // Deal calendar: the meeting stays company-linked, with the deal recorded
+  // on linkedDealId (meetings have no "linked to a deal" mode).
+  dealId,
   users,
   staffUsers = [],
   onSave,
@@ -364,7 +367,7 @@ const CompanyMeetingForm = ({
 
       const res = await API.get("/meetings", {
         params: {
-          ...(contactId ? { contactId } : { companyId }),
+          ...(contactId ? { contactId } : dealId ? { dealId } : { companyId }),
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         }
@@ -374,7 +377,7 @@ const CompanyMeetingForm = ({
       console.error("Error fetching meetings:", error);
       setExistingMeetings([]);
     }
-  }, [companyId, contactId]);
+  }, [companyId, contactId, dealId]);
 
   const checkTimeConflict = useCallback((selectedDate, selectedTime, duration) => {
     if (!selectedDate || !selectedTime) return null;
@@ -547,6 +550,7 @@ const CompanyMeetingForm = ({
         ...(contactId
           ? { contactId, linkedTo: "contact" }
           : { companyId, linkedTo: "company" }),
+        ...(dealId ? { linkedDealId: dealId } : {}),
       };
 
       if (isEditMode && mode === "view") {

@@ -39,7 +39,11 @@ const InfoCard = ({ title, value, icon: Icon, action, description }) => (
   </div>
 );
 
-const BasicDetails = ({ deal, dealFieldList = [] }) => {
+// `onDealUpdate` lets the owner change refresh in place. Without it this
+// component had no way to tell the page its data was stale, so it reloaded the
+// whole browser tab — which threw away the active tab, scroll position and
+// every other in-flight fetch just to show one changed name.
+const BasicDetails = ({ deal, dealFieldList = [], onDealUpdate }) => {
   const [showEmptyFields, setShowEmptyFields] = useState(false);
   const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
   const [searchOwnerQuery, setSearchOwnerQuery] = useState("");
@@ -77,10 +81,10 @@ const BasicDetails = ({ deal, dealFieldList = [] }) => {
     }
 
     try {
-      await API.put(`/deals/${deal._id}`, { user: newOwnerId });
+      const res = await API.put(`/deals/${deal._id}`, { user: newOwnerId });
       toast.success("Owner reassigned successfully.");
       setIsOwnerDropdownOpen(false);
-      window.location.reload(); 
+      onDealUpdate?.(res.data);
     } catch (err) {
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");

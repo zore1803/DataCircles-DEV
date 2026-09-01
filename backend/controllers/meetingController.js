@@ -2,6 +2,7 @@ const Meeting = require("../models/Meeting");
 const Contact = require("../models/Contact");
 const Company = require("../models/Company");
 const Vendor = require("../models/Vendor");
+const Deal = require("../models/Deal");
 const User = require("../models/User");
 const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
@@ -1480,6 +1481,7 @@ exports.getMeetings = async (req, res) => {
       contactId,
       companyId,
       vendorId,
+      dealId,
       participantId,
       status,
       search,
@@ -1529,6 +1531,18 @@ exports.getMeetings = async (req, res) => {
       }
       query.linkedTo = "vendor";
       query.vendor = vendorId;
+    } else if (dealId) {
+      // A meeting is never *linked to* a deal the way it is to a company or
+      // contact — a deal is recorded on the meeting's linkedDealId field. The
+      // deal profile's Meetings tab asks for exactly those.
+      const deal = await Deal.findOne({
+        _id: dealId,
+        organization: req.user.organization,
+      });
+      if (!deal) {
+        return res.status(404).json({ error: "Deal not found" });
+      }
+      query.linkedDealId = dealId;
     }
 
     // Filter by specific participant

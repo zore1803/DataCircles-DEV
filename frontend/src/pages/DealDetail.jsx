@@ -1,176 +1,83 @@
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
+import { useParams, Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import API from "../services/api";
 import { formatNumberToIndian } from "../utils/numberFormatter";
-import DealForm from "../components/deal/DealForm";
 import QuickDealForm from "../components/deal/QuickDealForm";
 import toast from "react-hot-toast";
 import {
-  ArrowLeft,
   Building2,
-  User,
-  Calendar,
-  IndianRupeeIcon,
-  FileText,
-  Download,
-  ExternalLink,
-  Trash2,
-  Eye,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
-  Send,
-  X,
-  Check,
+  Edit2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  Minimize2,
-  Edit2
+  Eye,
+  Plus,
+  CheckSquare,
+  MoreVertical,
+  StickyNote,
+  Calendar,
+  Receipt,
+  Trash2,
+  Clock,
+  User,
+  AlertCircle,
+  IndianRupeeIcon,
+  FileText,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
-
-// --- Assuming these components exist or you will map them to your Deal versions ---
-// Notes are company-scoped in this system, so a deal shows its company's notes
-// (which is also where the bulk "Add Note" action on the deals board writes).
-import NoteSection from "../components/company/NoteSection";
-// import DealTasksTable from "../components/deal/DealTasksTable";
-// import MeetingsTable from "../components/contact/MeetingsTable";
-// import DealCalendar from "../components/deal/DealCalendar";
 import BasicDetails from "../components/deal/BasicDetails";
-import logo from "/DataCircles.png";
+import CompanyInvoicesTab from "../components/company/CompanyInvoicesTab";
+import CompanyNotesTab from "../components/company/CompanyNotesTab";
+import CompanyTasksTab from "../components/company/CompanyTasksTab";
+import CompanyMeetingsTab from "../components/company/CompanyMeetingsTab";
+import CompanyCalendar from "../components/company/CompanyCalendar";
+import ProfilePicture from "../components/contact/ProfilePicture";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import StatTile from "../components/common/StatTile";
+import StatTileSkeleton from "../components/common/StatTileSkeleton";
+import Skeleton from "../components/common/Skeleton";
+import PageSkeleton from "../components/common/PageSkeleton";
 import AppToaster from "../components/AppToaster";
-import { getDocumentSettings } from "../services/documentSettingsCache";
-import { buildFilename, extractDocData, DEFAULT_FORMATS } from "../utils/pdfFilename";
 
-const tabsLeft = ["Details", "Invoices"];
-const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
+// Mirrors CompanyProfilePage's shape (header strip, one pill tab bar, KPI row,
+// full-width tab bodies) so a company, one of its contacts and one of its
+// deals all behave the same way. The tab set is the deal's own — Tasks,
+// Meetings and Calendar were "coming soon" placeholders before this and now
+// run the same components the company page uses, scoped to the deal.
+const tabs = ["Details", "Invoices", "Notes", "Tasks", "Meetings", "Calendar"];
 
-// --- Helper Components ---
+const newEntryOptions = [
+  { label: "New Invoice", icon: Receipt, tab: "Invoices" },
+  { label: "New Notes", icon: StickyNote, tab: "Notes" },
+  { label: "New Task", icon: CheckSquare, tab: "Tasks" },
+  { label: "New Meetings", icon: Calendar, tab: "Meetings" },
+];
+
+// Deal status shown next to the title, in the same pill vocabulary the rest of
+// the header uses.
 const StatusBadge = ({ status }) => {
   const statusConfig = {
-    open: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", icon: <Clock className="w-3 h-3" /> },
-    won: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", icon: <CheckCircle2 className="w-3 h-3" /> },
-    lost: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", icon: <XCircle className="w-3 h-3" /> },
-    pending: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: <AlertCircle className="w-3 h-3" /> },
-    default: { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", icon: <AlertCircle className="w-3 h-3" /> },
+    open: { cls: "bg-blue-50 text-blue-700 border-blue-100", icon: <Clock className="w-3 h-3" /> },
+    won: { cls: "bg-green-50 text-green-700 border-green-100", icon: <CheckCircle2 className="w-3 h-3" /> },
+    lost: { cls: "bg-red-50 text-red-700 border-red-100", icon: <XCircle className="w-3 h-3" /> },
+    pending: { cls: "bg-amber-50 text-amber-700 border-amber-100", icon: <AlertCircle className="w-3 h-3" /> },
+    default: { cls: "bg-gray-50 text-gray-700 border-gray-200", icon: <AlertCircle className="w-3 h-3" /> },
   };
   const config = statusConfig[status?.toLowerCase()] || statusConfig.default;
   return (
-    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${config.bg} ${config.text} ${config.border}`}>
+    <span className={`flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium border rounded-full px-2 py-0.5 ${config.cls}`}>
       {config.icon}
       <span className="capitalize">{status}</span>
-    </div>
+    </span>
   );
 };
 
-const InfoCard = ({ title, value, icon: Icon, action, description }) => (
-  <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-shadow">
-    <div className="flex items-center justify-between mb-2">
-      <div className="flex items-center gap-2">
-        <div className="bg-blue-50 p-2 rounded-lg">
-          <Icon className="w-4 h-4 text-blue-600" />
-        </div>
-        <span className="text-sm font-medium text-gray-600">{title}</span>
-      </div>
-      {action}
-    </div>
-    <div className="mb-1">
-      <p className="text-lg font-bold text-gray-900 truncate">{value}</p>
-    </div>
-    {description && <p className="text-xs text-gray-500 truncate">{description}</p>}
-  </div>
-);
-
-// --- Simplified Invoice Viewer ---
-const InvoiceViewer = ({ isOpen, onClose, invoice, onDownload, onSend }) => {
-  const [pdfUrl, setPdfUrl] = useState(null);
-
-  useEffect(() => {
-    if (isOpen && invoice) fetchPdf();
-    return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
-  }, [isOpen, invoice]);
-
-  const fetchPdf = async () => {
-    try {
-      const response = await API.get(`invoices/download/${invoice._id}`, { responseType: "blob" });
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      setPdfUrl(URL.createObjectURL(blob));
-    } catch (error) {
-      toast.error("Failed to load PDF");
-      onClose();
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[10000] pt-20 p-4">
-      <div className="bg-white rounded-xl w-full h-[90vh] max-w-5xl flex flex-col shadow-2xl">
-        <div className="flex justify-between items-center px-5 py-2 border-b border-gray-200 bg-gray-50 rounded-t-xl">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 p-2 rounded-lg"><FileText className="w-5 h-5 text-blue-600" /></div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Invoice #{invoice?.invoiceNumber || "NA"}</h2>
-              <p className="text-sm text-gray-600">View invoice details</p>
-            </div>
-          </div>
-          <div className="flex gap-3 items-center">
-            <div className="flex gap-2">
-              <button onClick={() => onDownload(invoice._id)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Download className="w-4 h-4" /></button>
-              <button onClick={() => onSend(invoice._id)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"><Send className="w-4 h-4" /></button>
-            </div>
-            <button onClick={onClose} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
-          </div>
-        </div>
-        <div className="flex-1 p-4 overflow-hidden">
-          {pdfUrl ? (
-            <iframe src={pdfUrl} width="100%" height="100%" title="Invoice PDF" className="rounded-lg" />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
-              <p className="text-gray-600 font-medium">Loading PDF...</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const InvoiceRow = ({ invoice, index, onDownload, onView }) => (
-  <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-all">
-    <div className="flex items-center gap-4">
-      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-        <FileText className="w-4 h-4 text-blue-600" />
-      </div>
-      <div>
-        <p className="font-semibold text-gray-900">#{invoice.invoiceNumber}</p>
-        <p className="text-sm text-gray-500">
-          {new Date(invoice.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-        </p>
-      </div>
-    </div>
-    <div className="flex items-center gap-4">
-      <div className="flex items-center gap-2">
-        <p className="font-semibold text-gray-900">₹{formatNumberToIndian(invoice.amount || 0)}</p>
-        <StatusBadge status={invoice.status} />
-      </div>
-      <div className="flex items-center gap-2">
-        <button onClick={() => onView?.(invoice)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg" title="View invoice"><Eye className="w-4 h-4" /></button>
-        <button onClick={() => onDownload(invoice._id)} className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg" title="Download PDF"><Download className="w-4 h-4" /></button>
-      </div>
-    </div>
-  </div>
-);
-
-// --- MAIN PAGE COMPONENT ---
 function DealDetail() {
   const { dealId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // The list of deal ids the user was browsing (whatever search/filter was
   // active on the Deals list) when they clicked into this deal — lets the
@@ -189,206 +96,238 @@ function DealDetail() {
 
   const [deal, setDeal] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [dealFieldList, setDealFieldList] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Layout States
-  const [activeTabLeft, setActiveTabLeft] = useState("Details");
-  const [activeTabRight, setActiveTabRight] = useState("Notes");
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [additionalFieldValues, setAdditionalFieldValues] = useState({});
-  const [form, setForm] = useState({
-    title: "",
-    amount: "",
-    status: "Open",
-    company: "",
-    contact: "",
-  });
+  const [tasks, setTasks] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Invoice viewer state
-  const [showViewer, setShowViewer] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-
-  // Owner States
-  const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
-  const [searchOwnerQuery, setSearchOwnerQuery] = useState("");
-  const [availableUsers, setAvailableUsers] = useState([]);
-
-  const currentUserStr = localStorage.getItem("user");
-  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
-
-
-
-  const hasEditPermission = () => {
-    if (currentUser?.role === 'admin') return true;
-    return currentUser?.permissions?.some((p) => p.name.toLowerCase() === 'deals' && p.permission === 'read-write');
+  // Tab lives in the URL (?tab=Notes), so a refresh or a shared link lands
+  // back on the same tab.
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTabState] = useState(
+    tabs.includes(tabFromUrl) ? tabFromUrl : "Details",
+  );
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      // Carry location.state across, or the prev/next deal arrows lose the
+      // list they were navigating.
+      { replace: true, state: location.state },
+    );
   };
 
-  useEffect(() => {
-    const fetchTeamUsers = async () => {
-      if (!hasEditPermission()) return;
-      try {
-        const response = await API.get("/auth/all-user");
-        setAvailableUsers(response.data.allUsers || []);
-      } catch (error) {
-        console.error("Unable to load team list:", error);
-      }
+  const dealLoaded = !!deal;
+
+  // Sliding pill indicator for the section-switcher tab bar
+  const tabRefs = useRef({});
+  const tabTrackRef = useRef(null);
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = tabRefs.current[activeTab];
+      if (el) setTabIndicator({ left: el.offsetLeft, width: el.offsetWidth });
     };
-    fetchTeamUsers();
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (tabTrackRef.current) ro.observe(tabTrackRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+    // `dealLoaded` because the page renders a skeleton until the deal arrives:
+    // on the first pass the tab bar isn't mounted, so there is nothing to
+    // measure and the indicator would stay stuck at width 0.
+  }, [activeTab, dealLoaded]);
+
+  const [showForm, setShowForm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showStats, setShowStats] = useState(true);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showNewEntryMenu, setShowNewEntryMenu] = useState(false);
+  const [showLastUpdatedTooltip, setShowLastUpdatedTooltip] = useState(false);
+  const actionsMenuRef = useRef(null);
+  const newEntryRef = useRef(null);
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target))
+        setShowActionsMenu(false);
+      if (newEntryRef.current && !newEntryRef.current.contains(e.target))
+        setShowNewEntryMenu(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const fetchData = async () => {
+  const fetchInvoices = async () => {
     try {
-      setIsLoading(true);
-      const [dealRes, invoiceRes, fieldsRes, companiesRes, contactsRes] = await Promise.all([
-        API.get(`/deals/${dealId}`),
-        API.get("/invoices"),
-        API.get("/deal-fields/latest").catch(() => ({ data: { fields: [] } })),
-        API.get("/companies").catch(() => ({ data: { companies: [] } })), // Fetch companies
-        API.get("/contacts").catch(() => ({ data: { contacts: [] } }))    // Fetch contacts
-      ]);
-      setDeal(dealRes.data);
-      setInvoices(invoiceRes.data.filter((i) => i.deal._id === dealId));
-      setDealFieldList(fieldsRes.data?.fields || []);
-      
-      // Store dropdown data
-      setCompanies(companiesRes.data?.companies || companiesRes.data || []);
-      setContacts(contactsRes.data?.contacts || contactsRes.data || []);
+      const res = await API.get("/invoices");
+      // `deal` populates as null on an invoice whose deal was deleted, hence
+      // the optional chaining rather than a bare i.deal._id.
+      const list = Array.isArray(res.data) ? res.data : [];
+      setInvoices(list.filter((i) => (i?.deal?._id || i?.deal) === dealId));
     } catch (err) {
-      setError("Failed to load deal details. Please try again.");
+      console.error("Failed to load invoices:", err);
     } finally {
-      setIsLoading(false);
+      setInvoicesLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, [dealId]);
+  const fetchData = async () => {
+    try {
+      setError(null);
+      // Only the deal itself is fatal: a failure loading the side data
+      // shouldn't replace the whole page with an error screen.
+      const [dealRes, fieldsRes, companiesRes, contactsRes] = await Promise.all([
+        API.get(`/deals/${dealId}`),
+        API.get("/deal-fields/latest").catch(() => ({ data: { fields: [] } })),
+        API.get("/companies").catch(() => ({ data: { companies: [] } })),
+        API.get("/contacts").catch(() => ({ data: { contacts: [] } })),
+      ]);
+      setDeal(dealRes.data);
+      setDealFieldList(fieldsRes.data?.fields || []);
+      setCompanies(companiesRes.data?.companies || companiesRes.data || []);
+      setContacts(contactsRes.data?.contacts || contactsRes.data || []);
+    } catch (err) {
+      console.error("Failed to load deal details:", err);
+      setError("Failed to load deal details. Please try again.");
+    }
+  };
+
+  useEffect(() => {
+    // Reset so stepping to another deal shows the skeleton again rather than
+    // leaving the previous deal on screen until the new fetch resolves.
+    setDeal(null);
+    setInvoices([]);
+    setInvoicesLoading(true);
+    setTasks([]);
+    setMeetings([]);
+    setStatsLoading(true);
+
+    // Tasks and meetings back the KPI row. The tabs fetch their own copies for
+    // their tables, so a failure on either side only costs the counts.
+    const fetchStats = async () => {
+      try {
+        const [resTasks, resMeetings] = await Promise.all([
+          API.get(`/tasks/deal/${dealId}`).catch(() => ({ data: [] })),
+          API.get("/meetings", { params: { dealId } }).catch(() => ({ data: {} })),
+        ]);
+        setTasks(Array.isArray(resTasks.data) ? resTasks.data : []);
+        const m = resMeetings.data?.meetings ?? resMeetings.data;
+        setMeetings(Array.isArray(m) ? m : []);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchData();
+    fetchInvoices();
+    fetchStats();
+  }, [dealId]);
 
   const handleEdit = () => {
     // Edit via the shared QuickDealForm (same as create).
     setShowForm(true);
   };
 
-  const handleOwnerChange = async (newOwnerId) => {
-    if (!hasEditPermission() || !newOwnerId || deal?.user?._id === newOwnerId) {
-      setIsOwnerDropdownOpen(false);
-      return;
-    }
+  const handleDeleteDeal = async () => {
+    setShowDeleteConfirm(false);
     try {
-      await API.put(`/deals/${dealId}`, { user: newOwnerId });
-      toast.success("Owner reassigned successfully.");
-      setIsOwnerDropdownOpen(false);
-      fetchData(); // Refresh gracefully instead of window.reload
+      await API.delete(`/deals/${dealId}`);
+      toast.success("Deal deleted successfully");
+      navigate("/deals");
     } catch (err) {
       if (err.response?.status === 402) {
         toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
       } else {
-        toast.error(err.response?.data?.error || "Failed to update owner.");
+        toast.error(err.response?.data?.error || "Failed to delete deal");
       }
     }
   };
 
-  const downloadPDF = async (id) => {
-    const inv = invoices.find((i) => i._id === id);
-    let filename = `Invoice-${inv?.invoiceNumber || id}`;
-    try {
-      const settings = await getDocumentSettings();
-      const formats = settings?.pdfFilenameFormats || DEFAULT_FORMATS;
-      const tokens = formats.tax || DEFAULT_FORMATS.tax;
-      const orgName = settings?.companyName || "";
-      filename = buildFilename(tokens, extractDocData(inv || {}, 'tax', orgName));
-    } catch (_) { /* fall back to default */ }
-
-    try {
-      const response = await API.get(`invoices/download/${id}`, { responseType: "blob" });
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `${filename}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success(`Invoice downloaded successfully`);
-    } catch (error) {
-      toast.error(`Failed to download invoice`);
-    }
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    return new Date(value).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
-  const handleSend = async (id) => {
-    try {
-      const response = await API.get(`invoices/download/${id}`, { responseType: "blob" });
-      const file = new File([response.data], `invoice-${id}.pdf`, { type: "application/pdf" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Share Invoice", text: "Here is the invoice PDF" });
-        toast.success("Shared successfully");
-      } else {
-        toast.error("Sharing not supported in this browser");
-      }
-    } catch (error) {
-      toast.error("Failed to prepare invoice for sharing");
-    }
+  const totalInvoiced = invoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+  const paidInvoiced = invoices
+    .filter((i) => (i.status || "").toLowerCase() === "paid")
+    .reduce((sum, i) => sum + (i.amount || 0), 0);
+  // The company page reads these off a server-side summary endpoint; a deal
+  // has no equivalent, so they're derived from its own invoices.
+  const invoiceSummary = {
+    totalAmount: totalInvoiced,
+    totalInvoices: invoices.length,
+    amountPaid: paidInvoiced,
+    amountDue: totalInvoiced - paidInvoiced,
   };
 
-  const handleDelete = async () => {
-    toast((t) => (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 text-red-500" />
-          <h4 className="font-semibold text-gray-900">Delete Deal</h4>
-        </div>
-        <p className="text-sm text-gray-600">Are you sure you want to delete "{deal.title}"? This action cannot be undone.</p>
-        <div className="flex justify-end gap-2 pt-2">
-          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">Cancel</button>
-          <button onClick={async () => {
-            toast.dismiss(t.id);
-            try {
-              await API.delete(`/deals/${dealId}`);
-              toast.success("Deal deleted successfully");
-              navigate("/deals");
-            } catch (error) {
-              if (error.response?.status === 402) {
-                toast.error(error.response?.data?.message || "An active subscription is required to make changes.");
-              } else {
-                toast.error(error.response?.data?.error || "Failed to delete deal");
-              }
-            }
-          }} className="px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Deal</button>
-        </div>
+  const upcomingTasksCount = tasks.filter((t) => t.status !== "Completed").length;
+  const upcomingMeetingsCount = meetings.filter(
+    (m) => m.scheduledAt && new Date(m.scheduledAt) >= new Date(),
+  ).length;
+
+  const statTiles = [
+    {
+      label: "Deal Value",
+      value: `₹${formatNumberToIndian(deal?.amount || 0)}`,
+      icon: IndianRupeeIcon,
+    },
+    {
+      label: "Invoiced",
+      value: `₹${formatNumberToIndian(totalInvoiced)}`,
+      icon: Receipt,
+    },
+    {
+      label: "Outstanding",
+      value: `₹${formatNumberToIndian(invoiceSummary.amountDue)}`,
+      icon: FileText,
+    },
+    { label: "Invoices", value: invoices.length, icon: Receipt },
+    { label: "Upcoming Tasks", value: upcomingTasksCount, icon: CheckSquare },
+    { label: "Upcoming Meetings", value: upcomingMeetingsCount, icon: Calendar },
+  ];
+
+  if (error && !deal) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center">
+        <AlertCircle className="w-10 h-10 text-red-500 mb-4" />
+        <p className="text-gray-600 mb-4">{error}</p>
+        <button
+          onClick={() => navigate("/deals")}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+        >
+          Back to Deals
+        </button>
       </div>
-    ), { duration: Infinity });
-  };
+    );
+  }
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return 'Unknown';
-    return new Date(dateString).toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-  };
+  if (!deal) {
+    return <PageSkeleton variant="profile" />;
+  }
 
-  if (isLoading) return (
-    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-      <div className="flex flex-col items-center"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div><p>Loading Deal...</p></div>
-    </div>
-  );
-
-  if (error || !deal) return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center">
-      <AlertCircle className="w-10 h-10 text-red-500 mb-4" />
-      <p className="text-gray-600 mb-4">{error || "Deal not found"}</p>
-      <button onClick={() => navigate("/deals")} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Back to Deals</button>
-    </div>
-  );
-
-  const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
+  const companyId = deal.company?._id || deal.company;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-4 px-6">
-      <AppToaster />
-      {/* 👉 ADD THIS BLOCK HERE */}
+    <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8 pt-6 px-6">
       {showForm && (
         <QuickDealForm
           companies={companies}
@@ -402,185 +341,338 @@ function DealDetail() {
         />
       )}
 
-      {/* WE WILL ADD DEAL FORM MODAL HERE IN STEP 3 */}
-
       <div className="mx-auto">
-        <div
-          className="grid grid-cols-1 lg:grid-cols-2 gap-6 transition-all duration-300"
-          style={{ gridTemplateColumns: window.innerWidth >= 1024 ? (isExpanded ? "40% 60%" : "60% 40%") : "1fr" }}
-        >
-          {/* ======================================= */}
-          {/* LEFT SIDE - Details & Invoices         */}
-          {/* ======================================= */}
-          <div className="space-y-0">
-            {/* Header Block */}
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <h1 className="text-3xl font-bold text-gray-900">{deal.title}</h1>
-                  {dealIds && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => goToDeal(prevDealId)}
-                        disabled={!prevDealId}
-                        title="Previous deal"
-                        aria-label="Previous deal"
-                        className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => goToDeal(nextDealId)}
-                        disabled={!nextDealId}
-                        title="Next deal"
-                        aria-label="Next deal"
-                        className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-lg font-semibold text-gray-600">₹{formatNumberToIndian(deal.amount || 0)}</p>
-                  <StatusBadge status={deal.status} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={handleEdit} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200" title="Edit Deal">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button onClick={handleDelete} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200" title="Delete Deal">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+        {/* Header Section — same 48px band as the company/contact pages. */}
+        <div className="flex items-center justify-between mb-2">
+          {/* LEFT: Avatar + Title + Company */}
+          <div className="flex items-center gap-3 min-w-0">
+            {dealIds && (
+              <button
+                type="button"
+                onClick={() => goToDeal(prevDealId)}
+                disabled={!prevDealId}
+                title="Previous deal"
+                aria-label="Previous deal"
+                className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
 
-            <div className="border-b border-gray-200 mb-6"></div>
+            <ProfilePicture
+              contact={{ name: deal.title }}
+              size="w-9 h-9"
+              textSize="text-sm"
+            />
 
-            {/* Left Tabs */}
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="flex gap-6">
-                {tabsLeft.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTabLeft(tab)}
-                    className={`pb-3 text-sm font-medium transition-colors ${activeTabLeft === tab ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-900"}`}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-base font-semibold text-gray-900 truncate">
+                  {deal.title}
+                </h1>
+                <StatusBadge status={deal.status} />
+                {deal.company && (
+                  <Link
+                    to={`/companies/${companyId}`}
+                    className="flex-shrink-0 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 hover:bg-blue-100 transition-colors truncate max-w-[160px]"
+                    title={`Deal for ${deal.company.name}`}
                   >
-                    {tab}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            {/* Left Content */}
-            <div className="px-1">
-
-              {/* TAB: DETAILS */}
-              {activeTabLeft === "Details" && (
-                <BasicDetails
-                  deal={deal}
-                  dealFieldList={dealFieldList}
-                />
-              )}
-
-              {/* TAB: INVOICES */}
-              {activeTabLeft === "Invoices" && (
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-blue-50 p-2 rounded-lg">
-                        <FileText className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">Linked Invoices</h2>
-                        <h6 className="text-sm text-gray-600">
-                          {invoices.length} invoice{invoices.length !== 1 ? "s" : ""} • Total: ₹{formatNumberToIndian(totalInvoiceAmount)}
-                        </h6>
-                      </div>
-                    </div>
-                    {invoices.length > 0 && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200">
-                        <TrendingUp className="w-3 h-3" /> Revenue Generated
-                      </div>
-                    )}
-                  </div>
-
-                  {invoices.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <FileText className="w-8 h-8 text-gray-400" />
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No invoices yet</h3>
-                      <p className="text-gray-600 mb-6">This deal doesn't have any linked invoices. Create an invoice to track payments.</p>
-                      <button onClick={() => navigate("/invoices/create", { state: { dealId } })} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                        Create Invoice
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {invoices.map((invoice, index) => (
-                        <InvoiceRow key={invoice._id} invoice={invoice} index={index} onDownload={downloadPDF} onView={() => { setSelectedInvoice(invoice); setShowViewer(true); }} />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                    {deal.company.name}
+                  </Link>
+                )}
+              </div>
+              {deal ? (
+                <p className="text-xs text-gray-500 truncate">
+                  ₹{formatNumberToIndian(deal.amount || 0)}
+                  {deal.contact?.name ? ` · ${deal.contact.name}` : ""}
+                </p>
+              ) : (
+                <Skeleton width={100} height={11} />
               )}
             </div>
+
+            {dealIds && (
+              <button
+                type="button"
+                onClick={() => goToDeal(nextDealId)}
+                disabled={!nextDealId}
+                title="Next deal"
+                aria-label="Next deal"
+                className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          {/* ======================================= */}
-          {/* RIGHT SIDE - Notes, Tasks, Meetings    */}
-          {/* ======================================= */}
-          <div className="space-y-0">
-            <div className="min-h-[85vh] bg-white border border-gray-200 rounded-lg">
-              <nav className="flex items-center border-b border-gray-200 overflow-x-auto">
-                <div className="flex flex-1">
-                  {tabsRight.map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTabRight(tab)}
-                      className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${activeTabRight === tab ? "border-b-2 border-gray-900 text-gray-900 -mb-[1px]" : "text-gray-500 hover:text-gray-900"}`}
+          {/* RIGHT: Owner + timestamps + actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Owner — the org user the deal is assigned to (Deal.user). A
+                label, not a link: it's a staff user, not a CRM record. */}
+            {deal.user ? (
+              <button
+                disabled
+                title={`Owner: ${deal.user.name}`}
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-800"
+              >
+                <User size={16} strokeWidth={2} />
+              </button>
+            ) : (
+              <button
+                disabled
+                title="No owner assigned"
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-full border border-gray-200 text-gray-300 cursor-not-allowed"
+              >
+                <User size={16} strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Last updated / created — hover for both timestamps. */}
+            <div
+              className="relative hidden lg:block"
+              onMouseEnter={() => setShowLastUpdatedTooltip(true)}
+              onMouseLeave={() => setShowLastUpdatedTooltip(false)}
+            >
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+              >
+                <Clock size={16} strokeWidth={2} />
+              </button>
+              {showLastUpdatedTooltip && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 z-50 text-left">
+                  <div className="mb-2">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                      Last updated
+                    </p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(deal.updatedAt)}
+                      {deal.lastUpdatedBy?.name ? ` by ${deal.lastUpdatedBy.name}` : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                      Created on
+                    </p>
+                    <p className="text-xs text-gray-800 mt-0.5">
+                      {formatDateTime(deal.createdAt)}
+                      {deal.createdBy?.name ? ` by ${deal.createdBy.name}` : ""}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions Menu */}
+            <div className="relative" ref={actionsMenuRef}>
+              <button
+                onClick={() => setShowActionsMenu((prev) => !prev)}
+                title="More actions"
+                className={`w-8 h-8 flex items-center justify-center rounded-full border transition-colors ${showActionsMenu
+                  ? "bg-gray-50 border-gray-200 text-gray-800"
+                  : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
+                  }`}
+              >
+                <MoreVertical size={16} strokeWidth={2.5} />
+              </button>
+              {showActionsMenu && (
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                  <button
+                    onClick={() => {
+                      setShowStats((prev) => !prev);
+                      setShowActionsMenu(false);
+                    }}
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Eye size={12} className="text-gray-400 lg:hidden" />
+                    <Eye size={14} className="text-gray-400 hidden lg:block" />
+                    {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                  </button>
+                  {/* Edit: mobile-only entry, folded in here instead of its own button */}
+                  <button
+                    onClick={() => {
+                      handleEdit();
+                      setShowActionsMenu(false);
+                    }}
+                    className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <Edit2 size={12} className="text-gray-400" />
+                    Edit
+                  </button>
+                  {deal.company && (
+                    <Link
+                      to={`/companies/${companyId}`}
+                      onClick={() => setShowActionsMenu(false)}
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                     >
-                      {tab}
+                      <Building2 size={12} className="text-gray-400 lg:hidden" />
+                      <Building2 size={14} className="text-gray-400 hidden lg:block" />
+                      View Company
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(true);
+                      setShowActionsMenu(false);
+                    }}
+                    className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-red-600 hover:bg-red-50 text-left"
+                  >
+                    <Trash2 size={12} className="text-red-400 lg:hidden" />
+                    <Trash2 size={14} className="text-red-400 hidden lg:block" />
+                    Delete Deal
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* New Entry Dropdown — icon-only (+) on mobile */}
+            <div className="relative" ref={newEntryRef}>
+              <button
+                onClick={() => setShowNewEntryMenu((prev) => !prev)}
+                title="New Entry"
+                className="flex items-center justify-center gap-1.5 h-8 w-8 lg:w-auto px-0 lg:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
+              >
+                <Plus size={14} className="lg:hidden" />
+                <span className="hidden lg:inline">New Entry</span>
+                <ChevronDown size={14} className="hidden lg:inline" />
+              </button>
+              {showNewEntryMenu && (
+                <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                  {newEntryOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(option.tab);
+                        setShowNewEntryMenu(false);
+                      }}
+                      className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <option.icon size={12} className="text-gray-400 lg:hidden" />
+                      <option.icon size={14} className="text-gray-400 hidden lg:block" />
+                      {option.label}
                     </button>
                   ))}
                 </div>
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="p-3 text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors border-l border-gray-200"
-                  title={isExpanded ? "Collapse (60/40)" : "Expand (40/60)"}
-                >
-                  {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-              </nav>
-
-              <div className="p-6 min-h-[400px]">
-                {/* Note: Update these placeholder components with your actual Deal-related components if they differ from contacts */}
-                {activeTabRight === "Notes" && (
-                  <NoteSection
-                    dealId={dealId}
-                    companyId={deal?.company?._id || deal?.company}
-                  />
-                )}
-                {activeTabRight === "Tasks" && <p className="text-gray-500 text-center py-10">Tasks integration coming soon...</p>}
-                {activeTabRight === "Meetings" && <p className="text-gray-500 text-center py-10">Meetings integration coming soon...</p>}
-                {activeTabRight === "Calendar" && <p className="text-gray-500 text-center py-10">Calendar integration coming soon...</p>}
-              </div>
+              )}
             </div>
+
+            <button
+              title="Edit"
+              onClick={handleEdit}
+              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+            >
+              <Edit2 size={13} />
+              Edit
+            </button>
           </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
+        {/* Tab Row: pill tab selector */}
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <div
+            ref={tabTrackRef}
+            className="relative inline-flex items-center gap-1.5 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto overflow-y-hidden no-scrollbar"
+          >
+            <span
+              className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+              style={{ left: tabIndicator.left, width: tabIndicator.width }}
+            />
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                ref={(el) => (tabRefs.current[tab] = el)}
+                onClick={() => setActiveTab(tab)}
+                className={`relative z-10 flex flex-shrink-0 items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab
+                  ? "text-[#0085FF]"
+                  : "text-gray-700 hover:text-gray-900"
+                  }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-b border-gray-200 mb-4 -mx-6"></div>
+
+        {/* Summary Stats Row — on Details, mirroring the company page's
+            Overview-only KPI strip. */}
+        {showStats && activeTab === "Details" && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+            {statsLoading || invoicesLoading
+              ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
+              : statTiles.map((tile) => <StatTile key={tile.label} tile={tile} />)}
+          </div>
+        )}
+
+        {/* Tab Content */}
+        <div className="min-h-[400px]">
+          {activeTab === "Details" && (
+            <BasicDetails
+              deal={deal}
+              dealFieldList={dealFieldList}
+              onDealUpdate={(updated) => (updated ? setDeal(updated) : fetchData())}
+            />
+          )}
+          {activeTab === "Invoices" && (
+            <CompanyInvoicesTab
+              invoices={invoices}
+              summary={invoiceSummary}
+              loading={invoicesLoading}
+              showStats={showStats}
+              deals={[deal]}
+              refreshInvoices={fetchInvoices}
+            />
+          )}
+          {activeTab === "Notes" && (
+            <CompanyNotesTab
+              dealId={dealId}
+              companyId={companyId}
+              showStats={showStats}
+            />
+          )}
+          {activeTab === "Tasks" && (
+            <CompanyTasksTab
+              dealId={dealId}
+              companyId={companyId}
+              tasks={tasks}
+              setTasks={setTasks}
+              showStats={showStats}
+              isLoading={statsLoading}
+            />
+          )}
+          {activeTab === "Meetings" && (
+            <CompanyMeetingsTab
+              dealId={dealId}
+              dealName={deal.title}
+              companyId={companyId}
+              companyName={deal.company?.name}
+              meetings={meetings}
+              setMeetings={setMeetings}
+              showStats={showStats}
+              isLoading={statsLoading}
+            />
+          )}
+          {activeTab === "Calendar" && (
+            <CompanyCalendar dealId={dealId} companyId={companyId} />
+          )}
         </div>
       </div>
 
-      <InvoiceViewer
-        isOpen={showViewer}
-        onClose={() => { setShowViewer(false); setSelectedInvoice(null); }}
-        invoice={selectedInvoice}
-        onDownload={downloadPDF}
-        onSend={handleSend}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete deal"
+        message={`Are you sure you want to delete "${deal.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteDeal}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      <AppToaster />
     </div>
   );
 }

@@ -2643,9 +2643,12 @@ function Deals() {
         </div>
       )}
 
+      {/* No space-y on this wrapper: every child bar the table block is a
+          modal or a fixed drawer, so the only thing it ever did was push the
+          table 32px further below the KPI strip. */}
       <div
-        className={`-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 space-y-8 ${showStats
-            ? showKanban ? "mt-[302px] lg:mt-[184px]" : "mt-[286px] lg:mt-[168px]"
+        className={`-mx-4 sm:-mx-6 lg:-mx-8 px-6 pb-6 ${showStats
+            ? showKanban ? "mt-[286px] lg:mt-[168px]" : "mt-[270px] lg:mt-[152px]"
             : showKanban ? "mt-16" : "mt-12"
           }`}
       >

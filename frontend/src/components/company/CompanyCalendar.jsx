@@ -205,7 +205,7 @@ const ActivityListPopup = ({
 // Also drives the contact profile's Calendar tab: pass `contactId` (plus that
 // contact's `companyId` so the participant pickers still populate) and the
 // grid, event panels and add-forms all scope to that contact.
-const CompanyCalendar = ({ companyId, contactId }) => {
+const CompanyCalendar = ({ companyId, contactId, dealId }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState("month");
   // Sliding pill indicator for the month/week/day switcher
@@ -267,7 +267,7 @@ const CompanyCalendar = ({ companyId, contactId }) => {
     setIsLoading(true);
     try {
       const meetingsRes = await API.get("/meetings", {
-        params: contactId ? { contactId } : { companyId },
+        params: contactId ? { contactId } : dealId ? { dealId } : { companyId },
       });
       const meetingsWithNames = await Promise.all(
         meetingsRes.data.meetings.map(async (meeting) => {
@@ -294,7 +294,11 @@ const CompanyCalendar = ({ companyId, contactId }) => {
       setMeetings(meetingsByDate);
 
       const tasksRes = await API.get(
-        contactId ? `/tasks/contact/${contactId}` : `/tasks/company/${companyId}`,
+        contactId
+          ? `/tasks/contact/${contactId}`
+          : dealId
+            ? `/tasks/deal/${dealId}`
+            : `/tasks/company/${companyId}`,
       );
       const tasksByDate = {};
       tasksRes.data.forEach((task) => {
@@ -310,17 +314,24 @@ const CompanyCalendar = ({ companyId, contactId }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, contactId]);
+  }, [companyId, contactId, dealId]);
 
   const fetchUsers = useCallback(async () => {
     try {
+      // Client contacts only exist for a company. A deal (or contact) with no
+      // company still needs the staff list for task assignment, and requesting
+      // /contacts/company/undefined just 404s — which surfaced as a pair of
+      // "Failed to fetch users" toasts on such records.
       const [contactsRes, usersRes] = await Promise.all([
-        API.get(`/contacts/company/${companyId}`),
+        companyId
+          ? API.get(`/contacts/company/${companyId}`).catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] }),
         API.get(`/auth/all-user`),
       ]);
-      setUsers(contactsRes.data);
+      setUsers(contactsRes.data || []);
       setTaskUsers(usersRes.data.allUsers);
     } catch (error) {
+      console.error("Failed to fetch users:", error);
       toast.error("Failed to fetch users");
     }
   }, [companyId]);
@@ -542,7 +553,7 @@ const CompanyCalendar = ({ companyId, contactId }) => {
             : { companyId, linkedTo: "company" }),
         });
       } else {
-        await API.post("/tasks", { ...form, companyId, contactId });
+        await API.post("/tasks", { ...form, companyId, contactId, dealId });
       }
       toast.success(`${type} saved`, { id: loadingToast });
       setModalOpen(false);
@@ -983,6 +994,7 @@ const CompanyCalendar = ({ companyId, contactId }) => {
           calendarDate={calendarDate}
           companyId={companyId}
           contactId={contactId}
+          dealId={dealId}
           users={users}
           onSave={(form) => handleSave(form, "meeting")}
           onDelete={
@@ -1002,6 +1014,7 @@ const CompanyCalendar = ({ companyId, contactId }) => {
           taskData={modalMode === "view" ? selectedTask : undefined}
           companyId={companyId}
           contactId={contactId}
+          dealId={dealId}
           calendarDate={calendarDate}
           users={taskUsers}
           onSave={(form) => handleSave(form, "task")}

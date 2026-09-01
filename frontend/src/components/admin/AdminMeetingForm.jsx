@@ -581,6 +581,11 @@ const AdminMeetingForm = ({
   // to one contact, so the pickers give way to a read-only label.
   initialContactId = null,
   contactName = "",
+  // Deal profile's Meetings tab. A meeting is never "linked to" a deal the
+  // way it is to a company or contact - the deal rides on linkedDealId - so
+  // this presets that field and shows the deal as a read-only label.
+  initialDealId = null,
+  dealName = "",
 }) => {
   const [form, setForm] = useState(initialState);
   // Org's MeetingFields definitions — drives the Custom Fields section below.
@@ -758,6 +763,7 @@ const AdminMeetingForm = ({
           linkedTo: initialContactId ? "contact" : "company",
           companyId: initialCompanyId || null,
           contactId: initialContactId || null,
+          linkedDealId: initialDealId || null,
         };
         setForm(initialFormData);
         setCompanyContacts([]);
@@ -777,7 +783,7 @@ const AdminMeetingForm = ({
       setTimeout(() => setShouldRender(false), 300);
       setTimeConflict(null);
     }
-  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate, fetchCompanyContacts, startInEditMode, initialContactId, initialCompanyId]);
+  }, [open, meetingData, mode, calendarDate, fetchMeetingsForDate, fetchCompanyContacts, startInEditMode, initialContactId, initialCompanyId, initialDealId]);
 
   const handleChange = (key, val) => {
     setForm(f => {
@@ -1143,6 +1149,16 @@ const AdminMeetingForm = ({
                   </div>
                 )}
 
+                {initialDealId && dealName && (
+                  <div>
+                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Deal</label>
+                    <div className="w-full flex items-center gap-1.5 px-3 h-8 rounded-full border border-[#1F2937]/10 bg-[#F9F9FB] text-[12px] text-[#1F2937]">
+                      <Building className="w-3.5 h-3.5 flex-shrink-0 opacity-50" />
+                      <span className="truncate">{dealName}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Same, for a contact-scoped meeting. */}
                 {initialContactId && contactName && (
                   <div>
@@ -1158,7 +1174,7 @@ const AdminMeetingForm = ({
                     already scoped to a single company (opened from that
                     company's own Meetings tab), since picking one again
                     would be redundant. */}
-                {!initialCompanyId && !initialContactId && (
+                {!initialCompanyId && !initialContactId && !initialDealId && (
                   <div className="grid grid-cols-2 gap-4">
                     <div ref={linkedToRef}>
                       <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Entity Type</label>
