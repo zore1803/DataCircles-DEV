@@ -40,7 +40,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled }) => (
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full appearance-none border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] font-medium text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full appearance-none border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] font-medium text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {options.map((option) => (
         <option key={option.value} value={option.value}>{option.label}</option>
@@ -68,7 +68,7 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityLabel, displayK
       <button
         type="button"
         onClick={() => onOpenChange(!isOpen)}
-        className="w-full flex items-center justify-between gap-2 px-3 h-8 rounded-full text-[12px] font-medium focus:outline-none transition-all border border-[#1F2937]/10 bg-white cursor-pointer"
+        className="w-full flex items-center justify-between gap-2 px-3 h-[38px] rounded-full text-[13px] font-medium focus:outline-none transition-all border border-[#1F2937]/10 bg-white cursor-pointer"
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`truncate ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}>
@@ -576,8 +576,8 @@ const QuickTaskForm = ({
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Task" : "Add New Task"}
             </h2>
             <button
@@ -597,14 +597,14 @@ const QuickTaskForm = ({
               {/* Content */}
               <div className="px-8 py-6 space-y-6">
                 <div ref={titleInputRef}>
-                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Task Title <span className="text-[#FF4935]">*</span>
                   </label>
                   <input
                     type="text"
                     value={form.title}
                     onChange={(e) => handleFormChange("title", e.target.value)}
-                    className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                    className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                       }`}
                     placeholder="Enter Task Title"
                   />
@@ -614,7 +614,7 @@ const QuickTaskForm = ({
                 </div>
 
                 <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Description
                   </label>
                   <textarea
@@ -628,7 +628,7 @@ const QuickTaskForm = ({
 
                 {/* Related to (entity type) */}
                 <div>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Related To
                   </label>
                   <SingleSelectDropdown
@@ -642,7 +642,7 @@ const QuickTaskForm = ({
 
                 {/* The record itself, with a quick-create shortcut */}
                 <div ref={relatedToRef}>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     {form.relationModel}
                   </label>
                   <div className="flex items-center gap-3">
@@ -661,7 +661,7 @@ const QuickTaskForm = ({
                       type="button"
                       onClick={openQuickCreate}
                       title={`Add New ${form.relationModel}`}
-                      className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                      className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                     >
                       <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                     </button>
@@ -676,14 +676,14 @@ const QuickTaskForm = ({
                 {/* Selected Date + Due Date */}
                 <div className="grid grid-cols-2 gap-3">
                   <div ref={selectedDateRef}>
-                    <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                       Selected Date <span className="text-[#FF4935]">*</span>
                     </label>
                     <input
                       type="date"
                       value={form.selectedDate}
                       onChange={(e) => handleFormChange("selectedDate", e.target.value)}
-                      className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.selectedDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                      className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.selectedDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                         }`}
                     />
                     {validationErrors.selectedDate && (
@@ -692,7 +692,7 @@ const QuickTaskForm = ({
                   </div>
 
                   <div ref={dueDateRef}>
-                    <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                       Due Date <span className="text-[#FF4935]">*</span>
                     </label>
                     <input
@@ -700,7 +700,7 @@ const QuickTaskForm = ({
                       value={form.dueDate}
                       min={form.selectedDate || ""}
                       onChange={(e) => handleFormChange("dueDate", e.target.value)}
-                      className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.dueDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
+                      className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all cursor-pointer ${validationErrors.dueDate ? "border-red-500 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"
                         }`}
                     />
                     {validationErrors.dueDate && (
@@ -712,7 +712,7 @@ const QuickTaskForm = ({
                 {/* Status + Priority */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                       Status
                     </label>
                     <SingleSelectDropdown
@@ -726,7 +726,7 @@ const QuickTaskForm = ({
                   </div>
 
                   <div>
-                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                       Priority
                     </label>
                     <SingleSelectDropdown
@@ -742,7 +742,7 @@ const QuickTaskForm = ({
 
                 {/* Assignees */}
                 <div ref={usersRef}>
-                  <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     Assignees
                   </label>
 
@@ -764,7 +764,7 @@ const QuickTaskForm = ({
                     <button
                       type="button"
                       onClick={() => setShowUserSelector(!showUserSelector)}
-                      className={`w-full flex items-center justify-between px-3 h-8 rounded-full text-[12px] focus:outline-none transition-all border bg-white ${validationErrors.users ? "border-red-300" : "border-[#1F2937]/10"
+                      className={`w-full flex items-center justify-between px-3 h-[38px] rounded-full text-[13px] focus:outline-none transition-all border bg-white ${validationErrors.users ? "border-red-300" : "border-[#1F2937]/10"
                         }`}
                     >
                       <span className="text-[#1F2937] opacity-50">

@@ -572,8 +572,8 @@ const ItemForm = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header — matches the CompanyForm/CompanyTaskForm quick-drawer header spec */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {form._id ? "Edit Item" : "Create New Item"}
           </h2>
           <button

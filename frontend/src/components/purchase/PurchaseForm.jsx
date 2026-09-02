@@ -469,7 +469,7 @@ const PurchaseForm = ({
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {editingPurchase ? "EDIT PURCHASE" : "CREATE NEW PURCHASE"}
           </h2>
           <div className="flex items-center gap-4">
@@ -500,7 +500,7 @@ const PurchaseForm = ({
           {/* Vendor & PO Link */}
           <div className="space-y-4">
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Select Vendor <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-2">
@@ -528,7 +528,7 @@ const PurchaseForm = ({
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Link to Purchase Order (Optional)
               </label>
               <div className="relative">
@@ -707,7 +707,7 @@ const PurchaseForm = ({
 
           {/* Notes */}
           <div>
-            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+            <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Additional Notes <span className="text-red-500">*</span>
             </label>
             <textarea
@@ -721,7 +721,7 @@ const PurchaseForm = ({
           {/* Status, Transaction Type, GST Rate */}
           <div className="space-y-4">
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Status
               </label>
               <div className="relative">
@@ -751,7 +751,7 @@ const PurchaseForm = ({
 
             <div className="grid grid-cols-1 gap-3">
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Transaction Type
                 </label>
                 <div className="relative">

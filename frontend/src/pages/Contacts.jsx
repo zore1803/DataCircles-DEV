@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -155,6 +155,13 @@ const HighlightText = ({ text, query }) => {
   );
 };
 
+const CONTACT_TABS = [
+  { id: "All", label: "All Contacts" },
+  { id: "Leads", label: "Leads" },
+  { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
+  { id: "Customers", label: "Customers" },
+];
+
 function Contacts() {
   const isSearchOverlayOpen = useSearchOverlayOpen();
   const [contacts, setContacts] = useState([]);
@@ -233,6 +240,14 @@ function Contacts() {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+
+  // Sliding pill for the lifecycle tabs: the white "thumb" is one element that
+  // animates to the active tab's box, instead of the highlight blinking from
+  // one button to the next.
+  const tabRefs = useRef({});
+  const tabNavRef = useRef(null);
+  const [tabThumb, setTabThumb] = useState({ left: 0, width: 0, ready: false });
+
   const searchInputRef = useRef(null);
 
   useEffect(() => {
@@ -493,6 +508,27 @@ function Contacts() {
     setSortConfig,
     setCurrentContactIds,
   } = useContactStore();
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const nav = tabNavRef.current;
+      const btn = tabRefs.current[activeTab];
+      if (!nav || !btn) return;
+      setTabThumb({
+        left: btn.offsetLeft - nav.scrollLeft,
+        width: btn.offsetWidth,
+        ready: true,
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const nav = tabNavRef.current;
+    nav?.addEventListener("scroll", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      nav?.removeEventListener("scroll", measure);
+    };
+  }, [activeTab]);
 
   const fetchFolders = async () => {
     try {
@@ -2354,21 +2390,29 @@ function Contacts() {
               </p>
             </div>
 
-            <nav className="hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar flex-shrink-0">
-              {[
-                { id: "All", label: "All Contacts" },
-                { id: "Leads", label: "Leads" },
-                { id: "Sales Qualified Lead", label: "Sales Qualified Lead" },
-                { id: "Customers", label: "Customers" },
-              ].map(({ id, label }) => {
+            <nav
+              ref={tabNavRef}
+              className="relative hidden lg:inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full overflow-x-auto no-scrollbar flex-shrink-0"
+            >
+              <span
+                aria-hidden="true"
+                className="absolute top-1 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+                style={{
+                  left: tabThumb.left,
+                  width: tabThumb.width,
+                  opacity: tabThumb.ready ? 1 : 0,
+                }}
+              />
+              {CONTACT_TABS.map(({ id, label }) => {
                 const isActive = activeTab === id;
                 return (
                   <button
                     key={id}
+                    ref={(el) => {
+                      tabRefs.current[id] = el;
+                    }}
                     onClick={() => handleTabChange(id)}
-                    className={`flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                      isActive ? "bg-white shadow-sm" : "text-gray-700 hover:text-gray-900"
-                    }`}
+                    className="relative z-[1] flex items-center justify-center h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors text-gray-700 hover:text-gray-900"
                     style={isActive ? { color: "var(--btn-primary)" } : undefined}
                   >
                     {label}

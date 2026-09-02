@@ -190,8 +190,8 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         className={`fixed dc-panel-card dc-panel-w bg-white shadow-2xl flex flex-col z-[100001] overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">Add Vendor Payment</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">Add Vendor Payment</h2>
           <button
             type="button"
             onClick={handleClose}
@@ -206,7 +206,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
           <form id="payment-form" onSubmit={handleSubmit} noValidate className="space-y-6">
             <div ref={vendorInputRef}>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Vendor <span className="text-red-500">*</span></label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Vendor <span className="text-red-500">*</span></label>
               <div className="relative">
                 <input
                   type="text"
@@ -217,7 +217,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                     if (validationErrors.vendor) setValidationErrors((p) => ({ ...p, vendor: undefined }));
                   }}
                   placeholder="Search or enter new vendor name"
-                  className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${validationErrors.vendor ? "border-red-500" : "border-[#1F2937]/10"}`}
+                  className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${validationErrors.vendor ? "border-red-500" : "border-[#1F2937]/10"}`}
                 />
                 {validationErrors.vendor && (
                   <p className="mt-1 text-xs text-red-600">{validationErrors.vendor}</p>
@@ -243,7 +243,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div ref={amountInputRef}>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Amount <span className="text-red-500">*</span></label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Amount <span className="text-red-500">*</span></label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1F2937] opacity-50 text-[12px]">₹</span>
                 <input
@@ -255,7 +255,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                     setFormData(p => ({ ...p, amount: e.target.value }));
                     if (validationErrors.amount) setValidationErrors((p) => ({ ...p, amount: undefined }));
                   }}
-                  className={`w-full border rounded-full pl-7 pr-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${validationErrors.amount ? "border-red-500" : "border-[#1F2937]/10"}`}
+                  className={`w-full border rounded-full pl-7 pr-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${validationErrors.amount ? "border-red-500" : "border-[#1F2937]/10"}`}
                 />
               </div>
               {validationErrors.amount && (
@@ -264,7 +264,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div ref={paymentDateInputRef}>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Payment Date <span className="text-red-500">*</span></label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Payment Date <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 value={formData.paymentDate}
@@ -272,7 +272,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                   setFormData(p => ({ ...p, paymentDate: e.target.value }));
                   if (validationErrors.paymentDate) setValidationErrors((p) => ({ ...p, paymentDate: undefined }));
                 }}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${validationErrors.paymentDate ? "border-red-500" : "border-[#1F2937]/10"}`}
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${validationErrors.paymentDate ? "border-red-500" : "border-[#1F2937]/10"}`}
               />
               {validationErrors.paymentDate && (
                 <p className="mt-1 text-xs text-red-600">{validationErrors.paymentDate}</p>
@@ -280,11 +280,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Direction <span className="text-red-500">*</span></label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Direction <span className="text-red-500">*</span></label>
               <select
                 value={formData.direction}
                 onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
               >
                 <option value="OUT">Debit (Out)</option>
                 <option value="IN">Credit (In)</option>
@@ -292,11 +292,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Type <span className="text-red-500">*</span></label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Type <span className="text-red-500">*</span></label>
               <select
                 value={formData.paymentType}
                 onChange={e => setFormData(p => ({ ...p, paymentType: e.target.value }))}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
               >
                 <option value="UPI">UPI</option>
                 <option value="Net Banking">Net Banking</option>
@@ -308,12 +308,12 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Select Bank Account</label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Select Bank Account</label>
               <div className="relative w-full">
                 <button
                   type="button"
                   onClick={() => setBankDropdownOpen(!bankDropdownOpen)}
-                  className="w-full flex items-center justify-between border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white"
+                  className="w-full flex items-center justify-between border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white"
                 >
                   {selectedBankObj ? (
                     <div className="flex items-center gap-2 min-w-0">
@@ -358,7 +358,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Notes</label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Notes</label>
               <div className="flex items-center gap-0.5 border border-[#1F2937]/10 border-b-0 rounded-t-2xl bg-gray-50 px-1.5 py-1">
                 {notesToolbarButtons.map(({ icon, title, onClick }) => (
                   <button

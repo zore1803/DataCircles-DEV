@@ -270,8 +270,8 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
   };
 
   const fieldClass =
-    "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400";
-  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
+    "w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400";
+  const labelClass = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
   const accentText = isIn ? "text-green-600" : "text-red-600";
   const accentBtn = isIn ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700";
 
@@ -288,7 +288,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
           <div className="min-w-0">
             <h2 className={`text-[14px] font-semibold leading-5 uppercase tracking-wide truncate ${accentText}`}>
               {isIn ? "You Received" : "You Gave"}
@@ -517,7 +517,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                         onChange={(e) => setCustomerPhone(e.target.value)}
                         placeholder="Customer mobile number (10 digits)"
                         maxLength={10}
-                        className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-green-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                        className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-green-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                       />
                     </div>
                   )}

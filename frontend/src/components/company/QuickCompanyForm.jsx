@@ -217,7 +217,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             step="any"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -230,7 +230,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             onChange={(newValue) => handleFieldChange(newValue)}
             placeholder={`Select ${fieldDef.name}`}
             required={fieldDef.required}
-            buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+            buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
           />
         );
 
@@ -251,7 +251,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             type="date"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -262,7 +262,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             type="url"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter placeholder:text-[#1F2937] placeholder:opacity-50"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter placeholder:text-[#1F2937] placeholder:opacity-50"
             required={fieldDef.required}
             placeholder="https://example.com"
           />
@@ -316,7 +316,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             type="text"
             value={value || ""}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
+            className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-inter"
             required={fieldDef.required}
           />
         );
@@ -547,11 +547,11 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   // Shared 6-field address grid, reused by billing and each shipping address.
   const renderAddressGrid = (address, onFieldChange, disabled, showError) => {
     const inputCls = (missing) =>
-      `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 ${
+      `w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 ${
         showError && missing ? "border-red-500" : "border-[#1F2937]/10"
       }`;
     const ddCls = (val, missing) =>
-      `w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"} ${
+      `w-full border rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${val ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"} ${
         showError && missing ? "border-red-500" : "border-[#1F2937]/10"
       }`;
     return (
@@ -685,8 +685,8 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       >
         <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the CompanyForm header spec */}
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Company" : "Create New Company"}
             </h2>
             <button
@@ -703,7 +703,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
+              <label className="block text-[13px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
                 Company Logo
               </label>
               <div className="flex items-center gap-3">
@@ -712,7 +712,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     otherwise the "Choose a file" placeholder. */}
                 <div
                   onClick={() => profilePictureInputRef.current?.click()}
-                  className="flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10 cursor-pointer"
+                  className="flex-1 flex items-center px-3 h-[38px] rounded-full border border-[#1F2937]/10 cursor-pointer"
                 >
                   <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
                     {form.profilePicture?.name ||
@@ -726,7 +726,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   type="button"
                   onClick={() => profilePictureInputRef.current?.click()}
                   title="Upload company logo"
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                 >
                   <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
@@ -740,7 +740,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   className="hidden"
                 />
               </div>
-              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
+              <p className="text-[13px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
               {/* Preview of the selected/current logo, since the pill field
                   above only shows a filename, not the image itself. The X
                   clears whichever picture is showing — a freshly picked file,
@@ -773,7 +773,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             </div>
 
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Company Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
@@ -784,7 +784,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   handleFormChange("name", e.target.value);
                   if (nameError) setNameError(false);
                 }}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
                   nameError ? "border-red-500" : "border-[#1F2937]/10"
                 }`}
                 placeholder="Enter Company Name"
@@ -795,7 +795,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Industry
               </label>
               <CustomDropdown
@@ -804,7 +804,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 onChange={(value) => handleFormChange("industry", value)}
                 placeholder="Select Industry"
                 searchable
-                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.industry ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter ${form.industry ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
             </div>
 
@@ -812,7 +812,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 company's own details rather than under Social Media Links
                 (which holds profile URLs). */}
             <div>
-              <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-2 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
                   <FaWhatsapp className="w-[18px] h-[18px]" />
                 </span>
@@ -827,7 +827,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                       countryCode: e.target.value,
                     })
                   }
-                  className="border border-[#1F2937]/10 rounded-full px-2 h-8 text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
+                  className="border border-[#1F2937]/10 rounded-full px-2 h-[38px] text-[13px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
                 >
                   {COUNTRY_DIAL_CODES.map((c) => (
                     <option key={`${c.iso}-${c.code}`} value={c.code}>
@@ -845,28 +845,28 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                       number: e.target.value.replace(/[^0-9]/g, ""),
                     })
                   }
-                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                   placeholder="1234567890"
                 />
               </div>
             </div>
 
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 GSTIN
               </label>
               <input
                 type="text"
                 value={form.gstin}
                 onChange={(e) => handleFormChange("gstin", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 placeholder="eg., 22ABCDE1234F1Z5"
               />
             </div>
 
             {/* Billing Address (single — GST is calculated from its state) */}
             <div ref={billingAddressRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Billing Address <span className="text-[#FF4935]">*</span>
               </label>
               {renderAddressGrid(
@@ -881,7 +881,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             {form.shippingAddresses.map((ship, index) => (
               <div key={index} ref={(el) => (shippingAddressRefs.current[index] = el)}>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em]">
+                  <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em]">
                     Shipping Address{form.shippingAddresses.length > 1 ? ` ${index + 1}` : ""}{" "}
                     <span className="text-[#FF4935]">*</span>
                   </label>
@@ -936,7 +936,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                 </div>
                 {fieldDefinitions.map((fieldDef) => (
                   <div key={fieldDef.name}>
-                    <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                       {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                     </label>
                     {renderFieldInput(
@@ -949,7 +949,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
             )}
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Website
               </label>
               {/* "https://" is a fixed prefix, not part of the typed value — only
@@ -957,7 +957,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   existing website (from editing a company) that already has a
                   protocol keeps it stripped here for display and re-added on
                   change; one saved without a protocol is treated the same way. */}
-              <div className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 flex items-center gap-0.5 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+              <div className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] flex items-center gap-0.5 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
                 <span className="text-[12px] text-[#1F2937] opacity-50 flex-shrink-0">
                   https://
                 </span>
@@ -979,7 +979,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
 
             {/* Email Address */}
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Email Address
               </label>
               <input
@@ -990,7 +990,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   handleFormChange("email", e.target.value);
                   if (emailError) setEmailError("");
                 }}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
                   emailError ? "border-red-500" : "border-[#1F2937]/10"
                 }`}
                 placeholder="contact@company.com"
@@ -1012,7 +1012,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="flex items-center gap-2 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
                       <Twitter className="w-[18px] h-[18px]" strokeWidth={2} />
                     </span>
@@ -1022,12 +1022,12 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     type="url"
                     value={form.socialMedia.twitter}
                     onChange={(e) => handleSocialMediaChange("twitter", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                     placeholder="https://x.com/vendorname"
                   />
                 </div>
                 <div>
-                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="flex items-center gap-2 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
                       <Linkedin className="w-[18px] h-[18px]" strokeWidth={2} />
                     </span>
@@ -1037,12 +1037,12 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     type="url"
                     value={form.socialMedia.linkedin}
                     onChange={(e) => handleSocialMediaChange("linkedin", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                     placeholder="https://linkedin.com/vendorname"
                   />
                 </div>
                 <div>
-                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="flex items-center gap-2 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
                       <Instagram className="w-[18px] h-[18px]" strokeWidth={2} />
                     </span>
@@ -1052,12 +1052,12 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     type="url"
                     value={form.socialMedia.instagram}
                     onChange={(e) => handleSocialMediaChange("instagram", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                     placeholder="https://instagram.com/vendorname"
                   />
                 </div>
                 <div>
-                  <label className="flex items-center gap-2 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  <label className="flex items-center gap-2 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                     <span className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center">
                       <Facebook className="w-[18px] h-[18px]" strokeWidth={2} />
                     </span>
@@ -1067,7 +1067,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     type="url"
                     value={form.socialMedia.facebook}
                     onChange={(e) => handleSocialMediaChange("facebook", e.target.value)}
-                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                    className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                     placeholder="https://facebook.com/vendorname"
                   />
                 </div>

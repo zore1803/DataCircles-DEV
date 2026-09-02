@@ -476,7 +476,7 @@ const PurchaseOrderForm = ({
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {editingPO ? "EDIT PURCHASE ORDER" : "CREATE NEW PURCHASE ORDER"}
           </h2>
           <div className="flex items-center gap-4">
@@ -506,7 +506,7 @@ const PurchaseOrderForm = ({
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
           {/* Vendor Section */}
           <div>
-            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+            <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Select Vendor <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
@@ -693,7 +693,7 @@ const PurchaseOrderForm = ({
           {/* Terms and Notes */}
           <div className="space-y-6">
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Payment Terms <span className="text-red-500">*</span>
               </label>
               <input
@@ -705,7 +705,7 @@ const PurchaseOrderForm = ({
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Notes
               </label>
               <div className="border border-[#1F2937]/10 rounded-xl bg-white">
@@ -722,7 +722,7 @@ const PurchaseOrderForm = ({
 
           {/* Status */}
           <div>
-            <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+            <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Status
             </label>
             <SingleSelectDropdown

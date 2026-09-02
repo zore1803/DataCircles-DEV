@@ -61,10 +61,10 @@ const SearchableDropdown = ({
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full border transition-all font-inter flex items-center justify-between ${compact ? "rounded-full px-3 h-8" : "rounded-[25px] px-4 h-12"} ${getBorderColor()} ${disabled ? "bg-gray-50 cursor-not-allowed opacity-70" : "bg-white cursor-pointer"}`}
+        className={`w-full border transition-all font-inter flex items-center justify-between ${compact ? "rounded-full px-3 h-[38px]" : "rounded-[25px] px-4 h-12"} ${getBorderColor()} ${disabled ? "bg-gray-50 cursor-not-allowed opacity-70" : "bg-white cursor-pointer"}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
-        <span className={`truncate ${compact ? "text-[12px]" : "text-[14px]"} ${selectedOption ? (compact ? "text-[#1F2937]" : "text-gray-900 font-medium") : (compact ? "text-[#1F2937] opacity-50" : "text-[#A0A0A0]")}`}>
+        <span className={`truncate ${compact ? "text-[13px]" : "text-[14px]"} ${selectedOption ? (compact ? "text-[#1F2937]" : "text-gray-900 font-medium") : (compact ? "text-[#1F2937] opacity-50" : "text-[#A0A0A0]")}`}>
           {selectedOption ? selectedOption[displayKey] : placeholder}
         </span>
         <div className="flex items-center gap-2">

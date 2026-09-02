@@ -244,8 +244,8 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
   };
 
   const fieldClass =
-    "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
-  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
+    "w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
+  const labelClass = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
 
   return (
     <>
@@ -258,8 +258,8 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
         className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {isEditing ? `Edit Return ${editingReturn.returnNumber}` : "New Sales Return"}
           </h2>
           <button
@@ -306,7 +306,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
           </div>
 
           <div>
-            <label className="text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2 block">
+            <label className="text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2 block">
               Items {invoiceNumber && <span className="text-gray-400 font-normal">— {invoiceNumber}</span>}
             </label>
 

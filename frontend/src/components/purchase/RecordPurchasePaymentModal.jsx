@@ -151,8 +151,8 @@ const RecordPurchasePaymentModal = ({ isOpen, onClose, purchase, onSuccess }) =>
   };
 
   const fieldClass =
-    "w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400";
-  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
+    "w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400";
+  const labelClass = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
 
   return (
     <>
@@ -169,9 +169,9 @@ const RecordPurchasePaymentModal = ({ isOpen, onClose, purchase, onSuccess }) =>
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
           <div className="min-w-0">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide truncate">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide truncate">
               Record Payment
             </h2>
             <p className="text-[11px] text-gray-400 truncate">

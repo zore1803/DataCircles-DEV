@@ -313,7 +313,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
   // themselves were still the older h-11/rounded-lg style).
   const fieldClass =
     "w-full h-8 px-3 border border-[#1F2937]/10 rounded-full text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50";
-  const labelClass = "block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
+  const labelClass = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
   const helpClass = "mt-1.5 text-xs text-gray-500 leading-relaxed";
 
   return (
@@ -334,8 +334,8 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
             the primary action both moved out of here (name into the body,
             action into the footer) so this container matches every other
             quick-drawer instead of carrying its own bespoke chrome. */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {isIn ? "Stock In" : "Stock Out"}
           </h2>
           <button

@@ -323,7 +323,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               <button onClick={handleClose} title="Close" className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity" aria-label="Close">
                 <X className="w-[18px] h-[18px]" strokeWidth={2} />
               </button>
-              <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">Add Item</h2>
+              <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">Add Item</h2>
             </div>
             <button
               onClick={handleSave}

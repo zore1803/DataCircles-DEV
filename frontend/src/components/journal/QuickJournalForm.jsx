@@ -135,7 +135,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
       >
         <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the QuickCompanyForm header spec */}
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <h2 className="text-base font-normal leading-5 text-[#78788D] uppercase tracking-wide">
               {editJournal ? "Edit Journal" : "Create New Journal"}
             </h2>
@@ -161,7 +161,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                 type="text"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
+                className={`w-full border rounded-full px-3 h-[38px] text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${
                   nameError ? "border-red-500" : "border-[#1F2937]/10"
                 }`}
                 placeholder="e.g. Petty Cash Journal"
@@ -179,7 +179,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                 type="date"
                 value={form.date}
                 onChange={(e) => handleFormChange("date", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -193,7 +193,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                 onChange={(value) => handleFormChange("category", value)}
                 placeholder="Select Category"
                 searchable
-                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-left flex items-center justify-between transition-all bg-white font-inter ${form.category ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+                buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-sm text-left flex items-center justify-between transition-all bg-white font-inter ${form.category ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
             </div>
 
@@ -226,7 +226,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                   min="0"
                   value={form.openingBalance}
                   onChange={(e) => handleFormChange("openingBalance", e.target.value)}
-                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-8 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                  className="flex-1 min-w-0 border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                   placeholder="0.00"
                 />
               </div>
@@ -252,7 +252,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
               <div className="flex items-center gap-3">
                 <div
                   onClick={() => attachments.length < MAX_FILES && fileInputRef.current?.click()}
-                  className={`flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10 ${
+                  className={`flex-1 flex items-center px-3 h-[38px] rounded-full border border-[#1F2937]/10 ${
                     attachments.length >= MAX_FILES ? "cursor-not-allowed opacity-50" : "cursor-pointer"
                   }`}
                 >
@@ -267,7 +267,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
                   onClick={() => fileInputRef.current?.click()}
                   disabled={attachments.length >= MAX_FILES}
                   title="Attach files"
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>

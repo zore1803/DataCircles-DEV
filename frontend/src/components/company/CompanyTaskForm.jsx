@@ -68,7 +68,7 @@ const SearchableEntityDropdown = ({ options, value, onChange, displayKey, placeh
         type="button"
         disabled={disabled}
         onClick={toggle}
-        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
       >
         <span className="truncate">{selected ? selected[displayKey] : placeholder}</span>
         {!disabled && <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />}
@@ -169,7 +169,7 @@ const SingleSelectDropdown = ({ options, value, onChange, disabled, onOpenChange
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen((v) => !v)}
-        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937] disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937] disabled:bg-gray-50 disabled:text-gray-400 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
       >
         <div className="flex items-center gap-1.5">
           {selectedOption.icon && <selectedOption.icon className="w-3.5 h-3.5" />}
@@ -569,8 +569,8 @@ const CompanyTaskForm = ({
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the CompanyForm header spec */}
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
               {mode === "view" ? "Edit Task" : "Add New Task"}
             </h2>
             <button
@@ -594,14 +594,14 @@ const CompanyTaskForm = ({
             }`}
           >
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Task Title <span className="text-[#FF4935]">*</span>
               </label>
               <input
                 type="text"
                 value={form.title}
                 onChange={(e) => handleChange("title", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 disabled:bg-gray-50 disabled:text-gray-400"
                 placeholder="Enter Task Title"
                 disabled={!isEditMode && mode === "view"}
               />
@@ -609,7 +609,7 @@ const CompanyTaskForm = ({
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Description
               </label>
               <textarea
@@ -623,10 +623,10 @@ const CompanyTaskForm = ({
             </div>
 
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Related to
               </label>
-              <div className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 flex items-center gap-2 bg-gray-50 text-[12px] text-[#1F2937]">
+              <div className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] flex items-center gap-2 bg-gray-50 text-[12px] text-[#1F2937]">
                 <Building className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                 <span className="truncate">{company?.name || "Company Name"}</span>
               </div>
@@ -634,7 +634,7 @@ const CompanyTaskForm = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Contact
                 </label>
                 <SearchableEntityDropdown
@@ -649,7 +649,7 @@ const CompanyTaskForm = ({
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Deal
                 </label>
                 <SearchableEntityDropdown
@@ -666,7 +666,7 @@ const CompanyTaskForm = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Selected Date
                 </label>
                 <input
@@ -674,12 +674,12 @@ const CompanyTaskForm = ({
                   value={form.selectedDate || calendarDate || ""}
                   onChange={(e) => handleChange("selectedDate", e.target.value)}
                   disabled={!isEditMode && mode === "view"}
-                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
                 />
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Due Date
                 </label>
                 <input
@@ -688,7 +688,7 @@ const CompanyTaskForm = ({
                   min={form.selectedDate || calendarDate || ""}
                   onChange={(e) => handleChange("dueDate", e.target.value)}
                   disabled={!isEditMode && mode === "view"}
-                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
                 />
                 {errors.dueDate && <p className="text-[12px] text-[#FF4935] font-medium mt-1.5">{errors.dueDate}</p>}
               </div>
@@ -696,7 +696,7 @@ const CompanyTaskForm = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="flex items-center gap-1.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   <Timer className="w-3.5 h-3.5" />
                   Status
                 </label>
@@ -710,7 +710,7 @@ const CompanyTaskForm = ({
               </div>
 
               <div>
-                <label className="flex items-center gap-1.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="flex items-center gap-1.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   <Flag className="w-3.5 h-3.5" />
                   Priority
                 </label>
@@ -725,7 +725,7 @@ const CompanyTaskForm = ({
             </div>
 
             <div ref={assigneesFieldRef}>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Assignees
               </label>
               <div className="space-y-2 relative">
@@ -743,7 +743,7 @@ const CompanyTaskForm = ({
                   <button
                     type="button"
                     onClick={() => setShowUserSelector(!showUserSelector)}
-                    className="w-full flex items-center justify-between border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] bg-white hover:bg-gray-50 transition-colors focus:outline-none"
+                    className="w-full flex items-center justify-between border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] bg-white hover:bg-gray-50 transition-colors focus:outline-none"
                   >
                     <span className="text-[#1F2937] opacity-50">
                       {form.users?.length ? `${form.users.length} selected` : "Select Users"}

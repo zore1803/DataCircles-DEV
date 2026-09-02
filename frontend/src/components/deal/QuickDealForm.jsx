@@ -182,7 +182,7 @@ const QuickDealForm = ({
     };
 
     const hasError = validationErrors[fieldDef.name];
-    const inputClassName = `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
+    const inputClassName = `w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
         ? 'border-red-500 focus:ring-red-500'
         : 'border-[#1F2937]/10 focus:ring-blue-500'
       }`;
@@ -531,8 +531,8 @@ const QuickDealForm = ({
           }`}
       >
         <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Deal" : "Create New Deal"}
             </h2>
             <button
@@ -549,7 +549,7 @@ const QuickDealForm = ({
             <div className="space-y-6">
             {/* Company - NOW REQUIRED */}
             <div ref={companyRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Company <span className="text-[#FF4935]">*</span>
               </label>
               <div className="flex items-center gap-3">
@@ -567,7 +567,7 @@ const QuickDealForm = ({
                 <button
                   type="button"
                   onClick={() => setShowQuickCompanyForm(true)}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
                   title="Add New Company"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
@@ -580,7 +580,7 @@ const QuickDealForm = ({
 
             {/* Title - Now with validation */}
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Deal Name <span className="text-[#FF4935]">*</span>
               </label>
               {/* Generated from the company above, so it's read-only and
@@ -595,7 +595,7 @@ const QuickDealForm = ({
                 readOnly
                 tabIndex={-1}
                 aria-readonly="true"
-                className={`w-full border rounded-full px-3 h-8 text-[12px] bg-[#F5F6F6] text-[#6B7280] cursor-not-allowed focus:outline-none transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-500' : 'border-[#1F2937]/10'
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] bg-[#F5F6F6] text-[#6B7280] cursor-not-allowed focus:outline-none transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.title ? 'border-red-500' : 'border-[#1F2937]/10'
                   }`}
                 placeholder="Select a company to generate the name"
               />
@@ -606,7 +606,7 @@ const QuickDealForm = ({
 
             {/* Amount - Now with validation */}
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Amount <span className="text-[#FF4935]">*</span>
               </label>
               <input
@@ -614,7 +614,7 @@ const QuickDealForm = ({
                 type="number"
                 value={form.amount}
                 onChange={(e) => handleFormChange("amount", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.amount ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.amount ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
                 min={"0"}
                 step="1"
@@ -627,7 +627,7 @@ const QuickDealForm = ({
 
             {/* Status */}
             <div ref={statusRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Status <span className="text-[#FF4935]">*</span>
               </label>
               <div className="flex items-center gap-3">
@@ -644,7 +644,7 @@ const QuickDealForm = ({
                 />
                 <button
                   type="button"
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
@@ -656,7 +656,7 @@ const QuickDealForm = ({
 
             {/* Contact - NOW REQUIRED */}
             <div ref={contactRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Contact <span className="text-[#FF4935]">*</span>
               </label>
               <div className="flex items-center gap-3">
@@ -674,7 +674,7 @@ const QuickDealForm = ({
                 <button
                   type="button"
                   onClick={() => setShowQuickContactForm(true)}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
                   title="Add New Contact"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
@@ -698,7 +698,7 @@ const QuickDealForm = ({
                 <div className="space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
                     <div key={fieldDef.name}>
-                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                         {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                       </label>
                       {renderFieldInput(

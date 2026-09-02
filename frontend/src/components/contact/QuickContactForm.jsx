@@ -214,7 +214,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
     };
 
     const hasError = validationErrors[`additional_${fieldDef.name}`];
-    const inputClassName = `w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
+    const inputClassName = `w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${hasError
       ? 'border-red-500 focus:ring-red-500'
       : 'border-[#1F2937]/10 focus:ring-blue-500'
       }`;
@@ -240,7 +240,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
             onChange={(newValue) => handleFieldChange(newValue)}
             placeholder={`Select ${fieldDef.name}`}
             required={fieldDef.required}
-            buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+            buttonClassName={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter ${value ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
           />
         );
 
@@ -519,8 +519,8 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
         `}
       >
         <form onSubmit={handleSubmit} noValidate className="flex flex-col h-full overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
               {isEditing ? "Edit Contact" : "Create New Contact"}
             </h2>
             <button
@@ -537,11 +537,11 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
           <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
             {/* Profile Picture */}
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
+              <label className="block text-[13px] font-medium text-[#161618] mb-2 tracking-[-0.05em]">
                 Profile Picture
               </label>
               <div className="flex items-center gap-3">
-                <div className="flex-1 flex items-center px-3 h-8 rounded-full border border-[#1F2937]/10">
+                <div className="flex-1 flex items-center px-3 h-[38px] rounded-full border border-[#1F2937]/10">
                   <span className="text-[12px] leading-5 text-[#1F2937] opacity-50 truncate">
                     {profilePicture ? profilePicture.name : "Choose a file"}
                   </span>
@@ -550,7 +550,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                   type="button"
                   onClick={() => profilePictureInputRef.current?.click()}
                   title="Upload profile picture"
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                 >
                   <Paperclip className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                 </button>
@@ -562,7 +562,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                   className="hidden"
                 />
               </div>
-              <p className="text-[12px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
+              <p className="text-[13px] font-inter text-[#A0A0A0] mt-1.5 uppercase font-medium">PNG, JPEG upto 5MB</p>
               {profilePicturePreview && (
                 <div className="relative mt-2 inline-block">
                   <img
@@ -590,7 +590,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
 
             {/* Name - Now with validation */}
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Full Name <span className="text-[#FF4935]">*</span>
               </label>
               <input
@@ -599,7 +599,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 placeholder="Enter Full Name"
                 value={form.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.name
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.name
                   ? 'border-red-500 focus:ring-red-500'
                   : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
@@ -611,7 +611,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
 
             {/* Email - Now with validation */}
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Email <span className="text-[#FF4935]">*</span>
               </label>
               <input
@@ -620,7 +620,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 placeholder="example@gmail.com"
                 value={form.email}
                 onChange={(e) => handleFormChange("email", e.target.value)}
-                className={`w-full border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.email
+                className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.email
                   ? 'border-red-500 focus:ring-red-500'
                   : 'border-[#1F2937]/10 focus:ring-blue-500'
                   }`}
@@ -632,7 +632,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
 
             {/* Phone */}
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Phone <span className="text-[#FF4935]">*</span>
               </label>
               {/* Wrapper carries phoneInputRef: the scroll-to-first-error
@@ -643,8 +643,8 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 value={form.phone}
                 onChange={(next) => handleFormChange("phone", next)}
                 placeholder="123456789"
-                selectClassName="border border-[#1F2937]/10 rounded-full px-2 h-8 text-[12px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
-                inputClassName={`flex-1 min-w-0 border rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.phone
+                selectClassName="border border-[#1F2937]/10 rounded-full px-2 h-[38px] text-[13px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0"
+                inputClassName={`flex-1 min-w-0 border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter ${validationErrors.phone
                   ? "border-red-500 focus:ring-red-500"
                   : "border-[#1F2937]/10 focus:ring-blue-500"
                   }`}
@@ -657,7 +657,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
 
             {/* Company - Now required with validation */}
             <div ref={companyRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Company <span className="text-[#FF4935]">*</span>
               </label>
               <div className="flex items-center gap-3">
@@ -675,7 +675,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 <button
                   type="button"
                   onClick={() => setShowQuickCompanyForm(true)}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add New Company"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
@@ -688,7 +688,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
 
             {/* Lead Source */}
             <div ref={leadSourceRef}>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Lead Source <span className="text-[#FF4935]">*</span>
               </label>
               <CustomDropdown
@@ -696,7 +696,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 value={form.leadSource}
                 onChange={(value) => handleFormChange("leadSource", value)}
                 placeholder="Choose Lead Source"
-                buttonClassName={`w-full border rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter ${validationErrors.leadSource ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10'} ${form.leadSource ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+                buttonClassName={`w-full border rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter ${validationErrors.leadSource ? 'border-red-500 focus:ring-red-500' : 'border-[#1F2937]/10'} ${form.leadSource ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
               />
               {validationErrors.leadSource && (
                 <p className="text-red-500 text-xs mt-1 font-inter">{validationErrors.leadSource}</p>
@@ -716,7 +716,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 <div className="space-y-3 sm:space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
                     <div key={fieldDef.name}>
-                      <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                      <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                         {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                       </label>
                       {renderFieldInput(

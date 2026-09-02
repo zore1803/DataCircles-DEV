@@ -78,7 +78,7 @@ const NoteTypeDropdown = ({ options, value, onChange, onOpenChange }) => {
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
-        className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937]"
+        className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between transition-all bg-white font-inter text-[#1F2937]"
       >
         <span className="truncate">{value}</span>
         <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -149,7 +149,7 @@ const EntityPickerDropdown = ({ options, value, onChange, displayKey, placeholde
       <button
         type="button"
         onClick={toggle}
-        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
+        className={`w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-left flex items-center justify-between gap-2 transition-all bg-white font-inter ${selected ? "text-[#1F2937]" : "text-[#1F2937] opacity-50"}`}
       >
         <span className="truncate">{selected ? selected[displayKey] : placeholder}</span>
         <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -1267,8 +1267,8 @@ export const NoteEditor = ({
       />
       <div className={`fixed dc-panel-card dc-panel-w z-[10001] bg-white shadow-2xl overflow-hidden flex flex-col transform transition-transform duration-300 ease-out font-inter ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}`}>
         {/* Sticky header — matches the CompanyForm/TaskForm header spec */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {isEditing ? 'Edit Note' : 'Create New Note'}
           </h2>
           <button
@@ -1293,7 +1293,7 @@ export const NoteEditor = ({
             }`}
           >
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Note Title <span className="text-[#FF4935]">*</span>
               </label>
               <input
@@ -1301,14 +1301,14 @@ export const NoteEditor = ({
                 value={noteTitle}
                 onChange={(e) => setNoteTitle(e.target.value)}
                 placeholder="Enter Note Title"
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 autoFocus
               />
             </div>
 
             {/* Editor Area */}
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Note <span className="text-[#FF4935]">*</span>
               </label>
               <div className="border border-[#1F2937]/10 rounded-2xl overflow-hidden dc-note-editor-compact">
@@ -1326,7 +1326,7 @@ export const NoteEditor = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Note Type <span className="text-[#FF4935]">*</span>
                 </label>
                 <NoteTypeDropdown
@@ -1338,7 +1338,7 @@ export const NoteEditor = ({
               </div>
 
               <div>
-                <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Visibility <span className="text-[#FF4935]">*</span>
                 </label>
                 <NoteTypeDropdown
@@ -1351,7 +1351,7 @@ export const NoteEditor = ({
             </div>
 
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Link Contact
               </label>
               <div className="flex items-center gap-3">
@@ -1374,7 +1374,7 @@ export const NoteEditor = ({
                     }
                     setContactToAdd("");
                   }}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add contact"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
@@ -1402,7 +1402,7 @@ export const NoteEditor = ({
             </div>
 
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Link Deal
               </label>
               <div className="flex items-center gap-3">
@@ -1425,7 +1425,7 @@ export const NoteEditor = ({
                     }
                     setDealToAdd("");
                   }}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add deal"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
@@ -1453,7 +1453,7 @@ export const NoteEditor = ({
             </div>
 
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Link Invoice
               </label>
               <div className="flex items-center gap-3">
@@ -1476,7 +1476,7 @@ export const NoteEditor = ({
                     }
                     setInvoiceToAdd("");
                   }}
-                  className="flex-shrink-0 w-8 h-8 rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add invoice"
                 >
                   <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />

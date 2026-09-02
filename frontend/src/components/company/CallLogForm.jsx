@@ -104,8 +104,8 @@ const CallLogForm = ({ companyId, contactId, editLog, isOpen, onClose, onSuccess
       >
         <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
           {/* Sticky header — matches the CompanyForm/CompanyTaskForm header spec */}
-          <div className="flex items-center justify-between px-6 py-3 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-            <h2 className="text-[14px] font-normal leading-5 text-[#78788D] uppercase tracking-wide">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
               {editLog ? "Edit Call Log" : "Log a Call"}
             </h2>
             <button
@@ -122,7 +122,7 @@ const CallLogForm = ({ companyId, contactId, editLog, isOpen, onClose, onSuccess
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-6 pb-6 space-y-6">
             <div>
-              <label className="flex items-center gap-0.5 text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Purpose / Title <span className="text-[#FF4935]">*</span>
               </label>
               <input
@@ -131,35 +131,35 @@ const CallLogForm = ({ companyId, contactId, editLog, isOpen, onClose, onSuccess
                 value={formData.purpose}
                 onChange={handleChange}
                 required
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 placeholder="E.g., Discovery Call, Follow up"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Type
                 </label>
                 <select
                   name="callType"
                   value={formData.callType}
                   onChange={handleChange}
-                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                 >
                   <option value="Outbound">Outbound</option>
                   <option value="Inbound">Inbound</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Status
                 </label>
                 <select
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                 >
                   <option value="Connected">Connected</option>
                   <option value="Missed">Missed</option>
@@ -171,7 +171,7 @@ const CallLogForm = ({ companyId, contactId, editLog, isOpen, onClose, onSuccess
 
             {(formData.status === "Connected" || formData.status === "Voicemail") && (
               <div>
-                <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Duration (minutes)
                 </label>
                 <input
@@ -180,14 +180,14 @@ const CallLogForm = ({ companyId, contactId, editLog, isOpen, onClose, onSuccess
                   value={formData.duration}
                   onChange={handleChange}
                   min="0"
-                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-8 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                   placeholder="e.g., 15"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-[12px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                 Notes
               </label>
               <textarea
