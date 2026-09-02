@@ -237,6 +237,7 @@ function Login() {
       console.log("Request config:", config);
 
       const res = await API.post("/auth/complete-registration", body, config);
+      window.dispatchEvent(new Event("dc:setup-complete"));
 
       if (res.data.success) {
         if (res.data.token) {
@@ -379,6 +380,7 @@ function Login() {
         sub: facebookUserData?.sub || user?.sub,
         name: facebookUserData?.name || user?.name || "Unknown",
       });
+      window.dispatchEvent(new Event("dc:setup-complete"));
 
       const authRes = await API.get("/auth/me");
       if (authRes.status === 200) {
@@ -454,6 +456,10 @@ function Login() {
         ? { headers: { Authorization: `Bearer ${tempToken}` } }
         : {};
       const res = await API.post("/auth/complete-registration", body, config);
+      // Setup just finished, but no auth flag changed — App's setup check is
+      // keyed on those flags, so without this it keeps the header and sidebar
+      // hidden until a full reload.
+      window.dispatchEvent(new Event("dc:setup-complete"));
       localStorage.removeItem("referralCode"); // consumed — one-shot, don't reuse on a later signup from this browser
 
       if (res.data.token) {

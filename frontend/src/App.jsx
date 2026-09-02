@@ -216,6 +216,17 @@ function App() {
   const { isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
   const [showChecklist, setShowChecklist] = useState(false);
   const [isSetupComplete, setIsSetupComplete] = useState(false);
+  // Completing setup (joining with a company code) doesn't change any auth
+  // flag, so the effect below never re-ran and the app rendered with no
+  // header or sidebar until a manual reload. Login fires "dc:setup-complete"
+  // and this bumps the effect.
+  const [setupSignal, setSetupSignal] = useState(0);
+
+  useEffect(() => {
+    const onSetupComplete = () => setSetupSignal((n) => n + 1);
+    window.addEventListener("dc:setup-complete", onSetupComplete);
+    return () => window.removeEventListener("dc:setup-complete", onSetupComplete);
+  }, []);
 
   // Referral code capture moved to main.jsx (runs before React mounts / any
   // redirect) — an App useEffect ran too late, after PrivateRoute's redirect
@@ -327,6 +338,7 @@ function App() {
     isPhoneAuthenticated,
     isSuperAdminAuthenticated,
     getAccessTokenSilently,
+    setupSignal,
   ]);
 
   // The dynamic viewport-scaling zoom (shrinking the whole desktop layout
