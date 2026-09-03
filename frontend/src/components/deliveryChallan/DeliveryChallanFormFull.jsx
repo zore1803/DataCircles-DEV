@@ -338,7 +338,7 @@ const ItemSearchSelect = ({
   );
 };
 
-const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 
 const DeliveryChallanFormFull = ({
   deals,
