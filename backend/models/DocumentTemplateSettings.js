@@ -8,24 +8,9 @@ const mongoose = require("mongoose");
  * (rather than folded into Branding) because Branding's routes sit behind
  * multipart upload middleware, and this is a plain JSON preference.
  */
-const TEMPLATES = [
-  "Classic",
-  "Modern",
-  "Minimal",
-  "Elegant",
-  "Compact",
-  "Corporate",
-  "Vibrant",
-  "Mono",
-  "Vintage",
-  "Professional",
-  "Landscape",
-  "Service",
-];
 
 const templateField = {
   type: String,
-  enum: TEMPLATES,
   default: "Classic",
 };
 
@@ -51,4 +36,3 @@ module.exports = mongoose.model(
   "DocumentTemplateSettings",
   documentTemplateSettingsSchema
 );
-module.exports.TEMPLATES = TEMPLATES;

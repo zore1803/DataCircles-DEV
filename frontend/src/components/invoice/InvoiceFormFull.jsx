@@ -342,7 +342,7 @@ const ItemSearchSelect = ({
   );
 };
 
-const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 
 const InvoiceFormFull = ({
   deals,

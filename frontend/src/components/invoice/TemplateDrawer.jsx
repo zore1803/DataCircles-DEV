@@ -16,6 +16,7 @@ import API from "../../services/api";
 import {
   DOCUMENT_TEMPLATES,
   DEFAULT_TEMPLATE,
+  REGISTRY,
   buildDocumentHtml,
 } from "../../../../shared/documentTemplates.js";
 import SignatureModal from "../settings/SignatureModal";
@@ -24,25 +25,12 @@ import SignatureModal from "../settings/SignatureModal";
  * Right-hand drawer that gathers everything that governs how a document type
  * looks and is issued — its template, its numbering (prefix / suffix / next
  * number) and the signatures it can carry — into one place, split across three
- * tabs. Previously this drawer only held the template gallery; the numbering
- * and signature controls used to live solely in Settings → Document Settings,
- * which mutate the same endpoints this drawer now calls.
+ * tabs.
  */
 
-const TEMPLATE_BLURBS = {
-  Classic: "Formal, fully ruled GST layout",
-  Modern: "Airy, blue-accented sans-serif template",
-  Minimal: "Hairline rules and generous spacing",
-  Elegant: "Serif type with a centred masthead",
-  Compact: "Dense layout that fits long item lists",
-  Corporate: "Dark masthead with navy table headings",
-  Vibrant: "Emerald accents and rounded sections",
-  Mono: "Typewriter face, pure black and white",
-  Vintage: "Dense grid invoice with per-item discount and a bold amount-payable summary.",
-  Professional: "Clean header with blue accent bar and a dedicated details section.",
-  Landscape: "Wide, fully-ruled boxed grid layout with complete cell borders.",
-  Service: "Clean, borderless service billing receipt with solid blue header band.",
-};
+const TEMPLATE_BLURBS = Object.fromEntries(
+  Object.entries(REGISTRY).map(([key, mod]) => [key, mod.blurb || ""])
+);
 
 /* Small representative document so every thumbnail shows the same content. */
 const SAMPLE_DOC = {
