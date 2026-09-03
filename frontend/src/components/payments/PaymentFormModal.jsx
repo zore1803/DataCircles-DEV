@@ -8,6 +8,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [vendors, setVendors] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [banks, setBanks] = useState([]);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
   const notesEditorRef = useRef(null);
@@ -15,6 +16,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [vendorSearch, setVendorSearch] = useState("");
   const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const vendorInputRef = useRef(null);
   const amountInputRef = useRef(null);
@@ -34,6 +36,25 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       setVendors(res.data.vendors || res.data || []);
     } catch (err) {
       console.error("Fetch vendors failed", err);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await API.get("/companies");
+      const raw = res.data?.companies || res.data || [];
+      const seen = new Set();
+      const unique = [];
+      raw.forEach(c => {
+        const name = (c.companyName || c.name || "").trim();
+        if (name && !seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          unique.push(c);
+        }
+      });
+      setCustomers(unique);
+    } catch (err) {
+      console.error("Fetch customers failed", err);
     }
   };
 
@@ -72,6 +93,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   useEffect(() => {
     if (isOpen) {
       fetchVendors();
+      fetchCustomers();
       fetchBanks();
       setVendorSearch("");
       setSelectedVendorId("");
@@ -117,7 +139,7 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const validateForm = () => {
     const errors = {};
     if (!selectedVendorId && !vendorSearch.trim()) {
-      errors.vendor = "Vendor is required";
+      errors.vendor = "Party name is required";
     }
     if (!formData.amount || Number(formData.amount) <= 0) {
       errors.amount = "Amount is required";
@@ -153,10 +175,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
 
     setLoading(true);
     try {
+      const isCredit = formData.direction === "IN";
       const payload = {
         ...formData,
-        vendor: selectedVendorId || undefined,
-        vendorName: selectedVendorId ? undefined : vendorSearch
+        vendor: isCredit ? undefined : (selectedVendorId || undefined),
+        vendorName: isCredit ? vendorSearch : (selectedVendorId ? undefined : vendorSearch)
       };
       await API.post("/payments-timeline", payload);
       toast.success("Payment added successfully!");
@@ -172,8 +195,10 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
 
   if (!shouldRender) return null;
 
-  const filteredVendors = vendors.filter(v => 
-    (v.name || v.companyName || "").toLowerCase().includes(vendorSearch.toLowerCase())
+  const isCredit = formData.direction === "IN";
+  const activePartyList = isCredit ? customers : vendors;
+  const filteredParties = activePartyList.filter(p => 
+    (p.name || p.companyName || "").toLowerCase().includes(vendorSearch.toLowerCase())
   );
 
   const selectedBankObj = banks.find(bk => bk._id === selectedBankId);
@@ -206,37 +231,53 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
           <form id="payment-form" onSubmit={handleSubmit} noValidate className="space-y-6">
             <div ref={vendorInputRef}>
-              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Vendor <span className="text-red-500">*</span></label>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">{isCredit ? "Customer" : "Vendor"} <span className="text-red-500">*</span></label>
               <div className="relative">
                 <input
                   type="text"
                   value={vendorSearch}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   onChange={(e) => {
                     setVendorSearch(e.target.value);
                     setSelectedVendorId("");
+                    setShowSuggestions(true);
                     if (validationErrors.vendor) setValidationErrors((p) => ({ ...p, vendor: undefined }));
                   }}
-                  placeholder="Search or enter new vendor name"
+                  placeholder={`Search or enter new ${isCredit ? 'customer' : 'vendor'} name`}
                   className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${validationErrors.vendor ? "border-red-500" : "border-[#1F2937]/10"}`}
                 />
                 {validationErrors.vendor && (
                   <p className="mt-1 text-xs text-red-600">{validationErrors.vendor}</p>
                 )}
-                {vendorSearch && !selectedVendorId && filteredVendors.length > 0 && (
+                {vendorSearch && !selectedVendorId && showSuggestions && (
                   <div className="absolute z-10 w-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                    {filteredVendors.map(v => (
+                    {filteredParties.map(p => (
                       <button
-                        key={v._id}
+                        key={p._id}
                         type="button"
                         onClick={() => {
-                          setSelectedVendorId(v._id);
-                          setVendorSearch(v.name || v.companyName);
+                          setSelectedVendorId(p._id);
+                          setVendorSearch(p.name || p.companyName);
+                          setShowSuggestions(false);
                         }}
                         className="w-full text-left px-4 py-2.5 text-[12px] hover:bg-gray-50 transition-colors"
                       >
-                        {v.name || v.companyName}
+                        {p.name || p.companyName}
                       </button>
                     ))}
+                    
+                    {!filteredParties.some(p => (p.name || p.companyName || "").toLowerCase() === vendorSearch.toLowerCase()) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSuggestions(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-[12px] text-blue-600 font-medium hover:bg-blue-50 transition-colors"
+                      >
+                        + Add "{vendorSearch}" as new {isCredit ? 'Customer' : 'Vendor'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -283,7 +324,11 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
               <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Direction <span className="text-red-500">*</span></label>
               <select
                 value={formData.direction}
-                onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
+                onChange={e => {
+                  setFormData(p => ({ ...p, direction: e.target.value }));
+                  setVendorSearch("");
+                  setSelectedVendorId("");
+                }}
                 className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
               >
                 <option value="OUT">Debit (Out)</option>

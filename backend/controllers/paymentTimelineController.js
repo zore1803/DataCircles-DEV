@@ -431,13 +431,23 @@ exports.createPayment = async (req, res) => {
     let vendorId = vendor;
 
     if (!vendorId && vendorName) {
-      const newVendor = new Vendor({
-        name: vendorName,
-        organization: orgId,
-        user: userId,
-      });
-      await newVendor.save();
-      vendorId = newVendor._id;
+      // Check if a vendor with this name already exists
+      let existingVendor = await Vendor.findOne({ name: vendorName, organization: orgId });
+      if (!existingVendor) {
+        existingVendor = await Vendor.findOne({ companyName: vendorName, organization: orgId });
+      }
+      
+      if (existingVendor) {
+        vendorId = existingVendor._id;
+      } else {
+        const newVendor = new Vendor({
+          name: vendorName,
+          organization: orgId,
+          user: userId,
+        });
+        await newVendor.save();
+        vendorId = newVendor._id;
+      }
     }
 
     if (!vendorId) {

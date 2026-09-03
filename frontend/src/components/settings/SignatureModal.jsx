@@ -419,15 +419,24 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
   const generateTypedDataUrl = () => {
     if (!typedText.trim()) return null;
     const canvas = document.createElement("canvas");
-    canvas.width = 600;
-    canvas.height = 180;
     const ctx = canvas.getContext("2d");
 
+    // Temporarily set font to measure text width
+    ctx.font = `60px "${selectedFont.fontName}", cursive, sans-serif`;
+    const textWidth = ctx.measureText(typedText).width;
+
+    // Set tight dimensions with minimal padding
+    canvas.width = textWidth + 40;
+    canvas.height = 90;
+
+    // Re-apply context styles after resizing canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.font = `60px "${selectedFont.fontName}", cursive, sans-serif`;
     ctx.fillStyle = penColor || "#0f172a";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    
+    // Draw text perfectly centered in the new tight canvas
     ctx.fillText(typedText, canvas.width / 2, canvas.height / 2);
 
     return canvas.toDataURL("image/png");
@@ -733,7 +742,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
                   onBegin={handleBegin}
                   onEnd={handleEnd}
                   canvasProps={{
-                    className: "w-full h-48 rounded-lg bg-white border border-slate-200 touch-none",
+                    className: "w-full max-w-[400px] mx-auto block h-48 rounded-lg bg-white border border-slate-200 touch-none",
                     style: { cursor: getCustomCursor() },
                   }}
                 />
