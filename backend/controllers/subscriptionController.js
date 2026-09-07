@@ -7,6 +7,8 @@ const Organization = require("../models/Organization");
 const razorpay = require("../config/razorpay");
 const crypto = require("crypto");
 const { sendTrialStartedEmail } = require('../utils/trialEmails');
+const seedTrialData = require('../utils/seedTrialData');
+const { deleteTrialDemoData } = require('../utils/seedTrialData');
 const {
   findOrCreateRazorpayPlan,
   classifyAddonsForPlanChange,
@@ -1336,6 +1338,17 @@ exports.startFreeTrial = async (req, res) => {
       await sendTrialStartedEmail(req.user, organization, trialEnd);
     } catch (emailError) {
       console.error('Failed to send trial-started email:', emailError);
+    }
+
+    // 10 sample rows each of Company/Contact/Deal/Invoice/Task/Note so a
+    // brand-new trial account isn't a blank slate. Only ever called from
+    // here — an org that never starts a trial never gets this data, so it
+    // stays genuinely empty. Wrapped for the same reason as the email above:
+    // a seeding failure must never block the trial itself from starting.
+    try {
+      await seedTrialData({ organization: req.user.organization, user: req.user._id });
+    } catch (seedError) {
+      console.error('Failed to seed trial demo data:', seedError);
     }
 
     res.json({
@@ -3101,6 +3114,15 @@ async function reconcileMandate(subscription) {
     // self-heal it on a later, unrelated call.
     subscription.isTrialActive = false;
     setAppStatus(subscription, 'active', 'Charge-at-Will mandate confirmed and first payment captured');
+
+    // Real activation, not a repeat call (see wasAlreadyActive below) — the
+    // trial has genuinely converted to paid, so its "Trial Demo" sample
+    // data should stop showing up alongside real records now.
+    if (!wasAlreadyActive) {
+      deleteTrialDemoData(subscription.organization).catch((cleanupErr) => {
+        console.error('Trial demo data cleanup failed on paid conversion:', cleanupErr);
+      });
+    }
 
     // CAW has no Razorpay-managed recurring subscription object to read
     // current_start/current_end/charge_at from (unlike the legacy path —

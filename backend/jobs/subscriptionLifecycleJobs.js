@@ -26,6 +26,7 @@ const {
   sendTrialExpiredEmail,
 } = require('../utils/trialEmails');
 const { emitBillingEvent } = require('../utils/billingEvents');
+const { deleteTrialDemoData } = require('../utils/seedTrialData');
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -117,6 +118,14 @@ cron.schedule('* * * * *', async () => {
         subscription.isTrialActive = false;
         setAppStatus(subscription, 'expired', 'trial period ended (cron)');
         await subscription.save();
+
+        // Trial's over and unconverted — the "Trial Demo" sample data has
+        // done its job.
+        try {
+          await deleteTrialDemoData(subscription.organization);
+        } catch (cleanupErr) {
+          console.error('[subscriptionLifecycleJobs] Trial demo data cleanup failed:', cleanupErr);
+        }
 
         await emitBillingEvent({
           organization: subscription.organization,
