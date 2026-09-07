@@ -643,6 +643,7 @@ const Navbar = () => {
           } ${isSearchOverlayOpen ? "pointer-events-none" : ""}`}
         style={{
           background: CHROME_BG,
+          top: "var(--dc-offline-offset, 0px)",
           // Dims in step with the overlay's own backdrop instead of relying
           // on that backdrop to visually cover this element — the two are
           // unrelated fixed-position layers, and z-index alone wasn't

@@ -97,7 +97,6 @@ import toast from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import TaskAndMeeting, { TasksCard } from "../components/dashboard/TaskAndMeeting";
 import ClientsAndDeals from "../components/dashboard/ClientsAndDeals";
-import DashboardSummary from "../components/dashboard/DashboardSummary";
 import RevenueOvertime from "../components/dashboard/RevenueOvertime";
 import PaymentInformation from "../components/dashboard/PaymentInformation";
 import MeetingsInformation from "../components/dashboard/MeetingsInformation";

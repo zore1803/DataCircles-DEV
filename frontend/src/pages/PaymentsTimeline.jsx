@@ -1531,7 +1531,7 @@ export default function PaymentsTimeline() {
                   position: "sticky",
                   left: 0,
                   zIndex: 20,
-                  boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                  boxShadow: "inset -1px 0 0 0 #E1E4EA",
                 }}
                 className="relative px-4 py-3 bg-[#F5F7FA]"
               >
@@ -1561,7 +1561,7 @@ export default function PaymentsTimeline() {
                     style={{
                       width: colWidths[col.id],
                       opacity: isDragging ? 0.35 : 1,
-                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA",
                       ...stickyStyleFor(col.id),
                     }}
                     className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] transition-colors ${

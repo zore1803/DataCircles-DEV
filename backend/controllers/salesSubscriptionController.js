@@ -197,16 +197,113 @@ exports.getAllSalesSubscriptionsWithPagination = async (req, res) => {
       return res.json({ ids: all.map((x) => x._id) });
     }
 
-    const [subscriptions, totalCount] = await Promise.all([
-      SalesSubscription.find(query)
+    // "customer" isn't a stored field — it's a display-time fallback chain
+    // (deal.contact.name -> deal.company.name -> deal.title, see the
+    // frontend's customerOf()) with nothing to sort on directly. Same fix
+    // as salesReturnController: resolve the sorted/paginated id order via
+    // aggregation, then fetch+populate those rows the normal way.
+    let subscriptions, totalCount;
+    if (sortBy === "customer" || sortBy === "interval") {
+      const dir = sortOrder === "desc" ? -1 : 1;
+      const pipeline = [{ $match: query }];
+
+      if (sortBy === "customer") {
+        pipeline.push(
+          {
+            $lookup: {
+              from: "deals",
+              localField: "deal",
+              foreignField: "_id",
+              as: "_deal",
+            },
+          },
+          { $unwind: { path: "$_deal", preserveNullAndEmptyArrays: true } },
+          {
+            $lookup: {
+              from: "contacts",
+              localField: "_deal.contact",
+              foreignField: "_id",
+              as: "_contact",
+            },
+          },
+          {
+            $lookup: {
+              from: "companies",
+              localField: "_deal.company",
+              foreignField: "_id",
+              as: "_company",
+            },
+          },
+          {
+            $addFields: {
+              _sortKey: {
+                $ifNull: [
+                  { $arrayElemAt: ["$_contact.name", 0] },
+                  { $ifNull: [{ $arrayElemAt: ["$_company.name", 0] }, { $ifNull: ["$_deal.title", ""] }] },
+                ],
+              },
+            },
+          }
+        );
+      } else {
+        // "interval" is billingInterval: { value, unit } — sorting the raw
+        // embedded object compares its serialized form, not actual
+        // recurrence frequency. Convert to an approximate day count instead
+        // (matches intervalLabel()'s "Every N <unit>" wording on the
+        // frontend, just expressed as a comparable number).
+        pipeline.push({
+          $addFields: {
+            _sortKey: {
+              $multiply: [
+                { $ifNull: ["$billingInterval.value", 1] },
+                {
+                  $switch: {
+                    branches: [
+                      { case: { $eq: ["$billingInterval.unit", "day"] }, then: 1 },
+                      { case: { $eq: ["$billingInterval.unit", "week"] }, then: 7 },
+                      { case: { $eq: ["$billingInterval.unit", "month"] }, then: 30 },
+                      { case: { $eq: ["$billingInterval.unit", "year"] }, then: 365 },
+                    ],
+                    default: 30,
+                  },
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      pipeline.push(
+        { $sort: { _sortKey: dir, _id: 1 } },
+        {
+          $facet: {
+            page: [{ $skip: skip }, { $limit: limit }, { $project: { _id: 1 } }],
+            total: [{ $count: "count" }],
+          },
+        }
+      );
+      const [result] = await SalesSubscription.aggregate(pipeline);
+      const orderedIds = (result?.page || []).map((r) => r._id);
+      totalCount = result?.total?.[0]?.count || 0;
+
+      const docs = await SalesSubscription.find({ _id: { $in: orderedIds } })
         .populate(POPULATE)
-        .skip(skip)
-        .limit(limit)
-        .sort({ [sortBy]: sortOrder === "desc" ? -1 : 1 })
         .lean()
-        .select("-__v"),
-      SalesSubscription.countDocuments(query),
-    ]);
+        .select("-__v");
+      const byId = new Map(docs.map((d) => [String(d._id), d]));
+      subscriptions = orderedIds.map((id) => byId.get(String(id))).filter(Boolean);
+    } else {
+      [subscriptions, totalCount] = await Promise.all([
+        SalesSubscription.find(query)
+          .populate(POPULATE)
+          .skip(skip)
+          .limit(limit)
+          .sort({ [sortBy]: sortOrder === "desc" ? -1 : 1 })
+          .lean()
+          .select("-__v"),
+        SalesSubscription.countDocuments(query),
+      ]);
+    }
 
     const totalPages = Math.ceil(totalCount / limit);
     res.json({

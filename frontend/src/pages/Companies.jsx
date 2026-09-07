@@ -1175,7 +1175,7 @@ function Companies() {
     } catch (err) {
       console.error("Failed to fetch company fields");
       if (err.response?.status !== 402) {
-        toast.error("Failed to fetch company fields");
+        toast.error("Failed to fetch company fields", { id: "companies-fields-error" });
       }
     }
   };
@@ -1266,9 +1266,9 @@ function Companies() {
         // Subscription state is already shown via the persistent
         // header banner/pill — don't pile on a redundant toast here.
       } else if (err.response && err.response.status === 403) {
-        toast.error(err.response.data.error || "Access denied");
+        toast.error(err.response.data.error || "Access denied", { id: "companies-load-error" });
       } else {
-        toast.error("Failed to load companies");
+        toast.error("Failed to load companies", { id: "companies-load-error" });
       }
       setCompanies([]);
     } finally {

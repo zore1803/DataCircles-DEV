@@ -429,14 +429,19 @@ const getInvoicesByCompany = async (req, res) => {
     invoices.forEach((invoice) => {
       summary.totalAmount += invoice.amount;
 
-      if (invoice.status === "Paid") {
-        summary.amountPaid += invoice.amount;
-      } else {
-        summary.amountDue += invoice.amount;
-
-        // Check if overdue
+      // A partially-paid invoice's collected amount was invisible here —
+      // amountDue counted the full invoice.amount even after a payment had
+      // been recorded against it via addInvoicePayment, and that payment
+      // never showed up in amountPaid either. Both now read the invoice's
+      // own `payments` subdocuments, the same source addInvoicePayment
+      // writes to and the same math it uses to decide Paid/Partially Paid.
+      const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+      summary.amountPaid += alreadyPaid;
+      const remaining = invoice.amount - alreadyPaid;
+      if (remaining > 0.01) {
+        summary.amountDue += remaining;
         if (invoice.dueDate && new Date(invoice.dueDate) < new Date()) {
-          summary.overdueAmount += invoice.amount;
+          summary.overdueAmount += remaining;
         }
       }
     });
@@ -463,7 +468,7 @@ const getCompanyInvoiceSummary = async (req, res) => {
     const invoices = await Invoice.find({
       deal: { $in: dealIds },
       organization: req.user.organization,
-    }).select("amount status dueDate");
+    }).select("amount status dueDate payments");
 
     const summary = {
       totalInvoices: invoices.length,
@@ -476,12 +481,16 @@ const getCompanyInvoiceSummary = async (req, res) => {
     invoices.forEach((invoice) => {
       summary.totalAmount += invoice.amount;
 
-      if (invoice.status === "Paid") {
-        summary.amountPaid += invoice.amount;
-      } else {
-        summary.amountDue += invoice.amount;
+      // Same fix as getCompanyInvoices above — derive from the invoice's own
+      // recorded payments instead of treating any non-"Paid" invoice as
+      // fully outstanding.
+      const alreadyPaid = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+      summary.amountPaid += alreadyPaid;
+      const remaining = invoice.amount - alreadyPaid;
+      if (remaining > 0.01) {
+        summary.amountDue += remaining;
         if (invoice.dueDate && new Date(invoice.dueDate) < new Date()) {
-          summary.overdueAmount += invoice.amount;
+          summary.overdueAmount += remaining;
         }
       }
     });

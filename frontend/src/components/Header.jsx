@@ -418,7 +418,7 @@
 
 //   if (isSuperAdmin || isSuperAdminRoute) {
 //     return (
-//       <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16">
+//       <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-[9992] h-16" style={{ top: "var(--dc-offline-offset, 0px)" }}>
 //         <div className="flex items-center justify-start h-full px-4 lg:pl-20">
 //           {/* Branding Section */}
 //           {isLoadingData ? (
@@ -1388,7 +1388,7 @@ const Header = () => {
         className="hidden lg:flex fixed top-0 right-0 border-b border-gray-200 z-[9992] h-16 items-center justify-between px-4 sm:px-6 lg:px-8 transition-all duration-300 ease-in-out"
         // Same tint as the sidebar (Navbar.jsx CHROME_BG) - the two are one
         // continuous surface, joined by the curved corner.
-        style={{ left: "var(--sidebar-width, 0px)", background: "var(--chrome-bg, #EBEDFF)" }}
+        style={{ left: "var(--sidebar-width, 0px)", background: "var(--chrome-bg, #EBEDFF)", top: "var(--dc-offline-offset, 0px)" }}
       >
         <img
           src="/DC Logo Export.png"
@@ -1653,7 +1653,7 @@ const Header = () => {
 
       {/* Mobile Header */}
       <header
-        style={{ background: "var(--chrome-bg, #EBEDFF)" }}
+        style={{ background: "var(--chrome-bg, #EBEDFF)", top: "var(--dc-offline-offset, 0px)" }}
         className="lg:hidden fixed top-0 left-0 right-0 z-[9992] h-[54px] flex items-center border-b border-[#ECECEC]"
       >
         <div className="w-full max-w-[440px] mx-auto flex items-center justify-between px-4 py-2 gap-3 h-full">

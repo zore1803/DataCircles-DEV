@@ -1172,7 +1172,7 @@ const PurchasePage = () => {
               );
             } else if (vc.key === "status") {
               baseContent = (
-                <div className="flex items-center justify-start -ml-3">
+                <div className="flex items-center justify-start">
                   <span
                     className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeColor(p.status)}`}
                   >

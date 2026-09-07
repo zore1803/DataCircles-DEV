@@ -696,7 +696,7 @@ export default function Inventory() {
       case "item":
         content = (
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 uppercase">
+            <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 uppercase">
               {(item.name || "?").slice(0, 2)}
             </div>
             <div className="flex flex-col min-w-0">
@@ -974,8 +974,21 @@ export default function Inventory() {
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">
             <tr>
               <th
-                style={{ width: colWidths.selection, position: "sticky", left: 0, zIndex: 20 }}
-                className="relative px-4 py-3 bg-[#F5F7FA] border-b border-r border-[#E1E4EA]"
+                style={{
+                  width: colWidths.selection,
+                  height: 44,
+                  maxHeight: 44,
+                  boxSizing: "border-box",
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 20,
+                  // Plain `border` on a cell inside a sticky <thead> doesn't
+                  // reliably paint in Chrome (the whole header row is missing
+                  // its vertical dividers) — every other table in the app
+                  // already uses box-shadow insets for exactly this reason.
+                  boxShadow: "inset -1px 0 0 0 #E1E4EA",
+                }}
+                className="relative px-4 py-2 bg-[#F5F7FA] overflow-hidden"
               >
                 <div className="flex justify-center items-center">
                   <input
@@ -998,8 +1011,16 @@ export default function Inventory() {
                     data-col-id={col.id}
                     onMouseDown={(e) => startColumnDrag(e, col.id)}
                     title="Drag to move this column"
-                    style={{ width: colWidths[col.id], opacity: isDragging ? 0.35 : 1, ...stickyStyleFor(col.id) }}
-                    className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"} ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
+                    style={{
+                      width: colWidths[col.id],
+                      height: 44,
+                      maxHeight: 44,
+                      boxSizing: "border-box",
+                      opacity: isDragging ? 0.35 : 1,
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA",
+                      ...stickyStyleFor(col.id),
+                    }}
+                    className={`relative px-4 py-2 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap overflow-hidden transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"} ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="truncate flex-1">{col.label}</span>
@@ -1052,11 +1073,20 @@ export default function Inventory() {
                 <tr
                   key={item._id}
                   className={`bg-white hover:bg-blue-50 transition-colors ${selectedIds.includes(item._id) ? "!bg-blue-50" : ""}`}
-                  style={{ height: 37, maxHeight: 37 }}
+                  style={{ height: 44, maxHeight: 44 }}
                 >
                   <td
-                    style={{ width: colWidths.selection, height: "37px", maxHeight: "37px", boxSizing: "border-box", position: "sticky", left: 0, zIndex: 10 }}
-                    className="px-4 py-0 align-middle border-b border-r border-[#E1E4EA] bg-inherit"
+                    style={{
+                      width: colWidths.selection,
+                      height: "44px",
+                      maxHeight: "44px",
+                      boxSizing: "border-box",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 10,
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                    }}
+                    className="px-4 py-0 align-middle bg-inherit"
                   >
                     {/* The stock-status dot that used to live here is redundant with the Status
                         column's badge, so the column now carries the selection checkbox instead. */}
@@ -1076,8 +1106,14 @@ export default function Inventory() {
                     return (
                       <td
                         key={col.id}
-                        style={{ width: colWidths[col.id], ...stickyStyleFor(col.id) }}
-                        className={`px-4 py-0 text-sm text-gray-900 border-b border-r border-[#E1E4EA] last:border-r-0 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
+                        style={{
+                          width: colWidths[col.id],
+                          boxShadow: isRightmost
+                            ? "inset 0 -1px 0 0 #E1E4EA"
+                            : "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                          ...stickyStyleFor(col.id),
+                        }}
+                        className={`px-4 py-0 text-sm text-gray-900 bg-inherit whitespace-nowrap ${cellBoundaryShadowSide ? "" : "overflow-hidden"}`}
                       >
                         {renderCell(col.id, item, isRightmost)}
                         {cellBoundaryShadowSide && <div style={getPinnedBoundaryOverlayStyle(cellBoundaryShadowSide)} />}

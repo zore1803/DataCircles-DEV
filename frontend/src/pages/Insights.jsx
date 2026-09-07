@@ -277,6 +277,67 @@ const DealsIndustryTreemap = ({ items }) => {
   );
 };
 
+// Isolated so its hover state can't force the rest of the Insights page to
+// re-render — see the comment at its call site.
+const DealPipelineBar = ({ stageEntries, colors, totalDeals }) => {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  return (
+    <div className="relative h-10 mb-4">
+      {/* overflow-hidden lives on this inner wrapper, not the outer relative
+          container above — the tooltip renders as a sibling positioned
+          ABOVE the bar (negative top + translate), and clipping it here
+          made it invisible on every hover despite the state updating fine. */}
+      <div className="flex flex-row items-stretch gap-0.5 h-full rounded-lg overflow-hidden">
+        {stageEntries.map(([stage, count], idx) => (
+          <div
+            key={stage}
+            onMouseEnter={() => setHoveredIdx(idx)}
+            onMouseLeave={() => setHoveredIdx((cur) => (cur === idx ? null : cur))}
+            style={{
+              background: colors[idx % colors.length],
+              flexGrow: count,
+              flexBasis: 0,
+            }}
+          />
+        ))}
+      </div>
+      {hoveredIdx !== null && (() => {
+        const [stage, count] = stageEntries[hoveredIdx];
+        const pct = totalDeals > 0 ? Math.round((count / totalDeals) * 100) : 0;
+        const color = colors[hoveredIdx % colors.length];
+        // Tracks the actual hovered segment's horizontal center (by summed
+        // share of totalDeals, matching each segment's flexGrow), same as
+        // Recharts' own tooltip following the hovered point — clamped so it
+        // can't push more than halfway off either edge of the bar.
+        const before = stageEntries.slice(0, hoveredIdx).reduce((sum, [, c]) => sum + c, 0);
+        const rawCenterPct = totalDeals > 0 ? ((before + count / 2) / totalDeals) * 100 : 50;
+        const centerPct = Math.min(92, Math.max(8, rawCenterPct));
+        return (
+          <div
+            className="absolute -top-2 z-10 pointer-events-none whitespace-nowrap"
+            style={{ left: `${centerPct}%`, transform: "translate(-50%, -100%)" }}
+          >
+            <div className="bg-white border border-gray-200 rounded-md shadow-lg p-2">
+              <p className="text-xs font-medium text-gray-500 mb-1.5">{stage}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: color }} />
+                <div>
+                  <p className="text-[11px] text-gray-500 leading-tight">Deals</p>
+                  <p className="text-xs font-medium text-gray-900 leading-tight">
+                    {count} <span className="text-gray-400 font-normal">({pct}%)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45 mx-auto -mt-1" />
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
 const Insights = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showFiltersPanel, setShowFiltersPanel] = useState(false);
@@ -1235,6 +1296,29 @@ const Insights = () => {
     // land back on today after navigating away and back.
   }, [chartData.dailyTrends.length, activeTab]);
 
+  // Real month-over-month growth: newly-created (or summed-value) records
+  // since the start of this month, as a percentage of whatever existed (or
+  // summed to) before this month — mathematically identical to
+  // (totalNow - totalBeforeThisMonth) / totalBeforeThisMonth, just computed
+  // from the "this month" bucket directly. valueField sums that field
+  // instead of counting records, for money-based tiles.
+  const monthOverMonthChange = (items, dateField, valueField) => {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    let thisMonth = 0;
+    let beforeThisMonth = 0;
+    (items || []).forEach((item) => {
+      const created = new Date(item?.[dateField]);
+      if (isNaN(created.getTime())) return;
+      const amount = valueField ? Number(item[valueField]) || 0 : 1;
+      if (created >= monthStart) thisMonth += amount;
+      else beforeThisMonth += amount;
+    });
+    if (beforeThisMonth > 0) return Math.round((thisMonth / beforeThisMonth) * 100);
+    return thisMonth + beforeThisMonth > 0 ? 100 : 0;
+  };
+
   const renderOverview = () => (
     <div className="space-y-6">
       {/* Stats Cards */}
@@ -1246,7 +1330,7 @@ const Insights = () => {
             icon={<Users className="w-6 h-6" />}
             color="text-blue-600"
             bgColor="bg-blue-50"
-            change={12}
+            change={monthOverMonthChange(filteredData.filteredContacts, "createdAt")}
           />
           <StatCard
             title="Total Companies"
@@ -1254,7 +1338,7 @@ const Insights = () => {
             icon={<Building className="w-6 h-6" />}
             color="text-green-600"
             bgColor="bg-green-50"
-            change={8}
+            change={monthOverMonthChange(filteredData.filteredCompanies, "createdAt")}
           />
           <StatCard
             title="Active Deals"
@@ -1262,7 +1346,7 @@ const Insights = () => {
             icon={<Briefcase className="w-6 h-6" />}
             color="text-purple-600"
             bgColor="bg-purple-50"
-            change={-3}
+            change={monthOverMonthChange(filteredData.filteredDeals, "createdAt")}
           />
           <StatCard
             title="Total Vendors"
@@ -1270,7 +1354,7 @@ const Insights = () => {
             icon={<UserCheck className="w-6 h-6" />}
             color="text-indigo-600"
             bgColor="bg-indigo-50"
-            change={5}
+            change={monthOverMonthChange(filteredData.filteredVendors, "createdAt")}
           />
           <StatCard
             title="Total Deal Value"
@@ -1283,7 +1367,7 @@ const Insights = () => {
             icon={<IndianRupeeIcon className="w-6 h-6" />}
             color="text-orange-600"
             bgColor="bg-orange-50"
-            change={15}
+            change={monthOverMonthChange(filteredData.filteredDeals, "createdAt", "amount")}
           />
           <StatCard
             title="Total Purchases"
@@ -1296,7 +1380,7 @@ const Insights = () => {
             icon={<Package className="w-6 h-6" />}
             color="text-pink-600"
             bgColor="bg-pink-50"
-            change={-2}
+            change={monthOverMonthChange(filteredData.filteredPurchases, "createdAt", "totalAmount")}
           />
           <StatCard
             title="Total Invoices"
@@ -1304,7 +1388,7 @@ const Insights = () => {
             icon={<FileText className="w-6 h-6" />}
             color="text-teal-600"
             bgColor="bg-teal-50"
-            change={10}
+            change={monthOverMonthChange(filteredData.filteredInvoices, "createdAt")}
           />
           <StatCard
             title="Total Invoice Value"
@@ -1317,7 +1401,7 @@ const Insights = () => {
             icon={<IndianRupeeIcon className="w-6 h-6" />}
             color="text-indigo-600"
             bgColor="bg-indigo-50"
-            change={18}
+            change={monthOverMonthChange(filteredData.filteredInvoices, "createdAt", "amount")}
           />
         </div>
       </div>
@@ -1769,20 +1853,21 @@ const Insights = () => {
                   <p className="text-sm text-gray-400 py-10 text-center">No deals yet</p>
                 ) : (
                   <>
-                    {/* Segmented bar — one block per stage, sized by share of total */}
-                    <div className="flex flex-row items-stretch gap-0.5 h-10 rounded-lg overflow-hidden mb-4">
-                      {stageEntries.map(([stage, count], idx) => (
-                        <div
-                          key={stage}
-                          title={`${stage}: ${count}`}
-                          style={{
-                            background: pipelineStageColors[idx % pipelineStageColors.length],
-                            flexGrow: count,
-                            flexBasis: 0,
-                          }}
-                        />
-                      ))}
-                    </div>
+                    {/* Segmented bar — one block per stage, sized by share of total.
+                        Its hover tooltip owns its own state (see
+                        DealPipelineBar below) rather than living on this
+                        page's own state — that state lived here originally,
+                        and every hover re-rendered the whole Insights render
+                        function, replaying Recharts' axis-tick enter
+                        animation on the unrelated Sales Trend / Revenue &
+                        Collections charts above (a visible "blink" on their
+                        x-axis labels for a hover that had nothing to do with
+                        them). */}
+                    <DealPipelineBar
+                      stageEntries={stageEntries}
+                      colors={pipelineStageColors}
+                      totalDeals={totalDeals}
+                    />
                     <div className="border-t border-gray-100 pt-3 space-y-3">
                       {stageEntries.map(([stage, count], idx) => (
                         <div key={stage} className="flex items-center justify-between gap-4">

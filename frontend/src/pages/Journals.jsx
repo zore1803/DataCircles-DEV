@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   BookOpen, Plus, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, MoreVertical, Pin, PinOff,
@@ -86,6 +86,13 @@ export default function Journals() {
   const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("active"); // "active" | "cancelled"
+
+  // Sliding pill for the Active/Closed/Cancelled tabs — matches the lifecycle
+  // switcher on the Contacts page (one white thumb animates to the active
+  // tab instead of an underline jumping across).
+  const journalTabRefs = useRef({});
+  const journalTabNavRef = useRef(null);
+  const [journalTabThumb, setJournalTabThumb] = useState({ left: 0, width: 0, ready: false });
   const [selectedJournals, setSelectedJournals] = useState([]);
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
@@ -333,6 +340,31 @@ export default function Journals() {
   const [draggedColKey, setDraggedColKey] = useState(null);
   const [dragOverColKey, setDragOverColKey] = useState(null);
   const [dragGhost, setDragGhost] = useState(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const nav = journalTabNavRef.current;
+      const btn = journalTabRefs.current[activeTab];
+      if (!nav || !btn) return;
+      setJournalTabThumb({
+        left: btn.offsetLeft - nav.scrollLeft,
+        width: btn.offsetWidth,
+        ready: true,
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const nav = journalTabNavRef.current;
+    nav?.addEventListener("scroll", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      nav?.removeEventListener("scroll", measure);
+    };
+    // journals.length: the Active tab's "57" count badge only exists once
+    // journals have loaded — it's absent at first paint (empty array), so
+    // the thumb was measured without it and never resized once it appeared,
+    // leaving the white pill too narrow for the badge that showed up after.
+  }, [activeTab, journals.length]);
+
   const dragOverRef = useRef(null);
   const ghostElRef = useRef(null);
 
@@ -886,27 +918,43 @@ export default function Journals() {
 
       {/* ── Active/Cancelled tabs ─────────────────────────────────────── */}
       <div
-        className="fixed right-0 h-11 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center gap-6 top-[118px] lg:top-[128px]"
+        className="fixed right-0 h-[68px] px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[118px] lg:top-[128px]"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
       >
-        {[
-          { key: "active", label: "Active Journals", count: journals.filter((j) => j.status === "active").length },
-          { key: "settled", label: "Closed", count: journals.filter((j) => j.status === "settled").length },
-          { key: "cancelled", label: "Cancelled", count: journals.filter((j) => j.status === "cancelled").length },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`h-full flex items-center gap-1.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key ? "border-[#0085FF] text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab.label}
-            {tab.key === "active" && tab.count > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-semibold">{tab.count}</span>
-            )}
-          </button>
-        ))}
+        <nav
+          ref={journalTabNavRef}
+          className="relative inline-flex items-center gap-1 h-10 p-1 bg-[#F1F1F5] rounded-full flex-shrink-0 w-max"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute top-1 h-8 rounded-full bg-white shadow-sm transition-all duration-300 ease-out pointer-events-none"
+            style={{
+              left: journalTabThumb.left,
+              width: journalTabThumb.width,
+              opacity: journalTabThumb.ready ? 1 : 0,
+            }}
+          />
+          {[
+            { key: "active", label: "Active Journals", count: journals.filter((j) => j.status === "active").length },
+            { key: "settled", label: "Closed", count: journals.filter((j) => j.status === "settled").length },
+            { key: "cancelled", label: "Cancelled", count: journals.filter((j) => j.status === "cancelled").length },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              ref={(el) => {
+                journalTabRefs.current[tab.key] = el;
+              }}
+              onClick={() => setActiveTab(tab.key)}
+              className="relative z-[1] flex items-center justify-center gap-1.5 h-8 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors text-gray-700 hover:text-gray-900"
+              style={activeTab === tab.key ? { color: "var(--btn-primary)" } : undefined}
+            >
+              {tab.label}
+              {tab.key === "active" && tab.count > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-semibold">{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {showQuickAdd && (
@@ -1109,8 +1157,8 @@ export default function Journals() {
 
       {/* ── Full-bleed table, edge to edge ───────────────────────────── */}
       <div
-        className="fixed right-0 overflow-x-auto overflow-y-auto bg-white"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 64, top: 173, paddingLeft: "var(--content-inset, 16px)" }}
+        className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[186px] lg:top-[196px]"
+        style={{ left: "var(--sidebar-width, 0px)", bottom: 64 }}
       >
         <table className="min-w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-[#F5F7FA] sticky top-0 z-20">
@@ -1121,7 +1169,7 @@ export default function Journals() {
                   position: "sticky",
                   left: 0,
                   zIndex: 20,
-                  boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                  boxShadow: "inset -1px 0 0 0 #E1E4EA",
                 }}
                 className="relative px-4 py-3 bg-[#F5F7FA]"
               >
@@ -1155,7 +1203,7 @@ export default function Journals() {
                     style={{
                       width: colWidths[col.id],
                       opacity: isDragging ? 0.35 : 1,
-                      boxShadow: "inset -1px 0 0 0 #E1E4EA, inset 0 -1px 0 0 #E1E4EA",
+                      boxShadow: "inset -1px 0 0 0 #E1E4EA",
                       ...stickyStyleFor(col.id),
                     }}
                     className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap transition-colors ${

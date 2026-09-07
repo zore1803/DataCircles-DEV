@@ -1258,7 +1258,7 @@ const PurchaseOrderPage = () => {
             } else if (vc.key === "status") {
               const statusObj = statusOptions.find(opt => opt.value === po.status) || statusOptions[0];
               baseContent = (
-                <div className="flex items-center justify-start -ml-3">
+                <div className="flex items-center justify-start">
                   <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${statusObj.className || "bg-gray-50 text-gray-700 border-gray-200"}`}>
                     {statusObj.label || po.status}
                   </span>

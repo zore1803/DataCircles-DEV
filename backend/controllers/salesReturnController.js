@@ -308,16 +308,94 @@ exports.getAllSalesReturnsWithPagination = async (req, res) => {
       return res.json({ ids: all.map((x) => x._id) });
     }
 
-    const [salesReturns, totalCount] = await Promise.all([
-      SalesReturn.find(query)
+    // "invoice" and "customer" aren't real fields on this document — invoice
+    // is only a reference id (sorting by it wouldn't match the invoice
+    // number shown), and "customer" is a display-time fallback chain
+    // (deal.contact.name -> deal.company.name -> deal.title) with no
+    // stored field at all. Both need a join to sort correctly, which plain
+    // .sort({[sortBy]: ...}) can't do — resolve the sorted/paginated id
+    // order via aggregation first, then fetch+populate those same rows the
+    // normal way so the response shape is unchanged.
+    const JOINED_SORT_FIELDS = ["invoice", "customer"];
+    let salesReturns, totalCount;
+    if (JOINED_SORT_FIELDS.includes(sortBy)) {
+      const dir = sortOrder === "desc" ? -1 : 1;
+      const pipeline = [
+        { $match: query },
+        {
+          $lookup: {
+            from: "invoices",
+            localField: "invoice",
+            foreignField: "_id",
+            as: "_invoice",
+          },
+        },
+        {
+          $lookup: {
+            from: "deals",
+            localField: "deal",
+            foreignField: "_id",
+            as: "_deal",
+          },
+        },
+        { $unwind: { path: "$_deal", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "contacts",
+            localField: "_deal.contact",
+            foreignField: "_id",
+            as: "_contact",
+          },
+        },
+        {
+          $lookup: {
+            from: "companies",
+            localField: "_deal.company",
+            foreignField: "_id",
+            as: "_company",
+          },
+        },
+        {
+          $addFields: {
+            _sortInvoice: { $ifNull: [{ $arrayElemAt: ["$_invoice.invoiceNumber", 0] }, ""] },
+            _sortCustomer: {
+              $ifNull: [
+                { $arrayElemAt: ["$_contact.name", 0] },
+                { $ifNull: [{ $arrayElemAt: ["$_company.name", 0] }, { $ifNull: ["$_deal.title", ""] }] },
+              ],
+            },
+          },
+        },
+        { $sort: { [sortBy === "invoice" ? "_sortInvoice" : "_sortCustomer"]: dir, _id: 1 } },
+        {
+          $facet: {
+            page: [{ $skip: skip }, { $limit: limit }, { $project: { _id: 1 } }],
+            total: [{ $count: "count" }],
+          },
+        },
+      ];
+      const [result] = await SalesReturn.aggregate(pipeline);
+      const orderedIds = (result?.page || []).map((r) => r._id);
+      totalCount = result?.total?.[0]?.count || 0;
+
+      const docs = await SalesReturn.find({ _id: { $in: orderedIds } })
         .populate(POPULATE)
-        .skip(skip)
-        .limit(limit)
-        .sort({ [sortBy]: sortOrder === "desc" ? -1 : 1 })
         .lean()
-        .select("-__v"),
-      SalesReturn.countDocuments(query),
-    ]);
+        .select("-__v");
+      const byId = new Map(docs.map((d) => [String(d._id), d]));
+      salesReturns = orderedIds.map((id) => byId.get(String(id))).filter(Boolean);
+    } else {
+      [salesReturns, totalCount] = await Promise.all([
+        SalesReturn.find(query)
+          .populate(POPULATE)
+          .skip(skip)
+          .limit(limit)
+          .sort({ [sortBy]: sortOrder === "desc" ? -1 : 1 })
+          .lean()
+          .select("-__v"),
+        SalesReturn.countDocuments(query),
+      ]);
+    }
 
     const totalPages = Math.ceil(totalCount / limit);
     res.json({

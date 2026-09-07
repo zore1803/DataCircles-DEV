@@ -46,7 +46,7 @@ const MergeCompanyModal = ({ primaryCompany, isOpen, onClose, onSuccess }) => {
         res.data.filter((c) => c._id !== primaryCompany._id),
       );
     } catch (err) {
-      toast.error("Failed to load companies");
+      toast.error("Failed to load companies", { id: "merge-companies-load-error" });
     }
   };
 

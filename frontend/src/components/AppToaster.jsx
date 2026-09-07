@@ -25,8 +25,15 @@ const AppToaster = (props) => (
             {message}
             {t.type !== "loading" && (
               <button
-                onClick={() => toast.dismiss(t.id)}
-                className="ml-2 p-0.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                type="button"
+                onClick={(e) => {
+                  // Defensive: this toast can render inside stacked/overlaid
+                  // panels (full-width document editors, the offline banner)
+                  // — stop the click from doing anything else on its way up.
+                  e.stopPropagation();
+                  toast.dismiss(t.id);
+                }}
+                className="ml-2 p-0.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
                 aria-label="Dismiss notification"
               >
                 <X size={14} />

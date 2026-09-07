@@ -257,7 +257,7 @@ const SalesSubscription = () => {
   const defaultColumns = useMemo(
     () => [
       { key: "subscriptionNumber", label: "Subscription ID", visible: true, order: 0, required: true, sortable: true },
-      { key: "customer", label: "Name", visible: true, order: 1, sortable: false },
+      { key: "customer", label: "Name", visible: true, order: 1, sortable: true },
       { key: "amount", label: "Amount", visible: true, order: 2, sortable: true },
       { key: "status", label: "Status", visible: true, order: 3, sortable: true, options: STATUS_OPTIONS },
       { key: "interval", label: "Repeat", visible: true, order: 4, sortable: false },
@@ -1321,7 +1321,7 @@ const SalesSubscription = () => {
                           <tr
                             key={row.id}
                             className={`bg-white hover:bg-blue-50 transition-colors ${selectedSet.has(row.original._id) ? "!bg-blue-50" : ""}`}
-                            style={{ height: 37, maxHeight: 37 }}
+                            style={{ height: 44, maxHeight: 44 }}
                           >
                             {row.getVisibleCells().map((cell) => {
                               const colId = cell.column.id;
@@ -1337,11 +1337,8 @@ const SalesSubscription = () => {
                                   key={cell.id}
                                   style={{
                                     width: cell.column.getSize(),
-                                  height: "37px",
-                                  maxHeight: "37px",
-                                  boxSizing: "border-box",
-                                    height: "37px",
-                                    maxHeight: "37px",
+                                    height: "44px",
+                                    maxHeight: "44px",
                                     boxSizing: "border-box",
                                     position: isSticky ? "sticky" : "static",
                                     left: isLeftSticky ? pinnedLeftOffsets[colId] ?? 0 : "auto",

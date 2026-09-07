@@ -407,6 +407,11 @@ function App() {
                     window.innerWidth >= 1024
                       ? "var(--sidebar-width, 64px)"
                       : undefined,
+                  // Additive with the pt-[...] class above (margin, not
+                  // padding) so the fixed Header/Navbar's own offset and
+                  // this stay in lockstep without duplicating the banner
+                  // height logic here.
+                  marginTop: "var(--dc-offline-offset, 0px)",
                   transition: "margin-left 300ms ease-in-out",
                 }
               : undefined
