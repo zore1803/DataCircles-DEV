@@ -212,7 +212,12 @@ export function html(ctx) {
       <div style="margin-bottom:3px;">Total Items / Qty : ${t.rows.length} / ${t.totalQty}</div>
       <div>Total amount (in words): INR ${esc(t.amountInWords)}</div>
     </div>
-    <div class="dc-payable"><span>Amount Payable:</span><span>&#8377;${fmt(t.grandTotal)}</span></div>
+    ${t.isPartiallyPaid
+      ? `<div class="dc-payable" style="flex-direction:column;align-items:flex-end;gap:2px;">
+      <span style="font-size:9px;color:var(--muted);font-weight:normal;">Paid &#8377;${fmt(t.amountPaid)} of &#8377;${fmt(t.grandTotal)}</span>
+      <span style="display:flex;gap:8px;"><span>Balance Due:</span><span>&#8377;${fmt(t.balanceDue)}</span></span>
+    </div>`
+      : `<div class="dc-payable"><span>Amount Payable:</span><span>&#8377;${fmt(t.grandTotal)}</span></div>`}
   </div>
 
   <div class="dc-footer-row">

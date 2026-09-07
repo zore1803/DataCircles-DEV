@@ -1,39 +1,58 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, ChevronDown, Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon, Strikethrough as StrikethroughIcon, List as ListIcon, ListOrdered, Link as LinkIcon } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import BankLogo from "../BankLogo";
+import PaymentAllocationPanel from "./PaymentAllocationPanel";
 
 export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
-  const [vendors, setVendors] = useState([]);
   const [banks, setBanks] = useState([]);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
   const notesEditorRef = useRef(null);
   const [selectedBankId, setSelectedBankId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [vendorSearch, setVendorSearch] = useState("");
-  const [selectedVendorId, setSelectedVendorId] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
-  const vendorInputRef = useRef(null);
+  const partyInputRef = useRef(null);
   const amountInputRef = useRef(null);
   const paymentDateInputRef = useRef(null);
+
+  // Party selection. Which side of the ledger a party comes from is decided
+  // by the direction: a Credit/IN payment is received from a customer (a
+  // Company or Contact — whichever the deal behind the invoice points at),
+  // a Debit/OUT payment is made to a Vendor.
+  const [parties, setParties] = useState([]);
+  const [partySearch, setPartySearch] = useState("");
+  const [selectedParty, setSelectedParty] = useState(null);
+
+  // Open documents for the selected party, and the split across them.
+  const [openDocs, setOpenDocs] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [allocations, setAllocations] = useState({});
+  const [creditBalance, setCreditBalance] = useState(0);
+
   const [formData, setFormData] = useState({
     amount: "",
     paymentDate: new Date().toISOString().slice(0, 10),
     direction: "OUT",
     paymentType: "UPI",
     bank: "",
+    reference: "",
     notes: ""
   });
 
-  const fetchVendors = async () => {
+  const isCredit = formData.direction === "IN";
+  const partyLabel = isCredit ? "Customer" : "Vendor";
+  const documentType = isCredit ? "Invoice" : "Purchase";
+
+  const fetchParties = async (direction) => {
     try {
-      const res = await API.get("/vendors");
-      setVendors(res.data.vendors || res.data || []);
+      const res = await API.get("/payments-timeline/parties", { params: { direction } });
+      setParties(res.data.parties || []);
     } catch (err) {
-      console.error("Fetch vendors failed", err);
+      console.error("Fetch parties failed", err);
+      setParties([]);
     }
   };
 
@@ -69,18 +88,27 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     setTimeout(() => onClose(), 300);
   };
 
+  const resetPartyState = () => {
+    setSelectedParty(null);
+    setPartySearch("");
+    setOpenDocs([]);
+    setAllocations({});
+    setCreditBalance(0);
+  };
+
   useEffect(() => {
     if (isOpen) {
-      fetchVendors();
       fetchBanks();
-      setVendorSearch("");
-      setSelectedVendorId("");
+      fetchParties("OUT");
+      resetPartyState();
+      setValidationErrors({});
       setFormData({
         amount: "",
         paymentDate: new Date().toISOString().slice(0, 10),
         direction: "OUT",
         paymentType: "UPI",
         bank: "",
+        reference: "",
         notes: ""
       });
       // notesEditorRef is an uncontrolled contentEditable (see execCmd below)
@@ -90,6 +118,50 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
       if (notesEditorRef.current) notesEditorRef.current.innerHTML = "";
     }
   }, [isOpen]);
+
+  // Switching direction switches which side of the ledger we're settling
+  // against, so the party list, the chosen party and any split against their
+  // documents all have to go — a vendor bill can't be settled by a customer
+  // receipt.
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchParties(formData.direction);
+    resetPartyState();
+  }, [formData.direction, isOpen]);
+
+  // The party's open documents (and any credit they're already sitting on).
+  useEffect(() => {
+    if (!isOpen || !selectedParty?._id) return;
+
+    let cancelled = false;
+    const load = async () => {
+      setDocsLoading(true);
+      try {
+        const params = {
+          direction: formData.direction,
+          partyType: selectedParty.partyType,
+          partyId: selectedParty._id,
+        };
+        const [docsRes, creditRes] = await Promise.all([
+          API.get("/payments-timeline/open-documents", { params }),
+          API.get("/payments-timeline/credit-balances", { params }),
+        ]);
+        if (cancelled) return;
+        setOpenDocs(docsRes.data.documents || []);
+        setCreditBalance(creditRes.data.total || 0);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Fetch open documents failed", err);
+          setOpenDocs([]);
+          setCreditBalance(0);
+        }
+      } finally {
+        if (!cancelled) setDocsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [selectedParty, formData.direction, isOpen]);
 
   // execCommand is deprecated but still the simplest way to drive a handful
   // of basic rich-text commands (bold/italic/underline/lists) against a
@@ -114,16 +186,48 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     { icon: <LinkIcon className="w-3.5 h-3.5" />, title: "Insert link", onClick: insertNotesLink },
   ];
 
+  const allocationLines = useMemo(
+    () =>
+      Object.entries(allocations)
+        .map(([documentId, value]) => ({
+          documentId,
+          documentType,
+          amount: Number(value) || 0,
+        }))
+        .filter((a) => a.amount > 0),
+    [allocations, documentType]
+  );
+
+  const totalAllocated = useMemo(
+    () => allocationLines.reduce((sum, a) => sum + a.amount, 0),
+    [allocationLines]
+  );
+
   const validateForm = () => {
     const errors = {};
-    if (!selectedVendorId && !vendorSearch.trim()) {
-      errors.vendor = "Vendor is required";
+    if (!selectedParty && !(formData.direction === "OUT" && partySearch.trim())) {
+      // A new vendor can be created inline by typing a name; a customer must
+      // be an existing Company/Contact, since an invoice can only exist
+      // against one that's already in the CRM.
+      errors.party = isCredit
+        ? "Select the customer this payment came from"
+        : "Vendor is required";
     }
     if (!formData.amount || Number(formData.amount) <= 0) {
       errors.amount = "Amount is required";
     }
     if (!formData.paymentDate) {
       errors.paymentDate = "Payment date is required";
+    }
+    if (totalAllocated > Number(formData.amount || 0) + 0.01) {
+      errors.allocation = "Applied amounts add up to more than the payment";
+    }
+    for (const doc of openDocs) {
+      const applied = Number(allocations[doc._id] || 0);
+      if (applied > doc.due + 0.01) {
+        errors.allocation = `₹${applied} applied to ${doc.number || "a document"} is more than its ₹${doc.due} balance`;
+        break;
+      }
     }
     return errors;
   };
@@ -135,8 +239,13 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
 
+      if (errors.allocation && !errors.party && !errors.amount && !errors.paymentDate) {
+        toast.error(errors.allocation);
+        return;
+      }
+
       const candidates = [
-        errors.vendor ? vendorInputRef.current : null,
+        errors.party ? partyInputRef.current : null,
         errors.amount ? amountInputRef.current : null,
         errors.paymentDate ? paymentDateInputRef.current : null,
       ].filter(Boolean);
@@ -155,11 +264,24 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
     try {
       const payload = {
         ...formData,
-        vendor: selectedVendorId || undefined,
-        vendorName: selectedVendorId ? undefined : vendorSearch
+        partyType: selectedParty?.partyType,
+        party: selectedParty?._id,
+        // Legacy vendor fields — still what the server uses to create a new
+        // vendor on the fly for an OUT payment typed in by name.
+        vendor: selectedParty?.partyType === "Vendor" ? selectedParty._id : undefined,
+        vendorName: !selectedParty && formData.direction === "OUT" ? partySearch : undefined,
+        allocations: allocationLines,
       };
-      await API.post("/payments-timeline", payload);
-      toast.success("Payment added successfully!");
+      const res = await API.post("/payments-timeline", payload);
+
+      const leftover = Number(res.data?.unallocatedAmount) || 0;
+      if (leftover > 0.01 && allocationLines.length > 0) {
+        toast.success(
+          `Payment recorded — ₹${leftover.toLocaleString("en-IN")} held as credit for ${selectedParty?.name || partySearch}`
+        );
+      } else {
+        toast.success("Payment added successfully!");
+      }
       onSuccess();
       handleClose();
     } catch (err) {
@@ -172,8 +294,8 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
 
   if (!shouldRender) return null;
 
-  const filteredVendors = vendors.filter(v => 
-    (v.name || v.companyName || "").toLowerCase().includes(vendorSearch.toLowerCase())
+  const filteredParties = parties.filter(p =>
+    (p.name || "").toLowerCase().includes(partySearch.toLowerCase())
   );
 
   const selectedBankObj = banks.find(bk => bk._id === selectedBankId);
@@ -191,7 +313,9 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
-          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">Add Vendor Payment</h2>
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
+            {isCredit ? "Record Customer Payment" : "Record Vendor Payment"}
+          </h2>
           <button
             type="button"
             onClick={handleClose}
@@ -205,43 +329,9 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
 
         <div className="space-y-6 overflow-y-auto flex-1 px-8 py-6">
           <form id="payment-form" onSubmit={handleSubmit} noValidate className="space-y-6">
-            <div ref={vendorInputRef}>
-              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Vendor <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={vendorSearch}
-                  onChange={(e) => {
-                    setVendorSearch(e.target.value);
-                    setSelectedVendorId("");
-                    if (validationErrors.vendor) setValidationErrors((p) => ({ ...p, vendor: undefined }));
-                  }}
-                  placeholder="Search or enter new vendor name"
-                  className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${validationErrors.vendor ? "border-red-500" : "border-[#1F2937]/10"}`}
-                />
-                {validationErrors.vendor && (
-                  <p className="mt-1 text-xs text-red-600">{validationErrors.vendor}</p>
-                )}
-                {vendorSearch && !selectedVendorId && filteredVendors.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                    {filteredVendors.map(v => (
-                      <button
-                        key={v._id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedVendorId(v._id);
-                          setVendorSearch(v.name || v.companyName);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-[12px] hover:bg-gray-50 transition-colors"
-                      >
-                        {v.name || v.companyName}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
+            {/* Amount and direction come first: direction decides whether the
+                next field asks for a customer or a vendor, and which
+                documents can be settled. */}
             <div ref={amountInputRef}>
               <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Amount <span className="text-red-500">*</span></label>
               <div className="relative">
@@ -263,6 +353,88 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
               )}
             </div>
 
+            <div>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Direction <span className="text-red-500">*</span></label>
+              <select
+                value={formData.direction}
+                onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
+              >
+                <option value="OUT">Debit (Out) — paid to a vendor</option>
+                <option value="IN">Credit (In) — received from a customer</option>
+              </select>
+            </div>
+
+            <div ref={partyInputRef}>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                {partyLabel} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={partySearch}
+                  onChange={(e) => {
+                    setPartySearch(e.target.value);
+                    setSelectedParty(null);
+                    setOpenDocs([]);
+                    setAllocations({});
+                    setCreditBalance(0);
+                    if (validationErrors.party) setValidationErrors((p) => ({ ...p, party: undefined }));
+                  }}
+                  placeholder={isCredit ? "Search customers..." : "Search or enter new vendor name"}
+                  className={`w-full border rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 ${validationErrors.party ? "border-red-500" : "border-[#1F2937]/10"}`}
+                />
+                {validationErrors.party && (
+                  <p className="mt-1 text-xs text-red-600">{validationErrors.party}</p>
+                )}
+                {partySearch && !selectedParty && filteredParties.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                    {filteredParties.map(p => (
+                      <button
+                        key={`${p.partyType}-${p._id}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedParty(p);
+                          setPartySearch(p.name);
+                          setAllocations({});
+                        }}
+                        className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-[12px] hover:bg-gray-50 transition-colors"
+                      >
+                        <span className="truncate text-[#1F2937]">{p.name}</span>
+                        {/* Customers can be a company or an individual contact
+                            and the names can collide, so say which. */}
+                        {p.partyType !== "Vendor" && (
+                          <span className="flex-shrink-0 text-[10px] uppercase tracking-wide text-[#78788D]">
+                            {p.partyType}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {isCredit && partySearch && !selectedParty && filteredParties.length === 0 && (
+                  <p className="mt-1 text-[11px] text-[#1F2937] opacity-50">
+                    No customer matches — only customers with an existing deal can be paid against.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* The allocation step. */}
+            <PaymentAllocationPanel
+              documentType={documentType}
+              documents={openDocs}
+              loading={docsLoading}
+              allocations={allocations}
+              onChange={(next) => {
+                setAllocations(next);
+                if (validationErrors.allocation) setValidationErrors((p) => ({ ...p, allocation: undefined }));
+              }}
+              paymentAmount={formData.amount}
+              partySelected={Boolean(selectedParty)}
+              creditBalance={creditBalance}
+            />
+
             <div ref={paymentDateInputRef}>
               <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Payment Date <span className="text-red-500">*</span></label>
               <input
@@ -280,18 +452,6 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div>
-              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Direction <span className="text-red-500">*</span></label>
-              <select
-                value={formData.direction}
-                onChange={e => setFormData(p => ({ ...p, direction: e.target.value }))}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all bg-white cursor-pointer"
-              >
-                <option value="OUT">Debit (Out)</option>
-                <option value="IN">Credit (In)</option>
-              </select>
-            </div>
-
-            <div>
               <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Type <span className="text-red-500">*</span></label>
               <select
                 value={formData.paymentType}
@@ -305,6 +465,17 @@ export default function PaymentFormModal({ isOpen, onClose, onSuccess }) {
                 <option value="Cheque">Cheque</option>
                 <option value="EMI">EMI</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">Reference</label>
+              <input
+                type="text"
+                value={formData.reference}
+                onChange={e => setFormData(p => ({ ...p, reference: e.target.value }))}
+                placeholder="UTR / cheque no. / txn id"
+                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
+              />
             </div>
 
             <div>

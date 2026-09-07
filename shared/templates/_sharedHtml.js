@@ -108,7 +108,14 @@ export function sharedHtml(ctx) {
       <div class="dc-trow"><span class="dc-label">SGST</span><span>&#8377;${fmt(t.totalSGST)}</span></div>`
       }
       <div class="dc-grand"><span>Total</span><span>&#8377;${fmt(t.grandTotal)}</span></div>
-      ${doc.status === "Paid" ? `<div class="dc-paid"><span class="dc-tick">&#10003;</span><span>Amount Paid</span></div>` : ""}
+      ${/* A part-paid document has to state what was received and what is
+            still owed — printing only the total makes it look unpaid, and
+            the customer has no way to see their payment landed. */ ""}
+      ${t.isPartiallyPaid
+        ? `<div class="dc-trow sep"><span class="dc-label">Amount Paid</span><span>&#8377;${fmt(t.amountPaid)}</span></div>
+      <div class="dc-grand"><span>Balance Due</span><span>&#8377;${fmt(t.balanceDue)}</span></div>`
+        : ""}
+      ${t.isFullyPaid || doc.status === "Paid" ? `<div class="dc-paid"><span class="dc-tick">&#10003;</span><span>Amount Paid</span></div>` : ""}
     </div>
   </div>
 

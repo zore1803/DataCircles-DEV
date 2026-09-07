@@ -15,6 +15,7 @@ import API from "../services/api";
 import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import PaymentFormModal from "../components/payments/PaymentFormModal";
+import ApplyCreditModal from "../components/payments/ApplyCreditModal";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import { getAncestorZoom } from "../utils/domUtils";
 import BulkActionBar from "../components/common/BulkActionBar";
@@ -55,6 +56,12 @@ const KPI_BAND_HEIGHT = 104;
 // Funds + Wallet/Cash/Bank cards) ported from the signatures branch.
 const HEADER_HEIGHT = 144;
 const TOOLBAR_BOTTOM = 64 + HEADER_HEIGHT;
+// The bulk-action strip gets its own band between the account cards and the
+// KPI row. It used to take over the header entirely, which hid the Total
+// Funds / Wallet / Cash / bank cards the moment anything was selected — the
+// account balances are context you want WHILE acting on rows, not something
+// to trade away for the toolbar.
+const BULK_STRIP_HEIGHT = 64;
 
 const ALL_COLUMNS = [
   { id: "payment-id", key: "payment-id", label: "Transaction ID" },
@@ -94,6 +101,64 @@ const cellTextFor = (colId, doc) => {
 export default function PaymentsTimeline() {
   const [documents, setDocuments] = useState([]);
   const [accountsSummary, setAccountsSummary] = useState([]);
+  // Unapplied credit — money received (or advanced) that hasn't been settled
+  // against an invoice/bill yet. Without this it's stored but invisible, and
+  // the whole point of keeping the remainder is that it can be found again.
+  const [creditBalances, setCreditBalances] = useState([]);
+  const [creditTotal, setCreditTotal] = useState(0);
+  const [showCreditPanel, setShowCreditPanel] = useState(false);
+  // The party whose credit is being applied — set from the Unapplied panel,
+  // drives the Apply Credit drawer.
+  const [creditParty, setCreditParty] = useState(null);
+  // The account-cards strip scrolls horizontally, so a panel positioned
+  // inside one of those cards gets clipped by that scroll container (and
+  // scrolls away with it). Portalled to document.body and positioned from the
+  // card's measured rect instead — same approach PickerSelect and the column
+  // menu already use on this page.
+  const creditCardRef = useRef(null);
+  const creditPanelRef = useRef(null);
+  const [creditPanelStyle, setCreditPanelStyle] = useState({});
+
+  const positionCreditPanel = useCallback(() => {
+    if (!creditCardRef.current) return;
+    // rect is in VISUAL px; the portal paints inside the app's dynamic <html>
+    // zoom, so every rect-derived value has to be divided by it or the panel
+    // drifts off-position.
+    const zoom = getAncestorZoom(document.body);
+    const rect = creditCardRef.current.getBoundingClientRect();
+    const width = 320;
+    const MARGIN = 8;
+    const viewportWidth = window.innerWidth / zoom;
+    let left = rect.left / zoom;
+    left = Math.min(left, viewportWidth - width - MARGIN);
+    left = Math.max(left, MARGIN);
+    setCreditPanelStyle({
+      position: "fixed",
+      left: `${left}px`,
+      top: `${rect.bottom / zoom + 6}px`,
+      width: `${width}px`,
+      maxHeight: `${Math.min(288, window.innerHeight / zoom - rect.bottom / zoom - 24)}px`,
+      zIndex: 99999,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showCreditPanel) return;
+    positionCreditPanel();
+    const onDocClick = (e) => {
+      const inCard = creditCardRef.current && creditCardRef.current.contains(e.target);
+      const inPanel = creditPanelRef.current && creditPanelRef.current.contains(e.target);
+      if (!inCard && !inPanel) setShowCreditPanel(false);
+    };
+    window.addEventListener("resize", positionCreditPanel);
+    window.addEventListener("scroll", positionCreditPanel, true);
+    document.addEventListener("mousedown", onDocClick);
+    return () => {
+      window.removeEventListener("resize", positionCreditPanel);
+      window.removeEventListener("scroll", positionCreditPanel, true);
+      document.removeEventListener("mousedown", onDocClick);
+    };
+  }, [showCreditPanel, positionCreditPanel]);
 
   const walletSummary = useMemo(() => accountsSummary.find(a => a.type === "wallet"), [accountsSummary]);
   const cashSummary   = useMemo(() => accountsSummary.find(a => a.type === "cash"),   [accountsSummary]);
@@ -403,6 +468,16 @@ export default function PaymentsTimeline() {
       if (res.data.accountsSummary) setAccountsSummary(res.data.accountsSummary);
       if (res.data.pagination) setPagination(res.data.pagination);
       setServerSummary(res.data.summary || null);
+
+      // Non-blocking: a failure here shouldn't cost the user the timeline
+      // they actually asked for, so it's caught separately.
+      try {
+        const creditRes = await API.get("/payments-timeline/credit-balances");
+        setCreditBalances(creditRes.data.balances || []);
+        setCreditTotal(creditRes.data.total || 0);
+      } catch (creditErr) {
+        console.error("Failed to load credit balances", creditErr);
+      }
     } catch (err) {
       toast.error("Failed to load transactions timeline");
       console.error(err);
@@ -494,6 +569,10 @@ export default function PaymentsTimeline() {
         const d = byId.get(id);
         if (!d) return;
         matched += 1;
+        // Same exclusion the server applies: a transfer between the org's own
+        // accounts is two legs of the same money, so counting them as credit
+        // and debit overstates both. They stay selectable and countable.
+        if (d.isInternalTransfer) return;
         const amt = Number(d.amount) || 0;
         if (d.direction === "IN") totalCredit += amt;
         else totalDebit += amt;
@@ -515,6 +594,7 @@ export default function PaymentsTimeline() {
     let totalCredit = 0;
     let totalDebit = 0;
     filteredDocs.forEach(d => {
+      if (d.isInternalTransfer) return;
       const amt = Number(d.amount) || 0;
       if (d.direction === "IN") totalCredit += amt;
       else totalDebit += amt;
@@ -793,9 +873,19 @@ export default function PaymentsTimeline() {
       const localDateObj = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
       const payloadDate = localDateObj.toISOString();
 
+      // Shared by both legs so they're identifiable as one movement (and a
+      // half-completed transfer can be spotted — the two POSTs below are not
+      // atomic).
+      const transferGroup = `xfer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
       // 1. Post Debit (OUT) to source account
       await API.post("/payments-timeline", {
         vendorName: "Self Transfer",
+        // Both legs are flagged, so the timeline can keep them in the
+        // per-account balances (the point of a transfer) while leaving them
+        // out of Total Credit / Total Debit (no money entered or left).
+        isInternalTransfer: true,
+        transferGroup,
         amount: Number(selfTransferAmount),
         paymentDate: payloadDate,
         direction: "OUT",
@@ -808,6 +898,8 @@ export default function PaymentsTimeline() {
       // 2. Post Credit (IN) to destination account
       await API.post("/payments-timeline", {
         vendorName: "Self Transfer",
+        isInternalTransfer: true,
+        transferGroup,
         amount: Number(selfTransferAmount),
         paymentDate: payloadDate,
         direction: "IN",
@@ -1147,26 +1239,6 @@ export default function PaymentsTimeline() {
           boxSizing: "border-box",
         }}
       >
-        {stripVisible ? (
-          <BulkActionBar
-            bare
-            selectedCount={selectedIds.length}
-            entityName="payment"
-            isClosing={stripClosing}
-            onSelectAll={fetchAllIds}
-            onDeselectAll={() => setSelectedIds([])}
-            onExport={() => {
-              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
-              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
-            }}
-            onDelete={() => {
-              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
-            }}
-            onUpdateStatus={() => setShowBulkActions(true)}
-            onCancel={() => setSelectedIds([])}
-          />
-        ) : (
-          <>
         <div className="flex flex-1 items-center gap-4 min-w-0 pr-4">
           {/* Scrollable Container for all Individual Cards — Total Funds + Wallet/Cash/Bank,
               ported from the signatures branch (cards now open the Account Detail ledger
@@ -1264,6 +1336,80 @@ export default function PaymentsTimeline() {
                 </div>
               );
             })()}
+
+            {/* ── CARD: Unapplied credit ───────────────────────────────────
+                Payments received or advanced that aren't yet tied to an
+                invoice or bill. Clicking it lists who the money sits with. */}
+            {creditTotal > 0.01 && (
+              <div
+                ref={creditCardRef}
+                onClick={() => setShowCreditPanel((v) => !v)}
+                className="group relative hidden sm:flex flex-col justify-between w-[220px] h-24 flex-shrink-0 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-3 hover:border-amber-400 hover:bg-amber-50/10 hover:shadow-sm cursor-pointer transition-all"
+                title="Payments not yet applied to a document"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
+                    <ListChecks className="w-3.5 h-3.5 text-amber-600" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-bold text-gray-900 leading-tight">Unapplied</span>
+                    <span className="text-[11px] text-gray-400 leading-tight">
+                      {creditBalances.length} {creditBalances.length === 1 ? "party" : "parties"}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xl font-semibold tracking-tight leading-none text-amber-600">
+                  ₹{Number(creditTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+
+                {showCreditPanel && createPortal(
+                  <div
+                    ref={creditPanelRef}
+                    style={creditPanelStyle}
+                    className="bg-white border border-gray-200 rounded-xl shadow-xl overflow-y-auto cursor-default"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+                      <span className="text-[12px] font-semibold text-gray-900">Unapplied credit</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowCreditPanel(false)}
+                        className="text-gray-400 hover:text-gray-600"
+                        aria-label="Close"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {creditBalances.map((b) => (
+                      <button
+                        key={`${b.partyType}-${b.partyId}`}
+                        type="button"
+                        onClick={() => {
+                          setCreditParty(b);
+                          setShowCreditPanel(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 border-b border-gray-50 last:border-b-0 flex items-center justify-between gap-3 hover:bg-amber-50/50 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium text-gray-900 truncate">{b.partyName}</p>
+                          <p className="text-[10.5px] text-gray-400">
+                            {b.direction === "IN" ? "From customer" : "Advance to vendor"} ·{" "}
+                            {b.payments.length} {b.payments.length === 1 ? "payment" : "payments"}
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <span className="block text-[12px] font-semibold text-amber-600">
+                            ₹{Number(b.creditBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="block text-[10px] text-[#158FFF] font-medium">Apply →</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+              </div>
+            )}
 
             {/* ── CARD: Wallet ─────────────────────────────────────────────── */}
             {(() => {
@@ -1479,9 +1625,40 @@ export default function PaymentsTimeline() {
             <span className="whitespace-nowrap">Add Payment</span>
           </button>
         </div>
-          </>
-        )}
       </div>
+
+      {/* ── Bulk-action strip — its own band directly above the KPIs, so the
+          account cards above it stay visible while rows are selected. ── */}
+      {stripVisible && (
+        <div
+          className="fixed right-0 box-border flex items-center bg-white border-b border-[#E1E4EA] px-4 sm:px-6 lg:px-8"
+          style={{
+            left: "var(--sidebar-width, 0px)",
+            top: TOOLBAR_BOTTOM,
+            height: BULK_STRIP_HEIGHT,
+            zIndex: 39,
+            boxSizing: "border-box",
+          }}
+        >
+          <BulkActionBar
+            bare
+            selectedCount={selectedIds.length}
+            entityName="payment"
+            isClosing={stripClosing}
+            onSelectAll={fetchAllIds}
+            onDeselectAll={() => setSelectedIds([])}
+            onExport={() => {
+              const selectedDocs = documents.filter(doc => selectedIds.includes(doc._id));
+              handleExportExcel(selectedDocs.length > 0 ? selectedDocs : selectedIds.map(id => ({ _id: id })));
+            }}
+            onDelete={() => {
+              setDeleteConfirmState({ isOpen: true, type: "bulk", target: selectedIds });
+            }}
+            onUpdateStatus={() => setShowBulkActions(true)}
+            onCancel={() => setSelectedIds([])}
+          />
+        </div>
+      )}
 
       {/* ── KPI stat cards — same band treatment as Deals.jsx's stats row
           (bordered band, 40x40 icon boxes, gap-6 between cards), narrowing
@@ -1490,7 +1667,7 @@ export default function PaymentsTimeline() {
       {showStats && (
         <div
           className="fixed right-0 box-border flex flex-col justify-center bg-white border-b border-[#E1E4EA] px-6 py-6"
-          style={{ left: "var(--sidebar-width, 0px)", top: TOOLBAR_BOTTOM, height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
+          style={{ left: "var(--sidebar-width, 0px)", top: TOOLBAR_BOTTOM + (stripVisible ? BULK_STRIP_HEIGHT : 0), height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
         >
           <div className="grid grid-cols-2 lg:flex lg:flex-row lg:items-stretch gap-3 lg:gap-6">
             {[
@@ -1498,6 +1675,19 @@ export default function PaymentsTimeline() {
               { label: "Total Debit", value: `₹${paymentStats.totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingDown, iconClass: "text-red-600" },
               { label: "Net", value: `₹${paymentStats.net.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: Wallet, iconClass: paymentStats.net >= 0 ? "text-green-600" : "text-red-600" },
               { label: "Transactions", value: paymentStats.count, icon: ListChecks, iconClass: "text-[#0085FF]" },
+              // Money moved between the org's own accounts. Deliberately kept
+              // out of Credit/Debit/Net — it's neither income nor expense —
+              // but shown when there is any, so excluding it doesn't look
+              // like the figure went missing. Hidden entirely at zero rather
+              // than adding a dead card to every other org's KPI row.
+              ...(Number(paymentStats.totalTransferred) > 0
+                ? [{
+                    label: "Self Transfers",
+                    value: `₹${Number(paymentStats.totalTransferred).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    icon: ArrowLeftRight,
+                    iconClass: "text-[#78788D]",
+                  }]
+                : []),
             ].map((kpi) => (
               <StatTile
                 key={kpi.label}
@@ -1517,7 +1707,10 @@ export default function PaymentsTimeline() {
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
-          top: TOOLBAR_BOTTOM + (showStats ? KPI_BAND_HEIGHT : 0),
+          top:
+            TOOLBAR_BOTTOM +
+            (stripVisible ? BULK_STRIP_HEIGHT : 0) +
+            (showStats ? KPI_BAND_HEIGHT : 0),
           paddingLeft: "var(--content-inset, 16px)",
         }}
       >
@@ -1875,6 +2068,14 @@ export default function PaymentsTimeline() {
           </>,
           document.body
         )}
+
+      {creditParty && (
+        <ApplyCreditModal
+          party={creditParty}
+          onClose={() => setCreditParty(null)}
+          onSuccess={() => fetchData()}
+        />
+      )}
 
       <PaymentFormModal
         isOpen={isPaymentModalOpen}

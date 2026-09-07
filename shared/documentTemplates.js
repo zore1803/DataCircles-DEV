@@ -262,7 +262,25 @@ export function computeDocument(doc, type = "tax") {
 
   const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
 
+  // Payments recorded against this document. Same `payments[]` array every
+  // Paid/Pending figure in the app reads, so a partially-paid invoice prints
+  // the same balance the Accounting list and the allocation screens show.
+  // Balance is measured against the printed grand total, not the stored
+  // `amount`, so the document can never contradict its own arithmetic.
+  const amountPaid = (doc?.payments || []).reduce(
+    (sum, p) => sum + (Number(p.amount) || 0),
+    0
+  );
+  const balanceDue = Math.max(0, grandTotal - amountPaid);
+  // A paisa of tolerance, matching the rest of the money comparisons.
+  const isFullyPaid = amountPaid > 0 && balanceDue <= 0.01;
+  const isPartiallyPaid = amountPaid > 0.01 && balanceDue > 0.01;
+
   return {
+    amountPaid,
+    balanceDue,
+    isFullyPaid,
+    isPartiallyPaid,
     isTax,
     transactionType,
     isInterState: transactionType === "inter",

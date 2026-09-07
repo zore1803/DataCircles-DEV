@@ -229,7 +229,10 @@ export function html(ctx) {
       ${taxTotalRow}
       <div class="dc-grand"><span>Total</span><span>&#8377;${fmt(t.grandTotal)}</span></div>
       ${discountRow}
-      <div class="dc-payable"><span>Amount Payable:</span><span>&#8377;${fmt(t.grandTotal)}</span></div>
+      ${t.isPartiallyPaid
+        ? `<div class="dc-trow"><span class="dc-label">Amount Paid</span><span>&#8377;${fmt(t.amountPaid)}</span></div>`
+        : ""}
+      <div class="dc-payable"><span>${t.isPartiallyPaid ? "Balance Due:" : "Amount Payable:"}</span><span>&#8377;${fmt(t.isPartiallyPaid ? t.balanceDue : t.grandTotal)}</span></div>
     </div>
     <div class="dc-note-row">
       <div>Total Items / Qty : ${t.rows.length} /${t.totalQty}</div>

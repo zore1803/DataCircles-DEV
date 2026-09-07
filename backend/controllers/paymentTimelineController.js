@@ -5,6 +5,11 @@ const Purchase = require("../models/Purchase");
 const SubscriptionPayment = require("../models/SubscriptionPayment.js");
 const BankDetails = require("../models/BankDetails");
 const Wallet = require("../models/Wallet");
+const Company = require("../models/Company");
+const Contact = require("../models/Contact");
+const Deal = require("../models/Deal");
+const PaymentAllocation = require("../models/PaymentAllocation");
+const allocationService = require("../services/paymentAllocationService");
 
 exports.getPaymentsTimeline = async (req, res) => {
   try {
@@ -26,8 +31,10 @@ exports.getPaymentsTimeline = async (req, res) => {
     }
 
     // Fetch from all relevant collections concurrently
-    const [payments, invoices, purchases, subPayments, bankAccounts, wallet] = await Promise.all([
-      Payment.find({ organization: orgId }).populate("vendor", "name companyName"),
+    const [payments, invoices, purchases, subPayments, bankAccounts, wallet, allocations] = await Promise.all([
+      Payment.find({ organization: orgId })
+        .populate("vendor", "name companyName")
+        .populate("party", "name companyName"),
       Invoice.find({ organization: orgId }).populate({
         path: "deal",
         populate: [
@@ -38,8 +45,20 @@ exports.getPaymentsTimeline = async (req, res) => {
       Purchase.find({ organization: orgId }).populate("vendor", "name companyName"),
       SubscriptionPayment.find({ organization: orgId }),
       BankDetails.find({ organization: orgId }),
-      Wallet.findOne({ organization: orgId })
+      Wallet.findOne({ organization: orgId }),
+      PaymentAllocation.find({ organization: orgId }).select("documentPaymentId").lean()
     ]);
+
+    // An allocated payment writes a subdocument into the Invoice/Purchase it
+    // settled — that's what keeps every Paid/Pending figure in the app
+    // correct without touching those screens. But the timeline reads BOTH the
+    // Payment collection and those subdocuments, so without this the same
+    // cash movement would be listed twice and counted twice in the Credit /
+    // Debit / Net KPIs. The Payment row is the canonical one (it carries the
+    // party and the full split), so the subdocuments it created are skipped.
+    const allocatedSubdocIds = new Set(
+      allocations.filter((a) => a.documentPaymentId).map((a) => String(a.documentPaymentId))
+    );
 
     // Maps a payment method string to a `bank` tag for account-card bucketing.
     // "Cash" → goes into the Cash card (paymentTimelineController filters on
@@ -55,19 +74,46 @@ exports.getPaymentsTimeline = async (req, res) => {
       return "";
     };
 
-    const formattedPayments = payments.map((p) => ({
-      _id: p._id,
-      "payment-id": p._id.toString().substring(0, 8).toUpperCase(),
-      party: p.vendor ? p.vendor.companyName || p.vendor.name : "Unknown Vendor",
-      amount: p.amount,
-      direction: p.direction,
-      type: p.paymentType || "Payment",
-      date: p.paymentDate,
-      bank: p.bank || "",
-      notes: p.notes || "",
-      source: "Payment",
-      status: "Paid"
-    }));
+    const formattedPayments = payments.map((p) => {
+      // `party` is the general pointer (Vendor for Debit, Company/Contact for
+      // Credit); `vendor` is the legacy one every pre-allocation row still
+      // uses. Prefer party, fall back to vendor.
+      const partyDoc = p.party || p.vendor;
+      const partyName = partyDoc
+        ? partyDoc.companyName || partyDoc.name
+        : (p.direction === "IN" ? "Unknown Customer" : "Unknown Vendor");
+
+      const allocated = Number(p.allocatedAmount) || 0;
+      const unallocated = Math.max(0, (Number(p.amount) || 0) - allocated);
+
+      return {
+        _id: p._id,
+        "payment-id": p._id.toString().substring(0, 8).toUpperCase(),
+        party: partyName,
+        partyType: p.partyType || (p.vendor ? "Vendor" : null),
+        partyId: partyDoc ? partyDoc._id || partyDoc : null,
+        amount: p.amount,
+        // Surfaced on the row so the timeline can show "₹2,000 unapplied"
+        // without a second request per payment.
+        allocatedAmount: allocated,
+        unallocatedAmount: unallocated,
+        direction: p.direction,
+        type: p.paymentType || "Payment",
+        date: p.paymentDate,
+        bank: p.bank || "",
+        notes: p.notes || "",
+        reference: p.reference || "",
+        // Legacy rows predate the flag, so fall back to the note text the old
+        // self-transfer path always wrote ("Self Transfer to X" / "from X").
+        // Without this, every transfer recorded before this change keeps
+        // inflating the KPIs.
+        isInternalTransfer:
+          p.isInternalTransfer === true || /^Self Transfer (to|from) /.test(p.notes || ""),
+        transferGroup: p.transferGroup || null,
+        source: "Payment",
+        status: "Paid"
+      };
+    });
 
     // STRICTLY ACTUAL PAYMENTS ONLY — iterate each Invoice's payments[]
     // sub-array instead of mapping the whole invoice as a single cash-in.
@@ -82,7 +128,9 @@ exports.getPaymentsTimeline = async (req, res) => {
         else if (inv.deal.contact && inv.deal.contact.name) party = inv.deal.contact.name;
       }
 
-      return inv.payments.map((pmt) => ({
+      return inv.payments
+        .filter((pmt) => !allocatedSubdocIds.has(String(pmt._id)))
+        .map((pmt) => ({
         _id: pmt._id,
         "payment-id": inv.invoiceNumber
           ? `${inv.invoiceNumber}-P${pmt._id.toString().substring(0, 4).toUpperCase()}`
@@ -112,7 +160,9 @@ exports.getPaymentsTimeline = async (req, res) => {
         ? pur.vendor.companyName || pur.vendor.name
         : "Unknown Vendor";
 
-      return pur.payments.map((pmt) => ({
+      return pur.payments
+        .filter((pmt) => !allocatedSubdocIds.has(String(pmt._id)))
+        .map((pmt) => ({
         _id: pmt._id,
         "payment-id": pur.purchaseNumber
           ? `${pur.purchaseNumber}-P${pmt._id.toString().substring(0, 4).toUpperCase()}`
@@ -245,10 +295,24 @@ exports.getPaymentsTimeline = async (req, res) => {
     // `documents` alone, which is only the current page (10 rows), so the
     // Total Credit/Debit/Net/Transactions cards read wildly low against the
     // real "534 total" count.
+    // Internal transfers are excluded here. Moving ₹50,000 from a bank
+    // account to Cash writes an OUT leg and an IN leg, which added ₹50,000 to
+    // BOTH Total Credit and Total Debit even though no money entered or left
+    // the business. (Net happened to survive, since the two legs cancel — the
+    // Credit and Debit cards were the ones reading high.) The legs stay in
+    // `allTransactions`, so they're still listed in the table and still move
+    // the per-account balances computed below, which is exactly what a
+    // transfer should do.
     let totalCredit = 0;
     let totalDebit = 0;
+    let totalTransferred = 0;
     allTransactions.forEach((t) => {
       const amt = Number(t.amount) || 0;
+      if (t.isInternalTransfer) {
+        // Counted once per transfer, not once per leg.
+        if (t.direction === "OUT") totalTransferred += amt;
+        return;
+      }
       if (t.direction === "IN") totalCredit += amt;
       else totalDebit += amt;
     });
@@ -325,6 +389,11 @@ exports.getPaymentsTimeline = async (req, res) => {
         totalCredit,
         totalDebit,
         net: totalCredit - totalDebit,
+        // Money moved between the org's own accounts. Reported separately so
+        // the figure isn't lost — it just isn't income or expense.
+        totalTransferred,
+        // Still every row in the table, transfers included, so this matches
+        // what the user can actually count on screen.
         count: totalCount
       }
     });
@@ -418,49 +487,444 @@ exports.getPaymentReceipt = async (req, res) => {
   }
 };
 
+// GET /api/payments-timeline/parties?direction=IN|OUT&search=
+// Who a payment of this direction can be attributed to. A Credit/IN payment
+// comes from a customer, and a customer is whoever a Deal points at (a
+// Company or a Contact) — that's the only link an Invoice has to a party. A
+// Debit/OUT payment goes to a Vendor.
+exports.getPaymentParties = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const direction = (req.query.direction || "OUT").trim().toUpperCase();
+    const search = (req.query.search || "").trim().toLowerCase();
+
+    let parties = [];
+
+    if (direction === "IN") {
+      // Only parties that could actually have an invoice — i.e. ones with at
+      // least one deal. Listing every company in the CRM would bury the
+      // handful that can be paid against.
+      const deals = await Deal.find({ organization: orgId })
+        .select("company contact")
+        .lean();
+
+      const companyIds = [...new Set(deals.filter((d) => d.company).map((d) => String(d.company)))];
+      const contactIds = [...new Set(deals.filter((d) => d.contact).map((d) => String(d.contact)))];
+
+      const [companies, contacts] = await Promise.all([
+        Company.find({ _id: { $in: companyIds }, organization: orgId })
+          .select("name email phone")
+          .lean(),
+        Contact.find({ _id: { $in: contactIds }, organization: orgId })
+          .select("name email phone")
+          .lean(),
+      ]);
+
+      // Names repeat — a CRM routinely holds several distinct contacts with
+      // the same name — and a picker showing five identical rows is
+      // unusable. `subtitle` carries whatever tells them apart, falling back
+      // to a short id so two otherwise-identical records are still
+      // separable.
+      const subtitleFor = (c, type) =>
+        c.email || c.phone || `${type} · ${String(c._id).slice(-6)}`;
+
+      parties = [
+        ...companies.map((c) => ({
+          _id: c._id,
+          partyType: "Company",
+          name: c.name || "Unnamed company",
+          subtitle: subtitleFor(c, "Company"),
+        })),
+        ...contacts.map((c) => ({
+          _id: c._id,
+          partyType: "Contact",
+          name: c.name || "Unnamed contact",
+          subtitle: subtitleFor(c, "Contact"),
+        })),
+      ];
+    } else {
+      const vendors = await Vendor.find({ organization: orgId })
+        .select("name companyName email phone")
+        .lean();
+      parties = vendors.map((v) => ({
+        _id: v._id,
+        partyType: "Vendor",
+        name: v.companyName || v.name || "Unnamed vendor",
+        subtitle: v.email || v.phone || "",
+      }));
+    }
+
+    if (search) {
+      parties = parties.filter(
+        (p) =>
+          p.name.toLowerCase().includes(search) ||
+          (p.subtitle || "").toLowerCase().includes(search)
+      );
+    }
+
+    parties.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({ direction, parties });
+  } catch (err) {
+    console.error("Fetch payment parties error:", err);
+    res.status(500).json({ error: "Failed to fetch parties" });
+  }
+};
+
+// GET /api/payments-timeline/open-documents?direction&partyType&partyId
+// The party's not-fully-settled documents, each with the balance it still
+// owes — the list the allocation step splits an amount across.
+exports.getOpenDocuments = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const direction = (req.query.direction || "").trim().toUpperCase();
+    const { partyType, partyId } = req.query;
+
+    if (!["IN", "OUT"].includes(direction)) {
+      return res.status(400).json({ error: "direction must be IN or OUT" });
+    }
+    if (!partyId) {
+      return res.status(400).json({ error: "partyId is required" });
+    }
+
+    const result = await allocationService.getOpenDocuments({
+      orgId,
+      direction,
+      partyType: partyType || (direction === "IN" ? "Company" : "Vendor"),
+      partyId,
+    });
+
+    const totalDue = allocationService.round2(
+      result.documents.reduce((sum, d) => sum + d.due, 0)
+    );
+
+    res.json({ ...result, totalDue });
+  } catch (err) {
+    console.error("Fetch open documents error:", err);
+    res.status(500).json({ error: "Failed to fetch open documents" });
+  }
+};
+
+// GET /api/payments-timeline/open-documents/all?direction=IN|OUT
+// Every open document in the org with its party name attached — backs the
+// "search any invoice" picker, since credit isn't restricted to the customer
+// it came from.
+exports.getAllOpenDocuments = async (req, res) => {
+  try {
+    const direction = (req.query.direction || "").trim().toUpperCase();
+    if (!["IN", "OUT"].includes(direction)) {
+      return res.status(400).json({ error: "direction must be IN or OUT" });
+    }
+    const result = await allocationService.getAllOpenDocuments({
+      orgId: req.user.organization,
+      direction,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("Fetch all open documents error:", err);
+    res.status(500).json({ error: "Failed to fetch open documents" });
+  }
+};
+
+// GET /api/payments-timeline/credit-balances?direction=IN|OUT
+// Unallocated money sitting against each party. For IN that's a customer who
+// has paid ahead of their invoices; for OUT it's an advance to a vendor.
+// Either way it's spendable against a future document.
+exports.getCreditBalances = async (req, res) => {
+  try {
+    const direction = req.query.direction ? req.query.direction.trim().toUpperCase() : null;
+    const balances = await allocationService.getCreditBalances({
+      orgId: req.user.organization,
+      direction: ["IN", "OUT"].includes(direction) ? direction : null,
+      partyType: req.query.partyType || null,
+      partyId: req.query.partyId || null,
+    });
+
+    const total = allocationService.round2(
+      balances.reduce((sum, b) => sum + b.creditBalance, 0)
+    );
+
+    res.json({ balances, total });
+  } catch (err) {
+    console.error("Fetch credit balances error:", err);
+    res.status(500).json({ error: "Failed to fetch credit balances" });
+  }
+};
+
+// POST /api/payments-timeline/credit/apply
+// Spends a party's accumulated credit balance against their open documents.
+// Separate from the per-payment endpoint because the credit can span several
+// earlier payments — the service draws them down oldest-first.
+exports.applyCreditBalance = async (req, res) => {
+  try {
+    const { partyType, partyId, direction, allocations } = req.body;
+
+    if (!partyId || !["Vendor", "Company", "Contact"].includes(partyType)) {
+      return res.status(400).json({ error: "A valid party is required." });
+    }
+    if (!["IN", "OUT"].includes(direction)) {
+      return res.status(400).json({ error: "direction must be IN or OUT" });
+    }
+
+    const result = await allocationService.applyCreditBalance({
+      orgId: req.user.organization,
+      userId: req.user._id,
+      partyType,
+      partyId,
+      direction,
+      allocations,
+    });
+
+    res.json({
+      message: "Credit applied",
+      totalApplied: result.totalApplied,
+      remainingCredit: result.remainingCredit,
+      allocations: result.applied,
+    });
+  } catch (err) {
+    if (err instanceof allocationService.AllocationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error("Apply credit balance error:", err);
+    res.status(500).json({ error: "Failed to apply credit" });
+  }
+};
+
 exports.createPayment = async (req, res) => {
   try {
-    const { vendor, vendorName, amount, paymentDate, direction, paymentType, bank, notes } = req.body;
+    const {
+      vendor, vendorName, amount, paymentDate, direction, paymentType, bank, notes,
+      reference, partyType, party, allocations, isInternalTransfer, transferGroup,
+    } = req.body;
     const orgId = req.user.organization;
     const userId = req.user._id;
 
     if (!amount || !paymentDate || !direction || !paymentType) {
       return res.status(400).json({ error: "Missing required fields" });
     }
-
-    let vendorId = vendor;
-
-    if (!vendorId && vendorName) {
-      const newVendor = new Vendor({
-        name: vendorName,
-        organization: orgId,
-        user: userId,
-      });
-      await newVendor.save();
-      vendorId = newVendor._id;
+    if (!["IN", "OUT"].includes(direction)) {
+      return res.status(400).json({ error: "direction must be IN or OUT" });
     }
 
-    if (!vendorId) {
-      return res.status(400).json({ error: "Vendor is required" });
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "A valid payment amount greater than 0 is required." });
+    }
+
+    // Resolve the party. A Credit/IN payment comes from a customer (Company
+    // or Contact); a Debit/OUT payment goes to a Vendor. The vendor-only
+    // fields are still honoured so the existing callers keep working, and an
+    // OUT payment sets both `vendor` and `party` so nothing reading the
+    // legacy pointer regressed.
+    let resolvedPartyType = partyType;
+    let resolvedPartyId = party;
+    let vendorId = vendor;
+
+    const internalTransfer = Boolean(isInternalTransfer);
+
+    if (internalTransfer) {
+      // A transfer between the org's own accounts has no counterparty. It
+      // still needs a vendor pointer (every pre-existing screen reads one),
+      // but it must reuse ONE placeholder per org — the old path ran
+      // `new Vendor()` on every leg of every transfer, which is why the
+      // vendor list fills up with duplicate "Self Transfer" entries.
+      const label = vendorName || "Self Transfer";
+      let placeholder = await Vendor.findOne({ name: label, organization: orgId });
+      if (!placeholder) {
+        placeholder = await Vendor.create({ name: label, organization: orgId, user: userId });
+      }
+      vendorId = placeholder._id;
+      resolvedPartyType = "Vendor";
+      resolvedPartyId = vendorId;
+    } else if (direction === "OUT" || resolvedPartyType === "Vendor") {
+      if (!vendorId && resolvedPartyType === "Vendor") vendorId = resolvedPartyId;
+      if (!vendorId && vendorName) {
+        const newVendor = new Vendor({ name: vendorName, organization: orgId, user: userId });
+        await newVendor.save();
+        vendorId = newVendor._id;
+      }
+      if (!vendorId) {
+        return res.status(400).json({ error: "Vendor is required" });
+      }
+      resolvedPartyType = "Vendor";
+      resolvedPartyId = vendorId;
+    } else {
+      if (!resolvedPartyId || !["Company", "Contact"].includes(resolvedPartyType)) {
+        return res.status(400).json({ error: "A customer (company or contact) is required for a Credit payment." });
+      }
+      const PartyModel = resolvedPartyType === "Company" ? Company : Contact;
+      const exists = await PartyModel.exists({ _id: resolvedPartyId, organization: orgId });
+      if (!exists) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
     }
 
     const payment = new Payment({
       vendor: vendorId,
-      amount: Number(amount),
+      partyType: resolvedPartyType,
+      party: resolvedPartyId,
+      amount: parsedAmount,
+      allocatedAmount: 0,
       paymentDate: new Date(paymentDate),
       direction, // "IN" or "OUT"
       paymentType,
       bank,
       notes,
+      reference,
+      isInternalTransfer: internalTransfer,
+      transferGroup: internalTransfer ? transferGroup : undefined,
       organization: orgId,
       user: userId,
     });
 
     await payment.save();
-    res.status(201).json(payment);
+
+    // Split it across the chosen documents. Anything left over stays on the
+    // payment as this party's credit balance rather than being lost.
+    let allocationResult = { allocations: [], totalAllocated: 0 };
+    if (Array.isArray(allocations) && allocations.length > 0) {
+      try {
+        allocationResult = await allocationService.applyAllocations({
+          orgId, userId, payment, allocations,
+        });
+      } catch (allocErr) {
+        // The payment itself is meaningless without the split the user asked
+        // for — don't leave a half-recorded receipt behind.
+        await Payment.deleteOne({ _id: payment._id });
+        if (allocErr instanceof allocationService.AllocationError) {
+          return res.status(400).json({ error: allocErr.message });
+        }
+        throw allocErr;
+      }
+    }
+
+    res.status(201).json({
+      ...payment.toObject(),
+      allocations: allocationResult.allocations,
+      totalAllocated: allocationResult.totalAllocated,
+      unallocatedAmount: allocationService.round2(parsedAmount - allocationResult.totalAllocated),
+    });
   } catch (err) {
     console.error("Create payment error:", err);
     res.status(500).json({ error: "Failed to create payment" });
+  }
+};
+
+// POST /api/payments-timeline/:id/allocations
+// Spends a payment's leftover credit balance against documents later, after
+// the payment was already recorded. Same validation and same writes as doing
+// it at creation time.
+exports.allocateExistingPayment = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const { allocations } = req.body;
+
+    if (!Array.isArray(allocations) || allocations.length === 0) {
+      return res.status(400).json({ error: "At least one allocation is required." });
+    }
+
+    const payment = await Payment.findOne({ _id: req.params.id, organization: orgId });
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    const available = allocationService.round2(
+      (Number(payment.amount) || 0) - (Number(payment.allocatedAmount) || 0)
+    );
+    if (available <= 0.01) {
+      return res.status(400).json({ error: "This payment has no unallocated balance left." });
+    }
+
+    const result = await allocationService.applyAllocations({
+      orgId,
+      userId: req.user._id,
+      payment,
+      allocations,
+    });
+
+    res.json({
+      message: "Allocation recorded",
+      payment,
+      allocations: result.allocations,
+      unallocatedAmount: allocationService.round2(payment.amount - payment.allocatedAmount),
+    });
+  } catch (err) {
+    if (err instanceof allocationService.AllocationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error("Allocate payment error:", err);
+    res.status(500).json({ error: "Failed to allocate payment" });
+  }
+};
+
+// GET /api/payments-timeline/:id/allocations — what a payment settled.
+exports.getPaymentAllocations = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const payment = await Payment.findOne({ _id: req.params.id, organization: orgId }).lean();
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    const records = await PaymentAllocation.find({ payment: payment._id, organization: orgId }).lean();
+
+    // Allocation rows only carry the document id, so resolve each one's
+    // human-readable number for display.
+    const detailed = await Promise.all(
+      records.map(async (r) => {
+        const cfg = allocationService.DOC_CONFIG[r.documentType];
+        const doc = cfg ? await cfg.model.findById(r.document).lean() : null;
+        return {
+          ...r,
+          documentNumber: doc ? cfg.numberOf(doc) : "",
+          documentTotal: doc ? allocationService.round2(cfg.totalOf(doc)) : 0,
+          documentDue: doc
+            ? allocationService.round2(cfg.totalOf(doc) - allocationService.sumPayments(doc.payments))
+            : 0,
+        };
+      })
+    );
+
+    res.json({
+      allocations: detailed,
+      amount: allocationService.round2(payment.amount),
+      allocatedAmount: allocationService.round2(payment.allocatedAmount),
+      unallocatedAmount: allocationService.round2(
+        (payment.amount || 0) - (payment.allocatedAmount || 0)
+      ),
+    });
+  } catch (err) {
+    console.error("Fetch payment allocations error:", err);
+    res.status(500).json({ error: "Failed to fetch allocations" });
+  }
+};
+
+// DELETE /api/payments-timeline/:id/allocations/:allocationId
+// Un-settles one line, returning that balance to the document's outstanding
+// amount and to the payment's credit balance.
+exports.deleteAllocation = async (req, res) => {
+  try {
+    const orgId = req.user.organization;
+    const record = await PaymentAllocation.findOne({
+      _id: req.params.allocationId,
+      payment: req.params.id,
+      organization: orgId,
+    });
+    if (!record) return res.status(404).json({ error: "Allocation not found" });
+
+    const payment = await Payment.findOne({ _id: req.params.id, organization: orgId });
+    const amount = record.amount;
+
+    await allocationService.reverseAllocation(record);
+
+    if (payment) {
+      payment.allocatedAmount = Math.max(
+        0,
+        allocationService.round2((Number(payment.allocatedAmount) || 0) - amount)
+      );
+      await payment.save({ validateModifiedOnly: true });
+    }
+
+    res.json({ message: "Allocation removed", released: amount });
+  } catch (err) {
+    console.error("Delete allocation error:", err);
+    res.status(500).json({ error: "Failed to remove allocation" });
   }
 };
 
@@ -545,6 +1009,14 @@ exports.deleteTimelineEntry = async (req, res) => {
       case "Subscription":  Model = SubscriptionPayment; break;
       default:
         return res.status(400).json({ error: `Unknown source: ${source}` });
+    }
+
+    // Undo any allocations first, so the invoices/bills this payment settled
+    // stop showing a payment that no longer exists. Done before the delete so
+    // a failure here leaves the payment intact rather than orphaning the
+    // subdocuments it pushed.
+    if (source === "Payment") {
+      await allocationService.reverseAllocationsForPayment(id);
     }
 
     const doc = await Model.findOneAndDelete({ _id: id, organization: orgId });

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronDown, MapPin } from "lucide-react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
+import { INDIA_STATES, CITIES_BY_STATE, ALL_CITIES } from "../../constants/addressOptions";
 
 /*
  * Small building blocks shared by Accounting.jsx's CreateInvoicePanel (the
@@ -60,6 +61,18 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false, r
     ? "border-red-400 focus:ring-red-500/20 focus:border-red-500"
     : "border-slate-200 focus:ring-blue-500/20 focus:border-[#0085FF]";
   const inputCls = `w-full h-11 px-3.5 rounded-[12px] border ${fieldBorder} bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200`;
+  // Match the height/radius of the plain inputs beside them.
+  const pickerTriggerCls = "h-11 rounded-[12px] text-[13px]";
+
+  const stateOptions = INDIA_STATES.map((n) => ({ value: n, label: n }));
+  // Scoped to the selected state; before one is picked, offer every city we
+  // know so the field is still usable rather than an empty dropdown.
+  const cityOptions = (
+    safeValue.state && CITIES_BY_STATE[safeValue.state]
+      ? [...CITIES_BY_STATE[safeValue.state]].sort()
+      : ALL_CITIES
+  ).map((n) => ({ value: n, label: n }));
+
   return (
     <div className="flex flex-col gap-3 w-full @md:col-span-2">
       <div className="flex items-center gap-2 mb-1">
@@ -91,22 +104,38 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false, r
             className={inputCls}
           />
         </div>
+        {/* State comes before City: the city list is scoped to the chosen
+            state, so asking for the state first is what makes the city
+            dropdown short enough to be useful. */}
         <div className="grid grid-cols-2 @md:grid-cols-3 gap-3">
-          <input
-            type="text"
-            value={safeValue.city || ""}
-            disabled={disabled}
-            onChange={(e) => onChange({ ...safeValue, city: e.target.value })}
-            placeholder="City"
-            className={inputCls}
-          />
-          <input
-            type="text"
+          <PickerSelect
             value={safeValue.state || ""}
-            disabled={disabled}
-            onChange={(e) => onChange({ ...safeValue, state: e.target.value })}
+            options={stateOptions}
             placeholder="State"
-            className={inputCls}
+            disabled={disabled}
+            allowCustom
+            triggerClassName={pickerTriggerCls}
+            onSelect={(o) =>
+              onChange({
+                ...safeValue,
+                state: o.value,
+                // A city from the previous state would be wrong under the new
+                // one, so it's cleared — unless it also exists in the new
+                // state's list (several city names repeat across states).
+                city: (CITIES_BY_STATE[o.value] || []).includes(safeValue.city)
+                  ? safeValue.city
+                  : "",
+              })
+            }
+          />
+          <PickerSelect
+            value={safeValue.city || ""}
+            options={cityOptions}
+            placeholder="City"
+            disabled={disabled}
+            allowCustom
+            triggerClassName={pickerTriggerCls}
+            onSelect={(o) => onChange({ ...safeValue, city: o.value })}
           />
           <input
             type="text"
@@ -142,6 +171,16 @@ export const PickerSelect = ({
   searchable = true,
   icon: Icon,
   invalid = false,
+  disabled = false,
+  // Offers "Use <what you typed>" when the search matches nothing, so a value
+  // outside the option list is still reachable. The address pickers need this:
+  // the city list is a curated set of the places that actually turn up on
+  // invoices, not every town in India, and it must never be a dead end.
+  allowCustom = false,
+  // Lets a caller match the surrounding field styling (the address block's
+  // inputs are taller and more rounded than the item-row pickers this was
+  // originally written for).
+  triggerClassName = "h-10 rounded-lg",
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -215,7 +254,10 @@ export const PickerSelect = ({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const selected = options.find((o) => o.value === value);
+  const matched = options.find((o) => o.value === value);
+  // Falling back to the raw value keeps a custom or legacy entry visible in
+  // the trigger instead of silently reading as empty.
+  const selected = matched || (value ? { value, label: value } : null);
   const filtered = query
     ? options.filter((o) =>
       o.label.toLowerCase().includes(query.toLowerCase())
@@ -226,8 +268,9 @@ export const PickerSelect = ({
     <div ref={wrapRef} className="relative w-full min-w-0">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`w-full h-10 flex items-center gap-2 px-3 rounded-lg border bg-white text-left focus:outline-none transition-colors ${
+        disabled={disabled}
+        onClick={() => { if (!disabled) setOpen((v) => !v); }}
+        className={`w-full ${triggerClassName} flex items-center gap-2 px-3 border bg-white text-left focus:outline-none transition-colors disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed ${
           invalid
             ? "border-red-400 hover:border-red-500 focus:border-red-500"
             : "border-[#E1E4EA] hover:border-[#C9CFD8] focus:border-[#0085FF]"
@@ -261,9 +304,24 @@ export const PickerSelect = ({
             </div>
           )}
           <div className="overflow-y-auto flex-1">
-            {filtered.length === 0 && (
+            {filtered.length === 0 && !(allowCustom && query.trim()) && (
               <p className="px-3 py-3 text-sm text-gray-400">No results</p>
             )}
+            {allowCustom && query.trim() &&
+              !options.some((o) => o.label.toLowerCase() === query.trim().toLowerCase()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const custom = query.trim();
+                  onSelect({ value: custom, label: custom });
+                  setOpen(false);
+                  setQuery("");
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-[#0085FF] hover:bg-blue-50 border-b border-[#E1E4EA] transition-colors"
+              >
+                Use &ldquo;{query.trim()}&rdquo;
+              </button>
+              )}
             {filtered.map((o) => (
               <button
                 key={o.value}
