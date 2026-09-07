@@ -9,6 +9,7 @@ const Company = require("../models/Company");
 const Contact = require("../models/Contact");
 const Deal = require("../models/Deal");
 const PaymentAllocation = require("../models/PaymentAllocation");
+const Expense = require("../models/Expense");
 const allocationService = require("../services/paymentAllocationService");
 
 exports.getPaymentsTimeline = async (req, res) => {
@@ -31,7 +32,7 @@ exports.getPaymentsTimeline = async (req, res) => {
     }
 
     // Fetch from all relevant collections concurrently
-    const [payments, invoices, purchases, subPayments, bankAccounts, wallet, allocations] = await Promise.all([
+    const [payments, invoices, purchases, subPayments, bankAccounts, wallet, allocations, expenses] = await Promise.all([
       Payment.find({ organization: orgId })
         .populate("vendor", "name companyName")
         .populate("party", "name companyName"),
@@ -46,7 +47,14 @@ exports.getPaymentsTimeline = async (req, res) => {
       SubscriptionPayment.find({ organization: orgId }),
       BankDetails.find({ organization: orgId }),
       Wallet.findOne({ organization: orgId }),
-      PaymentAllocation.find({ organization: orgId }).select("documentPaymentId").lean()
+      PaymentAllocation.find({ organization: orgId }).select("documentPaymentId").lean(),
+      // Only settled entries — a Pending expense is a record of something
+      // owed, not money that has moved, and the timeline is strictly actual
+      // cash (same rule the invoice/purchase rows follow).
+      Expense.find({ organization: orgId, status: "Paid" })
+        .populate("bankAccount", "bank accountNumber")
+        .populate("vendor", "name companyName")
+        .lean()
     ]);
 
     // An allocated payment writes a subdocument into the Invoice/Purchase it
@@ -196,11 +204,53 @@ exports.getPaymentsTimeline = async (req, res) => {
       status: sub.status
     }));
 
+    // Expenses (money out) and Indirect Income (money in). These are
+    // standalone ledger entries with no document to settle, so they never go
+    // through the allocation engine — but they ARE real cash, so they belong
+    // in the totals and in the per-account balances.
+    const formattedExpenses = expenses.map((e) => {
+      const isIncome = e.kind === "income";
+      // The account cards are matched by bank NAME, so the chosen account's
+      // name is what lets this row land on the right card. Cash has no bank
+      // record, so it's tagged by method instead — same convention
+      // methodToBank() uses for invoice/purchase payments.
+      const bankTag = e.bankAccount?.bank
+        ? e.bankAccount.bank
+        : e.paymentType === "Cash"
+          ? "Cash"
+          : "";
+
+      return {
+        _id: e._id,
+        // Last 6 chars, not the first: an ObjectId begins with a timestamp,
+        // so entries created in the same second share a prefix and every row
+        // would show the same id. The tail is the counter/random portion.
+        "payment-id": `${isIncome ? "INC" : "EXP"}-${e._id.toString().slice(-6).toUpperCase()}`,
+        // The vendor when one was attached; otherwise the category stands in
+        // for a party, since most of these entries have no counterparty.
+        party:
+          e.vendor?.companyName ||
+          e.vendor?.name ||
+          e.category ||
+          (isIncome ? "Indirect Income" : "Expense"),
+        amount: e.amount,
+        direction: isIncome ? "IN" : "OUT",
+        type: e.paymentType || (isIncome ? "Income" : "Expense"),
+        date: e.paymentDate || e.date || e.createdAt,
+        bank: bankTag,
+        notes: e.notes || e.paymentNotes || "",
+        reference: e.category || "",
+        source: isIncome ? "Indirect Income" : "Expense",
+        status: "Paid",
+      };
+    });
+
     let allTransactions = [
       ...formattedPayments,
       ...formattedInvoices,
       ...formattedPurchases,
-      ...formattedSubs
+      ...formattedSubs,
+      ...formattedExpenses
     ];
 
     if (partyFilter) {
@@ -227,7 +277,7 @@ exports.getPaymentsTimeline = async (req, res) => {
         allTransactions = allTransactions.filter(t => t.direction === "IN");
       } else if (typeFilter === "Debit") {
         allTransactions = allTransactions.filter(t => t.direction === "OUT");
-      } else if (["Invoice", "Purchase", "Subscription", "Payment"].includes(typeFilter)) {
+      } else if (["Invoice", "Purchase", "Subscription", "Payment", "Expense", "Indirect Income"].includes(typeFilter)) {
         allTransactions = allTransactions.filter(t => (t.source || "").toLowerCase() === typeFilter.toLowerCase());
       }
     }
@@ -453,6 +503,31 @@ exports.getPaymentReceipt = async (req, res) => {
         bank: "",
         notes: invoice.notes || "",
         reference: invoice.invoiceNumber,
+      };
+      return res.json({ payment, vendor: party });
+    }
+
+    if (source === "Expense" || source === "Indirect Income") {
+      const entry = await Expense.findOne({ _id: id, organization: orgId })
+        .populate("bankAccount", "bank accountNumber")
+        .populate("vendor", "name companyName")
+        .lean();
+      if (!entry) return res.status(404).json({ error: "Record not found" });
+
+      // Normalized onto the field names PaymentReceiptModal reads from a real
+      // Payment, so the modal doesn't need to know about this source.
+      const payment = {
+        _id: entry._id,
+        amount: entry.amount,
+        paymentDate: entry.paymentDate || entry.date,
+        direction: entry.kind === "income" ? "IN" : "OUT",
+        paymentType: entry.paymentType || (entry.kind === "income" ? "Income" : "Expense"),
+        bank: entry.bankAccount?.bank || "",
+        notes: entry.notes || entry.paymentNotes || "",
+        reference: entry.category || "",
+      };
+      const party = entry.vendor || {
+        name: entry.category || (entry.kind === "income" ? "Indirect Income" : "Expense"),
       };
       return res.json({ payment, vendor: party });
     }
@@ -1007,6 +1082,10 @@ exports.deleteTimelineEntry = async (req, res) => {
       case "Invoice":       Model = Invoice; break;
       case "Purchase":      Model = Purchase; break;
       case "Subscription":  Model = SubscriptionPayment; break;
+      // Standalone ledger entries — no allocations to unwind, so deleting one
+      // simply removes it (and with it, its effect on the account balances).
+      case "Expense":
+      case "Indirect Income": Model = Expense; break;
       default:
         return res.status(400).json({ error: `Unknown source: ${source}` });
     }

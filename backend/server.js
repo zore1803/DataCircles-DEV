@@ -134,6 +134,10 @@ app.use('/api/delivery-challans', deliveryChallanRoutes);
 const paymentTimelineRoutes = require('./routes/paymentTimelineRoutes');
 app.use('/api/payments-timeline', paymentTimelineRoutes);
 
+// Expenses and Indirect Income share one router — same record, different kind.
+const expenseRoutes = require('./routes/expenseRoutes');
+app.use('/api/expenses', expenseRoutes);
+
 const invoiceConverter = require('./routes/converterRoutes');
 app.use('/api/converter', invoiceConverter);
 
