@@ -353,7 +353,7 @@ const ItemSearchSelect = ({
   );
 };
 
-const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 
 // Stock is only enforced server-side at save, which meant a sold-out product
 // could sit in the bill until the very end. Products (and their variants)

@@ -1,16 +1,13 @@
 const DocumentTemplateSettings = require("../models/DocumentTemplateSettings");
-const TEMPLATES = DocumentTemplateSettings.TEMPLATES || [
-  "Classic",
-  "Modern",
-  "Minimal",
-  "Elegant",
-  "Compact",
-  "Corporate",
-  "Vibrant",
-  "Mono",
-  "Vintage",
-  "Professional",
-];
+
+let templatesPromise = null;
+function loadTemplates() {
+  if (!templatesPromise) {
+    templatesPromise = import("../../shared/documentTemplates.js");
+  }
+  return templatesPromise;
+}
+
 const DOC_TYPES = ["tax", "performa", "quotation", "deliveryChallan", "salesReturn"];
 
 const DEFAULTS = {
@@ -35,8 +32,9 @@ exports.getTemplatesForOrg = getTemplatesForOrg;
 
 exports.getDocumentTemplates = async (req, res) => {
   try {
+    const { DOCUMENT_TEMPLATES } = await loadTemplates();
     const templates = await getTemplatesForOrg(req.user.organization);
-    res.json({ templates, available: TEMPLATES });
+    res.json({ templates, available: DOCUMENT_TEMPLATES });
   } catch (err) {
     res
       .status(500)
@@ -46,6 +44,7 @@ exports.getDocumentTemplates = async (req, res) => {
 
 exports.updateDocumentTemplates = async (req, res) => {
   try {
+    const { DOCUMENT_TEMPLATES } = await loadTemplates();
     const { templates } = req.body || {};
     if (!templates || typeof templates !== "object") {
       return res.status(400).json({ error: "templates object is required" });
@@ -57,7 +56,7 @@ exports.updateDocumentTemplates = async (req, res) => {
     for (const type of DOC_TYPES) {
       const value = templates[type];
       if (value === undefined) continue;
-      if (!TEMPLATES.includes(value)) {
+      if (!DOCUMENT_TEMPLATES.includes(value)) {
         return res
           .status(400)
           .json({ error: `Invalid template "${value}" for ${type}` });
@@ -77,7 +76,7 @@ exports.updateDocumentTemplates = async (req, res) => {
 
     res.json({
       templates: { ...DEFAULTS, ...(settings?.templates || {}) },
-      available: TEMPLATES,
+      available: DOCUMENT_TEMPLATES,
     });
   } catch (err) {
     res

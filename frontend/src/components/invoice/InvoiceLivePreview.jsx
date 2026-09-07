@@ -81,7 +81,13 @@ const InvoiceLivePreview = ({
 
   return (
     <div
-      className="w-full bg-white border border-gray-300 shadow-md self-start"
+      className="bg-white shadow-lg mx-auto self-start overflow-hidden relative"
+      style={{
+        width: "100%",
+        maxWidth: template === "Landscape" ? "297mm" : "210mm",
+        minHeight: template === "Landscape" ? "210mm" : "297mm",
+        border: "1px solid #ddd",
+      }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

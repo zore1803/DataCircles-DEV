@@ -50,6 +50,7 @@ async function getBrowser() {
  * ignored so changing the template restyles the whole set at once.
  */
 async function resolveTemplate(doc, organization, DEFAULT_TEMPLATE, type) {
+  if (doc?.style) return doc.style;
   if (!organization) return DEFAULT_TEMPLATE;
   try {
     const templates = await getTemplatesForOrg(organization);
@@ -115,10 +116,10 @@ module.exports = async function htmlDocumentPdf(
 <head><meta charset="utf-8" />
 <style>
   html, body { margin: 0; padding: 0; }
-  .dcsheet { padding: 4px !important; }
+  .dcsheet { padding: 0 !important; }
 </style>
 </head>
-<body>${fragment}</body>
+<body class="is-pdf">${fragment}</body>
 </html>`;
 
   const browser = await getBrowser();
@@ -127,8 +128,12 @@ module.exports = async function htmlDocumentPdf(
     await page.setContent(html, { waitUntil: "networkidle0" });
     return await page.pdf({
       format: "A4",
+      landscape: template === "Landscape",
       printBackground: true,
-      margin: { top: "16px", bottom: "16px", left: "16px", right: "16px" },
+      displayHeaderFooter: true,
+      headerTemplate: '<div style="font-size: 8px;"></div>',
+      footerTemplate: '<div style="font-size: 9px; color: #666; font-family: Arial, Helvetica, sans-serif; width: 100%; text-align: right; padding-right: 20px; box-sizing: border-box;">Page <span class="pageNumber"></span>/<span class="totalPages"></span></div>',
+      margin: { top: "16px", bottom: "36px", left: "0", right: "0" },
     });
   } finally {
     await page.close();

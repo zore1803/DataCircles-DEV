@@ -320,7 +320,7 @@ const ItemSearchSelect = ({
   );
 };
 
-const styles = ["Classic", "Modern", "Minimal", "Elegant"];
+
 
 // Stock is only enforced server-side at save, which meant a sold-out product
 // could sit in the bill until the very end. Products (and their variants)
@@ -2809,9 +2809,7 @@ const CreateInvoicePanel = ({
         date: form.date,
         dueDate: form.dueDate,
         status: statusValue,
-        // Saved blank on purpose when no style was picked: the document then
-        // follows the organization's template instead of freezing today's
-        // choice into the record.
+        style: previewTemplate,
         transactionType: form.transactionType,
         gstRate: form.gstRate,
         discount: form.discount,
@@ -2950,17 +2948,12 @@ const CreateInvoicePanel = ({
 <html>
 <head><meta charset="utf-8" /><title>${previewDocNumber || docName}</title>
 <style>
-  @page { size: A4; margin: 12mm; }
+  @page { size: ${previewTemplate === "Landscape" ? "A4 landscape" : "A4 portrait"}; margin: 12mm; }
   html, body { margin: 0; padding: 0; }
-  .dcsheet { padding: 0 !important; }
+  .dcsheet { padding: 0 !important; max-width: 100% !important; min-height: 0 !important; }
   /* Browsers drop background fills when printing unless asked not to, which
      would strip the header bands and tinted rows some templates rely on. */
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  /* The sheet is authored at 760px and Chrome scales it to the printable
-     width, so 1px rules land on fractions of a device pixel and get rounded
-     away — the <table> blocks keep theirs (collapsed borders round up), the
-     plain div boxes lose theirs entirely and only reappear when zoomed in.
-     Printing at a slightly thicker hairline survives the downscale. */
   .dcsheet { --line-w: 1.5px; }
 </style>
 </head>
