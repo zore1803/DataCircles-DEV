@@ -2301,7 +2301,7 @@ function Contacts() {
 
       {/* Title Strip */}
       <div
-        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 border-b top-[54px] lg:top-16 bg-white border-[#E5E5EC]`}
+        className={`fixed right-0 h-16 flex items-center gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 border-b top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))] bg-white border-[#E5E5EC]`}
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
       >
         {showBulkStrip ? (
@@ -2749,7 +2749,7 @@ function Contacts() {
       <div className="bg-white overflow-visible">
         <div
           ref={tableScrollRef}
-          className={`${showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"} top-[118px] lg:top-[128px]`}
+          className={`${showKanban ? "overflow-x-auto overflow-y-hidden" : "overflow-x-auto overflow-y-auto"} top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]`}
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",

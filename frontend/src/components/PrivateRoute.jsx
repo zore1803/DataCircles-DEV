@@ -11,6 +11,13 @@ function PrivateRoute({ children }) {
   const [isAuthorized, setIsAuthorized] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  // A network failure (no err.response — the request never reached the
+  // server) isn't an auth problem at all, but the retry/final-failure logic
+  // below used to fall through the same 401-handling branch into "Unable
+  // to verify authorization" — actively misleading someone who's simply
+  // offline (the OfflineBanner already tells them that correctly) into
+  // thinking their session or credentials are broken.
+  const [isOfflineError, setIsOfflineError] = useState(false);
   const isCheckingRef = useRef(false); // Prevent duplicate checks
 
   // The auth check can resolve faster than the splash's one CSS animation
@@ -70,9 +77,21 @@ function PrivateRoute({ children }) {
         const res = await API.get("/auth/me");
         localStorage.setItem("user", JSON.stringify(res.data.user));
         setIsAuthorized(true);
+        setIsOfflineError(false);
         setRetryCount(0); // Reset retry count on success
       } catch (err) {
         const errorData = err.response?.data;
+
+        if (!err.response) {
+          // Network failure, not an auth failure — api.js has already
+          // retried this request twice internally before this catch even
+          // runs, so there's nothing more to gain from this component's own
+          // retry loop; go straight to the (accurately labeled) error state.
+          setIsAuthorized(false);
+          setIsOfflineError(true);
+          setErrorMessage("");
+          return;
+        }
 
         // Handle specific error cases
         if (errorData?.error === "EMAIL_REQUIRED" && errorData?.requiresEmail) {
@@ -101,6 +120,7 @@ function PrivateRoute({ children }) {
         } else {
           // Final failure after retries
           setIsAuthorized(false);
+          setIsOfflineError(false);
           setErrorMessage(
             errorData?.message ||
               "Unable to verify authorization. Please try again."
@@ -173,27 +193,25 @@ function PrivateRoute({ children }) {
     return (
       <div className="fixed bg-gray-50 flex items-center justify-center px-4 z-20" style={{ top: 64, left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}>
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 text-center max-w-md w-full">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg
-              className="w-8 h-8 text-red-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isOfflineError ? "bg-gray-100" : "bg-red-100"}`}>
+            {isOfflineError ? (
+              <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.828-2.828m2.828 2.828L21 21M15.536 8.464a5 5 0 010 7.072m-7.072 0a5 5 0 010-7.072m-2.829-2.829a9 9 0 000 12.728M3 3l18 18" />
+              </svg>
+            ) : (
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
           </div>
           <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            Authorization Failed
+            {isOfflineError ? "You're offline" : "Authorization Failed"}
           </h2>
           <p className="text-sm text-gray-600 mb-6">
-            {errorMessage ||
-              "Unable to verify your access. This may be due to network issues or session problems."}
+            {isOfflineError
+              ? "Couldn't reach the server. Check your connection and try again."
+              : (errorMessage ||
+                "Unable to verify your access. This may be due to network issues or session problems.")}
           </p>
           <div className="space-y-3">
             <button
@@ -202,12 +220,14 @@ function PrivateRoute({ children }) {
             >
               Try Again
             </button>
-            <button
-              onClick={handleLogout}
-              className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 font-medium text-sm rounded-lg hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-            >
-              Logout
-            </button>
+            {!isOfflineError && (
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 font-medium text-sm rounded-lg hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+              >
+                Logout
+              </button>
+            )}
           </div>
           <p className="mt-4 text-xs text-gray-500">
             If this issue persists, please contact support.

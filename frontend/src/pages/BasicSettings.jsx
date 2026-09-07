@@ -261,7 +261,7 @@ const BasicSettings = () => {
         }}
       >
         <div
-          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -304,7 +304,7 @@ const BasicSettings = () => {
     <div className="min-h-screen bg-white -mt-6 -mx-4 sm:-mx-6 lg:-mx-8">
       {/* Fixed page-header strip — matches the sub-page strip pattern */}
       <div
-        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[54px] lg:top-16"
+        className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
         style={{
           left: "var(--sidebar-width, 0px)",
           zIndex: 40,

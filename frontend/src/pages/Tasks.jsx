@@ -2929,7 +2929,7 @@ function Tasks() {
       />
 
       <div
-        className="flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16 gap-2 lg:gap-4"
+        className="flex flex-row justify-between items-center px-4 sm:px-6 lg:px-8 top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))] gap-2 lg:gap-4"
         style={{
           boxSizing: "border-box",
           height: 64,
@@ -3362,7 +3362,7 @@ function Tasks() {
       {activeTab === "tasks" && !showKanban && (
       <>
       <div
-        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+        className="overflow-x-auto overflow-y-auto top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -3526,7 +3526,7 @@ function Tasks() {
       {activeTab === "meetings" && !showMeetingCalendar && (
       <>
       <div
-        className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+        className="overflow-x-auto overflow-y-auto top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",
@@ -3683,7 +3683,7 @@ function Tasks() {
 
       {activeTab === "meetings" && showMeetingCalendar && (
         <div
-          className="top-[118px] lg:top-[128px]"
+          className="top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
@@ -3707,7 +3707,7 @@ function Tasks() {
 
       {activeTab === "tasks" && showKanban && (
         <div
-          className="top-[118px] lg:top-[128px]"
+          className="top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",

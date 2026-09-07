@@ -1463,7 +1463,7 @@ function Dashboard() {
     return (
       <div style={{ marginTop: -16 }}>
         <div
-          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
+          className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[calc(54px+var(--dc-offline-offset,0px))] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",
@@ -2399,7 +2399,7 @@ function Dashboard() {
   return (
     <div style={{ marginTop: -16 }}>
       <div
-        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[54px] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-16"
+        className="box-border flex flex-row justify-between items-center h-[72px] min-h-[72px] max-h-[72px] px-4 sm:px-6 lg:px-8 py-3 top-[calc(54px+var(--dc-offline-offset,0px))] lg:h-16 lg:min-h-16 lg:max-h-16 lg:py-0 lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
         style={{
           position: "fixed",
           left: "var(--sidebar-width, 0px)",

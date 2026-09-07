@@ -820,7 +820,7 @@ export default function Inventory() {
 
       {/* ── Fixed header bar ─────────────────────────────────────────── */}
       <div
-        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[54px] lg:top-16"
+        className="fixed right-0 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-2 lg:gap-4 px-4 sm:px-6 lg:px-8 top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
         style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, height: 64, minHeight: 64, maxHeight: 64, boxSizing: "border-box" }}
       >
         {showBulkStrip ? (

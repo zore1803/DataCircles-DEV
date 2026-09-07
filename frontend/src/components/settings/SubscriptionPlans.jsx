@@ -1,6 +1,6 @@
 // components/settings/SubscriptionPlans.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, Calendar } from "lucide-react";
+import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, Calendar, ShieldCheck, RotateCcw, ReceiptText } from "lucide-react";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 import PlanCard from "../subscription/PlanCard";
 import CurrentSubscriptionInfo from "../subscription/CurrentSubscriptionInfo";
@@ -1872,13 +1872,13 @@ const SubscriptionPlans = () => {
           {subscription?.subscription && (
             <button
               onClick={() => setShowBillingCalendar(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline mb-3"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0085FF] hover:underline mb-3"
             >
               <Calendar className="w-3.5 h-3.5" /> View Billing Calendar
             </button>
           )}
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Choose Your Plan</h1>
-          <p className="text-gray-600 text-sm max-w-2xl mx-auto mb-6">
+          <h1 className="text-[32px] font-bold text-gray-900 tracking-[-0.02em] mb-2">Choose Your Plan</h1>
+          <p className="text-gray-500 text-sm max-w-2xl mx-auto mb-6">
             Flexible pricing for teams of all sizes. Start with a free trial or scale with annual savings.
           </p>
 
@@ -1898,7 +1898,8 @@ const SubscriptionPlans = () => {
                       .catch(() => {});
                   }
                 }}
-                className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${billingCycle === "yearly" ? "bg-blue-600" : "bg-gray-300"}`}
+                className="relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
+                style={{ background: billingCycle === "yearly" ? "var(--btn-primary)" : "#D1D5DB" }}
                 disabled={processing || paymentInProgress}
               >
                 <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform ${billingCycle === "yearly" ? "translate-x-8" : "translate-x-1"}`} />
@@ -1910,11 +1911,27 @@ const SubscriptionPlans = () => {
           </div>
 
           {!subscription?.subscription?.trialUsed && !subscription?.subscription?.isPaymentConfirmed && (
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 px-4 py-2 rounded-lg border border-green-200 text-sm font-medium">
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 px-4 py-2 rounded-lg border border-green-200 text-sm font-medium mb-6">
               <Gift className="w-4 h-4" />
               7-Day Free Trial Available
             </div>
           )}
+
+          {/* Trust strip — real, standing claims only (no fabricated
+              guarantees like "money-back"): the plan comparison and payment
+              flow below are genuinely backed by these three things, and
+              a pricing page with nothing here reads as a placeholder. */}
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-gray-500 font-medium">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-gray-400" /> Secure payments via Razorpay
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5 text-gray-400" /> Cancel anytime
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ReceiptText className="w-3.5 h-3.5 text-gray-400" /> GST invoice on every payment
+            </span>
+          </div>
         </div>
 
         {/* Coupon apply lives here, outside checkout, so the discount ripples

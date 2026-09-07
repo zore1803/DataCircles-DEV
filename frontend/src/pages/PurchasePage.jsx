@@ -1535,7 +1535,7 @@ const PurchasePage = () => {
       <div className="bg-white overflow-visible">
         {/* Toolbar (Title + Search + Buttons) */}
         <div
-          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 bg-white border-[#E1E4EA]`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))] bg-white border-[#E1E4EA]`}
           style={{
             left: "var(--sidebar-width, 0px)",
             zIndex: 40,
@@ -1790,7 +1790,7 @@ const PurchasePage = () => {
 
         <div
           ref={tableScrollRef}
-          className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+          className="overflow-x-auto overflow-y-auto top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
           style={{
             position: "fixed",
             left: "var(--sidebar-width, 0px)",

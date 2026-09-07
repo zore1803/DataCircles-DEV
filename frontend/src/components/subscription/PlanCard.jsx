@@ -162,12 +162,23 @@ const PlanCard = ({
   const getCardStyles = () => {
     if (plan.popular) {
       return {
-        container: "bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 border-0 transform scale-105 shadow-2xl",
+        // scale-105 used to be here for extra visual pop, but a CSS transform
+        // only affects paint, not the grid box it sits in — this card's
+        // button rendered noticeably lower than its siblings' (grid still
+        // aligned the unscaled boxes; the scaled paint just grew past that
+        // box in every direction). shadow-2xl carries the emphasis instead.
+        // The generic purple->indigo/yellow-orange combo read as a stock
+        // pricing-template palette unrelated to the app's own brand — swapped
+        // for the same blue the rest of the app uses for its primary action
+        // color (index.css --btn-primary), so the "recommended" card looks
+        // like it belongs to this product specifically.
+        container: "border-0 shadow-2xl",
+        containerStyle: { background: "linear-gradient(160deg, #0C4FCD 0%, var(--btn-primary) 100%)" },
         text: "text-white",
-        subtext: "text-purple-100",
+        subtext: "text-blue-100",
         icon: "bg-white/20 text-white",
-        badge: "bg-gradient-to-r from-yellow-400 to-orange-400 text-gray-900",
-        button: "bg-white text-purple-600 hover:bg-gray-100 font-semibold",
+        badge: "bg-white text-[#0C4FCD]",
+        button: "bg-white text-[#0C4FCD] hover:bg-gray-100 font-semibold",
         checkBg: "bg-white/20",
         checkIcon: "text-white",
         priceHighlight: "text-white",
@@ -175,7 +186,7 @@ const PlanCard = ({
         expandBtn: "text-white/70 hover:text-white",
         addonBg: "bg-white/10",
         addonText: "text-white",
-        addonSubtext: "text-purple-200",
+        addonSubtext: "text-blue-100",
         addonBorder: "border-white/20",
         totalBg: "bg-white/10",
         totalText: "text-white",
@@ -183,6 +194,7 @@ const PlanCard = ({
     }
     return {
       container: "bg-white border border-gray-200 hover:border-gray-300 hover:shadow-lg",
+      containerStyle: undefined,
       text: "text-gray-900",
       subtext: "text-gray-500",
       icon:
@@ -282,7 +294,7 @@ const PlanCard = ({
 
   return (
     <>
-      <div className={`relative rounded-xl p-5 transition-all duration-300 ${styles.container}`}>
+      <div className={`relative rounded-xl p-6 transition-all duration-300 h-full flex flex-col ${styles.container}`} style={styles.containerStyle}>
         {/* Popular Badge */}
         {plan.popular && (
           <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -322,7 +334,7 @@ const PlanCard = ({
         <div className="text-center mb-4">
           {plan.trial ? (
             <div>
-              <div className={`text-2xl font-bold ${plan.popular ? "text-white" : "text-green-600"} mb-1`}>FREE</div>
+              <div className={`text-[32px] leading-tight tracking-[-0.02em] font-bold ${plan.popular ? "text-white" : "text-green-600"} mb-1`}>FREE</div>
               <div className={`text-xs ${styles.subtext}`}>{plan.trialDays} days trial</div>
             </div>
           ) : useSubscriptionSnapshot ? (
@@ -337,7 +349,7 @@ const PlanCard = ({
                 <span className={`text-sm line-through ${plan.popular ? "text-white/50" : "text-gray-400"}`}>
                   {formatPrice(snapshotBaseSubtotal)}
                 </span>
-                <h6 className="text-2xl font-bold text-green-500">
+                <h6 className="text-[32px] leading-tight tracking-[-0.02em] font-bold text-green-500">
                   {formatPrice(snapshotRecurringSubtotal)}
                 </h6>
                 <span className={`${styles.subtext} ml-1 text-xs`}>/{billingCycle === "monthly" ? "mo" : "yr"}</span>
@@ -358,7 +370,7 @@ const PlanCard = ({
                     {formatPrice(liveTotal)}
                   </span>
                 )}
-                <h6 className={`text-2xl font-bold ${totalDiscount > 0 ? "text-green-500" : styles.priceHighlight}`}>
+                <h6 className={`text-[32px] leading-tight tracking-[-0.02em] font-bold ${totalDiscount > 0 ? "text-green-500" : styles.priceHighlight}`}>
                   {formatPrice(discountedLiveTotal)}
                 </h6>
                 <span className={`${styles.subtext} ml-1 text-xs`}>/{billingCycle === "monthly" ? "mo" : "yr"}</span>
@@ -650,11 +662,14 @@ const PlanCard = ({
             decisions the same way. */}
         {action === "Upgrade" && <RewardAvailabilityBadge compact />}
 
-        {/* CTA Button */}
+        {/* CTA Button — mt-auto pins it to the bottom of the now h-full
+            flex-col card, so it lines up with every other plan card's
+            button regardless of how many feature bullets or add-on rows
+            render above it. */}
         <button
           onClick={() => !isDisabled && onSelectPlan(plan)}
           disabled={isDisabled}
-          className={`w-full py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center text-sm ${
+          className={`w-full mt-auto py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center text-sm ${
             isDisabled
               ? plan.popular
                 ? "bg-white/20 text-white/50 cursor-not-allowed"

@@ -182,7 +182,7 @@ const InsightsSkeleton = () => (
   <div>
     {/* Fixed tabs strip */}
     <div
-      className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[54px] lg:top-16"
+      className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
       style={{ left: "var(--sidebar-width, 0px)", zIndex: 40 }}
     >
       {/* One pill per real tab (Overview, Contacts, Companies, Deals, Vendors,
@@ -382,7 +382,7 @@ export default function PageSkeleton({ variant = "generic", ...rest }) {
   const Body = VARIANTS[variant] || GenericSkeleton;
   return (
     <div
-      className="fixed overflow-y-auto bg-gray-50 p-6 z-20 top-[54px] lg:top-16"
+      className="fixed overflow-y-auto bg-gray-50 p-6 z-20 top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
       style={{ left: "var(--sidebar-width, 0px)", right: 0, bottom: 0 }}
     >
       <Body {...rest} />

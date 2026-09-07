@@ -1039,7 +1039,7 @@ const Navbar = () => {
         className="hidden lg:block fixed z-[9996] pointer-events-none"
         style={{
           left: "calc(var(--sidebar-width, 64px) - 1px)",
-          top: "0px",
+          top: "var(--dc-offline-offset, 0px)",
           width: "1px",
           height: "64px",
           background: CHROME_BG,
@@ -1055,7 +1055,7 @@ const Navbar = () => {
         className="hidden lg:block fixed z-[9996] pointer-events-none"
         style={{
           left: "calc(var(--sidebar-width, 64px) - 1px)",
-          top: "63px",
+          top: "calc(63px + var(--dc-offline-offset, 0px))",
           width: "19px",
           height: "19px",
           background: CHROME_BG,
@@ -1080,7 +1080,7 @@ const Navbar = () => {
         fill="none"
         style={{
           left: "calc(var(--sidebar-width, 64px) - 1px)",
-          top: "63px",
+          top: "calc(63px + var(--dc-offline-offset, 0px))",
           filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
           transition: "left 300ms ease-in-out",
         }}

@@ -2998,7 +2998,7 @@ const CreateInvoicePanel = ({
 
   return (
     <div
-      className="fixed right-0 bottom-0 bg-white z-[60] flex flex-col top-[54px] lg:top-16"
+      className="fixed right-0 bottom-0 bg-white z-[60] flex flex-col top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
       style={{ left: "var(--sidebar-width, 0px)" }}
     >
       {/* Single continuous resizer line spanning the strip + panels, so the

@@ -1715,7 +1715,7 @@ const PurchaseReturn = () => {
 
       <div className="bg-white overflow-visible">
         <div
-          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[54px] lg:top-16 bg-white border-[#E1E4EA]`}
+          className={`fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))] bg-white border-[#E1E4EA]`}
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 40, minHeight: "64px", maxHeight: "64px", boxSizing: "border-box" }}
         >
           {showBulkStrip ? (
@@ -1934,7 +1934,7 @@ const PurchaseReturn = () => {
 
         <div
           ref={tableScrollRef}
-          className="overflow-x-auto overflow-y-auto top-[118px] lg:top-[128px]"
+          className="overflow-x-auto overflow-y-auto top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
           style={{ position: "fixed", left: "var(--sidebar-width, 0px)", paddingLeft: "var(--content-inset, 16px)", right: 0, bottom: !showLoadingSkeleton ? 64 : 0 }}
         >
           <div className={`relative bg-white border-r border-[#E1E4EA] ${showLoadingSkeleton || purchaseReturns.length > 0 ? "border-b" : ""}`}>

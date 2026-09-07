@@ -2350,7 +2350,7 @@ const Accounting = () => {
             mirroring the Companies page layout and slide animation. */}
         {showBulkStrip && (
           <div
-            className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[54px] lg:top-16"
+            className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
@@ -2542,7 +2542,7 @@ const Accounting = () => {
         )}
         {/* 2nd Header - Tab Bar & Actions Row */}
         <div
-          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[54px] lg:top-16"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center justify-between gap-3 top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 39 }}
         >
           {/* Mobile-only page title — fills the same left slot the tab pill
@@ -2807,7 +2807,7 @@ const Accounting = () => {
             region Companies.jsx uses: edge to edge under the tab bar, stopping
             above the pagination bar. */}
         <div
-          className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[118px] lg:top-[128px]"
+          className="fixed right-0 overflow-x-auto overflow-y-auto bg-white top-[calc(118px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+var(--dc-offline-offset,0px))]"
           style={{ left: "var(--sidebar-width, 0px)", bottom: 64, paddingLeft: "var(--content-inset, 16px)" }}
         >
           <table
