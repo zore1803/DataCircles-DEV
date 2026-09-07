@@ -1807,7 +1807,7 @@ const SubscriptionPlans = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className="min-h-screen bg-white">
       <SuccessConfetti isExploding={showConfetti} />
 
       {/* B2 fix (found via live QA): this used to also render whenever

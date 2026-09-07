@@ -166,6 +166,7 @@ export const SubscriptionProvider = ({ children }) => {
     try {
       const response = await subscriptionAPI.startFreeTrial();
       await fetchSubscription(); // Refresh subscription data
+      window.dispatchEvent(new Event("dc:subscription-updated"));
       return response.data;
     } catch (error) {
       throw error;
@@ -176,6 +177,7 @@ export const SubscriptionProvider = ({ children }) => {
     try {
       const response = await subscriptionAPI.createSubscription(planData);
       await fetchSubscription(); // Refresh subscription data
+      window.dispatchEvent(new Event("dc:subscription-updated"));
       return response.data;
     } catch (error) {
       throw error;
@@ -186,6 +188,7 @@ export const SubscriptionProvider = ({ children }) => {
     try {
       const response = await subscriptionAPI.updateSubscription(planData);
       await fetchSubscription(); // Refreshes subscription AND scheduledChanges (see fetchSubscription)
+      window.dispatchEvent(new Event("dc:subscription-updated"));
       return response.data;
     } catch (error) {
       throw error;
@@ -196,6 +199,7 @@ export const SubscriptionProvider = ({ children }) => {
     try {
       const response = await subscriptionAPI.cancelSubscription(cancelData);
       await fetchSubscription(); // Refreshes subscription AND scheduledChanges (see fetchSubscription)
+      window.dispatchEvent(new Event("dc:subscription-updated"));
       return response.data;
     } catch (error) {
       throw error;

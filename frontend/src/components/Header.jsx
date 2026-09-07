@@ -1013,6 +1013,27 @@ const Header = () => {
   useEffect(() => {
     if (!isSuperAdmin && !isSuperAdminRoute) {
       configureAxios(getAccessTokenSilently);
+      // Trial/subscription state came back once, at mount, from this call
+      // alone — starting a trial or upgrading a plan (SubscriptionContext,
+      // used by the Settings/Billing screens) refreshed only that context's
+      // own state, never this one, so the header's trial pill stayed on
+      // whatever it saw at page load until a full reload. Re-fetch on the
+      // event SubscriptionContext now fires after every state-changing call.
+      const fetchTrialState = async () => {
+        try {
+          const authRes = await API.get("/auth/me");
+          setIsTrialActive(authRes.data.isTrialActive);
+          setTrialEnd(authRes.data.trialEnd);
+          setTrialUsed(authRes.data.trialUsed);
+          setIsPaymentConfirmed(authRes.data.isPaymentConfirmed);
+          setAppStatus(authRes.data.appStatus);
+          setCurrentPeriodEnd(authRes.data.currentPeriodEnd);
+        } catch (err) {
+          console.error("Failed to refresh trial/subscription state:", err);
+        }
+      };
+      window.addEventListener("dc:subscription-updated", fetchTrialState);
+
       const fetchData = async () => {
         setIsLoadingData(true);
         try {
@@ -1039,6 +1060,8 @@ const Header = () => {
         }
       };
       fetchData();
+
+      return () => window.removeEventListener("dc:subscription-updated", fetchTrialState);
     } else {
       setBranding({ companyName: "Data Circles Admin", logoUrl: null });
     }
