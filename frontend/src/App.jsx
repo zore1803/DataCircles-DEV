@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
 import ForgotPassword from "./pages/ForgotPassword";
+import NotFound from "./pages/NotFound";
+import ErrorBoundary from "./components/common/ErrorBoundary";
+import OfflineBanner from "./components/common/OfflineBanner";
 import ResetPassword from "./pages/ResetPassword";
 import {
   BrowserRouter as Router,
@@ -369,6 +372,7 @@ function App() {
     <Router>
       <TopLoadingBarProvider>
       <div className="min-h-screen bg-white relative">
+        <OfflineBanner />
         {userIsAuthenticated && adminNotice && !shouldHideNavigation && (
           <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between gap-3 relative z-[100010]">
             <div className="flex items-center gap-2 text-sm">
@@ -775,6 +779,7 @@ function App() {
                 </SuperAdminPrivateRoute>
               }
             />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
         <ChecklistModal
@@ -801,7 +806,9 @@ function AppWrapper() {
       useRefreshTokens={true}
     >
       <SubscriptionProvider>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </SubscriptionProvider>
     </Auth0Provider>
   );

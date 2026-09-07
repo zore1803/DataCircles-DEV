@@ -924,7 +924,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                                 </div>
                                 <Link
                                   to={`/contacts/${contact._id}`}
-                                  className="text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-all duration-150 ease-out"
+                                  className="text-sm font-semibold text-[#0085FF] truncate hover:underline hover:text-[#004CFF] transition-all duration-150 ease-out"
                                   title={contact.name}
                                 >
                                   <HighlightText text={contact.name} query={searchTerm} />
