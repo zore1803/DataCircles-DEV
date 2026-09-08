@@ -814,9 +814,19 @@ exports.createPayment = async (req, res) => {
     } else if (direction === "OUT" || resolvedPartyType === "Vendor") {
       if (!vendorId && resolvedPartyType === "Vendor") vendorId = resolvedPartyId;
       if (!vendorId && vendorName) {
-        const newVendor = new Vendor({ name: vendorName, organization: orgId, user: userId });
-        await newVendor.save();
-        vendorId = newVendor._id;
+        // Reuse an existing vendor with this name before creating one —
+        // typing a name that's already on file used to mint a duplicate
+        // vendor on every payment.
+        const existing =
+          (await Vendor.findOne({ name: vendorName, organization: orgId })) ||
+          (await Vendor.findOne({ companyName: vendorName, organization: orgId }));
+        if (existing) {
+          vendorId = existing._id;
+        } else {
+          const newVendor = new Vendor({ name: vendorName, organization: orgId, user: userId });
+          await newVendor.save();
+          vendorId = newVendor._id;
+        }
       }
       if (!vendorId) {
         return res.status(400).json({ error: "Vendor is required" });
