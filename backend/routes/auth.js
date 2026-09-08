@@ -60,6 +60,9 @@ router.post(
   authController.updateProfile,
 );
 
+// Delete profile
+router.delete("/profile", requireAuth, authController.removeProfile);
+
 // Get profile
 router.get("/profile", requireAuth, authController.getProfile);
 

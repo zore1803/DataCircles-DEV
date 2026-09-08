@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import { User, Mail, Camera, Upload, LogOut, X, Monitor, ShieldCheck } from "lucide-react";
+import { User, Mail, Camera, Upload, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
 import logo from "/DataCircles.png";
 
 const Profile = () => {
@@ -118,6 +118,21 @@ const Profile = () => {
     setProfileBase64(null);
   };
 
+  const handleRemovePhoto = async () => {
+    if (!window.confirm("Are you sure you want to remove your profile photo?")) return;
+    try {
+      setUploading(true);
+      await API.delete("/auth/profile");
+      alert("Profile photo removed successfully!");
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to remove photo. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (!user) {
     return (
       <PageSkeleton variant="generic" />
@@ -147,7 +162,7 @@ const Profile = () => {
               <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
                 {user.profileUrl || imagePreview ? (
                   <img
-                    src={user.profileUrl}
+                    src={imagePreview || user.profileUrl}
                     alt="Profile"
                     className="w-full h-full object-cover"
                   />
@@ -170,6 +185,16 @@ const Profile = () => {
                   className="hidden"
                 />
               </label>
+              {user.profileUrl && !imagePreview && (
+                <button
+                  onClick={handleRemovePhoto}
+                  disabled={uploading}
+                  className="absolute bottom-2 left-2 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-red-50 transition-colors"
+                  title="Remove Photo"
+                >
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </button>
+              )}
             </div>
           </div>
         </div>

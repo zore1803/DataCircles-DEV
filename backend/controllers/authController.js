@@ -527,6 +527,35 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
+exports.removeProfile = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.profileUrl && user.profileUrl.includes("cloudfront")) {
+      const oldKey = user.profileUrl.split(".net/")[1];
+      if (oldKey) {
+        const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+        const { s3 } = require("../middlewares/uploadMiddlewareS3");
+        try {
+          await s3.send(
+            new DeleteObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: oldKey,
+            }),
+          );
+        } catch (error) {
+          console.error("Error deleting old profile picture:", error);
+        }
+      }
+    }
+    user.profileUrl = null;
+    await user.save();
+    res.json({ message: "Profile picture removed successfully" });
+  } catch (error) {
+    console.error("Profile removal error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Get profile
 // exports.getProfile = async (req, res) => {
 //   const user = req.user;
