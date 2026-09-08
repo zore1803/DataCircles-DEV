@@ -51,8 +51,7 @@ import {
   ListOrdered,
   List as ListIcon,
   Link as LinkIcon,
-  Video,
-} from "lucide-react";
+  Video, ArrowUp, ArrowDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { PDFDocument } from "pdf-lib";
@@ -2877,6 +2876,9 @@ const Accounting = () => {
                             />
                           )}
                         </span>
+                        {activeSort.key === col.id && (activeSort.direction === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           onClick={(e) => openColumnMenu(e, col.id)}
                           title="Column options"
@@ -3054,7 +3056,7 @@ const Accounting = () => {
                                 },
                               }));
                             }}
-                            className={`${itemClass} text-[#161618] hover:bg-gray-50`}
+                            className={`${itemClass} ${activeSort.key === sortKey && activeSort.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                           >
                             <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Ascending
@@ -3077,7 +3079,7 @@ const Accounting = () => {
                                 },
                               }));
                             }}
-                            className={`${itemClass} text-[#161618] hover:bg-gray-50`}
+                            className={`${itemClass} ${activeSort.key === sortKey && activeSort.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                           >
                             <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Descending

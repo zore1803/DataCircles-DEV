@@ -289,7 +289,13 @@ const VendorDetailsPageNew = () => {
   useLayoutEffect(() => {
     const el = leftColRef.current;
     if (!el || activeTab !== "Overview") return;
-    const measure = () => setLeftColHeight(el.getBoundingClientRect().height);
+    // Ignore sub-pixel churn: the observed element and the element this
+    // height is applied to share a grid row, so a jittery value here can
+    // ping-pong with layout instead of settling.
+    const measure = () => {
+      const next = el.getBoundingClientRect().height;
+      setLeftColHeight((prev) => (prev != null && Math.abs(prev - next) < 1 ? prev : next));
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -1046,7 +1052,11 @@ const VendorDetailsPageNew = () => {
             Activity Timeline are Overview-only (see the right column below),
             so the second grid column — and the gap that goes with it — only
             applies there; every other tab's table gets the full width. */}
-        <div className={`grid grid-cols-1 gap-3 ${activeTab === "Overview" ? "lg:grid-cols-[1fr_240px]" : ""}`}>
+        {/* items-start, not the default stretch: the right column is given an
+            explicit pixel height measured from the left column, and a
+            stretching row would let that height feed back into the row and
+            grow the page on every measurement. */}
+        <div className={`grid grid-cols-1 gap-3 items-start ${activeTab === "Overview" ? "lg:grid-cols-[1fr_240px]" : ""}`}>
 
           {/* ── Left Column: Active Tab Content ── */}
           <div ref={leftColRef} className="min-w-0 flex flex-col">
@@ -1292,7 +1302,7 @@ const VendorDetailsPageNew = () => {
           {activeTab === "Overview" && (
           <div
             className="hidden lg:flex lg:flex-col gap-3"
-            style={{ height: leftColHeight != null ? `${leftColHeight + 15}px` : undefined }}
+            style={{ height: leftColHeight != null ? `${leftColHeight}px` : undefined }}
           >
             {/* Vendor Snapshot — replaces the Relationship Health gauge,
                 which was a single fuzzy 0-100 score that read as "made up"
@@ -1350,10 +1360,11 @@ const VendorDetailsPageNew = () => {
               )}
             </div>
 
-            {/* Stretches to fill the rest of the column — the grid row's
-                height is set by the taller left column (Vendor Details +
-                Financial Overview), so this now grows to reach the same
-                bottom edge instead of stopping at its own content height. */}
+            {/* Stretches to fill the rest of the column, so this card's bottom
+                edge lands on the same line as the left column's last card. The
+                feed inside scrolls rather than growing the page — the runaway
+                height this used to show was the grid feedback loop fixed
+                further up, not this card filling its column. */}
             <div className="flex-1 min-h-0 flex flex-col bg-white border border-gray-200 rounded-xl p-3">
               {showSkeleton ? (
                 <Skeleton width={110} height={14} className="mb-5 flex-shrink-0" />

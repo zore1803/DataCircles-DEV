@@ -4,7 +4,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid, Tooltip } from "recharts";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import CrmHealthGauge from "../components/dashboard/CrmHealthGauge";
-import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare, Building2, Users, Video, ListChecks } from "lucide-react";
+import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare, Building2, Users, Video, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
@@ -521,6 +521,9 @@ function Dashboard() {
             return (
               <div className="flex items-center justify-between w-full group">
                 <span className="truncate flex-1 min-w-0" title={vc.label}>{vc.label}</span>
+                {invoiceSortConfig.key === vc.key && (invoiceSortConfig.direction === "asc"
+                  ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                  : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -586,7 +589,7 @@ function Dashboard() {
                               setInvoiceColMenuPos(null);
                               handleInvoiceSort(vc.key, "asc");
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${invoiceSortConfig.key === vc.key && invoiceSortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                           >
                             <ChevronUp className="w-4 h-4 text-[#1C1B1F]" />
                             Sort Ascending
@@ -597,7 +600,7 @@ function Dashboard() {
                               setInvoiceColMenuPos(null);
                               handleInvoiceSort(vc.key, "desc");
                             }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${invoiceSortConfig.key === vc.key && invoiceSortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                           >
                             <ChevronDown className="w-4 h-4 text-[#1C1B1F]" />
                             Sort Descending

@@ -6,6 +6,8 @@ const { EXPENSE_CATEGORIES, INCOME_CATEGORIES } = require("../models/Expense");
 // otherwise fail with MissingSchemaError.
 require("../models/Vendor");
 require("../models/BankDetails");
+const Branding = require("../models/Branding");
+const expenseReceiptPdf = require("../utils/expenseReceiptPdf");
 
 // Both Expenses and Indirect Income run through here — they're the same record
 // with a different `kind`, so the CRUD is shared and the kind comes in as a
@@ -106,7 +108,7 @@ exports.list = async (req, res) => {
 
     const [rows, totalCount, totals] = await Promise.all([
       Expense.find(query)
-        .populate("vendor", "name companyName")
+        .populate("vendor", "name companyName email phone gstin")
         .populate("bankAccount", "bank accountNumber")
         .sort({ date: -1, createdAt: -1 })
         .skip((page - 1) * limit)
@@ -273,6 +275,17 @@ exports.update = async (req, res) => {
       doc.exchangeRate = converted.exchangeRate;
       doc.foreignAmount = converted.foreignAmount;
     }
+    // Convert between Expense and Indirect Income. Same record, different
+    // direction — the two keep separate category lists, so a converted entry
+    // drops a category that doesn't exist on the other side.
+    if (req.body.kind !== undefined) {
+      const nextKind = parseKind(req.body.kind);
+      if (nextKind !== doc.kind) {
+        doc.kind = nextKind;
+        const allowed = nextKind === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+        if (!allowed.includes(doc.category)) doc.category = "";
+      }
+    }
     if (req.body.date !== undefined) doc.date = new Date(req.body.date);
     if (req.body.category !== undefined) doc.category = req.body.category;
     if (req.body.notes !== undefined) doc.notes = req.body.notes;
@@ -305,6 +318,38 @@ exports.uploadAttachment = (req, res) => {
     size: req.file.size || 0,
     mimeType: req.file.mimetype || "",
   });
+};
+
+// GET /api/expenses/:id/receipt
+// The entry's receipt as a PDF, rendered server-side (utils/expenseReceiptPdf.js)
+// so the in-app viewer, the download and the print are all the same bytes.
+exports.receipt = async (req, res) => {
+  try {
+    const entry = await Expense.findOne({
+      _id: req.params.id,
+      organization: req.user.organization,
+    })
+      .populate("vendor", "name companyName email phone gstin")
+      .populate("bankAccount", "bank accountNumber");
+
+    if (!entry) return res.status(404).json({ error: "Record not found" });
+
+    const orgDetails = await Branding.findOne({
+      organization: req.user.organization,
+    }).sort({ updatedAt: -1 });
+
+    const pdfBuffer = await expenseReceiptPdf(entry, orgDetails);
+    const prefix = entry.kind === "income" ? "income" : "expense";
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename=${prefix}-${String(entry._id).slice(-6)}.pdf`,
+    });
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error("Expense receipt error:", err);
+    res.status(500).json({ error: "Failed to build the receipt" });
+  }
 };
 
 // DELETE /api/expenses/:id

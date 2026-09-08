@@ -21,6 +21,7 @@ router.post(
 
 router.get("/", requireAuth, subscriptionGate, expenseController.list);
 router.post("/", requireAuth, subscriptionGate, expenseController.create);
+router.get("/:id/receipt", requireAuth, subscriptionGate, expenseController.receipt);
 router.put("/:id", requireAuth, subscriptionGate, expenseController.update);
 router.delete("/:id", requireAuth, subscriptionGate, expenseController.remove);
 

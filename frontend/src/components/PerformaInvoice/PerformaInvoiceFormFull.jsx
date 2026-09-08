@@ -1243,7 +1243,6 @@ const PerformaInvoiceFormFull = ({
                   <h2 className="text-xl font-bold text-slate-900 flex items-center gap-1 cursor-pointer">
                     Create Performa Invoice <ChevronDown className="w-5 h-5 text-gray-400" />
                   </h2>
-                  <span className="text-xs text-gray-500">Jivesh Sales</span>
                 </div>
                 
                 <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden h-10 bg-white">

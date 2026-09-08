@@ -2,8 +2,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffe
 import { createPortal } from "react-dom";
 import {
   BookOpen, Plus, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, MoreVertical, Pin, PinOff,
-  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Download, Loader2, FileText, Lock, Unlock
-} from "lucide-react";
+  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Download, Loader2, FileText, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
@@ -578,9 +577,13 @@ export default function Journals() {
       );
     }
     if (sortConfig.key) {
+      // Date columns sort on the instant, not on the rendered/raw string —
+      // and "lastUpdated" is a display id, the field behind it is updatedAt.
+      const DATE_FIELD = { date: "date", lastUpdated: "updatedAt" };
+      const dateField = DATE_FIELD[sortConfig.key];
       list = [...list].sort((a, b) => {
-        let va = a[sortConfig.key];
-        let vb = b[sortConfig.key];
+        let va = dateField ? new Date(a[dateField] || 0).getTime() : a[sortConfig.key];
+        let vb = dateField ? new Date(b[dateField] || 0).getTime() : b[sortConfig.key];
         if (typeof va === "string") va = va.toLowerCase();
         if (typeof vb === "string") vb = vb.toLowerCase();
         if (va < vb) return sortConfig.direction === "asc" ? -1 : 1;
@@ -1213,6 +1216,9 @@ export default function Journals() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="truncate flex-1">{col.label}</span>
                       {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
+                      {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                        ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                        : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                       <button
                         onClick={(e) => openColumnMenu(e, col.id)}
                         title="Column options"

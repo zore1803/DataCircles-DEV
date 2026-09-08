@@ -29,8 +29,7 @@ import {
   PinOff,
   EyeOff,
   Video,
-  Settings,
-} from "lucide-react";
+  Settings, ArrowUp, ArrowDown } from "lucide-react";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
 import { formatNumberFixed } from "../utils/numberFormatter";
@@ -1565,6 +1564,9 @@ function Vendors() {
                           )}
                         </span>
 
+                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           onClick={(e) => openColumnMenu(e, col.id)}
                           title="Column options"
@@ -1769,7 +1771,7 @@ function Vendors() {
                             setSortConfig({ key: col.id, direction: "asc" });
                             setPagination((prev) => ({ ...prev, currentPage: 1 }));
                           }}
-                          className={`${itemClass} text-[#161618] hover:bg-gray-50`}
+                          className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                         >
                           <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                           Sort Ascending
@@ -1780,7 +1782,7 @@ function Vendors() {
                             setSortConfig({ key: col.id, direction: "desc" });
                             setPagination((prev) => ({ ...prev, currentPage: 1 }));
                           }}
-                          className={`${itemClass} text-[#161618] hover:bg-gray-50`}
+                          className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                         >
                           <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                           Sort Descending

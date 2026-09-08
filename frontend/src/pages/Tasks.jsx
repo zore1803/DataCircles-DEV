@@ -38,8 +38,7 @@ import {
   Pin,
   PinOff,
   EyeOff,
-  Video,
-} from "lucide-react";
+  Video, ArrowUp, ArrowDown } from "lucide-react";
 import BulkActions from "../components/BulkActions";
 import TaskDetailsModal from "../components/Task/TaskDetailsModal";
 import logo from "/DataCircles.png";
@@ -1815,20 +1814,16 @@ function Tasks() {
   };
 
   // Sorting handlers
-  const handleSort = (key) => {
+  // `direction` is optional: the header click toggles, while the column
+  // menu's Sort Ascending/Descending pass the direction they name.
+  const handleSort = (key, direction) => {
+    const nextDir = (prev) =>
+      direction || (prev.key === key && prev.direction === "asc" ? "desc" : "asc");
     if (activeTab === "tasks") {
-      setTaskSortConfig((prev) => ({
-        key,
-        direction:
-          prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-      }));
+      setTaskSortConfig((prev) => ({ key, direction: nextDir(prev) }));
       setTaskPagination((prev) => ({ ...prev, currentPage: 1 }));
     } else {
-      setMeetingSortConfig((prev) => ({
-        key,
-        direction:
-          prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-      }));
+      setMeetingSortConfig((prev) => ({ key, direction: nextDir(prev) }));
       setMeetingPagination((prev) => ({ ...prev, currentPage: 1 }));
     }
     exitSelectionMode();
@@ -1905,6 +1900,7 @@ function Tasks() {
 
   const renderHeaderMenu = (colKey, label, { sortable = true } = {}) => {
     const isMenuOpen = openColMenuKey === colKey;
+    const activeSortConfig = activeTab === "tasks" ? taskSortConfig : meetingSortConfig;
     const pinSide = getColumnPinSide(colKey);
     return (
       <div className="flex items-center justify-between w-full group">
@@ -1921,6 +1917,9 @@ function Tasks() {
           )}
           <span className="truncate" title={label}>{label}</span>
         </div>
+        {activeSortConfig.key === colKey && (activeSortConfig.direction === "asc"
+          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -1984,9 +1983,9 @@ function Tasks() {
                     onClick={() => {
                       setOpenColMenuKey(null);
                       setColMenuPos(null);
-                      handleSort(colKey);
+                      handleSort(colKey, "asc");
                     }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${activeSortConfig.key === colKey && activeSortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
                     <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Sort Ascending
@@ -1995,9 +1994,9 @@ function Tasks() {
                     onClick={() => {
                       setOpenColMenuKey(null);
                       setColMenuPos(null);
-                      handleSort(colKey);
+                      handleSort(colKey, "desc");
                     }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${activeSortConfig.key === colKey && activeSortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
                     <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Sort Descending

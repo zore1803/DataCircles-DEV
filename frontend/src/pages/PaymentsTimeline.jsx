@@ -5,8 +5,7 @@ import {
   SlidersHorizontal, Plus, Download, Share2, Edit2,
   ChevronLeft, ChevronRight, Pin, PinOff, FileText,
   Settings, Upload, Video, TrendingUp, TrendingDown, Wallet, ListChecks,
-  ArrowLeftRight,
-} from "lucide-react";
+  ArrowLeftRight, ArrowUp, ArrowDown } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
@@ -536,6 +535,12 @@ export default function PaymentsTimeline() {
         if (sortConfig.key === "party") {
           valA = a.party || "";
           valB = b.party || "";
+        } else if (sortConfig.key === "date") {
+          // Compare the instant, so rows on the same day order by time of day
+          // and a missing date sorts to the start rather than landing wherever
+          // an undefined comparison happens to leave it.
+          valA = a.date ? new Date(a.date).getTime() : 0;
+          valB = b.date ? new Date(b.date).getTime() : 0;
         }
         if (typeof valA === "string") valA = valA.toLowerCase();
         if (typeof valB === "string") valB = valB.toLowerCase();
@@ -1764,6 +1769,9 @@ export default function PaymentsTimeline() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="truncate flex-1">{col.label}</span>
                       {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
+                      {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                        ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                        : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                       <button
                         onClick={e => openColumnMenu(e, col.id)}
                         title="Column options"

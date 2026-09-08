@@ -13,6 +13,7 @@ import {
 } from "react-router-dom";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import API, { configureAxios } from "./services/api";
+import Intercom from "./components/common/Intercom";
 import Dashboard from "./pages/Dashboard";
 import Companies from "./pages/Companies";
 import Contacts from "./pages/Contacts";
@@ -786,6 +787,12 @@ function App() {
         <ChecklistModal
           showChecklist={showChecklist}
           setShowChecklist={setShowChecklist}
+        />
+        {/* Boots the Intercom Messenger for a signed-in, set-up user. Renders
+            nothing itself — the launcher is Intercom's own widget. */}
+        <Intercom
+          isAuthenticated={userIsAuthenticated}
+          isSetupComplete={isSetupComplete}
         />
       </div>
       </TopLoadingBarProvider>

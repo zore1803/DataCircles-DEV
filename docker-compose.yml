@@ -31,6 +31,7 @@ services:
         VITE_APP_AUTH0_DOMAIN: ${VITE_APP_AUTH0_DOMAIN}
         VITE_APP_AUTH0_AUDIENCE: ${VITE_APP_AUTH0_AUDIENCE}
         VITE_APP_AUTH0_CLIENT_ID: ${VITE_APP_AUTH0_CLIENT_ID}
+        VITE_INTERCOM_APP_ID: ${VITE_INTERCOM_APP_ID}
     container_name: crm-frontend
     ports:
       - "127.0.0.1:3000:80"

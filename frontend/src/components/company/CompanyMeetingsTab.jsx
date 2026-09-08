@@ -19,8 +19,7 @@ import {
   X,
   Eye,
   Edit3,
-  Trash2,
-} from "lucide-react";
+  Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
@@ -961,6 +960,9 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                         </div>
 
                         {/* Column menu trigger */}
+                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1029,7 +1031,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                                   handleSort(col.id, "asc");
                                   setListPage(1);
                                 }}
-                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                               >
                                 <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                 Sort Ascending
@@ -1041,7 +1043,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                                   handleSort(col.id, "desc");
                                   setListPage(1);
                                 }}
-                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                               >
                                 <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                 Sort Descending

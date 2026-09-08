@@ -4140,19 +4140,19 @@ const CreateInvoicePanel = ({
             ref={previewAreaRef}
             className="group w-full lg:flex-1 lg:min-h-0 lg:self-stretch lg:overflow-y-auto overflow-x-hidden relative p-1.5"
           >
-            {/* Full-view button — appears on hover, opens the same document
-                viewer as the eye action in the list (edit mode only). */}
-            {isEditing && (
-              <button
-                type="button"
-                onClick={() => setShowFullView(true)}
-                title="Full view"
-                className="absolute top-3 right-3 z-10 flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1F2937] text-white text-xs font-medium shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Full view
-              </button>
-            )}
+            {/* Full-view button — appears on hover over the preview and opens
+                the same sheet at full size, i.e. the page as it will print.
+                Offered while creating too: the preview is driven by form
+                state, so it doesn't need a saved document to render. */}
+            <button
+              type="button"
+              onClick={() => setShowFullView(true)}
+              title="Full view"
+              className="absolute top-3 right-3 z-10 flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1F2937] text-white text-xs font-medium shadow-lg opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Full view
+            </button>
             {/* Fixed-width sheet scaled to fit — resizing zooms the invoice
                 instead of reflowing it. Outer div reserves the scaled height. */}
             <div style={{ height: sheetHeight || undefined }}>
@@ -4210,32 +4210,25 @@ const CreateInvoicePanel = ({
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100002] flex flex-col"
             onClick={() => setShowFullView(false)}
           >
-            <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 bg-white border-b border-[#E1E4EA]">
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-[#1F2937] truncate">
-                  {docName} Preview
-                  {initialDoc?.[numberKeyFor(type)]
-                    ? ` #${initialDoc[numberKeyFor(type)]}`
-                    : ""}
-                </h2>
-                <p className="text-xs text-[#99A0AE] truncate">
-                  Showing your current edits, including unsaved changes.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFullView(false)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            {/* No chrome around the sheet — just the page and a close
+                control above its corner. */}
             <div className="flex-1 min-h-0 overflow-auto p-6">
-              <div
-                className="mx-auto bg-white shadow-2xl"
-                style={{ width: PREVIEW_BASE_W }}
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="relative mx-auto" style={{ width: PREVIEW_BASE_W }}>
+                {/* Centred on the sheet's top-right corner, so it overlaps
+                    the page diagonally without covering the header block. */}
+                <button
+                  type="button"
+                  onClick={() => setShowFullView(false)}
+                  title="Close"
+                  aria-label="Close preview"
+                  className="absolute -top-3 -right-3 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-white border border-[#E1E4EA] text-gray-600 shadow-md hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                <div
+                  className="bg-white shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
                 <InvoiceLivePreview
                   form={form}
                   orgDetails={orgDetails}
@@ -4246,6 +4239,7 @@ const CreateInvoicePanel = ({
                   invoiceNumber={previewDocNumber}
                   dealName={dealOptions.find((d) => d.value === form.deal)?.label}
                 />
+                </div>
               </div>
             </div>
           </div>,

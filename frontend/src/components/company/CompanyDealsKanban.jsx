@@ -61,8 +61,7 @@ import {
   Tag,
   IndianRupee,
   Calendar,
-  X,
-} from "lucide-react";
+  X, ArrowUp, ArrowDown } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
@@ -1780,6 +1779,9 @@ export default function CompanyDealsKanban({
                                     />
                                   )}
                                 </div>
+                                {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                                  ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                                  : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

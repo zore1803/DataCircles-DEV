@@ -791,6 +791,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
           onUnpinColumn={handleUnpinColumn}
           onHideColumn={handleHideColumn}
           onSort={handleSort}
+          sortConfig={sortConfig}
           onColumnReorder={handleColumnReorder}
           visibleColumns={visibleColumnsForGhost}
           getGhostPreview={getGhostPreview}

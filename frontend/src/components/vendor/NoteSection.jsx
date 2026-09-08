@@ -1195,6 +1195,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
             onUnpinColumn={handleUnpinColumn}
             onHideColumn={handleHideColumn}
             onSort={handleSort}
+          sortConfig={sortConfig}
             onColumnReorder={handleColumnReorder}
             visibleColumns={visibleColumnsForGhost}
             getGhostPreview={getGhostPreview}

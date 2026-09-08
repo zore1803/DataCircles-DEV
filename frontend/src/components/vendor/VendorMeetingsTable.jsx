@@ -647,6 +647,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
           onUnpinColumn={handleUnpinColumn}
           onHideColumn={handleHideColumn}
           onSort={handleSort}
+          sortConfig={sortConfig}
           onColumnReorder={handleColumnReorder}
           visibleColumns={visibleColumnsForGhost}
           getGhostPreview={getGhostPreview}

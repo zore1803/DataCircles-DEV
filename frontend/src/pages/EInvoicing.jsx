@@ -25,8 +25,7 @@ import {
   Trash2,
   Upload,
   X,
-  XCircle,
-} from "lucide-react";
+  XCircle, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   useReactTable,
@@ -381,6 +380,9 @@ export default function EInvoicing() {
                   )}
                 </span>
 
+                {sortConfig.key === vc.key && (sortConfig.direction === "asc"
+                  ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                  : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -442,7 +444,7 @@ export default function EInvoicing() {
                               setSortConfig({ key: vc.key, direction: "asc" });
                               setPagination((p) => ({ ...p, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                           >
                             <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Ascending
@@ -453,7 +455,7 @@ export default function EInvoicing() {
                               setSortConfig({ key: vc.key, direction: "desc" });
                               setPagination((p) => ({ ...p, currentPage: 1 }));
                             }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                           >
                             <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Sort Descending

@@ -2,17 +2,20 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import {
   Search as SearchIcon, X, Plus, Pencil, Trash2, ChevronDown, MoreVertical,
   Pin, PinOff, ArrowUp, ArrowDown, EyeOff, Settings, ChevronLeft, ChevronRight, Eye,
+  Download, Share2, Repeat, Copy, MessageCircle, Mail, MessageSquare,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import ExpenseFormPanel from "./ExpenseFormPanel";
+import ExpenseReceiptModal from "./ExpenseReceiptModal";
 import { useColumnSettings } from "../../hooks/useColumnSettings";
 import ColumnSettingsPanel from "../ColumnSettingsPanel";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import { getAncestorZoom } from "../../utils/domUtils";
 import BulkActionBar from "../common/BulkActionBar";
 import { useBulkStrip } from "../../hooks/useBulkSelection";
+import useSearchOverlayOpen from "../../hooks/useSearchOverlayOpen";
 import * as XLSX from "xlsx";
 
 /*
@@ -70,6 +73,7 @@ const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title, subtitle }) {
+  const isSearchOverlayOpen = useSearchOverlayOpen();
   const isIncome = kind === "income";
   const noun = isIncome ? "Income" : "Expense";
 
@@ -97,6 +101,12 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [sort, setSort] = useState({ key: "date", dir: "desc" });
   const [openMenu, setOpenMenu] = useState(null);
+  const [rowMenuPos, setRowMenuPos] = useState(null);
+  // Which page of the row flyout is showing: the action list, the Convert
+  // targets, or the share channels. Mirrors Accounting.jsx's row menu.
+  const [rowMenuView, setRowMenuView] = useState("main");
+  const [viewRow, setViewRow] = useState(null);
+  const [busyRowId, setBusyRowId] = useState(null);
 
   /* Column visibility + order persist per page via the same hook Companies
      and the timeline use. Pin side and widths stay session-local, matching
@@ -127,7 +137,9 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const [draggedColKey, setDraggedColKey] = useState(null);
   const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [dragGhost, setDragGhost] = useState(null);
   const dragOverRef = useRef(null);
+  const ghostElRef = useRef(null);
 
   const toggleSort = (key) =>
     setSort((prev) =>
@@ -242,42 +254,106 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
 
   // Drag to reorder. No floating ghost preview (the timeline has one) - the
   // drop target is highlighted and the dragged header dims instead.
+  // Plain text for a cell, used by the drag ghost's column preview.
+  const cellTextFor = (colKey, row) => {
+    switch (colKey) {
+      case "category":
+        return row.category || noun;
+      case "vendor":
+        return row.vendor?.companyName || row.vendor?.name || "—";
+      case "amount":
+        return money(row.amount);
+      case "mode":
+        return row.paymentType || "—";
+      case "notes":
+        return row.notes || "—";
+      case "date":
+        return formatDate(row.date);
+      default:
+        return "";
+    }
+  };
+
+  // Same lift-and-carry column drag as PaymentsTimeline.jsx: a floating ghost
+  // of the column (header + its cell values) follows the cursor, so the drag
+  // reads as picking the column up rather than just tinting the header.
   const startColumnDrag = (e, colId) => {
     if (e.button !== 0) return;
     if (e.target.closest("button") || e.target.closest("[data-resize-handle]")) return;
 
+    const th = e.currentTarget;
     const startX = e.clientX;
     const startY = e.clientY;
     const THRESHOLD = 5;
-    let started = false;
 
-    const onMove = (mv) => {
-      if (!started) {
-        if (Math.hypot(mv.clientX - startX, mv.clientY - startY) < THRESHOLD) return;
-        started = true;
-        window.getSelection?.()?.removeAllRanges();
-        document.body.style.userSelect = "none";
-        setDraggedColKey(colId);
-      }
-      const el = document.elementFromPoint(mv.clientX, mv.clientY);
-      const th = el?.closest("th[data-col-id]");
-      const overKey = th?.getAttribute("data-col-id") || null;
+    const dragState = { started: false, offsetX: 0, offsetY: 0, zGhost: 1 };
+
+    const positionGhost = (clientX, clientY) => {
+      const el = ghostElRef.current;
+      if (!el) return;
+      const visualTop = clientY - dragState.offsetY;
+      const visualLeft = clientX - dragState.offsetX;
+      el.style.top = `${visualTop / dragState.zGhost}px`;
+      el.style.left = `${visualLeft / dragState.zGhost}px`;
+      el.style.maxHeight = `${Math.max(100, window.innerHeight - visualTop - 72) / dragState.zGhost}px`;
+    };
+
+    const updateDragOver = (clientX, clientY) => {
+      const elAtPoint = document.elementFromPoint(clientX, clientY);
+      const thAtPoint = elAtPoint?.closest("th[data-col-id]");
+      const overKey = thAtPoint?.getAttribute("data-col-id") || null;
       if (dragOverRef.current !== overKey) {
         dragOverRef.current = overKey;
         setDragOverColKey(overKey);
       }
     };
 
+    const beginDrag = () => {
+      dragState.started = true;
+      window.getSelection?.()?.removeAllRanges();
+
+      const rect = th.getBoundingClientRect();
+      const col = ALL_COLUMNS.find((c) => c.key === colId);
+
+      dragState.zGhost = getAncestorZoom(document.body);
+      dragState.offsetX = startX - rect.left;
+      dragState.offsetY = startY - rect.top;
+
+      dragOverRef.current = null;
+      setDraggedColKey(colId);
+      setDragOverColKey(null);
+      document.body.style.userSelect = "none";
+      setDragGhost({
+        label: col?.label || colId,
+        previewRows: sortedRows.map((row) => cellTextFor(colId, row)),
+        width: rect.width / dragState.zGhost,
+        height: rect.height / dragState.zGhost,
+      });
+
+      requestAnimationFrame(() => positionGhost(startX, startY));
+    };
+
+    const onMove = (mv) => {
+      if (!dragState.started) {
+        if (Math.hypot(mv.clientX - startX, mv.clientY - startY) < THRESHOLD) return;
+        mv.preventDefault();
+        beginDrag();
+      }
+      positionGhost(mv.clientX, mv.clientY);
+      updateDragOver(mv.clientX, mv.clientY);
+    };
+
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      if (!started) return;
+      if (!dragState.started) return;
       document.body.style.userSelect = "";
       const overKey = dragOverRef.current;
       if (overKey && overKey !== colId) handleColumnReorder(colId, overKey);
       dragOverRef.current = null;
       setDraggedColKey(null);
       setDragOverColKey(null);
+      setDragGhost(null);
     };
 
     document.addEventListener("mousemove", onMove);
@@ -336,7 +412,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
 
   useEffect(() => {
     if (!openMenu) return;
-    const close = () => setOpenMenu(null);
+    const close = () => { setOpenMenu(null); setRowMenuPos(null); setRowMenuView("main"); };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [openMenu]);
@@ -381,6 +457,106 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
       fetchData();
     } finally {
       setBulkDeleting(false);
+    }
+  };
+
+  const closeRowMenu = () => {
+    setOpenMenu(null);
+    setRowMenuPos(null);
+    setRowMenuView("main");
+  };
+
+  // One-row export. Same sheet shape as the toolbar's bulk export so the two
+  // files are readable side by side.
+  const handleDownloadRow = (row) => {
+    const sheet = XLSX.utils.json_to_sheet([
+      {
+        Date: formatDate(row.date),
+        Category: row.category || "",
+        Vendor: row.vendor?.companyName || row.vendor?.name || "",
+        Notes: row.notes || "",
+        Mode: row.paymentType || "",
+        Bank: row.bankAccount?.bank || "",
+        "Amount (INR)": Number(row.amount) || 0,
+        Currency: row.currency || "INR",
+        "Original Amount": row.foreignAmount ?? "",
+      },
+    ]);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, noun);
+    XLSX.writeFile(book, `${noun.toLowerCase()}-${formatDate(row.date).replace(/\s+/g, "-")}.xlsx`);
+    toast.success("Downloaded");
+  };
+
+  const handleDuplicate = async (row) => {
+    setBusyRowId(row._id);
+    const tid = toast.loading("Duplicating...");
+    try {
+      await API.post("/expenses", {
+        kind,
+        amount: row.currency && row.currency !== "INR" ? row.foreignAmount ?? row.amount : row.amount,
+        currency: row.currency || "INR",
+        exchangeRate: row.exchangeRate ?? 1,
+        date: row.date,
+        category: row.category || "",
+        notes: row.notes || "",
+        vendor: row.vendor?._id || row.vendor || null,
+        attachments: row.attachments || [],
+        status: row.status,
+        paymentDate: row.paymentDate,
+        paymentType: row.paymentType,
+        bankAccount: row.bankAccount?._id || row.bankAccount || null,
+        paymentNotes: row.paymentNotes || "",
+      });
+      toast.success(`${noun} duplicated`, { id: tid });
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to duplicate", { id: tid });
+    } finally {
+      setBusyRowId(null);
+    }
+  };
+
+  // Expense <-> Indirect Income are the same record with a different `kind`,
+  // so converting is a one-field update. The row leaves this list on success.
+  const convertTargetKind = isIncome ? "expense" : "income";
+  const convertTargetLabel = isIncome ? "Expense" : "Indirect Income";
+  const handleConvert = async (row) => {
+    setBusyRowId(row._id);
+    const tid = toast.loading("Converting...");
+    try {
+      await API.put(`/expenses/${row._id}`, { kind: convertTargetKind });
+      toast.success(`Converted to ${convertTargetLabel}`, { id: tid });
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to convert", { id: tid });
+    } finally {
+      setBusyRowId(null);
+    }
+  };
+
+  // Expenses have no public view link, so the share text is the entry itself
+  // rather than a URL.
+  const shareText = (row) =>
+    [
+      `${noun}: ${row.category || "Uncategorised"}`,
+      `Amount: ${money(row.amount)}`,
+      `Date: ${formatDate(row.date)}`,
+      row.vendor?.companyName || row.vendor?.name ? `Vendor: ${row.vendor.companyName || row.vendor.name}` : null,
+      row.paymentType ? `Mode: ${row.paymentType}` : null,
+      row.notes ? `Notes: ${row.notes}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+  const shareVia = (channel, row) => {
+    const text = shareText(row);
+    if (channel === "whatsapp") {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    } else if (channel === "email") {
+      window.location.href = `mailto:?subject=${encodeURIComponent(`${noun} - ${money(row.amount)}`)}&body=${encodeURIComponent(text)}`;
+    } else if (channel === "sms") {
+      window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
     }
   };
 
@@ -680,15 +856,12 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="truncate flex-1">{col.label}</span>
-                        {sort.key === col.key &&
-                          (sort.dir === "asc" ? (
-                            <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                          ) : (
-                            <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                          ))}
                         {pinnedCols[col.key] && (
                           <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
                         )}
+                        {sort.key === col.key && (sort.dir === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           type="button"
                           onClick={(e) => openColumnMenu(e, col.key)}
@@ -812,41 +985,193 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                                 <button
                                   type="button"
                                   onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={() => setOpenMenu(openMenu === r._id ? null : r._id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (openMenu === r._id) {
+                                      setOpenMenu(null);
+                                      setRowMenuPos(null);
+                                      return;
+                                    }
+                                    // Same zoom-corrected, row-centered, viewport-clamped
+                                    // anchoring as the PaymentsTimeline row-actions menu.
+                                    const zMenu = getAncestorZoom(document.body);
+                                    const MENU_W = 224; // matches w-56 below
+                                    const MENU_H = 300; // 7 items + divider + padding
+                                    const MARGIN = 8;
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const viewportH = window.innerHeight / zMenu;
+                                    // clientWidth, not innerWidth: the latter counts the
+                                    // vertical scrollbar and lets the menu sit under it.
+                                    const viewportW = document.documentElement.clientWidth / zMenu;
+
+                                    // Hangs below the trigger, flipping above it when the
+                                    // row is near the bottom. Centering on the row (what the
+                                    // shorter timeline menu does) would put this taller menu
+                                    // over the toolbar for rows near the top.
+                                    const btnTop = rect.top / zMenu;
+                                    const btnBottom = rect.bottom / zMenu;
+                                    let calcTop = btnBottom + 4;
+                                    if (calcTop + MENU_H > viewportH - MARGIN) {
+                                      calcTop = btnTop - 4 - MENU_H;
+                                    }
+                                    calcTop = Math.max(MARGIN, Math.min(calcTop, viewportH - MENU_H - MARGIN));
+
+                                    let calcLeft = rect.right / zMenu - MENU_W;
+                                    calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
+                                    calcLeft = Math.max(calcLeft, MARGIN);
+
+                                    setRowMenuPos({ top: calcTop, left: calcLeft });
+                                    setOpenMenu(r._id);
+                                  }}
                                   title="Actions"
                                   className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
                                 >
                                   <MoreVertical className="w-4 h-4" />
                                 </button>
-                                {openMenu === r._id && (
-                                  <div
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    className="absolute right-0 top-8 z-50 w-36 bg-white border border-[#E1E4EA] rounded-xl shadow-xl py-1"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenMenu(null);
-                                        openEdit(r);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-[#1F2937] hover:bg-gray-50 transition-colors"
+                                {openMenu === r._id && rowMenuPos && createPortal(
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-[59]"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={closeRowMenu}
+                                    />
+                                    <div
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
+                                      className="w-56 bg-white border border-[#E1E4EA] rounded-xl shadow-xl py-1 z-[60] max-h-[70vh] overflow-y-auto"
                                     >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={deletingId === r._id}
-                                      onClick={() => {
-                                        setOpenMenu(null);
-                                        handleDelete(r);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      Delete
-                                    </button>
-                                  </div>
+                                      {rowMenuView === "main" && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeRowMenu(); setViewRow(r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
+                                            <Eye className="w-4 h-4 text-blue-600" />
+                                            View
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeRowMenu(); openEdit(r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
+                                            <Pencil className="w-4 h-4 text-blue-600" />
+                                            Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeRowMenu(); handleDownloadRow(r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
+                                            <Download className="w-4 h-4 text-green-600" />
+                                            Download
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setRowMenuView("share")}
+                                            className="w-full flex items-center justify-between gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                          >
+                                            <span className="flex items-center gap-2 text-left">
+                                              <Share2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                              Share via WhatsApp/Email/SMS
+                                            </span>
+                                            <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setRowMenuView("convert")}
+                                            className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                          >
+                                            <span className="flex items-center gap-2">
+                                              <Repeat className="w-4 h-4 text-orange-600" />
+                                              Convert
+                                            </span>
+                                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={busyRowId === r._id}
+                                            onClick={() => { closeRowMenu(); handleDuplicate(r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center gap-2"
+                                          >
+                                            <Copy className="w-4 h-4 text-indigo-600" />
+                                            Duplicate
+                                          </button>
+                                          <div className="border-t border-gray-100 my-1" />
+                                          <button
+                                            type="button"
+                                            disabled={deletingId === r._id}
+                                            onClick={() => { closeRowMenu(); handleDelete(r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 flex items-center gap-2"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                            Delete
+                                          </button>
+                                        </>
+                                      )}
+
+                                      {rowMenuView === "share" && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => setRowMenuView("main")}
+                                            className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                                          >
+                                            <ChevronLeft className="w-4 h-4" />
+                                            Back
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeRowMenu(); shareVia("whatsapp", r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
+                                            <MessageCircle className="w-4 h-4 text-green-600" />
+                                            WhatsApp
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeRowMenu(); shareVia("email", r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
+                                            <Mail className="w-4 h-4 text-blue-600" />
+                                            Email
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { closeRowMenu(); shareVia("sms", r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
+                                            <MessageSquare className="w-4 h-4 text-orange-600" />
+                                            SMS
+                                          </button>
+                                        </>
+                                      )}
+
+                                      {rowMenuView === "convert" && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => setRowMenuView("main")}
+                                            className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                                          >
+                                            <ChevronLeft className="w-4 h-4" />
+                                            Back
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={busyRowId === r._id}
+                                            onClick={() => { closeRowMenu(); handleConvert(r); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 flex items-center gap-2"
+                                          >
+                                            <Repeat className="w-4 h-4 text-orange-600" />
+                                            Convert to {convertTargetLabel}
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </>,
+                                  document.body
                                 )}
                               </div>
                             )}
@@ -865,130 +1190,163 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
         )}
       </div>
 
-      {/* Pagination - same layout and controls as Companies.jsx, including
-          double-clicking the current page to type a page number. */}
+      {/* Pagination — same bar and controls as Companies.jsx: the count and
+          the per-page picker sit together on the left, the pager on the
+          right, and the bar dims with the search overlay. */}
       <div
-        className="fixed right-0 bg-white border-t border-[#E1E4EA] flex items-center justify-between px-4 sm:px-6 lg:px-8"
-        style={{ left: "var(--sidebar-width, 0px)", bottom: 0, height: 64, zIndex: 30 }}
+        className={`fixed bottom-0 right-0 bg-white border-t border-[#E1E4EA] shadow-sm z-[9992] flex items-center ${
+          isSearchOverlayOpen ? "pointer-events-none" : ""
+        }`}
+        style={{
+          left: "var(--sidebar-width, 0px)",
+          height: 64,
+          filter: isSearchOverlayOpen ? "brightness(0.6)" : "none",
+        }}
       >
-        <p className="text-sm text-gray-700 font-inter">
-          Showing{" "}
-          <span className="font-semibold">
-            {pagination.totalCount === 0
-              ? 0
-              : (pagination.currentPage - 1) * pagination.limit + 1}
-          </span>{" "}
-          to{" "}
-          <span className="font-semibold">
-            {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}
-          </span>{" "}
-          of <span className="font-semibold">{pagination.totalCount}</span> results
-        </p>
-
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <select
-              value={pagination.limit}
-              onChange={(e) =>
-                setPagination((p) => ({ ...p, limit: Number(e.target.value), currentPage: 1 }))
-              }
-              className="appearance-none h-8 pl-3 pr-8 rounded-full border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#0085FF] cursor-pointer"
-            >
-              {[10, 20, 50, 100, 150].map((n) => (
-                <option key={n} value={n}>
-                  {n} per page
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-          </div>
-
-          <div className="flex items-center gap-2">
+        <div className="w-full bg-white px-4 py-3 flex items-center justify-between sm:px-6">
+          <div className="flex-1 flex justify-between sm:hidden">
             <button
               type="button"
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={!pagination.hasPrevPage}
-              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronLeft className="h-4 w-4" />
+              Previous
             </button>
-
-            {(() => {
-              const { currentPage, totalPages } = pagination;
-              const commitPage = () => {
-                const n = parseInt(pageInput, 10);
-                if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
-                setEditingPage(false);
-              };
-              const items = [1];
-              if (currentPage > 2) items.push("left-dots");
-              if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
-              if (currentPage < totalPages - 1) items.push("right-dots");
-              if (totalPages > 1) items.push(totalPages);
-
-              return items.map((item, index) => {
-                if (item === "left-dots" || item === "right-dots") {
-                  return (
-                    <span
-                      key={`${item}-${index}`}
-                      className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
-                    >
-                      ....
-                    </span>
-                  );
-                }
-                const isCurrent = item === currentPage;
-                if (isCurrent && editingPage) {
-                  return (
-                    <input
-                      key="page-edit"
-                      autoFocus
-                      type="number"
-                      min={1}
-                      max={totalPages}
-                      value={pageInput}
-                      onChange={(e) => setPageInput(e.target.value)}
-                      onBlur={commitPage}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitPage();
-                        if (e.key === "Escape") setEditingPage(false);
-                      }}
-                      className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                  );
-                }
-                return (
-                  <button
-                    key={`page-${item}`}
-                    type="button"
-                    onClick={() => handlePageChange(item)}
-                    onDoubleClick={() => {
-                      if (isCurrent) {
-                        setPageInput(String(currentPage));
-                        setEditingPage(true);
-                      }
-                    }}
-                    title={isCurrent ? "Double-click to type a page number" : undefined}
-                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                      isCurrent
-                        ? "bg-[#0085FF] text-white"
-                        : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                );
-              });
-            })()}
-
             <button
               type="button"
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={!pagination.hasNextPage}
-              className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronRight className="h-4 w-4" />
+              Next
             </button>
+          </div>
+
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div className="flex items-center space-x-2">
+              <p className="text-sm text-gray-700 font-inter">
+                Showing{" "}
+                <span className="font-semibold">
+                  {pagination.totalCount === 0
+                    ? 0
+                    : (pagination.currentPage - 1) * pagination.limit + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-semibold">
+                  {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)}
+                </span>{" "}
+                of <span className="font-semibold">{pagination.totalCount}</span> results
+              </p>
+              <div className="relative ml-2">
+                <select
+                  value={pagination.limit}
+                  onChange={(e) =>
+                    setPagination((p) => ({
+                      ...p,
+                      limit: parseInt(e.target.value, 10),
+                      currentPage: 1,
+                    }))
+                  }
+                  className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-inter"
+                >
+                  {[10, 20, 50, 100, 150].map((n) => (
+                    <option key={n} value={n}>
+                      {n} per page
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={!pagination.hasPrevPage}
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {(() => {
+                const { currentPage, totalPages } = pagination;
+                const commitPage = () => {
+                  const n = parseInt(pageInput, 10);
+                  if (!Number.isNaN(n)) handlePageChange(Math.min(Math.max(n, 1), totalPages));
+                  setEditingPage(false);
+                };
+                const items = [1];
+                if (currentPage > 2) items.push("left-dots");
+                if (currentPage !== 1 && currentPage !== totalPages) items.push(currentPage);
+                if (currentPage < totalPages - 1) items.push("right-dots");
+                if (totalPages > 1) items.push(totalPages);
+
+                return items.map((item, index) => {
+                  if (item === "left-dots" || item === "right-dots") {
+                    return (
+                      <span
+                        key={`${item}-${index}`}
+                        className="flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-400 select-none"
+                      >
+                        ....
+                      </span>
+                    );
+                  }
+                  const isCurrent = item === currentPage;
+                  if (isCurrent && editingPage) {
+                    return (
+                      <input
+                        key="page-edit"
+                        autoFocus
+                        type="number"
+                        min={1}
+                        max={totalPages}
+                        value={pageInput}
+                        onChange={(e) => setPageInput(e.target.value)}
+                        onBlur={commitPage}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitPage();
+                          if (e.key === "Escape") setEditingPage(false);
+                        }}
+                        className="w-10 h-8 rounded-full border border-blue-500 text-center text-sm font-medium text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                    );
+                  }
+                  return (
+                    <button
+                      key={`page-${item}`}
+                      type="button"
+                      onClick={() => handlePageChange(item)}
+                      onDoubleClick={() => {
+                        if (isCurrent) {
+                          setPageInput(String(currentPage));
+                          setEditingPage(true);
+                        }
+                      }}
+                      title={isCurrent ? "Double-click to type a page number" : undefined}
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                        isCurrent
+                          ? "bg-blue-600 text-white"
+                          : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  );
+                });
+              })()}
+
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={!pagination.hasNextPage}
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1035,14 +1393,14 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
 
                     <button
                       onClick={() => { setSort({ key: col.key, dir: "asc" }); closeColumnMenu(); }}
-                      className={`${item} text-[#161618] hover:bg-gray-50`}
+                      className={`${item} ${sort.key === col.key && sort.dir === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                     >
                       <ArrowUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Sort Ascending
                     </button>
                     <button
                       onClick={() => { setSort({ key: col.key, dir: "desc" }); closeColumnMenu(); }}
-                      className={`${item} text-[#161618] hover:bg-gray-50`}
+                      className={`${item} ${sort.key === col.key && sort.dir === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                     >
                       <ArrowDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Sort Descending
@@ -1093,6 +1451,51 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
           onSaved={fetchData}
         />
       )}
+
+      {/* Drag ghost - the column being carried, same as PaymentsTimeline. */}
+      {dragGhost &&
+        createPortal(
+          <div
+            ref={ghostElRef}
+            style={{
+              position: "fixed",
+              top: -9999,
+              left: -9999,
+              width: dragGhost.width,
+              zIndex: 10000,
+              pointerEvents: "none",
+            }}
+            className="flex flex-col bg-white rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div
+              className="px-4 py-3 bg-[#F5F7FA] border-b border-[#E1E4EA]"
+              style={{ height: dragGhost.height }}
+            >
+              <span className="text-sm font-bold text-[#525866] truncate block">
+                {dragGhost.label}
+              </span>
+            </div>
+            {dragGhost.previewRows.map((val, i) => (
+              <div key={i} className="px-4 py-2 border-b border-[#F1F1F5] last:border-b-0">
+                <span className="text-sm text-gray-700 truncate block">{val}</span>
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
+
+      {/* "View" opens the printable receipt, same role as the payments
+          timeline's receipt modal. */}
+      <ExpenseReceiptModal
+        isOpen={!!viewRow}
+        onClose={() => setViewRow(null)}
+        record={viewRow}
+        kind={kind}
+        onEdit={(row) => { setViewRow(null); openEdit(row); }}
+        onConvert={(row) => { setViewRow(null); handleConvert(row); }}
+        convertLabel={convertTargetLabel}
+      />
+
     </div>
   );
 }

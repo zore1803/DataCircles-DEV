@@ -44,8 +44,7 @@ import {
   Pin,
   PinOff,
   EyeOff,
-  X,
-} from "lucide-react";
+  X, ArrowUp, ArrowDown } from "lucide-react";
 
 const ContactNameIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size * (13 / 16)} viewBox="0 0 16 13" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -737,6 +736,9 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                             )}
                           </div>
                         )}
+                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -803,7 +805,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                                 handleSort(col.id, "asc");
                                 setCurrentPage(1);
                               }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                             >
                               <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Sort Ascending
@@ -815,7 +817,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                                 handleSort(col.id, "desc");
                                 setCurrentPage(1);
                               }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                             >
                               <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Sort Descending
