@@ -1916,10 +1916,10 @@ function Tasks() {
             />
           )}
           <span className="truncate" title={label}>{label}</span>
+          {activeSortConfig.key === colKey && (activeSortConfig.direction === "asc"
+            ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+            : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
         </div>
-        {activeSortConfig.key === colKey && (activeSortConfig.direction === "asc"
-          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
         <button
           onClick={(e) => {
             e.stopPropagation();

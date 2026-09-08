@@ -2868,6 +2868,9 @@ const Accounting = () => {
                               ? col.label(activeTab)
                               : col.label}
                           </span>
+                          {activeSort.key === col.id && (activeSort.direction === "asc"
+                            ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                            : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                           {pinnedCols[col.id] && (
                             <Pin
                               size={12}
@@ -2876,9 +2879,6 @@ const Accounting = () => {
                             />
                           )}
                         </span>
-                        {activeSort.key === col.id && (activeSort.direction === "asc"
-                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           onClick={(e) => openColumnMenu(e, col.id)}
                           title="Column options"

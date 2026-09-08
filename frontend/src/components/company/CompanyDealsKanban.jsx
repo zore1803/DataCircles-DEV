@@ -1771,6 +1771,9 @@ export default function CompanyDealsKanban({
                                 <div className="flex items-center gap-1.5 flex-1 overflow-hidden select-none">
                                   {col.icon && <col.icon className="w-3.5 h-3.5 flex-shrink-0" />}
                                   <span className="truncate">{col.label}</span>
+                                  {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                                    ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                                    : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                                   {pinSide && (
                                     <Pin
                                       size={12}
@@ -1779,9 +1782,6 @@ export default function CompanyDealsKanban({
                                     />
                                   )}
                                 </div>
-                                {sortConfig.key === col.id && (sortConfig.direction === "asc"
-                                  ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                                  : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

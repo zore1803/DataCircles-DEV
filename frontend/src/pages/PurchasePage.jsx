@@ -1015,6 +1015,9 @@ const PurchasePage = () => {
               <div className="flex items-center justify-between w-full group">
                 <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
                   <span className="truncate">{vc.label}</span>
+                  {sortConfig.key === vc.key && (sortConfig.direction === "asc"
+                    ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                    : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                   {pinSide && (
                     <Pin
                       size={12}
@@ -1024,9 +1027,6 @@ const PurchasePage = () => {
                   )}
                 </span>
 
-                {sortConfig.key === vc.key && (sortConfig.direction === "asc"
-                  ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                  : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

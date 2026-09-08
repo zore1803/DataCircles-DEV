@@ -284,11 +284,10 @@ export default function DataTable({
                         <div className={`flex items-center justify-between w-full min-w-0 ${loading ? "[&_button]:invisible" : ""}`}>
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden cursor-grab active:cursor-grabbing">
                             {flexRender(header.column.columnDef.header, header.getContext())}
+                            {sortConfig.key === colId && (sortConfig.direction === "asc"
+                              ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                              : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                           </div>
-                          
-                          {sortConfig.key === colId && (sortConfig.direction === "asc"
-                            ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                            : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                           {colId !== selectionColId && (onPinColumn || onHideColumn || onSort) && (
                             <button
                               onClick={(e) => {

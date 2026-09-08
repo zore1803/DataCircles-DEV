@@ -950,6 +950,9 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                               <div className="flex items-center gap-1.5 min-w-0 truncate">
                                 <span className="truncate flex-1 min-w-0" title={col.label}>
                                   {col.label}
+                                  {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                                    ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                                    : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                                 </span>
                                 {(leftPinned.has(col.id) || rightPinned.has(col.id)) && (
                                   <Pin size={12} className="text-blue-500 fill-blue-500 flex-shrink-0 ml-1" style={{ transform: "rotate(45deg)" }} />
@@ -960,9 +963,6 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                         </div>
 
                         {/* Column menu trigger */}
-                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
-                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

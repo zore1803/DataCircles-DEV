@@ -346,6 +346,9 @@ export default function DealsTable({
             `sortable` still gates whether those two menu items render at all. */}
         <div className="flex items-center gap-2 flex-1 overflow-hidden select-none">
           <span className="truncate" title={label}>{label}</span>
+          {sortConfig.key === colKey && (sortConfig.direction === "asc"
+            ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+            : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
           {pinSide && (
             <Pin
               size={12}
@@ -354,9 +357,6 @@ export default function DealsTable({
             />
           )}
         </div>
-        {sortConfig.key === colKey && (sortConfig.direction === "asc"
-          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
         <button
           onClick={(e) => {
             e.stopPropagation();

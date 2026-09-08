@@ -1768,10 +1768,10 @@ export default function PaymentsTimeline() {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="truncate flex-1">{col.label}</span>
-                      {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
                       {sortConfig.key === col.id && (sortConfig.direction === "asc"
                         ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
                         : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
+                      {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
                       <button
                         onClick={e => openColumnMenu(e, col.id)}
                         title="Column options"

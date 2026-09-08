@@ -1120,13 +1120,13 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                         ) : (
                           <div className="flex items-center justify-center gap-1.5 whitespace-nowrap flex-1">
                             <span>{col.label}</span>
+                            {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                              ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                              : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                           </div>
                         )}
 
                         {/* Column menu trigger */}
-                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
-                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
