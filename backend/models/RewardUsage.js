@@ -61,7 +61,13 @@ const rewardUsageSchema = new mongoose.Schema({
   // let go, per BILLING_DOMAIN_SPECIFICATION.md Chapter 13.
   releaseReason: {
     type: String,
-    enum: ['TIMEOUT', 'PAYMENT_FAILED', 'ADMIN_RELEASE', 'REPLACED_BY_NEW_INVOICE'],
+    // REPLACED_BY_RETRY (subscriptionController.js's trial-conversion
+    // release-before-reserve guard) was missing from this enum — writes
+    // still succeeded silently because releaseReservation() uses
+    // findOneAndUpdate, which skips schema validation unless runValidators
+    // is explicitly passed. Added rather than left undocumented, since it
+    // was already a real value being written.
+    enum: ['TIMEOUT', 'PAYMENT_FAILED', 'ADMIN_RELEASE', 'REPLACED_BY_NEW_INVOICE', 'REPLACED_BY_RETRY'],
   },
   expiresAt: { type: Date, required: true },
 }, { timestamps: true });

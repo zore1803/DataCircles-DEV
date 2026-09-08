@@ -111,4 +111,20 @@ async function getPublicForm(req, res) {
   }
 }
 
-module.exports = { submitForm, getPublicForm };
+/**
+ * POST /api/public/forms/:publicSlug/upload
+ * Multipart body: single file under field name "file". Runs after `resolveFormOrganization` +
+ * `uploadPublicFormFileSafe` (backend/middlewares/uploadMiddlewarePublicForm.js), which have already
+ * streamed the file to S3 by the time this handler runs and set `req.fileLocation`.
+ * Responses:
+ *   201 { url }        — uploaded; the client submits this URL as the field's value in /submit
+ *   400 { error }       — no file present (fileFilter/size rejections are handled upstream as 400)
+ */
+async function uploadFile(req, res) {
+  if (!req.file || !req.fileLocation) {
+    return res.status(400).json({ error: "No file uploaded." });
+  }
+  return res.status(201).json({ url: req.fileLocation });
+}
+
+module.exports = { submitForm, getPublicForm, uploadFile };

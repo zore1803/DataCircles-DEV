@@ -32,9 +32,16 @@ function calculateAddonProration(quantity, pricePerUnit, currentPeriodStart, cur
  * upgrading plans mid-cycle. Only the difference between new and old
  * base price is prorated (add-ons are separate and untouched).
  * Returns rupees (not paise). Minimum ₹1.
+ *
+ * @param {Date|string} [asOfDate] - the instant to price the upgrade AS IF
+ *   executed at. Defaults to real wall-clock `new Date()` — every existing
+ *   caller (the real upgrade commit path) omits this, so behavior is
+ *   unchanged. Added for the Billing Calendar's upgrade-date slider, which
+ *   needs "if I upgraded on THIS date instead of right now, what would I
+ *   owe" — a hypothetical instant, not the real one.
  */
-function calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd) {
-  const now = new Date();
+function calculatePlanUpgradeProration(oldBasePrice, newBasePrice, currentPeriodStart, currentPeriodEnd, asOfDate) {
+  const now = asOfDate ? new Date(asOfDate) : new Date();
   const periodStart = new Date(currentPeriodStart);
   const periodEnd = new Date(currentPeriodEnd);
 

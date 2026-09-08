@@ -38,6 +38,9 @@ router.post('/trial', requireAuth, adminMiddleware, subscriptionController.start
 // (401 on this account, see CAW_BILLING_DESIGN.md §0) was never wired to any
 // route and has been removed entirely (Phase 7 cleanup).
 router.post('/preview', requireAuth, adminMiddleware, subscriptionController.previewSubscription);
+// Read-only Billing Calendar upgrade-slider preview — see the controller's
+// own comment for why this can never create an Order/reservation/write.
+router.get('/preview-plan-upgrade', requireAuth, adminMiddleware, subscriptionController.previewPlanUpgrade);
 router.post('/create', requireAuth, adminMiddleware, subscriptionController.createSubscription);
 router.put('/update', requireAuth, adminMiddleware, subscriptionController.updateSubscription);
 router.post('/cancel', requireAuth, adminMiddleware, subscriptionController.cancelSubscription);

@@ -16,7 +16,9 @@ const duplicateDetectionService = require("./duplicateDetectionService");
 const contactService = require("./contactService");
 const companyService = require("./companyService");
 const vendorService = require("./vendorService");
-const { getCrmFieldNameForSystemId } = require("../utils/systemFields");
+const { getCrmFieldNameForSystemId, ARRAY_CRM_PARENT_KEYS } = require("../utils/systemFields");
+const { validateFieldValue } = require("../utils/fieldTypeContract");
+const { dedupeKeyFor, withDedupeLock } = require("../utils/dedupeLock");
 
 const mongoose = require("mongoose");
 
@@ -57,7 +59,12 @@ function coerceAndValidate(formVersion, rawData) {
 
       const meta = fieldMetaById.get(el.fieldId);
       const rawValue = rawData ? rawData[el.fieldId] : undefined;
-      const isPresent = rawValue !== undefined && rawValue !== null && rawValue !== "";
+      // An empty ARRAY counts as absent too: a multiselect with nothing ticked arrives as [], which
+      // is neither undefined nor "", so a required multiselect would otherwise pass validation with
+      // no answer and then store an empty string.
+      const isPresent =
+        rawValue !== undefined && rawValue !== null && rawValue !== "" &&
+        !(Array.isArray(rawValue) && rawValue.length === 0);
 
       // A system field whose underlying CRM schema hard-requires a value (e.g. Company.industry)
       // must be enforced here even if an older FormVersion froze `required: false` for it — the
@@ -71,6 +78,17 @@ function coerceAndValidate(formVersion, rawData) {
         continue;
       }
       if (!isPresent) continue;
+
+      // The owner's per-field configuration (min/max/regex/date restrictions/allowed domains),
+      // frozen onto this FormVersion at publish. Enforced HERE and only here: the public form is
+      // entirely under the submitter's control, so the browser's matching checks are a convenience
+      // and never the authority. Runs on the RAW value — before coercion flattens a multi-select
+      // array into a comma-separated string, which the "how many selected" rules need to see.
+      const configError = validateFieldValue(rawValue, meta, el.validationOverrides);
+      if (configError) {
+        validationErrors.push({ fieldId: el.fieldId, message: configError });
+        continue;
+      }
 
       // Reuse Phase 0's coercion rules (number/dropdown/string/text default) by shaping this as
       // a one-element additionalFields array through the existing pure-transform helper.
@@ -128,11 +146,19 @@ function buildCrmPayloads(formVersion, processedData, defaultModule) {
     if (meta.source === "system") {
       const crmFieldName = getCrmFieldNameForSystemId(fieldId);
       if (crmFieldName && crmFieldName.includes(".")) {
-        // Sub-fields of a nested CRM object (e.g. "socialMedia.twitter") can't be assigned as a
-        // flat top-level key — build/merge the nested object instead.
+        // Sub-fields of a nested CRM object (e.g. "socialMedia.twitter", "billingAddress.city")
+        // can't be assigned as a flat top-level key — build/merge the nested object instead.
         const [parentKey, childKey] = crmFieldName.split(".");
-        if (!payloads[targetModule][parentKey]) payloads[targetModule][parentKey] = {};
-        payloads[targetModule][parentKey][childKey] = value;
+        if (ARRAY_CRM_PARENT_KEYS.has(parentKey)) {
+          // The model stores an array here (Company.shippingAddresses). A static form layout can
+          // only express one entry, so everything merges into element [0]; assigning a bare object
+          // would fail to cast. The CRM's "+ Add another shipping address" has no form equivalent.
+          if (!Array.isArray(payloads[targetModule][parentKey])) payloads[targetModule][parentKey] = [{}];
+          payloads[targetModule][parentKey][0][childKey] = value;
+        } else {
+          if (!payloads[targetModule][parentKey]) payloads[targetModule][parentKey] = {};
+          payloads[targetModule][parentKey][childKey] = value;
+        }
       } else if (crmFieldName) {
         payloads[targetModule][crmFieldName] = value;
       }
@@ -267,11 +293,23 @@ const REVIEW_THRESHOLD = 80;
  *   createdRecord is set only when a NEW record was actually created (not when linked/queued).
  * Side effects: possibly one CRM create, FormSubmission updates, SubmissionEvent + DuplicateReview.
  */
-async function processModuleBucket({ submission, form, module, payload, duplicateStrategy, isPrimary }) {
+async function processModuleBucket(args) {
+  const { form, module, payload, duplicateStrategy } = args;
+
   if (duplicateStrategy === "allow_duplicates") {
-    const record = await createCrmRecord(submission, form, module, payload);
+    // Nothing to serialize: this strategy never reads before writing, it just creates.
+    const record = await createCrmRecord(args.submission, form, module, payload);
     return { createdRecord: record, review: null };
   }
+
+  // Everything from here on reads the CRM, decides, and then writes. Without a lock, simultaneous
+  // submissions for the same record all read "nothing exists" before any of them writes, and each
+  // creates its own copy — 100 identical submissions produced 94 Contacts. Holding the key makes
+  // the second one actually see the first and raise a review, which is the intended behaviour.
+  return withDedupeLock(dedupeKeyFor(form.organization, module, payload), () => processModuleBucketLocked(args));
+}
+
+async function processModuleBucketLocked({ submission, form, module, payload, duplicateStrategy, isPrimary }) {
 
   const matches = await duplicateDetectionService.findDuplicates({
     organization: form.organization,

@@ -25,7 +25,22 @@ const PaymentStatusAlert = ({ subscription, onRetryPayment, onResumePayment, onC
   // rather than silently hiding behind the trial banner (the two used to be
   // indistinguishable from raw isTrialActive alone — see
   // FRONTEND_CONVERGENCE_PLAN.md Journey 1).
-  if (uiState === SUBSCRIPTION_UI_STATES.TRIAL) return null;
+  //
+  // EXPIRED is exempted for the same reason, not a new one: appStatus is
+  // only ever set to 'expired' from a trial running out (confirmed by
+  // tracing every setAppStatus(..., 'expired', ...) call site —
+  // subscriptionLifecycleJobs.js's cron and adminEndTrialNow, both purely
+  // trial-exhaustion paths; no paid-subscription code path ever produces
+  // 'expired'). Without this, a trial that never touched checkout — and so
+  // still carries the schema's generic paymentStatus:'pending_payment'
+  // default (never explicitly set by startFreeTrial()) — fell through to
+  // the switch below and showed "Payment Pending / Complete Payment" for a
+  // payment that was never attempted (found live: "I didn't choose any
+  // plan. Why is it showing Complete Payment?"). CANCELLED/SUSPENDED are
+  // deliberately NOT exempted here — those states are always reached from a
+  // real paid subscription, where a genuine payment-status alert can be
+  // legitimate.
+  if (uiState === SUBSCRIPTION_UI_STATES.TRIAL || uiState === SUBSCRIPTION_UI_STATES.EXPIRED) return null;
 
   // Hide if payment is already confirmed
   if (subscription.isPaymentConfirmed) return null;

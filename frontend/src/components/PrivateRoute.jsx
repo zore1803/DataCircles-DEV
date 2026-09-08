@@ -1,7 +1,7 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useEffect, useState, useRef } from "react";
-import API, { configureAxios } from "../services/api";
+import API, { configureAxios, setCsrfToken } from "../services/api";
 import SplashLoader from "./common/SplashLoader";
 
 function PrivateRoute({ children }) {
@@ -76,6 +76,46 @@ function PrivateRoute({ children }) {
 
         const res = await API.get("/auth/me");
         localStorage.setItem("user", JSON.stringify(res.data.user));
+
+        // /auth/me only proves the Auth0/phone IDENTITY is valid — it says
+        // nothing about whether this browser holds a live DataCircles
+        // application session (dc_session), which is what the 2-concurrent-
+        // session limit actually enforces. Without this second check, a
+        // user who is still Auth0-authenticated in a 3rd/4th browser (or a
+        // browser whose DataCircles session was explicitly revoked) would
+        // be let into the app on identity alone. GET /session/me is
+        // authoritative for that — sessionAuth 401s it whenever dc_session
+        // is missing, expired, or revoked.
+        sessionCheck: try {
+          await API.get("/session/me");
+
+          // csrfToken (services/api.js) is an in-memory-only value, set by
+          // establishSession() during login — it does NOT survive a page
+          // reload or a fresh tab that lands directly on a private route
+          // without going through /login. Without re-fetching it here,
+          // every mutating request (e.g. revoking a session from the
+          // Profile page) would silently omit X-CSRF-Token and get a 403
+          // CSRF_INVALID from csrfCheck, even though the session itself is
+          // perfectly valid. Re-derive it from the now-confirmed-valid
+          // dc_session cookie on every mount that reaches this point.
+          const csrfRes = await API.get("/session/csrf-token");
+          setCsrfToken(csrfRes.data.csrfToken);
+        } catch (sessionErr) {
+          if (sessionErr.response?.status === 401) {
+            // No dc_session cookie yet. Deliberately NOT a redirect to
+            // /login: application routes still authenticate off the
+            // Auth0/phone JWT (see any backend/routes/*.js requireAuth), so
+            // a missing DataCircles session doesn't make this browser
+            // unauthorised — it just means the session layer hasn't been
+            // established for it. Bouncing everyone to /login here would
+            // force a re-login on every existing user for no gain. Flip
+            // this to a redirect at the same time the routes adopt
+            // sessionAuth, which is what makes the session authoritative.
+            break sessionCheck;
+          }
+          throw sessionErr;
+        }
+
         setIsAuthorized(true);
         setIsOfflineError(false);
         setRetryCount(0); // Reset retry count on success

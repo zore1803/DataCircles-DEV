@@ -146,7 +146,7 @@ async function test(name, fn) {
     assert.equal(entry.scheduled.quantity, 1, 'residual after removal (3-2=1)');
   });
 
-  await test('Test E: trialing org gets a critical trial_end event carrying the real conversion amount, not null', async (registry) => {
+  await test('Test E: trialing org gets a critical trial_end event, priced separately via trial.conversionAmount', async (registry) => {
     const org = await Organization.create({ name: 'BP Fixture E', code: 'bp-e-' + Date.now() });
     registry.Organization.push(org._id);
     const trialEnd = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
@@ -166,7 +166,41 @@ async function test(name, fn) {
     const trialEvent = p.upcomingEvents.find((e) => e.type === 'trial_end');
     assert.ok(trialEvent, 'trial_end must appear in upcomingEvents — this was previously missing entirely');
     assert.equal(trialEvent.priority, 'critical');
-    assert.equal(trialEvent.amount, p.trial.conversionAmount, 'the event amount must be the SAME number as trial.conversionAmount, never a second independent estimate');
+    // Deliberately null, not trial.conversionAmount: nothing converts
+    // automatically at trial end (no charge, no committed plan), so
+    // attaching a price directly to "your trial ends" implies a billing
+    // event that will never happen unless the org actually buys a plan.
+    // The real conversion price still exists — as trial.conversionAmount,
+    // surfaced separately by the frontend's trial banner, never merged
+    // into this event.
+    assert.equal(trialEvent.amount, null, 'trial_end must not carry an amount — nothing is charged automatically');
+    assert.match(trialEvent.description, /no payment/i, 'description must say plainly that nothing is scheduled, not "X billing begins"');
+  });
+
+  await test('Test F: trialing org (startFreeTrial-shaped, currentPeriodEnd = trialEnd) must NOT fabricate a "plan renews" event — nothing was ever paid or committed', async (registry) => {
+    const org = await Organization.create({ name: 'BP Fixture F', code: 'bp-f-' + Date.now() });
+    registry.Organization.push(org._id);
+    const trialStart = new Date();
+    const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // Mirrors subscriptionController.js's actual startFreeTrial exactly:
+    // currentPeriodStart/End set to the trial window for internal
+    // bookkeeping, isPaymentConfirmed never set (stays falsy), price/total 0.
+    const sub = await Subscription.create({
+      organization: org._id, planName: 'growth', appStatus: 'trial', status: 'active',
+      billingCycle: 'monthly', pricePerUser: 0, userCount: 1, totalAmount: 0,
+      isTrialActive: true, trialUsed: true, trialStart, trialEnd,
+      currentPeriodStart: trialStart, currentPeriodEnd: trialEnd,
+      activeAddons: [],
+    });
+    registry.Subscription.push(sub._id);
+
+    const p = await buildBillingProjection(sub);
+
+    const fabricatedRenewal = p.upcomingEvents.find((e) => e.type === 'base_renewal');
+    assert.equal(fabricatedRenewal, undefined, `must NOT contain a base_renewal event during an unconverted trial — got ${JSON.stringify(fabricatedRenewal)}. currentPeriodEnd being set for trial bookkeeping must not be read as "a real renewal is coming."`);
+    const trialEndEvent = p.upcomingEvents.find((e) => e.type === 'trial_end');
+    assert.ok(trialEndEvent, 'trial_end must still be present — this is the one real future event for a trialing org');
+    assert.equal(p.basePlan.nextRenewal, null, 'nextRenewal must stay null — nothing has been paid');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

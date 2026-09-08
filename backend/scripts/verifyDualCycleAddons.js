@@ -34,18 +34,28 @@ if (process.env.CONFIRM_TEST_DB !== 'yes') {
   process.exit(1);
 }
 
-let passed = 0, failed = 0;
-async function test(name, fn) {
-  try { await fn(); passed++; console.log(`  ok - ${name}`); }
-  catch (err) { failed++; console.log(`  FAIL - ${name}:`, err); }
-}
-
 const cleanupIds = { subs: [], scs: [] };
 async function cleanup() {
   if (cleanupIds.subs.length) await Subscription.deleteMany({ _id: { $in: cleanupIds.subs } });
   if (cleanupIds.scs.length) await ScheduledChange.deleteMany({ _id: { $in: cleanupIds.scs } });
   cleanupIds.subs = [];
   cleanupIds.scs = [];
+}
+
+let passed = 0, failed = 0;
+// cleanup() runs in `finally` here — NOT left to each test body to remember
+// to call at its own end. Found live: a failing assertion inside a test
+// throws past its own trailing cleanup() call, so a failure used to leak
+// its fixture Subscription (and dangling org ObjectId ref) into whatever
+// database MONGO_URI points at, permanently — 19 of these accumulated
+// across repeated runs of this exact script before being found and cleaned
+// up. Wrapping here means every test cleans up regardless of outcome; any
+// cleanup() call still present inside a test body is a harmless no-op
+// (cleanupIds is already empty by the time this finally block would run).
+async function test(name, fn) {
+  try { await fn(); passed++; console.log(`  ok - ${name}`); }
+  catch (err) { failed++; console.log(`  FAIL - ${name}:`, err); }
+  finally { await cleanup(); }
 }
 
 async function makeSubscription(billingCycle, overrides = {}) {

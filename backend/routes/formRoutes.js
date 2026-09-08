@@ -14,6 +14,7 @@ const userSync = require("../middlewares/userSync");
 const subscriptionGate = require("../middlewares/subscriptionGate");
 const restrictByPlan = require("../middlewares/restrictByPlan");
 const checkPermission = require("../middlewares/checkPermission");
+const uploadMiddlewareS3 = require("../middlewares/uploadMiddlewareS3");
 
 const requireAuth = [authMiddleware, userSync];
 const readGate = [requireAuth, subscriptionGate, restrictByPlan("forms", "read"), checkPermission("forms", "readonly")];
@@ -35,6 +36,11 @@ router.post("/forms/:id/archive", mutateGate, formController.archiveForm);
 router.post("/forms/:id/pause", mutateGate, formController.pauseForm);
 router.post("/forms/:id/resume", mutateGate, formController.resumeForm);
 router.delete("/forms/:id", mutateGate, formController.deleteForm);
+// POST /api/forms/:id/image — an image placed on the form by its owner (logo, banner, etc.).
+// Authenticated, so it can reuse the standard org-scoped uploadMiddlewareS3 (its S3 key builder
+// reads req.user.organization, populated by requireAuth above — hence the middleware order).
+// Returns a URL the Builder stores on an "image" layout element via the normal PATCH /forms/:id save.
+router.post("/forms/:id/image", mutateGate, uploadMiddlewareS3().single("image"), formController.uploadFormImage);
 
 // --- Submissions ---
 router.get("/forms/:id/submissions", readGate, formController.listSubmissions);

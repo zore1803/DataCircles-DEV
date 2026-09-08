@@ -2,6 +2,7 @@ const Organization = require('../models/Organization');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const { getAccessEntitlementEnd } = require('../utils/prorationMath');
+const { emitBillingEvent } = require('../utils/billingEvents');
 const SubscriptionPayment = require('../models/SubscriptionPayment.js');
 const Invoice = require('../models/Invoice');
 const Deal = require('../models/Deal');
@@ -19,7 +20,6 @@ const mongoose = require('mongoose');
 const UserAuditLog = require('../models/UserAuditLog.js');
 const {
   setAppStatus,
-  startFreeTrial,
   cancelSubscription,
 } = require('./subscriptionController');
 const {
@@ -27,6 +27,7 @@ const {
   sendTrialEndedByAdminEmail,
   sendSubscriptionCancelledByAdminEmail,
 } = require('../utils/adminActionEmails');
+const { sendTrialStartedEmail } = require('../utils/trialEmails');
 
 const getOverview = async (req, res) => {
   try {
@@ -1320,6 +1321,28 @@ const getOrganizationPayments = async (req, res) => {
   }
 }
 
+// Restarts a trial IN PLACE on the org's existing Subscription document —
+// deliberately does NOT delegate to startFreeTrial() anymore. Two reasons,
+// both found by tracing rather than assumed:
+//
+// 1. startFreeTrial() has its own independent `trialUsed` guard that this
+//    super-admin action needs to bypass (per spec: only a LIVE paid
+//    subscription should ever block a restart, never "this org used a
+//    trial before"). Removing that guard from startFreeTrial() itself
+//    would also lift it for the ordinary user-facing endpoint, which is
+//    not what was asked.
+// 2. startFreeTrial() unconditionally does `new Subscription({...})`.
+//    Subscription.js's own unique index on `organization` is a PARTIAL
+//    index — it only rejects a second document while appStatus is one of
+//    {trial, active, past_due}. An 'expired'/'cancelled'/'suspended' doc
+//    sits outside that filter, so calling startFreeTrial() again (even
+//    with its trialUsed guard removed) would silently succeed in creating
+//    a SECOND Subscription for the same organization — breaking the
+//    one-canonical-subscription-per-org invariant. Reusing the existing
+//    document and only resetting its trial-relevant fields keeps that
+//    invariant intact and preserves history (_id, appStatusHistory).
+const TRIAL_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // matches startFreeTrial's own trial length
+
 const adminStartTrialForOrganization = async (req, res) => {
   try {
     const { organizationId } = req.params;
@@ -1347,45 +1370,92 @@ const adminStartTrialForOrganization = async (req, res) => {
       });
     }
 
-    const adminUser = await User.findOne({
-      organization: organizationId,
-      role: 'admin',
-    });
+    // A currently-running trial isn't something to "restart" — this action
+    // is for orgs whose entitlement has already ended (expired/cancelled/
+    // suspended) or that never had a subscription at all.
+    if (existingSubscription && existingSubscription.appStatus === 'trial') {
+      return res.status(409).json({
+        error: 'This organization already has an active trial running.',
+        code: 'TRIAL_ALREADY_ACTIVE',
+      });
+    }
+
+    const [adminUser, organization] = await Promise.all([
+      User.findOne({ organization: organizationId, role: 'admin' }),
+      Organization.findById(organizationId),
+    ]);
 
     if (!adminUser) {
       return res.status(404).json({
         error: 'No admin user found for this organization',
       });
     }
-
-    const fakeReq = { body: {}, user: adminUser };
-    let capturedStatus = 200;
-    let capturedBody = null;
-    const fakeRes = {
-      status(code) { capturedStatus = code; return this; },
-      json(body) { capturedBody = body; return this; },
-    };
-
-    await startFreeTrial(fakeReq, fakeRes);
-
-    // startFreeTrial already emails the org's admin (sendTrialStartedEmail) —
-    // just add the one-shot dashboard notice so it's clear this was admin-initiated.
-    if (capturedStatus === 200 && capturedBody?.success) {
-      await Subscription.findOneAndUpdate(
-        { organization: organizationId },
-        {
-          $set: {
-            adminNotice: {
-              message: 'A free trial was started for your organization by our support team.',
-              createdAt: new Date(),
-            },
-          },
-        }
-      );
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
     }
 
-    return res.status(capturedStatus).json({
-      ...capturedBody,
+    const trialStart = new Date();
+    const trialEnd = new Date(trialStart.getTime() + TRIAL_DAYS_MS);
+    const isRestart = !!existingSubscription;
+
+    // Same trial defaults startFreeTrial() uses (plan_trial / growth /
+    // monthly / ₹0) — reused here, not reinvented, just written onto the
+    // EXISTING document instead of a new one when there is one.
+    const subscription = existingSubscription || new Subscription({ organization: organizationId });
+    subscription.razorpayPlanId = 'plan_trial';
+    subscription.planName = 'growth';
+    subscription.status = 'active';
+    subscription.billingCycle = 'monthly';
+    subscription.pricePerUser = 0;
+    subscription.userCount = 1;
+    subscription.totalAmount = 0;
+    subscription.trialStart = trialStart;
+    subscription.trialEnd = trialEnd;
+    subscription.isTrialActive = true;
+    subscription.trialUsed = true;
+    subscription.currentPeriodStart = trialStart;
+    subscription.currentPeriodEnd = trialEnd;
+    // Reset checkout/payment residue from whatever this document's PRIOR
+    // life carried (a stale mandate, a failed payment, an old add-on set)
+    // so the restarted trial looks like a genuinely fresh one, not a
+    // continuation of leftover state.
+    subscription.isPaymentConfirmed = false;
+    subscription.paymentStatus = 'pending_payment';
+    subscription.mandateStatus = undefined;
+    subscription.registrationLinkId = undefined;
+    subscription.cancelAtPeriodEnd = false;
+    subscription.pendingUpdate = undefined;
+    subscription.activeAddons = [];
+    subscription.adminNotice = {
+      message: isRestart
+        ? 'A free trial was restarted for your organization by our support team.'
+        : 'A free trial was started for your organization by our support team.',
+      createdAt: new Date(),
+    };
+
+    setAppStatus(subscription, 'trial', isRestart ? 'trial restarted by super admin' : 'trial started by super admin');
+    await subscription.save();
+
+    await emitBillingEvent({
+      organization: organizationId,
+      subscription: subscription._id,
+      eventType: 'TRIAL_STARTED',
+      status: 'completed',
+      effectiveAt: trialEnd,
+      after: subscription,
+      metadata: { restartedByAdmin: isRestart },
+    });
+
+    try {
+      await sendTrialStartedEmail(adminUser, organization, trialEnd);
+    } catch (emailError) {
+      console.error('Failed to send trial-started email:', emailError);
+    }
+
+    return res.json({
+      success: true,
+      message: isRestart ? 'Trial restarted' : 'Free trial started successfully',
+      subscription,
       adminTriggered: true,
     });
   } catch (error) {
@@ -1477,14 +1547,56 @@ const adminAdjustTrial = async (req, res) => {
 
     await subscription.save();
 
+    // Record what actually happened — every other commercial state change
+    // this app makes (upgrades, downgrades, cancellations, add-on changes)
+    // gets a BillingEvent the Timeline/Calendar can show; an admin-driven
+    // trial change was previously invisible (silently moved trialEnd with
+    // no record of why). If the adjustment pushed the trial past "now", the
+    // real consequence is that the trial ended — record it as TRIAL_ENDED
+    // (attributed to admin), not TRIAL_ADJUSTED, so it reads the same as
+    // any other trial ending rather than as a still-ongoing adjustment.
+    // previousEnd/newEnd (both already-computed real Dates, not derived
+    // client-side) let the Calendar render the actual changed SEGMENT of
+    // the trial period — the territory added or removed — instead of a
+    // generic "+3D" badge that carries no visual relationship to the
+    // timeline itself.
+    await emitBillingEvent(
+      resultsInExpiry
+        ? {
+            organization: subscription.organization?._id || subscription.organization,
+            subscription: subscription._id,
+            eventType: 'TRIAL_ENDED',
+            status: 'completed',
+            effectiveAt: newTrialEnd,
+            metadata: { endedBy: 'admin', adjustmentDays, previousEnd: currentTrialEnd, newEnd: newTrialEnd },
+          }
+        : {
+            organization: subscription.organization?._id || subscription.organization,
+            subscription: subscription._id,
+            eventType: 'TRIAL_ADJUSTED',
+            status: 'completed',
+            effectiveAt: newTrialEnd,
+            metadata: { adjustmentDays, previousEnd: currentTrialEnd, newEnd: newTrialEnd },
+          }
+    );
+
     // Email the org's admin — wrapped so a delivery failure never blocks
-    // the actual trial adjustment, which is already saved above.
+    // the actual trial adjustment, which is already saved above. One
+    // coherent email per real-world consequence, not one per input: a
+    // shortening large enough to push the trial into the past is, from the
+    // org's perspective, indistinguishable from adminEndTrialNow — they
+    // don't experience "reduced" and then separately "ended", they just
+    // find their trial over. Sending both would be confusing/redundant, so
+    // resultsInExpiry routes to the exact same "trial has ended" email
+    // adminEndTrialNow sends, not the extend/reduce template.
     try {
       const adminUser = await User.findOne({
         organization: subscription.organization?._id || subscription.organization,
         role: 'admin',
       });
-      if (adminUser) {
+      if (adminUser && resultsInExpiry) {
+        await sendTrialEndedByAdminEmail(adminUser, subscription.organization);
+      } else if (adminUser) {
         await sendTrialAdjustedByAdminEmail(adminUser, subscription.organization, newTrialEnd, adjustmentDays);
       }
     } catch (emailError) {
@@ -1536,6 +1648,15 @@ const adminEndTrialNow = async (req, res) => {
     };
 
     await subscription.save();
+
+    await emitBillingEvent({
+      organization: subscription.organization?._id || subscription.organization,
+      subscription: subscription._id,
+      eventType: 'TRIAL_ENDED',
+      status: 'completed',
+      effectiveAt: subscription.trialEnd,
+      metadata: { endedBy: 'admin' },
+    });
 
     try {
       const adminUser = await User.findOne({

@@ -106,6 +106,11 @@ function assertUniqueFieldIds(layout) {
 function computeSchemaHash(layout) {
   const structural = (layout || []).map((section) => ({
     order: section.order,
+    // Where the form breaks across pages is structural: it changes what the visitor is shown and
+    // in what sequence, exactly like element order. Note this shifts the hash for every existing
+    // form, so the first publish after this ships mints one new version — a one-time, harmless
+    // consequence of the field entering the structural boundary.
+    startsNewPage: !!section.startsNewPage,
     elements: (section.elements || [])
       .slice()
       .sort((a, b) => a.order - b.order)
@@ -146,7 +151,9 @@ async function resolveOneField(module, fieldId, organizationId) {
   if (isSystemFieldId(fieldId)) {
     const meta = getSystemFieldMeta(fieldId);
     if (!meta) return null;
-    let options = [];
+    // Most system dropdowns have a fixed enum declared alongside their metadata (lifecycleStage,
+    // leadSource) — carry it through so the public renderer has options without a lookup.
+    let options = meta.options || [];
     if (fieldId === "system:company.industry") {
       // Industry has no fixed enum (Company.industry is a plain String) — its dropdown options
       // come from the org's Industry collection (defaults + org-created), the same source
@@ -158,7 +165,7 @@ async function resolveOneField(module, fieldId, organizationId) {
       ).sort({ isDefault: -1, name: 1 });
       options = industries.map((i) => i.name);
     }
-    return { fieldId, source: "system", label: meta.label, type: meta.type, options, baseRequired: meta.baseRequired };
+    return { fieldId, source: "system", label: meta.label, type: meta.type, format: meta.format, options, baseRequired: meta.baseRequired };
   }
 
   const Model = FIELD_MODEL_BY_MODULE[module];
@@ -226,10 +233,106 @@ async function refreshResolvedFields(formVersionId, module, organizationId) {
   return version;
 }
 
+// The exact complement of what computeSchemaHash covers (§3a, Option A boundary): every element
+// property that is presentation, not structure. Structural properties — type, fieldId, source,
+// targetModule, required, validationOverrides, order — are deliberately absent and must never be
+// refreshed in place, because changing one of them is what mints a new FormVersion.
+const PRESENTATION_ELEMENT_FIELDS = [
+  "text", "fontSize", "fontWeight", "textAlign", "textColor", "layoutWidth",
+  "height",
+  "dividerThickness", "dividerColor", "dividerSpacingTop", "dividerSpacingBottom",
+  "url", "alt", "imageWidth",
+  "label", "color", "position", "style",
+  "helpText", "placeholder", "defaultValue",
+];
+
+function plain(doc) {
+  return doc && typeof doc.toObject === "function" ? doc.toObject() : doc;
+}
+
+/**
+ * Purpose: Project the draft layout's PRESENTATION-only values onto a frozen layout, preserving
+ * every structural value from the frozen copy. Returns null if the two layouts don't line up
+ * element-for-element — a caller should then leave the frozen layout untouched rather than guess.
+ * Inputs: frozenLayout (FormVersion.layout), draftLayout (FormDefinition.layout, targetModule-resolved)
+ * Outputs: Array (new plain-object layout) | null
+ * Side effects: none (pure transform)
+ */
+function mergePresentationIntoLayout(frozenLayout, draftLayout) {
+  const frozen = (frozenLayout || []).map(plain);
+  const draft = (draftLayout || []).map(plain);
+  if (frozen.length !== draft.length) return null;
+
+  const merged = [];
+  for (let i = 0; i < frozen.length; i++) {
+    const fSec = frozen[i];
+    const dSec = draft[i];
+    // Sort both the same way computeSchemaHash does, so a matching hash guarantees these two
+    // sequences are element-for-element equivalent and can be paired by index.
+    const fEls = (fSec.elements || []).map(plain).slice().sort((a, b) => a.order - b.order);
+    const dEls = (dSec.elements || []).map(plain).slice().sort((a, b) => a.order - b.order);
+    if (fEls.length !== dEls.length) return null;
+
+    const elements = fEls.map((fEl, j) => {
+      const dEl = dEls[j];
+      if (!dEl || dEl.type !== fEl.type) return fEl; // defensive: hash equality should rule this out
+      const next = { ...fEl };
+      for (const key of PRESENTATION_ELEMENT_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(dEl, key) && dEl[key] !== undefined) {
+          next[key] = dEl[key];
+        } else {
+          // Cleared in the draft (e.g. an image's URL removed) — clear it on the frozen copy too,
+          // rather than leaving the old value stranded on the live version.
+          delete next[key];
+        }
+      }
+      return next;
+    });
+
+    // Section title/description are presentation as well — computeSchemaHash reads only
+    // section.order and the element sequence.
+    merged.push({ ...fSec, title: dSec.title, description: dSec.description, elements });
+  }
+  return merged;
+}
+
+/**
+ * Purpose: Push presentation-only edits (image URL/size/position, heading text, divider styling,
+ * help text, button label...) onto an already-active FormVersion whose structure is unchanged.
+ *
+ * Why this exists: §3a deliberately keeps presentation OUT of schemaHash so that retitling a
+ * heading or swapping a logo doesn't mint a new version and strand old submissions. But layout is
+ * frozen, so without this the live form would keep serving the presentation it had at first
+ * publish — republishing appeared to do nothing. This is the same in-place exception, and the same
+ * reasoning, as refreshResolvedFields above (which does it for labels/options); it is deliberately
+ * narrow, touching only PRESENTATION_ELEMENT_FIELDS and never a structural property.
+ *
+ * Inputs: formVersionId, draftLayout (the targetModule-resolved FormDefinition.layout)
+ * Outputs: Promise<void>
+ * Side effects: at most one FormVersion write, touching ONLY layout (never schemaHash/versionNumber).
+ *   No-ops if the layouts don't align element-for-element.
+ * Errors thrown: none beyond driver errors
+ * Known callers: formPublishService.publishForm (the "unchanged, reuse" branch)
+ */
+async function refreshLayoutPresentation(formVersionId, draftLayout) {
+  const version = await FormVersion.findById(formVersionId);
+  if (!version) throw new Error("FormVersion not found");
+
+  const merged = mergePresentationIntoLayout(version.layout, draftLayout);
+  if (!merged) return;
+
+  // `layout` is immutable: true, which is exactly the protection we want against a structural
+  // rewrite — so this bypass is explicit and scoped to this one call rather than being unlocked
+  // schema-wide. schemaHash and versionNumber are untouched and stay immutable.
+  await FormVersion.updateOne({ _id: formVersionId }, { $set: { layout: merged } }, { overwriteImmutable: true });
+}
+
 module.exports = {
   computeSchemaHash,
   resolveFields,
   refreshResolvedFields,
+  refreshLayoutPresentation,
+  mergePresentationIntoLayout,
   deriveTargetModule,
   resolveLayoutTargetModules,
   assertUniqueFieldIds,

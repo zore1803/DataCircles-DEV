@@ -9,6 +9,7 @@ const {
   computeSchemaHash,
   resolveFields,
   refreshResolvedFields,
+  refreshLayoutPresentation,
   resolveLayoutTargetModules,
   assertUniqueFieldIds,
 } = require("./formVersionService");
@@ -82,8 +83,12 @@ async function publishForm(formDefinitionId, organizationId, { actorUserId } = {
   let versionWasReused;
 
   if (latestVersion && latestVersion.schemaHash === schemaHash) {
-    // Unchanged structurally — reuse the existing version, but refresh its resolvedFields in
-    // case labels/options drifted since it was last frozen (FORMS_SCHEMA.md §3a).
+    // Unchanged structurally — reuse the existing version, but refresh the two things §3a keeps
+    // OUT of schemaHash and therefore lets drift: field labels/options (resolvedFields) and
+    // element presentation (image URL/size/position, heading text, divider styling, button label).
+    // Without the presentation refresh the frozen layout would keep serving whatever it held at
+    // first publish, so republishing a purely cosmetic edit visibly did nothing.
+    await refreshLayoutPresentation(latestVersion._id, resolvedLayout);
     formVersion = await refreshResolvedFields(latestVersion._id, form.module, organizationId);
     versionWasReused = true;
   } else {

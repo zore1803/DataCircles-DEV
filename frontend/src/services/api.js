@@ -4,12 +4,86 @@ import axios from "axios";
 const API = axios.create({
   baseURL: `${import.meta.env.VITE_APP_API_URL}/api`,
   timeout: 30000, // 30 second timeout for production
+  // Required so the dc_session HttpOnly cookie (DataCircles application
+  // session — see backend/services/sessionService.js) is sent on
+  // cross-site requests; frontend and backend are on different domains in
+  // every environment this app deploys to.
+  withCredentials: true,
 });
 
 // Token refresh management
 let getAccessTokenSilently = null;
 let isRefreshing = false;
 let failedQueue = [];
+
+// In-memory only — never localStorage. This is the double-submit CSRF
+// token derived server-side from the session's csrfSecret
+// (backend/services/sessionService.js deriveCsrfToken); it authorizes
+// mutating requests once a DataCircles session cookie is set.
+let csrfToken = null;
+
+export const setCsrfToken = (token) => {
+  csrfToken = token;
+};
+
+// Lazily (re)fetch the double-submit CSRF token when it's missing. The
+// in-memory `csrfToken` above does NOT survive a full page load, and the
+// only thing that otherwise repopulates it is PrivateRoute's mount effect
+// (GET /session/csrf-token) — so a mutating request fired from a freshly
+// loaded tab that reached the app by any other path would go out with no
+// X-CSRF-Token and be rejected 403 CSRF_INVALID by the backend csrfCheck
+// middleware. GET /session/csrf-token re-derives the token from the
+// existing dc_session cookie without disturbing the session itself.
+//
+// Single-flight: concurrent mutating requests share one in-flight fetch
+// rather than each firing their own.
+let csrfFetchPromise = null;
+
+const fetchCsrfToken = () => {
+  if (!csrfFetchPromise) {
+    csrfFetchPromise = API.get("/session/csrf-token")
+      .then((res) => {
+        setCsrfToken(res.data.csrfToken);
+        return res.data.csrfToken;
+      })
+      .catch((err) => {
+        // No dc_session cookie yet (401) or a transient failure — leave
+        // csrfToken null and let the original request proceed so it fails
+        // with a clear server-side 401/403 instead of hanging here.
+        console.warn(
+          "Could not fetch CSRF token:",
+          err.response?.status || err.message,
+        );
+        return null;
+      })
+      .finally(() => {
+        csrfFetchPromise = null;
+      });
+  }
+  return csrfFetchPromise;
+};
+
+/**
+ * Establishes a DataCircles application session after Auth0 login or phone
+ * OTP verification succeeds. Sets the dc_session HttpOnly cookie and
+ * returns the CSRF token for mutating requests. Surfaces a
+ * SESSION_LIMIT_REACHED error distinctly so callers can show the
+ * "maximum 2 active sessions" message instead of a generic failure.
+ */
+export const establishSession = async () => {
+  try {
+    const res = await API.post("/session/establish");
+    setCsrfToken(res.data.csrfToken);
+    return res.data;
+  } catch (error) {
+    if (error.response?.data?.code === "SESSION_LIMIT_REACHED") {
+      const limitError = new Error(error.response.data.message);
+      limitError.code = "SESSION_LIMIT_REACHED";
+      throw limitError;
+    }
+    throw error;
+  }
+};
 
 /**
  * Process the queue of failed requests after token refresh
@@ -39,6 +113,30 @@ export const configureAxios = (tokenFunction) => {
 API.interceptors.request.use(
   async (config) => {
     try {
+      // Attach the CSRF token on mutating requests once a DataCircles
+      // session has been established (see establishSession above). Safe
+      // methods don't need it; the backend's csrfCheck middleware only
+      // enforces it on routes that opt into sessionAuth.
+      //
+      // If the token is missing (e.g. wiped by a page reload), fetch it
+      // first so this request isn't the one that eats a 403. Auth/session
+      // endpoints are skipped — they run before any dc_session exists
+      // (/auth/*), mint the token themselves (/session/establish), or ARE
+      // the fetch we'd be calling (/session/csrf-token).
+      const method = (config.method || "get").toLowerCase();
+      const isMutating = !["get", "head", "options"].includes(method);
+      const url = config.url || "";
+      const isPreSessionEndpoint =
+        url.includes("/session/") || url.includes("/auth/");
+      if (isMutating) {
+        if (!csrfToken && !isPreSessionEndpoint) {
+          await fetchCsrfToken();
+        }
+        if (csrfToken) {
+          config.headers["X-CSRF-Token"] = csrfToken;
+        }
+      }
+
       // If Authorization header is already set (e.g., tempToken), don't override it
       if (config.headers.Authorization) {
         return config;
@@ -174,6 +272,38 @@ API.interceptors.response.use(
     }
 
     // Handle other errors or non-401 responses
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Response Interceptor - Reactive CSRF recovery
+ *
+ * A 403 with code CSRF_INVALID means the in-memory token was stale or
+ * missing when the request went out (typically: a page reload wiped it and
+ * the proactive fetch in the request interceptor lost a race, or the
+ * session was rotated). Drop the cached token, re-derive it from the live
+ * dc_session cookie, and replay the request once. Guarded per-request so a
+ * genuinely un-fixable token can't loop.
+ */
+API.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    const isCsrfError =
+      error.response?.status === 403 &&
+      error.response?.data?.code === "CSRF_INVALID";
+
+    if (isCsrfError && originalRequest && !originalRequest._csrfRetry) {
+      originalRequest._csrfRetry = true;
+      csrfToken = null; // force a real re-fetch rather than reusing the rejected value
+      const fresh = await fetchCsrfToken();
+      if (fresh) {
+        originalRequest.headers["X-CSRF-Token"] = fresh;
+        return API(originalRequest);
+      }
+    }
+
     return Promise.reject(error);
   }
 );

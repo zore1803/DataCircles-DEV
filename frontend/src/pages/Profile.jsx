@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import { User, Mail, Camera, Upload, LogOut, X } from "lucide-react";
+import { User, Mail, Camera, Upload, LogOut, X, Monitor, ShieldCheck } from "lucide-react";
 import logo from "/DataCircles.png";
 
 const Profile = () => {
@@ -12,6 +12,9 @@ const Profile = () => {
   const [profileBase64, setProfileBase64] = useState(null);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sessions, setSessions] = useState(null);
+  const [sessionsError, setSessionsError] = useState("");
+  const [revokingId, setRevokingId] = useState(null);
   const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
@@ -26,9 +29,44 @@ const Profile = () => {
       }
     };
     fetchUser();
+    fetchSessions();
   }, [getAccessTokenSilently]);
 
-  const handleLogout = () => {
+  const fetchSessions = async () => {
+    try {
+      const res = await API.get("/session");
+      setSessions(res.data.sessions);
+      setSessionsError("");
+    } catch {
+      // Non-fatal — no application route enforces sessionAuth yet, so a
+      // user who hasn't gone through /session/establish simply has no
+      // dc_session cookie and this 401s. Show a quiet, non-alarming state.
+      setSessions([]);
+      setSessionsError("");
+    }
+  };
+
+  const handleRevokeSession = async (id) => {
+    setRevokingId(id);
+    try {
+      await API.delete(`/session/${id}`);
+      await fetchSessions();
+    } catch {
+      setSessionsError("Failed to sign out that session. Please try again.");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    // Revoke the DataCircles application session server-side before
+    // clearing any client-side state — see backend/controllers/
+    // sessionController.js logout.
+    try {
+      await API.post("/session/logout");
+    } catch (err) {
+      console.error("Failed to revoke DataCircles session:", err);
+    }
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     // Clear browser history to prevent back button access
@@ -248,6 +286,57 @@ const Profile = () => {
           Account Active
         </div>
       </div>
+
+      {/* Active Sessions */}
+      {sessions && sessions.length > 0 && (
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="w-4 h-4 text-gray-500" />
+            <h3 className="text-sm font-semibold text-gray-900">Active Sessions</h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            You can be signed in on up to 2 devices at once. Sign out of a
+            session below to free up a slot for a new one.
+          </p>
+          {sessionsError && (
+            <p className="text-xs text-red-600 mb-3">{sessionsError}</p>
+          )}
+          <div className="space-y-2">
+            {sessions.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <Monitor className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {s.deviceLabel || "Unknown device"}
+                      {s.current && (
+                        <span className="ml-2 text-xs font-semibold text-green-600">
+                          This device
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Last active {new Date(s.lastActiveAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                {!s.current && (
+                  <button
+                    onClick={() => handleRevokeSession(s.id)}
+                    disabled={revokingId === s.id}
+                    className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {revokingId === s.id ? "Signing out..." : "Sign out"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Logout Confirmation Modal */}
       {isLogoutModalOpen && (

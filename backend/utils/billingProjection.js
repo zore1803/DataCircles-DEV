@@ -93,7 +93,7 @@ function buildAddonEntries(activeAddons, cycle, subscription, scheduledChanges, 
 // Every event carries `source` (where it came from) and `priority` (display
 // weight only, decided here from the event's own type — React never
 // classifies an event itself).
-function buildUpcomingEvents({ subscription, addonEntries, scheduledChanges, cancellation, now, trial, nextRenewalAmount }) {
+function buildUpcomingEvents({ subscription, addonEntries, scheduledChanges, cancellation, now, trial }) {
   const horizon = new Date(now.getTime() + HORIZON_MS);
   const events = [];
 
@@ -103,14 +103,18 @@ function buildUpcomingEvents({ subscription, addonEntries, scheduledChanges, can
   // plan's own nextRenewal amount) — no new computation, just one more
   // canonical event alongside the others below.
   if (trial?.active && trial.endsAt && trial.endsAt <= horizon) {
+    // "billing begins" here used to imply a charge that will never happen —
+    // nothing converts automatically at trial end (subscriptionLifecycleJobs.js's
+    // expiry job only flips isTrialActive/appStatus, never charges anything).
+    // No payment is scheduled unless the org actually buys a plan.
     events.push({
       type: 'trial_end',
       source: 'subscription',
       priority: 'critical',
       date: trial.endsAt,
       title: 'Free trial ends',
-      description: `${subscription.planName} billing begins`,
-      amount: nextRenewalAmount ?? null,
+      description: 'No payment is scheduled — choose a plan to continue',
+      amount: null,
     });
   }
 
@@ -150,7 +154,15 @@ function buildUpcomingEvents({ subscription, addonEntries, scheduledChanges, can
     }
   }
 
-  if (subscription.currentPeriodEnd && subscription.currentPeriodEnd <= horizon) {
+  // Gated on isPaymentConfirmed, matching buildBillingProjection's own
+  // nextRenewal gate exactly. A trial subscription also has
+  // currentPeriodEnd set (= trialEnd, for internal bookkeeping — see
+  // startFreeTrial) but nothing has ever been paid or committed, so there
+  // is no real "plan renews" event to report — that's the trial_end event
+  // above, not this one. Without this gate, every trialing org saw a
+  // fabricated "growth plan renews" event alongside "Free trial ends",
+  // implying a charge that was never scheduled and would never happen.
+  if (subscription.isPaymentConfirmed && subscription.currentPeriodEnd && subscription.currentPeriodEnd <= horizon) {
     events.push({
       type: 'base_renewal',
       source: 'subscription',
@@ -263,7 +275,6 @@ async function buildBillingProjection(subscription) {
     cancellation,
     now,
     trial,
-    nextRenewalAmount: trial.active ? trial.conversionAmount : nextRenewal?.amount,
   }).map((event) =>
     event.type === 'base_renewal' && nextRenewal ? { ...event, amount: nextRenewal.amount } : event
   );

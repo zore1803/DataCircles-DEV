@@ -29,6 +29,49 @@ const UPDATE_SERVICE_BY_MODULE = {
   Vendor: (id, org, data, opts) => vendorService.updateVendor(id, org, data, opts),
 };
 
+// Keys a FORM can never legitimately supply for a module, because they are internal relationship
+// references the server sets itself. Contact.company is an ObjectId ref assigned by the Company
+// bucket's linking logic (submissionService.linkContactToCompany) — never something a visitor types.
+const NON_FILLABLE_BY_MODULE = {
+  Contact: ["company"],
+};
+
+/**
+ * Purpose: Strip keys that a stored review payload must never carry into a create/update.
+ *
+ * Why this is needed at RESOLUTION time and not just at submission time: `system:contact.company`
+ * used to be offered as a fillable field. That was removed (see the note in utils/systemFields.js —
+ * "what caused the CastError('company') incident; do not re-add it"), which stopped NEW reviews
+ * being poisoned, but did nothing for reviews already stored. DuplicateReview.incomingData is Mixed
+ * and permanent, so a review created in July 2026 still holds `company: "company"` — the literal
+ * field name as its value. Resolving it throws
+ *     Contact validation failed: company: Cast to ObjectId failed for value "company"
+ * and the Review Center action 500s with no way for the user to clear it.
+ *
+ * Deliberately defensive rather than destructive: this drops the offending key on the way through,
+ * and never rewrites the stored review, submission or any CRM record. Historical data stays as it
+ * was; only what we hand to Mongoose is cleaned.
+ *
+ * Inputs: module ("Contact"|"Company"|"Vendor"), data (plain object, may be undefined)
+ * Outputs: a shallow copy with non-fillable keys removed (or `data` untouched when there are none)
+ * Side effects: none beyond a console.warn, so a stale payload is visible rather than silently swallowed
+ */
+function sanitizeForModule(module, data) {
+  const banned = NON_FILLABLE_BY_MODULE[module];
+  if (!banned || !data || typeof data !== "object") return data;
+
+  const present = banned.filter((k) => data[k] !== undefined);
+  if (present.length === 0) return data;
+
+  const cleaned = { ...data };
+  present.forEach((k) => delete cleaned[k]);
+  console.warn(
+    `duplicateResolutionService: dropped non-fillable ${module} field(s) [${present.join(", ")}] ` +
+    `from a stored review payload — legacy data, see sanitizeForModule.`
+  );
+  return cleaned;
+}
+
 /**
  * Purpose: Find the Contact this submission's (deferred) Company decision should link to. Checks
  * `resultingRecords` first (the Contact was newly created), and if that's empty, falls back to the
@@ -70,7 +113,11 @@ async function keepSeparate(reviewId, organizationId, { decidedByUserId } = {}) 
 
   const createFn = CREATE_SERVICE_BY_MODULE[review.module];
   if (!createFn) throw new Error(`Unsupported module: ${review.module}`);
-  const createdRecord = await createFn(organizationId, review.incomingData, { actingUserId: decidedByUserId, createdByUserId: decidedByUserId, userId: decidedByUserId });
+  const createdRecord = await createFn(
+    organizationId,
+    sanitizeForModule(review.module, review.incomingData),
+    { actingUserId: decidedByUserId, createdByUserId: decidedByUserId, userId: decidedByUserId }
+  );
 
   review.decision = "kept_separate";
   review.decidedBy = decidedByUserId;
@@ -176,9 +223,15 @@ async function mergeIntoExisting(reviewId, organizationId, { decidedByUserId, re
 
   const updateFn = UPDATE_SERVICE_BY_MODULE[review.module];
   if (!updateFn) throw new Error(`Unsupported module: ${review.module}`);
-  const updatedRecord = await updateFn(review.existingRecord.recordId, organizationId, resolvedFieldValues, {
-    lastUpdatedByUserId: decidedByUserId,
-  });
+  // Sanitized for the same reason as keepSeparate: the merge UI builds its rows from
+  // review.incomingData, so a stale review's poisoned key would otherwise ride through here too.
+  // (The UI already hides `company` via HIDDEN_RECORD_KEYS, but a direct API call would not.)
+  const updatedRecord = await updateFn(
+    review.existingRecord.recordId,
+    organizationId,
+    sanitizeForModule(review.module, resolvedFieldValues),
+    { lastUpdatedByUserId: decidedByUserId }
+  );
 
   review.decision = "merged";
   review.decidedBy = decidedByUserId;

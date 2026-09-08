@@ -49,6 +49,26 @@ const billingInvoiceSchema = new mongoose.Schema({
   taxable: { type: Number },
   gst: { type: Number },
   total: { type: Number },
+  // Added (Aug 2026) — closes a real gap found while tracing the orphaned-
+  // CAW-payment reconciliation fix: unlike RewardUsage (one immutable row
+  // per referral-reservation attempt), nothing previously recorded WHICH
+  // coupon produced this invoice's `discount` — the combined coupon+referral
+  // amount was folded into one `{type:'discount', key:'modifiers'}` line
+  // item, and the coupon code itself lived only on Subscription.appliedCoupon,
+  // a field a LATER attempt (Change Plan / Resume Payment on the same
+  // Subscription document) freely overwrites before this invoice is ever
+  // paid. Without this, a superseded-payment reconciliation has no way to
+  // tell whether the invoice that actually got paid used a coupon at all —
+  // and, critically, no way to tell whether that coupon was recurring
+  // (duration.type 'lifetime'/'until_cancelled', which renewal billing keeps
+  // re-checking every cycle — see utils/couponRenewalEligibility.js) versus
+  // one-off ('first_payment'). Populated at both invoice-creation call sites
+  // (createSubscription, updateSubscription's pending/trial-conversion
+  // branch) alongside razorpay.registrationLinkId, from the same
+  // couponResult already computed there — never guessed at reconciliation
+  // time.
+  couponId: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
+  couponCode: { type: String },
   status: { type: String, enum: ['PENDING_PAYMENT', 'PAID', 'FAILED', 'VOID'], default: 'PENDING_PAYMENT' },
   // Correlation identifiers, added cheaply now (Phase 2) rather than migrated
   // onto historical invoices later once Phase 3 needs them. Only whichever of
