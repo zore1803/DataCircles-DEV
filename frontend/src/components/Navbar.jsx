@@ -422,23 +422,41 @@ const Navbar = () => {
     getProfile();
   }, []);
 
+  // A profile image that 404s falls back to the initials avatar rather than
+  // leaving the browser's broken-image glyph in a round frame.
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
   const getProfile = async () => {
     const res = await API.get("/auth/profile");
     setProfile(res.data);
+    // A newly-saved picture deserves a fresh attempt at loading it.
+    setAvatarFailed(false);
   };
 
   const renderProfileImage = () => {
-    if (profile && !isSuperAdmin) {
+    if (profile && !isSuperAdmin && !avatarFailed) {
+      // GET /auth/profile returns `profileUrl` as a bare string, which may be
+      // absolute (S3/CloudFront), a data:/blob: preview, or a server-relative
+      // path. The relative case needs the API origin prefixed — passing it
+      // through raw requested a URL that doesn't exist and left the broken
+      // image placeholder, which renders as a squashed non-circular blob.
       const src =
-        typeof profile == "string" &&
-          (profile.startsWith("data:") || profile.startsWith("blob:"))
+        typeof profile === "string" &&
+        (profile.startsWith("data:") ||
+          profile.startsWith("blob:") ||
+          profile.startsWith("http"))
           ? profile
           : `${import.meta.env.VITE_APP_API_URL}${profile}`;
       return (
         <img
-          src={profile}
-          alt="User Profile"
-          className="h-7 w-7 rounded-full object-cover flex-shrink-0 border border-white"
+          src={src}
+          alt=""
+          width={32}
+          height={32}
+          // Fixed square box that flex can neither shrink nor stretch, so
+          // `rounded-full` is always a circle rather than an oval.
+          className="h-8 w-8 min-w-[32px] aspect-square rounded-full object-cover flex-shrink-0 border border-white"
+          onError={() => setAvatarFailed(true)}
         />
       );
     } else {
@@ -449,7 +467,7 @@ const Navbar = () => {
       const color = getRandomColor(userName);
       return (
         <div
-          className="h-8 w-8 rounded-full text-white flex items-center justify-center font-bold text-sm flex-shrink-0"
+          className="h-8 w-8 min-w-[32px] aspect-square rounded-full text-white flex items-center justify-center font-bold text-sm flex-shrink-0"
           style={{ background: color }}
         >
           {initials}
@@ -506,7 +524,7 @@ const Navbar = () => {
       <button
         className={`${navRowBase} ${navRowLayout} ${isChildActive(children)
             ? "bg-white border border-[#E5E5E5] text-[#0085FF] font-medium"
-            : "border border-transparent text-gray-900 hover:bg-gray-100"
+            : "border border-transparent text-gray-900 hover:bg-[#D6DEEC]"
           }`}
       >
         <item.icon
@@ -898,7 +916,7 @@ const Navbar = () => {
                       }}
                       className={`${navRowBase} ${navRowLayout} ${isCurrentPath(item.href)
                           ? "bg-white border border-[#E5E5E5] text-[#0085FF] font-medium"
-                          : "border border-transparent text-gray-900 hover:bg-gray-100"
+                          : "border border-transparent text-gray-900 hover:bg-[#D6DEEC]"
                         }`}
                     >
                       <item.icon
