@@ -48,3 +48,4 @@ backend/scripts/scratch/*
 # generated email previews (npm run preview:emails)
 backend/scripts/email-previews/
 .email-preview/
+backend/scripts/template-previews/
