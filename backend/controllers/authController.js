@@ -20,9 +20,8 @@ const { getAccessEntitlementEnd } = require('../utils/prorationMath');
 const { calculateInvoice } = require('../utils/invoiceEngine');
 const PlanAddon = require("../models/PlanAddon");
 const { startAddonPurchase } = require('../utils/addonPurchaseLifecycle');
-const sessionService = require("../services/sessionService");
-const { setSessionCookie } = require("../utils/sessionCookie");
 const Notification = require("../models/Notification");
+const { renderEmail } = require("../utils/emailLayout");
 
 // Emails + writes an in-app Notification when a new staff member joins an
 // organization (via invite or company code). Best-effort — callers must
@@ -53,18 +52,20 @@ async function notifyAdminsOfNewStaff({ organization, staffUser }) {
 
   const staffEmail = staffUser.email || staffUser.phone || "";
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color: #111827;">New team member joined ${org.name}</h2>
-      <p style="color: #374151; font-size: 15px;">
-        <strong>${staffName}</strong>${staffEmail ? ` (${staffEmail})` : ""} has accepted their invitation and is now a member of ${org.name} on DataCircles.
-      </p>
-      <p style="color: #6b7280; font-size: 13px;">
-        Review or adjust what they can access from Settings &gt; User Management.
-      </p>
-      <p style="color: #374151; font-size: 15px; margin-top: 24px;">Regards,<br>Team DataCircles</p>
-    </div>
-  `;
+  const html = renderEmail({
+    intro: `<strong>${staffName}</strong>${staffEmail ? ` (${staffEmail})` : ""} has accepted their invitation and is now a member of ${org.name} on DataCircles.`,
+    blocks: [
+      {
+        rows: [
+          { label: "Team member", value: staffName },
+          staffEmail ? { label: "Contact", value: staffEmail } : null,
+          { label: "Organisation", value: org.name },
+        ],
+      },
+    ],
+    closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Review or adjust what they can access from Settings &gt; User Management.</p>',
+    preheader: `${staffName} has joined ${org.name} on DataCircles.`,
+  });
 
   await sendGridMail({
     to: adminEmails,
@@ -84,152 +85,37 @@ const TempOTP = mongoose.model(
   }),
 );
 
-// Helper function for generating invite email HTML
+// Helper function for generating invite email HTML.
+// `organizationLogoUrl` is retained for call-site compatibility; the shared
+// layout uses the DataCircles logo, so it is no longer rendered.
 const generateInviteEmailHTML = (
   inviteLink,
   organizationName,
   inviterName,
   organizationLogoUrl,
 ) => {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You're Invited to Join ${organizationName}</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f6f9fc;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f6f9fc; padding: 40px 0;">
-    <tr>
-      <td align="center">
-        <!-- Main Container -->
-        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden;">
-          
-          <!-- Data Circles Header (Brand) -->
-          <tr>
-            <td style="padding: 32px 40px; text-align: center; background-color: #000; border-bottom: 1px solid #e2e8f0; min-height: 150px;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width: 200px; height: auto;">
-            </td>
-          </tr>
-          
-          <!-- Organization Header (Neutral) -->
-          <tr>
-            <td style="padding: 5px 40px 15px; text-align: center; background-color: #fff;">
-              ${organizationLogoUrl
-      ? `
-              <div style="background-color: #f6f9fc; border-radius: 8px; padding: 12px; display: inline-block; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                <img src="${organizationLogoUrl}" alt="${organizationName}" style="max-width: 160px; height: auto;">
-              </div>
-              `
-      : `
-              <h2 style="color: #212121; font-size: 22px; font-weight: 600; margin-bottom: 16px; background-color: #f6f9fc; padding: 10px 20px; border-radius: 7px; display: inline-block;">
-                ${organizationName}
-              </h2>
-              `
-    }
-              <h1 style="color: #23272a; font-size: 26px; font-weight: 600; margin: 0; line-height: 1.2;">
-                You're invited to join ${organizationName}
-              </h1>
-            </td>
-          </tr>
-
-          <!-- Main Content -->
-          <tr>
-            <td style="padding: 32px 40px 18px;">
-              <p style="color: #23272a; font-size: 16px; line-height: 1.6; margin: 0 0 18px;">
-                Hi there,
-              </p>
-              <p style="color: #23272a; font-size: 16px; line-height: 1.6; margin: 0 0 18px;">
-                <strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong> on DataCircles, the CRM the team uses to manage contacts, deals and day-to-day sales work.
-              </p>
-              <!-- What You'll Get (Neutral Card) -->
-              <div style="background-color: #f7f7fa; border-left: 3px solid #d7dbdf; padding: 18px; margin: 22px 0; border-radius: 6px;">
-                <h3 style="color: #23272a; font-size: 15px; font-weight: 600; margin: 0 0 9px">
-                  Once you accept, you'll be able to work with:
-                </h3>
-                <ul style="color: #4a5568; font-size: 14px; line-height: 1.7; margin: 0; padding-left: 18px;">
-                  <li style="margin-bottom: 7px;"><strong>${organizationName}</strong>'s contacts, companies, and deals</li>
-                  <li style="margin-bottom: 7px;">Shared sales pipelines and team workflows</li>
-                  <li style="margin-bottom: 7px;">Real-time collaboration with your colleagues</li>
-                  <li>Reporting and analytics tools</li>
-                </ul>
-              </div>
-
-              <!-- CTA Button (Blue Accent) -->
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 18px;">
-                <tr>
-                  <td align="center">
-                    <a href="${inviteLink}" style="background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 5px; font-size: 16px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(102,126,234,0.15);">
-                      Accept invitation
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 18px 0 0;">
-                This invitation link is unique to you. If you weren't expecting it, you can ignore this email.
-              </p>
-              <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 10px 0 0;">
-                New to DataCircles? You can sign in with your existing Google, Facebook, GitHub, or LinkedIn account, or create an account with your phone number.
-              </p>
-              <p style="color: #23272a; font-size: 15px; line-height: 1.6; margin: 24px 0 0;">
-                Regards,<br>Team DataCircles
-              </p>
-            </td>
-          </tr>
-
-          <!-- Divider -->
-          <tr>
-            <td style="padding: 0 40px;">
-              <div style="border-top: 1px solid #e2e8f0;"></div>
-            </td>
-          </tr>
-          
-          <!-- Alternative Link Section -->
-          <tr>
-            <td style="padding: 24px 40px;">
-              <p style="color: #718096; font-size: 13px; line-height: 1.6; margin: 0 0 7px;">
-                If the button above doesn't work, copy and paste this link into your browser:
-              </p>
-              <p style="margin: 0;">
-                <a href="${inviteLink}" style="color: #667eea; font-size: 13px; word-break: break-all; text-decoration: underline;">
-                  ${inviteLink}
-                </a>
-              </p>
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8f9fb; padding: 26px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="color: #718096; font-size: 13px; line-height: 1.6; margin: 0 0 10px;">
-                This invitation was sent by <strong>${inviterName}</strong> from <strong>${organizationName}</strong>
-              </p>
-              <p style="color: #a0aec0; font-size: 12px; line-height: 1.5; margin: 0 0 7px;">
-                © ${new Date().getFullYear()} DataCircles. All rights reserved.
-              </p>
-              <p style="color: #cbd5e0; font-size: 11px; margin: 0;">
-                Questions about DataCircles? <a href="mailto:support@datacircles.in" style="color: #667eea; text-decoration: none;">Contact support</a>
-              </p>
-            </td>
-          </tr>
-          
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  `;
+  return renderEmail({
+    greetingName: null,
+    intro: [
+      `<strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong> on DataCircles, the CRM the team uses to manage contacts, deals and day-to-day sales work.`,
+      `Once you accept, you'll be able to work with ${organizationName}'s contacts, companies and deals, shared sales pipelines and team workflows, real-time collaboration, and reporting and analytics tools.`,
+    ],
+    ctaLabel: 'Accept invitation',
+    ctaUrl: inviteLink,
+    closingHtml: `
+      <p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#666666;">If the button above does not work, copy and paste this link into your browser:</p>
+      <p style="margin:6px 0 0;"><a href="${inviteLink}" style="color:#1a56db;font-size:13px;word-break:break-all;">${inviteLink}</a></p>
+      <p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#333333;">This invitation link is unique to you. If you weren't expecting it, you can ignore this email.</p>
+      <p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:#333333;">New to DataCircles? You can sign in with your existing Google, Facebook, GitHub, or LinkedIn account, or create an account with your phone number.</p>
+    `,
+    preheader: `${inviterName} has invited you to join ${organizationName} on DataCircles.`,
+  });
 };
 
-// Referral invitation email — deliberately mirrors generateInviteEmailHTML's
-// structure/branding exactly (same header, CTA, footer), different copy.
-// Sending this email creates NO Referral record — a referral only becomes
-// Pending when the recipient actually registers using the link (see
-// subscriptionController.sendReferralEmail, which calls this and nothing
-// else). "Sending an email is not a referral" — see
+// Referral invitation email. Sending this email creates NO Referral record;
+// a referral only becomes Pending when the recipient actually registers
+// using the link (see subscriptionController.sendReferralEmail, which calls
+// this and nothing else). "Sending an email is not a referral" -- see
 // backend/docs/REFERRAL_SYSTEM_DESIGN.md.
 const generateReferralEmailHTML = (
   referralLink,
@@ -237,133 +123,27 @@ const generateReferralEmailHTML = (
   senderName,
   customMessage,
 ) => {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You're Invited to Try DataCircles</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f6f9fc;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f6f9fc; padding: 40px 0;">
-    <tr>
-      <td align="center">
-        <!-- Main Container -->
-        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden;">
+  const quote = customMessage
+    ? `<p style="margin:0 0 16px;padding:14px 16px;background:#f4f6f8;border-left:3px solid #111111;font-size:14px;line-height:1.6;color:#333333;font-style:italic;">"${customMessage}"</p>`
+    : '';
 
-          <!-- Data Circles Header (Brand) -->
-          <tr>
-            <td style="padding: 32px 40px; text-align: center; background-color: #000; border-bottom: 1px solid #e2e8f0; min-height: 150px;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width: 200px; height: auto;">
-            </td>
-          </tr>
-
-          <!-- Header -->
-          <tr>
-            <td style="padding: 5px 40px 15px; text-align: center; background-color: #fff;">
-              <h2 style="color: #212121; font-size: 22px; font-weight: 600; margin-bottom: 16px; background-color: #f6f9fc; padding: 10px 20px; border-radius: 7px; display: inline-block;">
-                ${organizationName}
-              </h2>
-              <h1 style="color: #23272a; font-size: 26px; font-weight: 600; margin: 0; line-height: 1.2;">
-                ${senderName} thinks DataCircles could help your team
-              </h1>
-            </td>
-          </tr>
-
-          <!-- Main Content -->
-          <tr>
-            <td style="padding: 32px 40px 18px;">
-              <p style="color: #23272a; font-size: 16px; line-height: 1.6; margin: 0 0 18px;">
-                Hi there,
-              </p>
-              <p style="color: #23272a; font-size: 16px; line-height: 1.6; margin: 0 0 18px;">
-                <strong>${senderName}</strong> from <strong>${organizationName}</strong> uses DataCircles to manage their sales and customer relationships, and thought it could be a good fit for your business.
-              </p>
-              ${customMessage
-      ? `
-              <div style="background-color: #f7f7fa; border-left: 3px solid #667eea; padding: 16px 18px; margin: 0 0 18px; border-radius: 6px;">
-                <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 0; font-style: italic;">"${customMessage}"</p>
-              </div>
-              `
-      : ''
-    }
-              <p style="color: #23272a; font-size: 15px; line-height: 1.6; margin: 0 0 8px; font-weight: 600;">
-                What you can manage in DataCircles:
-              </p>
-              <ul style="color: #4a5568; font-size: 14px; line-height: 1.7; margin: 0 0 22px; padding-left: 18px;">
-                <li>Customers and deals</li>
-                <li>Sales pipelines</li>
-                <li>Invoices and quotations</li>
-                <li>Reports and team collaboration</li>
-              </ul>
-
-              <!-- CTA Button -->
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 18px;">
-                <tr>
-                  <td align="center">
-                    <a href="${referralLink}" style="background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 5px; font-size: 16px; font-weight: 600; display: inline-block; box-shadow: 0 4px 12px rgba(102,126,234,0.15);">
-                      See how it works
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 18px 0 0;">
-                If you sign up and become a paying customer, both you and ${organizationName} receive a referral reward.
-              </p>
-              <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 10px 0 0;">
-                This invitation was sent by ${senderName}. If it is not relevant to you, you can ignore this email.
-              </p>
-              <p style="color: #23272a; font-size: 15px; line-height: 1.6; margin: 24px 0 0;">
-                Regards,<br>Team DataCircles
-              </p>
-            </td>
-          </tr>
-
-          <!-- Divider -->
-          <tr>
-            <td style="padding: 0 40px;">
-              <div style="border-top: 1px solid #e2e8f0;"></div>
-            </td>
-          </tr>
-
-          <!-- Alternative Link Section -->
-          <tr>
-            <td style="padding: 24px 40px;">
-              <p style="color: #718096; font-size: 13px; line-height: 1.6; margin: 0 0 7px;">
-                If the button above doesn't work, copy and paste this link into your browser:
-              </p>
-              <p style="margin: 0;">
-                <a href="${referralLink}" style="color: #667eea; font-size: 13px; word-break: break-all; text-decoration: underline;">
-                  ${referralLink}
-                </a>
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8f9fb; padding: 26px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <p style="color: #718096; font-size: 13px; line-height: 1.6; margin: 0 0 10px;">
-                This referral was sent by <strong>${senderName}</strong> from <strong>${organizationName}</strong>
-              </p>
-              <p style="color: #a0aec0; font-size: 12px; line-height: 1.5; margin: 0 0 7px;">
-                © ${new Date().getFullYear()} DataCircles. All rights reserved.
-              </p>
-              <p style="color: #cbd5e0; font-size: 11px; margin: 0;">
-                Questions about DataCircles? <a href="mailto:support@datacircles.in" style="color: #667eea; text-decoration: none;">Contact support</a>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  `;
+  return renderEmail({
+    greetingName: null,
+    intro: [
+      `<strong>${senderName}</strong> from <strong>${organizationName}</strong> uses DataCircles to manage their sales and customer relationships, and thought it could be a good fit for your business.`,
+      quote,
+      'In DataCircles you can manage customers and deals, sales pipelines, invoices and quotations, and reports and team collaboration.',
+    ],
+    ctaLabel: 'See how it works',
+    ctaUrl: referralLink,
+    closingHtml: `
+      <p style="margin:18px 0 0;font-size:14px;line-height:1.6;color:#333333;">If you sign up and become a paying customer, both you and ${organizationName} receive a referral reward.</p>
+      <p style="margin:10px 0 0;font-size:13px;line-height:1.6;color:#666666;">If the button above does not work, copy and paste this link into your browser:</p>
+      <p style="margin:6px 0 0;"><a href="${referralLink}" style="color:#1a56db;font-size:13px;word-break:break-all;">${referralLink}</a></p>
+      <p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#666666;">This invitation was sent by ${senderName}. If it is not relevant to you, you can ignore this email.</p>
+    `,
+    preheader: `${senderName} from ${organizationName} thinks DataCircles could help your team.`,
+  });
 };
 
 // Get current user
@@ -883,32 +663,7 @@ exports.verifyOtp = async (req, res) => {
       secret,
       { expiresIn: "7d" },
     );
-
-    // Establish the same DataCircles application session used by Google
-    // login, so both paths count toward the same 2-session limit and set
-    // the same dc_session cookie. See services/sessionService.js.
-    let sessionInfo;
-    try {
-      const { session, csrfToken } = await sessionService.establishSession({
-        userId: user._id,
-        organization: user.organization,
-        ip: req.ip,
-        userAgent: req.headers["user-agent"],
-      });
-      setSessionCookie(res, session.sessionId);
-      sessionInfo = { csrfToken };
-    } catch (err) {
-      if (err instanceof sessionService.SessionLimitError) {
-        return res.status(409).json({
-          code: err.code,
-          message:
-            "You've reached the maximum of 2 active sessions. Sign out of another session to continue.",
-        });
-      }
-      throw err;
-    }
-
-    return res.json({ success: true, token, user, ...sessionInfo });
+    return res.json({ success: true, token, user });
   } else {
     const tempToken = jwt.sign({ sub: `temp-phone|${phone}` }, secret, {
       expiresIn: "10m",
@@ -958,71 +713,19 @@ exports.sendEmailOtp = async (req, res) => {
     await newEmailOtp.save();
 
     // Send OTP via email
-    const emailHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Email Verification OTP</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f6f9fc;">
-      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f6f9fc; padding: 40px 0;">
-        <tr>
-          <td align="center">
-            <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden;">
-              
-              <!-- Header -->
-              <tr>
-                <td style="padding: 32px 40px; text-align: center; background-color: #000; border-bottom: 1px solid #e2e8f0; min-height: 150px;">
-
-                  <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width: 200px; height: auto;">
-                </td>
-              </tr>
-              
-              <!-- Main Content -->
-              <tr>
-                <td style="padding: 40px;">
-                  <h1 style="color: #23272a; font-size: 24px; font-weight: 600; margin: 0 0 16px; text-align: center;">
-                    Verify your email address
-                  </h1>
-                  <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0 0 24px; text-align: center;">
-                    Use this code to verify your email address and finish setting up your DataCircles account:
-                  </p>
-
-                  <!-- OTP Display -->
-                  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; padding: 24px; margin: 24px 0; text-align: center;">
-                    <div style="font-size: 36px; font-weight: 700; color: #ffffff; letter-spacing: 8px; font-family: 'Courier New', monospace;">
-                      ${otp}
-                    </div>
-                  </div>
-
-                  <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
-                    This code expires in <strong>10 minutes</strong>. If you didn't request it, you can ignore this email.
-                  </p>
-                  <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
-                    Regards,<br>Team DataCircles
-                  </p>
-                </td>
-              </tr>
-
-              <!-- Footer -->
-              <tr>
-                <td style="background-color: #f8f9fb; padding: 24px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-                  <p style="color: #718096; font-size: 13px; line-height: 1.6; margin: 0;">
-                    DataCircles | datacircles.in | Need help? support@datacircles.in<br>
-                    © ${new Date().getFullYear()} DataCircles. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
+    const emailHtml = renderEmail({
+      greetingName: null,
+      intro: 'Use this code to verify your email address and finish setting up your DataCircles account:',
+      blocks: [
+        {
+          html: `<div style="margin:20px 0;text-align:center;">
+            <div style="display:inline-block;padding:16px 28px;background:#f4f6f8;border:1px solid #e5e7eb;border-radius:6px;font-size:32px;font-weight:700;letter-spacing:8px;font-family:'Courier New',monospace;color:#111111;">${otp}</div>
+          </div>`,
+        },
+      ],
+      closingHtml: '<p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#333333;">This code expires in <strong>10 minutes</strong>. If you didn\'t request it, you can ignore this email.</p>',
+      preheader: 'Your DataCircles email verification code.',
+    });
 
     console.log(otp, newEmailOtp);
     await sendGridMail({
@@ -1498,15 +1201,14 @@ exports.forgotPassword = async (req, res) => {
     await sendGridMail({
       to: email,
       subject: "Reset your DataCircles password",
-      html: `
-        <div style="font-family:Arial,sans-serif;color:#333;">
-          <p>Hi ${user.name || "there"},</p>
-          <p>We received a request to reset the password for your DataCircles account. Use the link below to choose a new one.</p>
-          <p><a href="${resetLink}">Reset password</a></p>
-          <p>This link expires in 1 hour. If you didn't make this request, no action is needed and your password stays the same.</p>
-          <p style="margin-top:24px;">Regards,<br>Team DataCircles</p>
-        </div>
-      `,
+      html: renderEmail({
+        greetingName: user.name || null,
+        intro: 'We received a request to reset the password for your DataCircles account. Use the button below to choose a new one.',
+        ctaLabel: 'Reset password',
+        ctaUrl: resetLink,
+        closingHtml: "<p style=\"margin:8px 0 0;font-size:14px;line-height:1.6;color:#333333;\">This link expires in 1 hour. If you didn't make this request, no action is needed and your password stays the same.</p>",
+        preheader: 'Reset your DataCircles password.',
+      }),
     });
 
     res.json({ message: "If that email is in our system, we sent a reset link to it." });
@@ -1706,11 +1408,7 @@ exports.login = async (req, res, next) => {
         email: user.email,
       },
       process.env.JWT_SECRET,
-      // This token only needs to survive long enough to reach
-      // /api/session/establish, not to be a long-lived credential — fall
-      // back to a short, explicit expiry instead of trusting
-      // JWT_EXPIRES_IN, which produces a non-expiring token if unset.
-      { expiresIn: process.env.JWT_EXPIRES_IN || "15m" }
+      { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
     // 6. Prepare Response

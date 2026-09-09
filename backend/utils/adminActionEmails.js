@@ -1,43 +1,21 @@
 // utils/adminActionEmails.js
 //
 // Email senders for super-admin-initiated subscription changes (trial
-// adjusted, trial ended, subscription cancelled on the org's behalf).
-// Same sendGridMail pattern as trialEmails.js, kept in a separate file
-// since these are admin-triggered notices, not part of the automatic
-// trial lifecycle.
+// adjusted, trial ended, subscription cancelled on the org's behalf). All
+// use the shared renderEmail shell so they match every other DataCircles
+// email.
 
 const sendGridMail = require('./sendGridMail');
+const { renderEmail } = require('./emailLayout');
 
 function getUserEmail(user) {
   return user?.email || user?.profileEmail || null;
 }
 
-function wrapEmail({ heading, bodyHtml }) {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f6f9fc;">
-      <table role="presentation" width="100%" style="background-color:#f6f9fc;padding:40px 0;">
-        <tr><td align="center">
-          <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
-            <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
-            </td></tr>
-            <tr><td style="padding:40px;">
-              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">${heading}</h1>
-              ${bodyHtml}
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;margin-top:24px;">Regards,<br>Team DataCircles</p>
-            </td></tr>
-            <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
-              <p style="color:#718096;font-size:12px;margin:0 0 4px;">DataCircles | datacircles.in | Need help? support@datacircles.in</p>
-              <p style="color:#718096;font-size:12px;margin:0;">You're receiving this email because you have a DataCircles account.</p>
-            </td></tr>
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>
-  `;
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
 }
 
 async function sendTrialAdjustedByAdminEmail(user, organization, trialEnd, adjustmentDays) {
@@ -49,23 +27,17 @@ async function sendTrialAdjustedByAdminEmail(user, organization, trialEnd, adjus
 
   const direction = adjustmentDays > 0 ? 'extended' : 'reduced';
   const dayCount = Math.abs(adjustmentDays);
-  const trialEndFormatted = new Date(trialEnd).toLocaleDateString('en-IN', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
+  const orgName = organization?.name || 'your workspace';
+  const trialEndFormatted = fmtDate(trialEnd);
 
-  const html = wrapEmail({
-    heading: `Your trial was ${direction} by our team`,
-    bodyHtml: `
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, our support team has ${direction} the free trial for <strong>${organization?.name || 'your workspace'}</strong> by ${dayCount} day${dayCount === 1 ? '' : 's'}.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Your trial now ends on <strong>${trialEndFormatted}</strong>.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Questions? Reply to this email or contact support@datacircles.in.
-      </p>
-    `,
+  const html = renderEmail({
+    greetingName: user.name || null,
+    intro: [
+      `Our support team has ${direction} the free trial for <strong>${orgName}</strong> by ${dayCount} day${dayCount === 1 ? '' : 's'}.`,
+      `Your trial now ends on <strong>${trialEndFormatted}</strong>.`,
+      'Questions? Reply to this email or contact support@datacircles.in.',
+    ],
+    preheader: `Your DataCircles trial for ${orgName} now ends on ${trialEndFormatted}.`,
   });
 
   await sendGridMail({
@@ -82,26 +54,18 @@ async function sendTrialEndedByAdminEmail(user, organization) {
     return;
   }
 
-  const html = wrapEmail({
-    heading: 'Your trial has ended',
-    bodyHtml: `
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, our support team has ended the free trial for <strong>${organization?.name || 'your workspace'}</strong>. Your data is safe and remains available to view.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        To continue adding and editing data, choose a plan.
-      </p>
-      <table role="presentation" width="100%" style="margin:24px 0;">
-        <tr><td align="center">
-          <a href="${process.env.FRONTEND_URL}/subscription" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:14px 32px;border-radius:5px;font-size:15px;font-weight:600;display:inline-block;">
-            Choose a plan
-          </a>
-        </td></tr>
-      </table>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Questions? Contact support@datacircles.in.
-      </p>
-    `,
+  const orgName = organization?.name || 'your workspace';
+
+  const html = renderEmail({
+    greetingName: user.name || null,
+    intro: [
+      `Our support team has ended the free trial for <strong>${orgName}</strong>. Your data is safe and remains available to view.`,
+      'To continue adding and editing data, choose a plan.',
+    ],
+    ctaLabel: 'Choose a plan',
+    ctaUrl: `${process.env.FRONTEND_URL}/subscription`,
+    closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Questions? Contact support@datacircles.in.</p>',
+    preheader: `Your DataCircles trial for ${orgName} has ended.`,
   });
 
   await sendGridMail({
@@ -118,37 +82,25 @@ async function sendSubscriptionCancelledByAdminEmail(user, organization, current
     return;
   }
 
-  const accessEnd = currentPeriodEnd
-    ? new Date(currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-    : 'the end of your current billing period';
+  const orgName = organization?.name || 'your workspace';
+  const accessEnd = currentPeriodEnd ? fmtDate(currentPeriodEnd) : 'the end of your current billing period';
 
-  const bodyHtml = isTrial
-    ? `
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, our support team has cancelled the trial for <strong>${organization?.name || 'your workspace'}</strong>.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Your data stays available to view in read-only mode.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        If this was unexpected, contact support@datacircles.in and we'll be glad to help.
-      </p>
-    `
-    : `
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, our support team has cancelled the DataCircles subscription for <strong>${organization?.name || 'your workspace'}</strong>.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        You'll keep full access until <strong>${accessEnd}</strong>. After that, your data stays available to view in read-only mode.
-      </p>
-      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        If this was unexpected, contact support@datacircles.in and we'll be glad to help.
-      </p>
-    `;
+  const intro = isTrial
+    ? [
+        `Our support team has cancelled the trial for <strong>${orgName}</strong>.`,
+        'Your data stays available to view in read-only mode.',
+        "If this was unexpected, contact support@datacircles.in and we'll be glad to help.",
+      ]
+    : [
+        `Our support team has cancelled the DataCircles subscription for <strong>${orgName}</strong>.`,
+        `You'll keep full access until <strong>${accessEnd}</strong>. After that, your data stays available to view in read-only mode.`,
+        "If this was unexpected, contact support@datacircles.in and we'll be glad to help.",
+      ];
 
-  const html = wrapEmail({
-    heading: 'Your subscription has been cancelled',
-    bodyHtml,
+  const html = renderEmail({
+    greetingName: user.name || null,
+    intro,
+    preheader: `Your DataCircles subscription for ${orgName} has been cancelled.`,
   });
 
   await sendGridMail({

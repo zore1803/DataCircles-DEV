@@ -1489,7 +1489,7 @@ exports.startFreeTrial = async (req, res) => {
     // never blocks the actual trial from starting — it's already saved above.
     try {
       const organization = await Organization.findById(req.user.organization);
-      await sendTrialStartedEmail(req.user, organization, trialEnd);
+      await sendTrialStartedEmail(req.user, organization, trialEnd, subscription.planName);
     } catch (emailError) {
       console.error('Failed to send trial-started email:', emailError);
     }

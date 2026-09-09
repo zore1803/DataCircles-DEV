@@ -12,6 +12,7 @@ const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require(".
 const sendPaymentEmail = require("../utils/sendPaymentEmail");
 const sendSMS = require("../utils/sendSMS");
 const sendGridMail = require("../utils/sendGridMail");
+const { renderEmail } = require("../utils/emailLayout");
 const { syncDocumentStock } = require("../utils/inventorySync");
 const { getOwnedDealIds } = require("../utils/ownedCompanies");
 
@@ -1230,7 +1231,7 @@ const bulkEmailGrouped = async (req, res) => {
           to: group.email,
           subject: `Invoice(s) from ${companyName}`,
           text: [
-            `Dear ${group.customerName},`,
+            `Hello ${group.customerName},`,
             "",
             `Please find attached ${invoiceCount} invoice${invoiceCount === 1 ? "" : "(s)"} from ${companyName}, totalling ${totalAmt}.`,
             "Payment terms and bank details are on each invoice. Reply to this email with any questions.",
@@ -1238,6 +1239,19 @@ const bulkEmailGrouped = async (req, res) => {
             "Regards,",
             companyName,
           ].join("\n"),
+          html: renderEmail({
+            greetingName: group.customerName,
+            intro: [
+              `Please find attached ${invoiceCount} invoice${invoiceCount === 1 ? "" : "(s)"} from ${companyName}, totalling ${totalAmt}.`,
+              "Payment terms and bank details are on each invoice. Reply to this email with any questions.",
+            ],
+            blocks: [{ rows: [
+              { label: "Invoices", value: String(invoiceCount) },
+              { label: "Total", value: totalAmt },
+            ] }],
+            signOff: companyName,
+            preheader: `${invoiceCount} invoice${invoiceCount === 1 ? "" : "(s)"} from ${companyName}`,
+          }),
           attachments,
         });
         // Mark the invoices whose PDFs were generated as successful

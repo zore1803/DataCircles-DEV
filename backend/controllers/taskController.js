@@ -8,6 +8,31 @@ const Vendor = require("../models/Vendor");
 const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
 const { processAdditionalFields } = require("../services/fieldCoercionService");
+const { renderEmail } = require("../utils/emailLayout");
+
+// Shared builder for the "task assigned" notification email so the create
+// and update paths stay identical.
+function buildTaskAssignedEmail(recipientName, taskDoc, relatedNames) {
+  const dueDate = taskDoc.dueDate
+    ? new Date(taskDoc.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+    : "Not set";
+  return renderEmail({
+    greetingName: recipientName || null,
+    intro: "You have been assigned a task in DataCircles. The details are below.",
+    blocks: [
+      {
+        rows: [
+          { label: "Task", value: taskDoc.title },
+          { label: "Due date", value: dueDate },
+          { label: "Description", value: taskDoc.description || "N/A" },
+          relatedNames ? { label: "Related to", value: relatedNames } : null,
+        ],
+      },
+    ],
+    closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Open the task in DataCircles to review it or update its status.</p>',
+    preheader: `You've been assigned a task: ${taskDoc.title}`,
+  });
+}
 
 // Parses a search term as a calendar date so free-text search can match the
 // "Due Date" column, which the UI renders as D/M/YYYY (toLocaleDateString).
@@ -202,37 +227,7 @@ const createTask = async (req, res) => {
         text: `You've been assigned a task in DataCircles. Task: ${task.title}. Due: ${
           task.dueDate ? new Date(task.dueDate).toLocaleDateString("en-IN") : "not set"
         }.`,
-        html: `
-  <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
-    <h2 style="color: #2c3e50;">You've been assigned a task</h2>
-    <p>Hi ${u.name || ""},</p>
-    <p>You have been assigned a task in DataCircles. The details are below.</p>
-
-    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-      <tr>
-        <td style="padding: 8px; font-weight: bold; width: 150px;">Title:</td>
-        <td style="padding: 8px;">${task.title}</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; font-weight: bold;">Description:</td>
-        <td style="padding: 8px;">${task.description || "N/A"}</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; font-weight: bold;">Due Date:</td>
-        <td style="padding: 8px;">${
-          task.dueDate ? new Date(task.dueDate).toLocaleDateString("en-IN") : "N/A"
-        }</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; font-weight: bold;">Related To:</td>
-        <td style="padding: 8px;">${relatedNames}</td>
-      </tr>
-    </table>
-
-    <p>Open the task in DataCircles to review it or update its status.</p>
-    <p style="margin-top: 30px;">Regards,<br>Team DataCircles</p>
-  </div>
-`,
+        html: buildTaskAssignedEmail(u.name, task, relatedNames),
       });
     }
 
@@ -749,39 +744,7 @@ const updateTask = async (req, res) => {
             text: `You've been assigned a task in DataCircles. Task: ${updatedTask.title}. Due: ${
               updatedTask.dueDate ? new Date(updatedTask.dueDate).toLocaleDateString("en-IN") : "not set"
             }.`,
-            html: `
-  <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
-    <h2 style="color: #2c3e50;">You've been assigned a task</h2>
-    <p>Hi ${u.name || ""},</p>
-    <p>You have been assigned a task in DataCircles. The details are below.</p>
-
-    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-      <tr>
-        <td style="padding: 8px; font-weight: bold; width: 150px;">Title:</td>
-        <td style="padding: 8px;">${updatedTask.title}</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; font-weight: bold;">Description:</td>
-        <td style="padding: 8px;">${updatedTask.description || "N/A"}</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; font-weight: bold;">Due Date:</td>
-        <td style="padding: 8px;">${
-          updatedTask.dueDate
-            ? new Date(updatedTask.dueDate).toLocaleDateString("en-IN")
-            : "N/A"
-        }</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px; font-weight: bold;">Related To:</td>
-        <td style="padding: 8px;">${relatedNames}</td>
-      </tr>
-    </table>
-
-    <p>Open the task in DataCircles to review it or update its status.</p>
-    <p style="margin-top: 30px;">Regards,<br>Team DataCircles</p>
-  </div>
-`,
+            html: buildTaskAssignedEmail(u.name, updatedTask, relatedNames),
           });
         }
       }

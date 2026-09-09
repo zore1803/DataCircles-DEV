@@ -4,6 +4,7 @@ const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const sendGridMail = require("../utils/sendGridMail");
+const { renderEmail } = require("../utils/emailLayout");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
@@ -607,18 +608,29 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
       ? new Date(deliveryChallan.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
       : "";
 
+    const senderName = companyName || "The sender";
     const mailOptions = {
       to: deliveryChallan.deal.email || req.body.email,
       replyTo: req.user.email,
       subject: `Delivery Challan ${deliveryChallan.deliveryChallanNumber}${companyName ? ` from ${companyName}` : ""}`,
       text: [
-        `Dear ${contactName},`,
+        `Hello ${contactName},`,
         "",
         `Please find attached delivery challan ${deliveryChallan.deliveryChallanNumber}${issueDate ? `, dated ${issueDate}` : ""}, covering the items dispatched to you.`,
         "",
         "Regards,",
-        companyName || "The sender",
+        senderName,
       ].join("\n"),
+      html: renderEmail({
+        greetingName: contactName,
+        intro: `Please find attached delivery challan ${deliveryChallan.deliveryChallanNumber}${issueDate ? `, dated ${issueDate}` : ""}, covering the items dispatched to you.`,
+        blocks: [{ rows: [
+          { label: "Delivery challan", value: deliveryChallan.deliveryChallanNumber },
+          issueDate ? { label: "Date", value: issueDate } : null,
+        ].filter(Boolean) }],
+        signOff: senderName,
+        preheader: `Delivery Challan ${deliveryChallan.deliveryChallanNumber} from ${senderName}`,
+      }),
       attachments: [
         {
           filename: `DeliveryChallan-${deliveryChallan.deliveryChallanNumber}.pdf`,

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const sendGridMail = require('../utils/sendGridMail');
+const { renderEmail } = require('../utils/emailLayout');
 
 const Invoice = require('../models/Invoice');
 const ProformaInvoice = require('../models/ProformaInvoice');
@@ -219,20 +220,35 @@ router.post('/:type/:id/email', async (req, res) => {
     const totalAmt = Number.isFinite(Number(doc.amount))
       ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(Number(doc.amount))
       : '';
-    const defaultBody = [
-      `Dear ${contactName},`,
-      '',
-      `Please find attached ${docName.toLowerCase()} ${docNum}${issueDate ? `, dated ${issueDate}` : ''}${totalAmt ? `, for ${totalAmt}` : ''}.`,
-      '',
-      'Regards,',
-      companyName,
-    ].join('<br>');
+    const emailSubject = subject || `${docName} ${docNum} from ${companyName}`;
 
-    const htmlBody = body || defaultBody;
-    // The compose panel sends rich-text HTML; SendGrid still wants a
-    // plain-text fallback for clients that don't render HTML, so strip tags
-    // for the `text` field rather than sending markup as literal text.
-    const textBody = htmlBody.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+    // Inner content: the compose panel's rich-text body when supplied,
+    // otherwise the standardised default. Either way it is framed by the
+    // shared DataCircles shell (we send on the org's behalf).
+    let innerHtml;
+    if (body) {
+      innerHtml = renderEmail({
+        blocks: [{ html: body }],
+        signOff: null,
+        preheader: emailSubject,
+      });
+    } else {
+      innerHtml = renderEmail({
+        greetingName: contactName,
+        intro: `Please find attached ${docName.toLowerCase()} ${docNum}${issueDate ? `, dated ${issueDate}` : ''}${totalAmt ? `, for ${totalAmt}` : ''}.`,
+        blocks: [{ rows: [
+          { label: docName, value: docNum },
+          issueDate ? { label: 'Date', value: issueDate } : null,
+          totalAmt ? { label: 'Amount', value: totalAmt } : null,
+        ].filter(Boolean) }],
+        signOff: companyName,
+        preheader: emailSubject,
+      });
+    }
+    const htmlBody = innerHtml;
+    // Plain-text fallback for clients that don't render HTML.
+    const textSource = body || `Hello ${contactName},<br><br>Please find attached ${docName.toLowerCase()} ${docNum}.<br><br>Regards,<br>${companyName}`;
+    const textBody = textSource.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
     // Cc/Bcc arrive as a comma-separated string from the compose panel;
     // SendGrid wants an array (or undefined, not an empty one).
     const toList = (raw) => (raw || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -243,7 +259,7 @@ router.post('/:type/:id/email', async (req, res) => {
       to: email,
       cc: ccList.length ? ccList : undefined,
       bcc: bccList.length ? bccList : undefined,
-      subject: subject || `${docName} ${docNum} from ${companyName}`,
+      subject: emailSubject,
       text: textBody,
       html: htmlBody,
       attachments: [
