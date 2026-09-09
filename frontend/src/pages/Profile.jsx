@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import { User, Mail, Camera, Upload, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
+import { User, Mail, Phone, Camera, Upload, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
 import logo from "/DataCircles.png";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
@@ -10,10 +10,22 @@ import AppToaster from "../components/AppToaster";
 const Profile = () => {
   const { user: auth0User, getAccessTokenSilently, logout } = useAuth0();
   const [user, setUser] = useState(null);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
+  // Inline OTP verify widgets for the email/phone fields below — "target"
+  // holds which one ("email" | "phone" | null) currently has its OTP input
+  // open, since only one can be verified at a time.
+  const [verifyTarget, setVerifyTarget] = useState(null);
+  const [verifyOtpValue, setVerifyOtpValue] = useState("");
+  const [verifySending, setVerifySending] = useState(false);
+  const [verifyChecking, setVerifyChecking] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [profileBase64, setProfileBase64] = useState(null);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isRemovePhotoModalOpen, setIsRemovePhotoModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sessions, setSessions] = useState(null);
   const [sessionsError, setSessionsError] = useState("");
@@ -37,6 +49,8 @@ const Profile = () => {
       try {
         const res = await API.get("/auth/me");
         setUser(res.data?.user);
+        setNameDraft(res.data?.user?.name || "");
+        setPhoneDraft(res.data?.user?.phone || "");
       } catch (err) {
         console.error("Failed to fetch user", err);
       }
@@ -105,23 +119,109 @@ const Profile = () => {
     if (!profileImage) return;
     setUploading(true);
     const formData = new FormData();
-    // Include base64 if available so backend can store data URL directly
-    if (profileBase64) {
-      formData.append("profileBase64", profileBase64);
-    }
-    // Also append raw file as fallback
+    // Only the raw file — updateProfile (backend/controllers/authController.js)
+    // reads req.file/req.fileLocation from multer-s3 and never looks at a
+    // base64 field, so sending one here was dead weight that actively broke
+    // uploads: multer defaults to a 1MB limit on non-file field values, and
+    // a base64-encoded image easily exceeds that as plain text, rejecting
+    // the whole request with "Field value too long" before it ever reached
+    // the controller.
     formData.append("profile", profileImage);
     try {
-      await API.post("/auth/profile", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // No explicit Content-Type here — axios/the browser must set it
+      // themselves for a FormData body, since only they know the multipart
+      // boundary string. Hardcoding "multipart/form-data" (no boundary)
+      // used to strip that boundary, so multer could never parse the body
+      // and every upload failed regardless of the file or S3 config.
+      const res = await API.post("/auth/profile", formData);
+      // Update local state from the response instead of reloading the whole
+      // app — a full window.location.reload() re-fetched every page's data
+      // from scratch just to show a new avatar, which felt like the entire
+      // site had crashed/reset rather than one photo changing.
+      setUser(res.data.user);
+      clearImageSelection();
       toast.success("Profile image updated successfully!");
-      window.location.reload();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to upload image. Please try again.");
+      toast.error(err.response?.data?.error || "Failed to upload image. Please try again.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const hasProfileChanges =
+    user && (nameDraft.trim() !== (user.name || "") || phoneDraft.trim() !== (user.phone || ""));
+
+  const handleSaveProfile = async () => {
+    const trimmedName = nameDraft.trim();
+    const trimmedPhone = phoneDraft.trim();
+
+    if (!trimmedName) {
+      toast.error("Full name cannot be empty");
+      return;
+    }
+    if (trimmedPhone && !/^\d{10}$/.test(trimmedPhone)) {
+      toast.error("Please enter a valid 10-digit phone number");
+      return;
+    }
+
+    setSavingName(true);
+    setSavingPhone(true);
+    try {
+      const payload = { name: trimmedName };
+      if (trimmedPhone && trimmedPhone !== user.phone) payload.phone = trimmedPhone;
+      const res = await API.post("/auth/profile", payload);
+      setUser(res.data.user);
+      setNameDraft(res.data.user.name || "");
+      setPhoneDraft(res.data.user.phone || "");
+      toast.success("Profile updated successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to update profile. Please try again.");
+    } finally {
+      setSavingName(false);
+      setSavingPhone(false);
+    }
+  };
+
+  const openVerify = (target) => {
+    setVerifyTarget(target);
+    setVerifyOtpValue("");
+  };
+
+  const handleSendVerifyOtp = async (target) => {
+    setVerifySending(true);
+    try {
+      await API.post(target === "email" ? "/auth/send-profile-email-otp" : "/auth/send-profile-phone-otp");
+      toast.success(`OTP sent to your ${target === "email" ? "email" : "phone"}`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to send OTP. Please try again.");
+    } finally {
+      setVerifySending(false);
+    }
+  };
+
+  const handleConfirmVerifyOtp = async (target) => {
+    if (!verifyOtpValue.trim()) {
+      toast.error("Please enter the OTP");
+      return;
+    }
+    setVerifyChecking(true);
+    try {
+      const res = await API.post(
+        target === "email" ? "/auth/verify-profile-email-otp" : "/auth/verify-profile-phone-otp",
+        { otp: verifyOtpValue.trim() }
+      );
+      setUser(res.data.user);
+      setVerifyTarget(null);
+      setVerifyOtpValue("");
+      toast.success(`${target === "email" ? "Email" : "Phone number"} verified successfully!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Invalid or expired OTP. Please try again.");
+    } finally {
+      setVerifyChecking(false);
     }
   };
 
@@ -132,15 +232,15 @@ const Profile = () => {
   };
 
   const handleRemovePhoto = async () => {
-    if (!window.confirm("Are you sure you want to remove your profile photo?")) return;
+    setIsRemovePhotoModalOpen(false);
     try {
       setUploading(true);
-      await API.delete("/auth/profile");
+      const res = await API.delete("/auth/profile");
+      setUser(res.data.user);
       toast.success("Profile photo removed successfully!");
-      window.location.reload();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to remove photo. Please try again.");
+      toast.error(err.response?.data?.error || "Failed to remove photo. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -194,37 +294,38 @@ const Profile = () => {
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 h-32 relative">
           <div className="absolute -bottom-16 left-8">
             <div className="relative group">
-              <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
+              <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden relative">
                 {user.profileUrl || imagePreview ? (
                   <img
                     src={imagePreview || user.profileUrl}
                     alt="Profile"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-all duration-200 group-hover:blur-sm group-hover:brightness-75"
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
                     <User className="w-16 h-16 text-gray-400" />
                   </div>
                 )}
+                <label
+                  htmlFor="profile-upload"
+                  className="absolute inset-0 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Change Photo"
+                >
+                  <Camera className="w-6 h-6 text-white drop-shadow" />
+                  <input
+                    id="profile-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
               </div>
-              <label
-                htmlFor="profile-upload"
-                className="absolute bottom-2 right-2 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                <Camera className="w-4 h-4 text-gray-600" />
-                <input
-                  id="profile-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
               {user.profileUrl && !imagePreview && (
                 <button
-                  onClick={handleRemovePhoto}
+                  onClick={() => setIsRemovePhotoModalOpen(true)}
                   disabled={uploading}
-                  className="absolute bottom-2 left-2 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-red-50 transition-colors"
+                  className="absolute bottom-2 right-2 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-red-50 transition-colors"
                   title="Remove Photo"
                 >
                   <Trash2 className="w-4 h-4 text-red-600" />
@@ -254,9 +355,10 @@ const Profile = () => {
               </label>
               <input
                 type="text"
-                value={user.name}
-                readOnly
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                disabled={savingName}
+                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-full text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -269,9 +371,78 @@ const Profile = () => {
                 type="email"
                 value={user.email || user.profileEmail}
                 readOnly
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-full text-sm text-gray-500 cursor-not-allowed focus:outline-none"
               />
             </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <Phone className="w-4 h-4 text-gray-500" />
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phoneDraft}
+                onChange={(e) => setPhoneDraft(e.target.value)}
+                disabled={savingPhone}
+                placeholder="Add a phone number"
+                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-full text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {[
+                (user.email || user.profileEmail) && !user.isEmailVerified && "email",
+                user.phone && !hasProfileChanges && !user.isPhoneVerified && "phone",
+              ]
+                .filter(Boolean)
+                .map((target) => (
+                  <div key={target} className="mt-2">
+                    {verifyTarget === target ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={verifyOtpValue}
+                          onChange={(e) => setVerifyOtpValue(e.target.value)}
+                          placeholder="Enter OTP"
+                          className="w-32 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={() => handleConfirmVerifyOtp(target)}
+                          disabled={verifyChecking}
+                          className="text-xs font-semibold text-[#0085FF] hover:underline disabled:opacity-40"
+                        >
+                          {verifyChecking ? "Verifying..." : "Verify"}
+                        </button>
+                        <button
+                          onClick={() => handleSendVerifyOtp(target)}
+                          disabled={verifySending}
+                          className="text-xs text-gray-500 hover:underline disabled:opacity-40"
+                        >
+                          Resend
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          openVerify(target);
+                          handleSendVerifyOtp(target);
+                        }}
+                        className="text-xs text-[#0085FF] hover:underline"
+                      >
+                        Please click here to verify your {target === "email" ? "email" : "phone number"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div className="flex justify-start mb-6">
+            <button
+              onClick={handleSaveProfile}
+              disabled={!hasProfileChanges || savingName || savingPhone}
+              className="px-5 h-[38px] rounded-full bg-[#0085FF] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {savingName || savingPhone ? "Saving..." : "Save and Update"}
+            </button>
           </div>
 
           {/* Image Upload Section */}
@@ -410,6 +581,40 @@ const Profile = () => {
                   className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors"
                 >
                   Yes, Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Photo Confirmation Modal */}
+      {isRemovePhotoModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
+                Remove Photo
+              </h3>
+              <p className="text-sm text-gray-600 text-center mb-6">
+                Are you sure you want to remove your profile photo?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsRemovePhotoModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRemovePhoto}
+                  disabled={uploading}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Yes, Remove
                 </button>
               </div>
             </div>

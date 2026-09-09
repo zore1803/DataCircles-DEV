@@ -121,6 +121,37 @@ router.post(
   authController.verifyEmailOtp,
 );
 
+// Profile settings page verification (authenticated — acts on req.user)
+router.post(
+  "/send-profile-email-otp",
+  requireAuth,
+  globalOtpLimiter,
+  sendOtpLimiter,
+  authController.sendProfileEmailOtp,
+);
+router.post(
+  "/verify-profile-email-otp",
+  requireAuth,
+  globalOtpLimiter,
+  verifyOtpLimiter,
+  authController.verifyProfileEmailOtp,
+);
+router.post(
+  "/send-profile-phone-otp",
+  requireAuth,
+  globalOtpLimiter,
+  sendOtpLimiter,
+  phoneOtpLimiter,
+  authController.sendProfilePhoneOtp,
+);
+router.post(
+  "/verify-profile-phone-otp",
+  requireAuth,
+  globalOtpLimiter,
+  verifyOtpLimiter,
+  authController.verifyProfilePhoneOtp,
+);
+
 // Complete registration
 router.post("/complete-registration", authMiddleware, authController.completeRegistration);
 

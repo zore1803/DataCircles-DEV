@@ -239,12 +239,16 @@ exports.updateProfile = async (req, res) => {
   try {
     const user = req.user;
 
-    // Billing (Charge-at-Will) requires both email and phone on the customer
-    // record, but signup only ever collects one of the two — this lets the
-    // subscription page's "Complete Billing Profile" flow fill in whichever
-    // one is missing, without touching signup/auth. Only ever fills a blank
-    // field; never overwrites an existing email/phone.
-    const { email, phone } = req.body;
+    // Billing (Charge-at-Will) requires both email on the customer record,
+    // but signup only ever collects one of email/phone — this lets the
+    // subscription page's "Complete Billing Profile" flow fill in email if
+    // missing, without touching signup/auth. Only ever fills a blank email;
+    // never overwrites an existing one. Phone, unlike email, can be edited
+    // from the Profile settings page even when already set.
+    const { email, phone, name } = req.body;
+    if (name && name.trim()) {
+      user.name = name.trim();
+    }
     if (email && !user.email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
@@ -255,8 +259,9 @@ exports.updateProfile = async (req, res) => {
         return res.status(400).json({ error: "This email is already in use." });
       }
       user.email = email;
+      user.isEmailVerified = false;
     }
-    if (phone && !user.phone) {
+    if (phone && phone !== user.phone) {
       if (!/^\d{10}$/.test(phone)) {
         return res.status(400).json({ error: "Please enter a valid 10-digit phone number" });
       }
@@ -265,6 +270,7 @@ exports.updateProfile = async (req, res) => {
         return res.status(400).json({ error: "This phone number is already in use." });
       }
       user.phone = phone;
+      user.isPhoneVerified = false;
     }
 
     // If a file was uploaded via multer-s3
@@ -330,7 +336,7 @@ exports.removeProfile = async (req, res) => {
     }
     user.profileUrl = null;
     await user.save();
-    res.json({ message: "Profile picture removed successfully" });
+    res.json({ message: "Profile picture removed successfully", user });
   } catch (error) {
     console.error("Profile removal error:", error);
     res.status(500).json({ error: error.message });
@@ -779,6 +785,149 @@ exports.verifyEmailOtp = async (req, res) => {
   } catch (error) {
     console.error("Error verifying email OTP:", error);
     res.status(500).json({ message: "Error verifying OTP. Please try again." });
+  }
+};
+
+// ============ PROFILE VERIFICATION (Settings page) ============
+// Distinct from the signup-flow OTP endpoints above: these act on the
+// already-authenticated req.user and flip isEmailVerified/isPhoneVerified,
+// rather than looking a user up by the raw email/phone in the body.
+
+exports.sendProfileEmailOtp = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user.email) {
+      return res.status(400).json({ error: "No email address on file to verify" });
+    }
+    if (user.isEmailVerified) {
+      return res.status(400).json({ error: "Email is already verified" });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await TempEmailOTP.deleteMany({ email: user.email.toLowerCase() });
+    await new TempEmailOTP({
+      email: user.email.toLowerCase(),
+      otp,
+      verified: false,
+      expires: new Date(Date.now() + 10 * 60 * 1000),
+    }).save();
+
+    const emailHtml = renderEmail({
+      greetingName: user.name,
+      intro: "Use this code to verify your email address on your DataCircles account:",
+      blocks: [
+        {
+          html: `<div style="margin:20px 0;text-align:center;">
+            <div style="display:inline-block;padding:16px 28px;background:#f4f6f8;border:1px solid #e5e7eb;border-radius:6px;font-size:32px;font-weight:700;letter-spacing:8px;font-family:'Courier New',monospace;color:#111111;">${otp}</div>
+          </div>`,
+        },
+      ],
+      closingHtml: '<p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#333333;">This code expires in <strong>10 minutes</strong>. If you didn\'t request it, you can ignore this email.</p>',
+      preheader: "Your DataCircles email verification code.",
+    });
+
+    await sendGridMail({
+      to: user.email,
+      subject: "Your DataCircles verification code",
+      html: emailHtml,
+    });
+
+    res.json({ success: true, message: "OTP sent to your email" });
+  } catch (error) {
+    console.error("Error sending profile email OTP:", error);
+    res.status(500).json({ error: "Error sending OTP. Please try again." });
+  }
+};
+
+exports.verifyProfileEmailOtp = async (req, res) => {
+  try {
+    const user = req.user;
+    const { otp } = req.body;
+    if (!otp) {
+      return res.status(400).json({ error: "OTP is required" });
+    }
+
+    const tempEmailOtp = await TempEmailOTP.findOne({
+      email: user.email.toLowerCase(),
+      otp: otp.toString(),
+      expires: { $gt: new Date() },
+    });
+    if (!tempEmailOtp) {
+      return res.status(400).json({ error: "Invalid or expired OTP. Please request a new one." });
+    }
+    await tempEmailOtp.deleteOne();
+
+    user.isEmailVerified = true;
+    await user.save();
+
+    res.json({ success: true, message: "Email verified successfully", user });
+  } catch (error) {
+    console.error("Error verifying profile email OTP:", error);
+    res.status(500).json({ error: "Error verifying OTP. Please try again." });
+  }
+};
+
+exports.sendProfilePhoneOtp = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user.phone) {
+      return res.status(400).json({ error: "No phone number on file to verify" });
+    }
+    if (user.isPhoneVerified) {
+      return res.status(400).json({ error: "Phone number is already verified" });
+    }
+
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    await TempOTP.deleteMany({ phone: user.phone });
+    await new TempOTP({
+      phone: user.phone,
+      otp,
+      expires: new Date(Date.now() + 10 * 60 * 1000),
+    }).save();
+
+    const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${process.env.FAST2SMS_KEY}&route=dlt&sender_id=DTACRL&message=204838&variables_values=${otp}&flash=0&numbers=${user.phone}&schedule_time=`;
+
+    try {
+      const response = await axios.get(url);
+      if (response.data?.return) {
+        return res.json({ success: true, message: "OTP sent to your phone" });
+      }
+      return res.status(500).json({ error: "Failed to send OTP" });
+    } catch (smsError) {
+      console.error("Error sending profile phone OTP:", smsError);
+      return res.status(500).json({ error: "Error sending OTP" });
+    }
+  } catch (error) {
+    console.error("Error sending profile phone OTP:", error);
+    res.status(500).json({ error: "Error sending OTP. Please try again." });
+  }
+};
+
+exports.verifyProfilePhoneOtp = async (req, res) => {
+  try {
+    const user = req.user;
+    const { otp } = req.body;
+    if (!otp) {
+      return res.status(400).json({ error: "OTP is required" });
+    }
+
+    const tempOtp = await TempOTP.findOne({
+      phone: user.phone,
+      otp: otp.toString(),
+      expires: { $gt: new Date() },
+    });
+    if (!tempOtp) {
+      return res.status(400).json({ error: "Invalid or expired OTP. Please request a new one." });
+    }
+    await tempOtp.deleteOne();
+
+    user.isPhoneVerified = true;
+    await user.save();
+
+    res.json({ success: true, message: "Phone number verified successfully", user });
+  } catch (error) {
+    console.error("Error verifying profile phone OTP:", error);
+    res.status(500).json({ error: "Error verifying OTP. Please try again." });
   }
 };
 

@@ -35,3 +35,9 @@ const uploadMiddlewareS3 = (bucketName = process.env.AWS_BUCKET_NAME, orgField =
 
 
 module.exports = uploadMiddlewareS3;
+// Named export of the shared S3 client so callers that need to issue their
+// own commands (e.g. authController.js deleting an old profile picture) can
+// reuse it instead of `const { s3 } = require(...)`, which silently
+// destructured `undefined` off this function export and threw inside a
+// caught block on every such delete.
+module.exports.s3 = s3;

@@ -313,6 +313,22 @@ app.get('/health', (req, res) => {
   res.status(200).json({ message: "server is running..." })
 })
 
+// Catch-all error handler — without this, an error passed to next(err)
+// anywhere (most commonly multer/multer-s3 failing on a file upload, e.g.
+// bad/expired AWS credentials or a file over the size limit) fell through to
+// Express's default handler, which renders an HTML stack-trace page instead
+// of JSON. The frontend then saw a response with no `.error` field and could
+// never show the real reason — every upload failure looked identical
+// ("Failed to upload image") no matter what actually broke.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error("Unhandled error:", err);
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ error: "File is too large." });
+  }
+  res.status(err.status || 500).json({ error: err.message || "Something went wrong" });
+});
+
 // MongoDB connect
 // mongoose.connect(process.env.MONGO_URI, {
 //   useNewUrlParser: true,

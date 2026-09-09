@@ -52,6 +52,12 @@ const userSchema = new mongoose.Schema(
     },
     role: { type: String, enum: ["admin", "staff"], default: "staff" },
     profileUrl: String,
+    // Default true so existing accounts (verified implicitly by their
+    // original signup flow: Auth0 email or phone-OTP) aren't suddenly
+    // prompted to reverify. Only flipped to false when updateProfile sets a
+    // new/changed email or phone from the Profile settings page.
+    isEmailVerified: { type: Boolean, default: true },
+    isPhoneVerified: { type: Boolean, default: true },
     organization: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Organization",
