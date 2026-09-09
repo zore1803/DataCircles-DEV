@@ -6,6 +6,7 @@ const Branding = require("../models/Branding");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
 const sendGridMail = require("../utils/sendGridMail");
+const { renderEmail } = require("../utils/emailLayout");
 const { getOwnedDealIds } = require("../utils/ownedCompanies");
 
 // Utility function to format date as YYYYMMDD
@@ -716,22 +717,41 @@ const sendPerformaInvoiceEmail = async (req, res) => {
       ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(pi.amount))
       : "";
 
+    const senderName = companyName || "The sender";
     const subject = req.body.subject || `Proforma Invoice ${pi.performaInvoiceNumber}${companyName ? ` from ${companyName}` : ""}`;
     const body = req.body.body || [
-      `Dear ${contactName},`,
+      `Hello ${contactName},`,
       "",
       `Please find attached proforma invoice ${pi.performaInvoiceNumber}${issueDate ? `, dated ${issueDate}` : ""}${totalAmt ? `, for a total of ${totalAmt}` : ""}.`,
       "To confirm this order, please arrange payment as per the details on the invoice. Contact us if anything needs adjusting.",
       "",
       "Regards,",
-      companyName || "The sender",
+      senderName,
     ].join("\n");
+
+    const html = req.body.body
+      ? renderEmail({ blocks: [{ html: req.body.body.replace(/\n/g, "<br>") }], signOff: null, preheader: subject })
+      : renderEmail({
+          greetingName: contactName,
+          intro: [
+            `Please find attached proforma invoice ${pi.performaInvoiceNumber}${issueDate ? `, dated ${issueDate}` : ""}${totalAmt ? `, for a total of ${totalAmt}` : ""}.`,
+            "To confirm this order, please arrange payment as per the details on the invoice. Contact us if anything needs adjusting.",
+          ],
+          blocks: [{ rows: [
+            { label: "Proforma invoice", value: pi.performaInvoiceNumber },
+            issueDate ? { label: "Date", value: issueDate } : null,
+            totalAmt ? { label: "Total", value: totalAmt } : null,
+          ].filter(Boolean) }],
+          signOff: senderName,
+          preheader: `Proforma Invoice ${pi.performaInvoiceNumber} from ${senderName}`,
+        });
 
     await sendGridMail({
       to: recipient,
       replyTo: req.user.email,
       subject,
       text: body,
+      html,
       attachments: [
         {
           filename: `ProformaInvoice-${pi.performaInvoiceNumber}.pdf`,

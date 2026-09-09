@@ -6,6 +6,7 @@ const Deal = require("../models/Deal");
 const User = require("../models/User");
 const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
+const { renderEmail } = require("../utils/emailLayout");
 
 // controllers/meetingController.js (updated createMeeting)
 
@@ -95,251 +96,84 @@ const formatMeetingDetails = (meeting) => {
   };
 };
 
+// Label/value rows shared by every meeting email.
+const meetingDetailRows = (d, { dateLabel = "Date and time", withExtras = true } = {}) =>
+  [
+    { label: dateLabel, value: d.scheduledAt },
+    { label: "Duration", value: d.duration },
+    { label: "Location", value: d.location },
+    withExtras ? { label: "Type", value: d.meetingType } : null,
+    withExtras ? { label: `Related ${d.entityType}`, value: d.entityName } : null,
+    withExtras ? { label: "Participants", value: d.participants } : null,
+    withExtras ? { label: "Description", value: d.description } : null,
+  ].filter(Boolean);
+
+const meetingDetailText = (d, rows) =>
+  rows.map((r) => `${r.label}: ${r.value}`).join("\n");
+
 // Helper function to generate meeting creation email template
 const generateMeetingCreationEmail = (meetingDetails) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .details { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-        .footer { text-align: center; padding: 20px; color: #666; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Meeting scheduled</h1>
-        </div>
-        <div class="content">
-          <p>A meeting has been scheduled. The details are below.</p>
-
-          <div class="details">
-            <h3>${meetingDetails.title}</h3>
-            <p><strong>Date and time:</strong> ${meetingDetails.scheduledAt}</p>
-            <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
-            <p><strong>Location:</strong> ${meetingDetails.location}</p>
-            <p><strong>Type:</strong> ${meetingDetails.meetingType}</p>
-            <p><strong>Related ${meetingDetails.entityType}:</strong> ${meetingDetails.entityName}</p>
-            <p><strong>Participants:</strong> ${meetingDetails.participants}</p>
-            <p><strong>Description:</strong> ${meetingDetails.description}</p>
-          </div>
-
-          <p>Add it to your calendar so you have time to prepare.</p>
-        </div>
-        <div class="footer">
-          <p>Regards,<br>Team DataCircles</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const text = `
-    Meeting scheduled: ${meetingDetails.title}
-
-    Date and time: ${meetingDetails.scheduledAt}
-    Duration: ${meetingDetails.duration}
-    Location: ${meetingDetails.location}
-    Type: ${meetingDetails.meetingType}
-    Related ${meetingDetails.entityType}: ${meetingDetails.entityName}
-    Participants: ${meetingDetails.participants}
-    Description: ${meetingDetails.description}
-
-    Add it to your calendar so you have time to prepare.
-  `;
-
-  return { html, text };
+  const rows = meetingDetailRows(meetingDetails);
+  return {
+    html: renderEmail({
+      intro: `A meeting has been scheduled: <strong>${meetingDetails.title}</strong>. The details are below.`,
+      blocks: [{ rows }],
+      closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Add it to your calendar so you have time to prepare.</p>',
+      preheader: `Meeting scheduled: ${meetingDetails.title}`,
+    }),
+    text: `Meeting scheduled: ${meetingDetails.title}\n\n${meetingDetailText(meetingDetails, rows)}\n\nAdd it to your calendar so you have time to prepare.`,
+  };
 };
 
 // Helper function to generate meeting update email template
 const generateMeetingUpdateEmail = (meetingDetails, changes) => {
-  const changesHtml = Object.entries(changes)
-    .map(
-      ([key, { from, to }]) =>
-        `<li><strong>${key}:</strong> ${from} to ${to}</li>`
-    )
-    .join("");
-
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .details { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #FF9800; }
-        .changes { background-color: #FFF3E0; padding: 15px; margin: 10px 0; border-radius: 5px; }
-        .footer { text-align: center; padding: 20px; color: #666; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Meeting updated</h1>
-        </div>
-        <div class="content">
-          <p>A meeting has been updated. The current details are below.</p>
-
-          <div class="details">
-            <h3>${meetingDetails.title}</h3>
-            <p><strong>Date and time:</strong> ${meetingDetails.scheduledAt}</p>
-            <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
-            <p><strong>Location:</strong> ${meetingDetails.location}</p>
-          </div>
-
-          <div class="changes">
-            <h4>What changed</h4>
-            <ul>${changesHtml}</ul>
-          </div>
-
-          <p>Update your calendar to match.</p>
-        </div>
-        <div class="footer">
-          <p>Regards,<br>Team DataCircles</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const changesText = Object.entries(changes)
-    .map(([key, { from, to }]) => `${key}: ${from} to ${to}`)
-    .join("\n");
-
-  const text = `
-    Meeting updated: ${meetingDetails.title}
-
-    Current details:
-    Date and time: ${meetingDetails.scheduledAt}
-    Duration: ${meetingDetails.duration}
-    Location: ${meetingDetails.location}
-
-    What changed:
-    ${changesText}
-
-    Update your calendar to match.
-  `;
-
-  return { html, text };
+  const rows = meetingDetailRows(meetingDetails, { withExtras: false });
+  const changeRows = Object.entries(changes).map(([key, { from, to }]) => ({
+    label: key,
+    value: `${from} to ${to}`,
+  }));
+  const changesText = changeRows.map((r) => `${r.label}: ${r.value}`).join("\n");
+  return {
+    html: renderEmail({
+      intro: `A meeting has been updated: <strong>${meetingDetails.title}</strong>. The current details are below.`,
+      blocks: [
+        { rows },
+        { heading: "What changed", rows: changeRows },
+      ],
+      closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Update your calendar to match.</p>',
+      preheader: `Meeting updated: ${meetingDetails.title}`,
+    }),
+    text: `Meeting updated: ${meetingDetails.title}\n\nCurrent details:\n${meetingDetailText(meetingDetails, rows)}\n\nWhat changed:\n${changesText}\n\nUpdate your calendar to match.`,
+  };
 };
 
 // Helper function to generate meeting reminder email template
 const generateMeetingReminderEmail = (meetingDetails) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .details { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #2196F3; }
-        .reminder { background-color: #E3F2FD; padding: 15px; margin: 10px 0; border-radius: 5px; text-align: center; }
-        .footer { text-align: center; padding: 20px; color: #666; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Meeting reminder</h1>
-        </div>
-        <div class="content">
-          <div class="reminder">
-            <h2>Your meeting starts in 1 hour</h2>
-          </div>
-
-          <div class="details">
-            <h3>${meetingDetails.title}</h3>
-            <p><strong>Date and time:</strong> ${meetingDetails.scheduledAt}</p>
-            <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
-            <p><strong>Location:</strong> ${meetingDetails.location}</p>
-            <p><strong>Type:</strong> ${meetingDetails.meetingType}</p>
-            <p><strong>Description:</strong> ${meetingDetails.description}</p>
-          </div>
-
-          <p>Prepare any materials you need for this meeting.</p>
-        </div>
-        <div class="footer">
-          <p>Regards,<br>Team DataCircles</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const text = `
-    Meeting reminder: starts in 1 hour
-
-    ${meetingDetails.title}
-    Date and time: ${meetingDetails.scheduledAt}
-    Duration: ${meetingDetails.duration}
-    Location: ${meetingDetails.location}
-    Type: ${meetingDetails.meetingType}
-    Description: ${meetingDetails.description}
-
-    Prepare any materials you need for this meeting.
-  `;
-
-  return { html, text };
+  const rows = meetingDetailRows(meetingDetails, { withExtras: false });
+  rows.push({ label: "Type", value: meetingDetails.meetingType });
+  rows.push({ label: "Description", value: meetingDetails.description });
+  return {
+    html: renderEmail({
+      intro: `Your meeting <strong>${meetingDetails.title}</strong> starts in about 1 hour.`,
+      blocks: [{ rows }],
+      closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Prepare any materials you need for this meeting.</p>',
+      preheader: `Reminder: ${meetingDetails.title} starts in 1 hour`,
+    }),
+    text: `Meeting reminder: starts in 1 hour\n\n${meetingDetails.title}\n${meetingDetailText(meetingDetails, rows)}\n\nPrepare any materials you need for this meeting.`,
+  };
 };
 
 // Helper function to generate meeting cancellation email template
 const generateMeetingCancellationEmail = (meetingDetails) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #F44336; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .details { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #F44336; }
-        .footer { text-align: center; padding: 20px; color: #666; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>Meeting cancelled</h1>
-        </div>
-        <div class="content">
-          <p>The meeting below has been cancelled. You can remove it from your calendar.</p>
-
-          <div class="details">
-            <h3>${meetingDetails.title}</h3>
-            <p><strong>Was scheduled for:</strong> ${meetingDetails.scheduledAt}</p>
-            <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
-            <p><strong>Location:</strong> ${meetingDetails.location}</p>
-          </div>
-        </div>
-        <div class="footer">
-          <p>Regards,<br>Team DataCircles</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  const text = `
-    Meeting cancelled: ${meetingDetails.title}
-
-    Was scheduled for: ${meetingDetails.scheduledAt}
-    Duration: ${meetingDetails.duration}
-    Location: ${meetingDetails.location}
-
-    The meeting has been cancelled. You can remove it from your calendar.
-  `;
-
-  return { html, text };
+  const rows = meetingDetailRows(meetingDetails, { dateLabel: "Was scheduled for", withExtras: false });
+  return {
+    html: renderEmail({
+      intro: `The meeting <strong>${meetingDetails.title}</strong> has been cancelled. You can remove it from your calendar.`,
+      blocks: [{ rows }],
+      preheader: `Meeting cancelled: ${meetingDetails.title}`,
+    }),
+    text: `Meeting cancelled: ${meetingDetails.title}\n\n${meetingDetailText(meetingDetails, rows)}\n\nThe meeting has been cancelled. You can remove it from your calendar.`,
+  };
 };
 
 // A user with own-only permission may only touch meetings they created —
@@ -1327,27 +1161,20 @@ exports.completeMeeting = async (req, res) => {
       try {
         const meetingDetails = formatMeetingDetails(meeting);
 
-        const html = `
-          <div style="font-family:Arial,sans-serif;color:#333;">
-            <h2>Meeting completed: ${meetingDetails.title}</h2>
-            <p>The meeting below is marked complete.</p>
-            <p>Scheduled for ${meetingDetails.scheduledAt}.</p>
-            ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ""}
-            ${outcome ? `<p><strong>Outcome:</strong> ${outcome}</p>` : ""}
-            <p style="margin-top:24px;">Regards,<br>Team DataCircles</p>
-          </div>
-        `;
+        const completedRows = [
+          { label: "Meeting", value: meetingDetails.title },
+          { label: "Was scheduled for", value: meetingDetails.scheduledAt },
+          notes ? { label: "Notes", value: notes } : null,
+          outcome ? { label: "Outcome", value: outcome } : null,
+        ].filter(Boolean);
 
-        const text = `
-          Meeting completed: ${meetingDetails.title}
+        const html = renderEmail({
+          intro: `The meeting <strong>${meetingDetails.title}</strong> is marked complete.`,
+          blocks: [{ rows: completedRows }],
+          preheader: `Meeting completed: ${meetingDetails.title}`,
+        });
 
-          The meeting below is marked complete.
-          Scheduled for ${meetingDetails.scheduledAt}.
-          ${notes ? `Notes: ${notes}` : ""}
-          ${outcome ? `Outcome: ${outcome}` : ""}
-
-          Team DataCircles
-        `;
+        const text = `Meeting completed: ${meetingDetails.title}\n\n${completedRows.map((r) => `${r.label}: ${r.value}`).join("\n")}`;
 
         await sendGridMail({
           to: u.email,

@@ -1,27 +1,22 @@
 // utils/trialEmails.js
 //
 // Email senders for the trial lifecycle: started, ending soon (48h/24h),
-// and expired. Uses the existing sendGridMail utility, same pattern as
-// the invite/OTP emails elsewhere in the codebase.
+// and expired. All three use the shared renderEmail shell so they match
+// every other DataCircles email.
 //
 // NOTE: the actual From address is controlled by the SendGrid configuration,
 // not by the `from` value passed here, so it is not set in this file.
 
 const sendGridMail = require('./sendGridMail');
+const { renderEmail } = require('./emailLayout');
 
-// Standard sign-off + footer for every DataCircles lifecycle email. Kept here
-// so the wording stays identical across the three senders below.
-const SIGNOFF_HTML = `
-  <tr><td style="padding:0 40px 32px;">
-    <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0;">Regards,<br>Team DataCircles</p>
-  </td></tr>
-`;
-const FOOTER_HTML = `
-  <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
-    <p style="color:#718096;font-size:12px;margin:0 0 4px;">DataCircles | datacircles.in | Need help? support@datacircles.in</p>
-    <p style="color:#718096;font-size:12px;margin:0;">You're receiving this email because you have a DataCircles account.</p>
-  </td></tr>
-`;
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 // Picks the right email field depending on how the user signed up.
 // Google/GitHub/Facebook users have `email`; phone-signup users have
@@ -31,45 +26,29 @@ function getUserEmail(user) {
   return user?.email || user?.profileEmail || null;
 }
 
-async function sendTrialStartedEmail(user, organization, trialEnd) {
+async function sendTrialStartedEmail(user, organization, trialEnd, planName) {
   const toEmail = getUserEmail(user);
   if (!toEmail) {
     console.warn(`[trialEmails] No email found for user ${user?._id}, skipping trial-started email`);
     return;
   }
 
-  const trialEndFormatted = new Date(trialEnd).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  // Plan id ("growth", "business") -> display label ("Growth plan",
+  // "Business plan"). Falls back to "Growth plan" if no plan is passed.
+  const raw = (planName || 'growth').trim();
+  const planLabel = `${raw.charAt(0).toUpperCase()}${raw.slice(1)} plan`;
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f6f9fc;">
-      <table role="presentation" width="100%" style="background-color:#f6f9fc;padding:40px 0;">
-        <tr><td align="center">
-          <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
-            <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
-            </td></tr>
-            <tr><td style="padding:40px;">
-              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your DataCircles trial is active</h1>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Hi ${user.name || 'there'}, your 7-day free trial for <strong>${organization?.name || 'your workspace'}</strong> is now active, with full access to all Growth plan features.
-              </p>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Your trial ends on <strong>${trialEndFormatted}</strong>. You can choose a plan at any time from Settings &gt; Subscription, and your data and setup carry over.
-              </p>
-            </td></tr>
-            ${SIGNOFF_HTML}            ${FOOTER_HTML}
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>
-  `;
+  const orgName = organization?.name || 'your workspace';
+  const trialEndFormatted = fmtDate(trialEnd);
+
+  const html = renderEmail({
+    greetingName: user.name || null,
+    intro: [
+      `Your 7-day free trial for <strong>${orgName}</strong> is now active, with full access to all ${planLabel} features.`,
+      `Your trial ends on <strong>${trialEndFormatted}</strong>. You can choose a plan at any time from Settings &gt; Subscription, and your data and setup carry over.`,
+    ],
+    preheader: `Your DataCircles trial for ${orgName} is active until ${trialEndFormatted}.`,
+  });
 
   await sendGridMail({
     to: toEmail,
@@ -85,45 +64,19 @@ async function sendTrialEndingEmail(user, organization, trialEnd, hoursRemaining
     return;
   }
 
-  const trialEndFormatted = new Date(trialEnd).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const orgName = organization?.name || 'your workspace';
+  const trialEndFormatted = fmtDate(trialEnd);
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f6f9fc;">
-      <table role="presentation" width="100%" style="background-color:#f6f9fc;padding:40px 0;">
-        <tr><td align="center">
-          <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
-            <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
-            </td></tr>
-            <tr><td style="padding:40px;">
-              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your trial ends on ${trialEndFormatted}</h1>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> ends on <strong>${trialEndFormatted}</strong>, about ${hoursRemaining} hours from now.
-              </p>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                To keep adding and editing data after that, choose a plan. Your existing data stays available to view either way.
-              </p>
-              <table role="presentation" width="100%" style="margin:24px 0;">
-                <tr><td align="center">
-                  <a href="${process.env.FRONTEND_URL}/subscription" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:14px 32px;border-radius:5px;font-size:15px;font-weight:600;display:inline-block;">
-                    Choose a plan
-                  </a>
-                </td></tr>
-              </table>
-            </td></tr>
-            ${SIGNOFF_HTML}            ${FOOTER_HTML}
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>
-  `;
+  const html = renderEmail({
+    greetingName: user.name || null,
+    intro: [
+      `Your free trial for <strong>${orgName}</strong> ends in about ${hoursRemaining} hours, on <strong>${trialEndFormatted}</strong>.`,
+      'To keep adding and editing data after that, choose a plan. Your existing data stays available to view either way.',
+    ],
+    ctaLabel: 'Choose a plan',
+    ctaUrl: `${process.env.FRONTEND_URL}/subscription`,
+    preheader: `Your DataCircles trial for ${orgName} ends on ${trialEndFormatted}.`,
+  });
 
   await sendGridMail({
     to: toEmail,
@@ -139,39 +92,18 @@ async function sendTrialExpiredEmail(user, organization) {
     return;
   }
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f6f9fc;">
-      <table role="presentation" width="100%" style="background-color:#f6f9fc;padding:40px 0;">
-        <tr><td align="center">
-          <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
-            <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
-            </td></tr>
-            <tr><td style="padding:40px;">
-              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your trial has ended</h1>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> has ended. Your data is safe and you can still sign in to view everything you've added.
-              </p>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                To start adding and editing again, choose a plan that fits your team.
-              </p>
-              <table role="presentation" width="100%" style="margin:24px 0;">
-                <tr><td align="center">
-                  <a href="${process.env.FRONTEND_URL}/subscription" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:14px 32px;border-radius:5px;font-size:15px;font-weight:600;display:inline-block;">
-                    Choose a plan
-                  </a>
-                </td></tr>
-              </table>
-            </td></tr>
-            ${SIGNOFF_HTML}            ${FOOTER_HTML}
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>
-  `;
+  const orgName = organization?.name || 'your workspace';
+
+  const html = renderEmail({
+    greetingName: user.name || null,
+    intro: [
+      `Your free trial for <strong>${orgName}</strong> has ended. Your data is safe and you can still sign in to view everything you've added.`,
+      'To start adding and editing again, choose a plan that fits your team.',
+    ],
+    ctaLabel: 'Choose a plan',
+    ctaUrl: `${process.env.FRONTEND_URL}/subscription`,
+    preheader: `Your DataCircles trial for ${orgName} has ended.`,
+  });
 
   await sendGridMail({
     to: toEmail,

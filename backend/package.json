@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npx nodemon server.js",
     "dev": "npx nodemon server.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "preview:emails": "node scripts/previewEmails.js --open"
   },
   "keywords": [],
   "author": "",

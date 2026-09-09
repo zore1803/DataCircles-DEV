@@ -4,6 +4,7 @@ const Company = require("../models/Company");
 const Contact = require("../models/Contact");
 const Vendor = require("../models/Vendor");
 const sendMail = require("../utils/sendMail"); // Import your existing sendMail utility
+const { renderEmail } = require("../utils/emailLayout");
 
 const sendEmail = async (req, res) => {
   try {
@@ -47,7 +48,10 @@ const sendEmail = async (req, res) => {
         from:fromEmail,
         to: toEmail,
         subject,
-        html: body, // HTML body
+        // Frame the staff-composed body in the shared DataCircles shell
+        // (we send on the organisation's behalf). The body carries its own
+        // greeting/sign-off, so the shell's auto sign-off is suppressed.
+        html: renderEmail({ blocks: [{ html: body }], signOff: null, preheader: subject }),
         text: body.replace(/<[^>]*>/g, ''), // Strip HTML for text version
       });
     } catch (sendError) {

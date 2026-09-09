@@ -1,25 +1,29 @@
 const sendGridMail = require('./sendGridMail');
+const { renderEmail } = require('./emailLayout');
 
 const sendTaskReminder = async (to, task) => {
   const dueDate = new Date(task.dueDate).toLocaleDateString('en-IN', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
 
-  const mailOptions = {
+  const rows = [
+    { label: 'Task', value: task.title },
+    { label: 'Due date', value: dueDate },
+    task.description ? { label: 'Details', value: task.description } : null,
+  ];
+
+  const html = renderEmail({
+    intro: `This is a reminder that the following task is due on <strong>${dueDate}</strong>.`,
+    blocks: [{ rows }],
+    closingHtml: '<p style="margin:16px 0 0;font-size:15px;line-height:1.6;color:#333333;">Open it in DataCircles to update its status.</p>',
+    preheader: `Task "${task.title}" is due ${dueDate}.`,
+  });
+
+  await sendGridMail({
     to,
     subject: `Reminder: "${task.title}" is due ${dueDate}`,
-    html: `
-      <div style="font-family:Arial,sans-serif;color:#333;">
-        <p>Hi,</p>
-        <p>This is a reminder that your task "<strong>${task.title}</strong>" is due on <strong>${dueDate}</strong>.</p>
-        ${task.description ? `<p>${task.description}</p>` : ''}
-        <p>Open it in DataCircles to update its status.</p>
-        <p style="margin-top:24px;">Regards,<br>Team DataCircles</p>
-      </div>
-    `,
-  };
-
-  await sendGridMail(mailOptions);
+    html,
+  });
 };
 
 module.exports = { sendTaskReminder };

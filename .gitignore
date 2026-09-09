@@ -44,3 +44,7 @@ Thumbs.db
 backend/scripts/scratch/*
 !backend/scripts/scratch/README.md
 !backend/scripts/scratch/.gitkeep
+
+# generated email previews (npm run preview:emails)
+backend/scripts/email-previews/
+.email-preview/

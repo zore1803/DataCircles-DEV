@@ -3,6 +3,7 @@ const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const sendGridMail = require("../utils/sendGridMail");
+const { renderEmail } = require("../utils/emailLayout");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
 const { getDocumentSettingsForOrganization, resolveDocumentNumber } = require("../utils/documentNumbering");
@@ -635,15 +636,16 @@ exports.sendQuotationEmail = async (req, res) => {
     const totalAmt = fmtAmt(quotation.amount);
     const validUntil = fmtDate(quotation.dueDate);
 
+    const senderName = companyName || "The sender";
     const bodyLines = [
-      `Dear ${contactName},`,
+      `Hello ${contactName},`,
       "",
       `Please find attached quotation ${quotation.quotationNumber}${issueDate ? `, dated ${issueDate}` : ""}${totalAmt ? `, for a total of ${totalAmt}` : ""}.`,
       validUntil ? `This quotation is valid until ${validUntil}.` : "",
       "Let us know if you would like any changes.",
       "",
       "Regards,",
-      companyName || "The sender",
+      senderName,
     ].filter((line, i, arr) => !(line === "" && arr[i - 1] === ""));
 
     const mailOptions = {
@@ -651,6 +653,22 @@ exports.sendQuotationEmail = async (req, res) => {
       replyTo: req.user.email,
       subject: `Quotation ${quotation.quotationNumber}${companyName ? ` from ${companyName}` : ""}`,
       text: bodyLines.join("\n"),
+      html: renderEmail({
+        greetingName: contactName,
+        intro: [
+          `Please find attached quotation ${quotation.quotationNumber}${issueDate ? `, dated ${issueDate}` : ""}${totalAmt ? `, for a total of ${totalAmt}` : ""}.`,
+          validUntil ? `This quotation is valid until ${validUntil}.` : "",
+          "Let us know if you would like any changes.",
+        ].filter(Boolean),
+        blocks: [{ rows: [
+          { label: "Quotation", value: quotation.quotationNumber },
+          issueDate ? { label: "Date", value: issueDate } : null,
+          totalAmt ? { label: "Total", value: totalAmt } : null,
+          validUntil ? { label: "Valid until", value: validUntil } : null,
+        ].filter(Boolean) }],
+        signOff: senderName,
+        preheader: `Quotation ${quotation.quotationNumber} from ${senderName}`,
+      }),
       attachments: [
         {
           filename: `Quotation-${quotation.quotationNumber}.pdf`,
