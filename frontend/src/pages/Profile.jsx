@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
 import { User, Mail, Camera, Upload, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
 import logo from "/DataCircles.png";
+import toast from "react-hot-toast";
+import AppToaster from "../components/AppToaster";
 
 const Profile = () => {
   const { user: auth0User, getAccessTokenSilently, logout } = useAuth0();
@@ -15,6 +18,16 @@ const Profile = () => {
   const [sessions, setSessions] = useState(null);
   const [sessionsError, setSessionsError] = useState("");
   const [revokingId, setRevokingId] = useState(null);
+  // null during this component's very first render (before anything is
+  // committed to the real DOM), then re-checked once after mount — a direct
+  // load of /settings/profile mounts the Settings header strip and this
+  // component in the same commit, so checking document.getElementById
+  // synchronously during render can miss a target that exists a moment
+  // later.
+  const [headerTarget, setHeaderTarget] = useState(null);
+  useEffect(() => {
+    setHeaderTarget(document.getElementById('settings-header-actions'));
+  }, []);
   const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
@@ -102,11 +115,11 @@ const Profile = () => {
       await API.post("/auth/profile", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      alert("Profile image updated successfully!");
+      toast.success("Profile image updated successfully!");
       window.location.reload();
     } catch (err) {
       console.error(err);
-      alert("Failed to upload image. Please try again.");
+      toast.error("Failed to upload image. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -123,11 +136,11 @@ const Profile = () => {
     try {
       setUploading(true);
       await API.delete("/auth/profile");
-      alert("Profile photo removed successfully!");
+      toast.success("Profile photo removed successfully!");
       window.location.reload();
     } catch (err) {
       console.error(err);
-      alert("Failed to remove photo. Please try again.");
+      toast.error("Failed to remove photo. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -141,17 +154,39 @@ const Profile = () => {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
-        <button
-          onClick={() => setIsLogoutModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-        >
-          <LogOut className="w-4 h-4" />
-          Logout
-        </button>
-      </div>
+      <AppToaster />
+
+      {/* Lives in the shared Settings header strip (see Settings.jsx's
+          #settings-header-actions target) when embedded there — the strip
+          already shows "Profile" as the title. Falls back to an inline row
+          when rendered standalone (e.g. the bare /profile route), where that
+          target doesn't exist, so Logout is never stranded with no way to
+          reach it. headerTarget is re-checked after mount (settingsHeaderTick)
+          since the target may not exist yet during this component's very
+          first render (e.g. a hard refresh straight into /settings/profile,
+          where the strip and this component mount in the same commit). */}
+      {headerTarget ? (
+        createPortal(
+          <button
+            onClick={() => setIsLogoutModalOpen(true)}
+            className="flex items-center gap-2 px-4 h-[38px] text-sm font-medium text-red-600 hover:bg-red-50 rounded-full transition-colors whitespace-nowrap"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>,
+          headerTarget
+        )
+      ) : (
+        <div className="flex justify-end mb-6">
+          <button
+            onClick={() => setIsLogoutModalOpen(true)}
+            className="flex items-center gap-2 px-4 h-[38px] text-sm font-medium text-red-600 hover:bg-red-50 rounded-full transition-colors whitespace-nowrap"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
+      )}
 
       {/* Profile Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -271,7 +306,7 @@ const Profile = () => {
                 <button
                   onClick={handleImageUpload}
                   disabled={uploading}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 h-[38px] bg-[#0085FF] text-white text-sm font-semibold rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? (
                     <>
@@ -287,28 +322,13 @@ const Profile = () => {
                 </button>
                 <button
                   onClick={clearImageSelection}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                  className="px-4 h-[38px] bg-gray-200 text-gray-700 text-sm font-semibold rounded-full hover:bg-gray-300 transition-colors"
                 >
                   Cancel
                 </button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Account Info Card */}
-      <div className="mt-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-6 border border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">
-          Account Information
-        </h3>
-        <p className="text-xs text-gray-600 mb-3">
-          Your profile information is synced with your account. Some fields are
-          managed by your authentication provider.
-        </p>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          Account Active
         </div>
       </div>
 

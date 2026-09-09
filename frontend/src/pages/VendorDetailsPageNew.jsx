@@ -5,6 +5,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import ProfilePicture from "../components/contact/ProfilePicture";
 import Skeleton from "../components/common/Skeleton";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
+import StatTile from "../components/common/StatTile";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import PaymentsTable from "../components/vendor/PaymentsTable";
 import NoteSection from "../components/vendor/NoteSection";
@@ -1090,27 +1091,16 @@ const VendorDetailsPageNew = () => {
                         </h3>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                           {financialTiles.map((tile) => (
-                            <div
+                            <StatTile
                               key={tile.label}
-                              className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl min-w-0"
-                            >
-                              <div className="flex lg:hidden flex-shrink-0 text-gray-500">
-                                <tile.icon size={18} />
-                              </div>
-                              <div className="hidden lg:flex w-10 h-10 bg-white text-gray-500 rounded-lg items-center justify-center flex-shrink-0 border border-gray-200">
-                                <tile.icon size={20} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
-                                  {tile.label}
-                                </p>
-                                <p
-                                  className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClassName || "text-gray-900"}`}
-                                >
-                                  {tile.value}
-                                </p>
-                              </div>
-                            </div>
+                              tile={{
+                                icon: tile.icon,
+                                iconClass: "text-gray-500",
+                                label: tile.label,
+                                value: tile.value,
+                                valueClassName: tile.valueClassName,
+                              }}
+                            />
                           ))}
                         </div>
 

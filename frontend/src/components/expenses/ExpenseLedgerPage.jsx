@@ -897,14 +897,16 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                         isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
                       } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        {sort.key === col.key && (sort.dir === "asc"
-                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
-                        <span className="truncate flex-1">{col.label}</span>
-                        {pinnedCols[col.key] && (
-                          <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                        )}
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
+                          <span className="truncate">{col.label}</span>
+                          {sort.key === col.key && (sort.dir === "asc"
+                            ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                            : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
+                          {pinnedCols[col.key] && (
+                            <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          )}
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => openColumnMenu(e, col.key)}

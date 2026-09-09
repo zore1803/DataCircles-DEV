@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
+import StatTile from "../common/StatTile";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
@@ -1022,28 +1023,17 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
         {initialLoading && !notes.length
           ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
           : noteKpiTiles.map((tile) => (
-              <div
+              <StatTile
                 key={tile.label}
-                className="h-[72px] flex items-center gap-3 px-3 bg-white border border-gray-200 rounded-xl"
-              >
-                <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                  <tile.icon size={18} strokeWidth={1.5} />
-                </div>
-                <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                  <tile.icon size={20} strokeWidth={1.5} />
-                </div>
-                <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[11px] text-gray-500 truncate">{tile.label}</p>
-                    <p className="text-base font-semibold text-gray-900 truncate">{tile.value}</p>
-                  </div>
-                  {tile.subtitle && (
-                    <span className={`hidden sm:inline text-[11px] flex-shrink-0 truncate max-w-[90px] ${tile.subtitleClass || "text-gray-400"}`}>
-                      {tile.subtitle}
-                    </span>
-                  )}
-                </div>
-              </div>
+                tile={{
+                  icon: tile.icon,
+                  iconClass: "text-blue-600",
+                  label: tile.label,
+                  value: tile.value,
+                  subtitle: tile.subtitle,
+                  subtitleClass: tile.subtitleClass,
+                }}
+              />
             ))}
       </div>
       )}

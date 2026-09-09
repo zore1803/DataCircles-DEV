@@ -28,10 +28,14 @@ const userSchema = new mongoose.Schema(
       unique: true,
       // Remove default: null to prevent explicit nulls
     },
-    password: { 
-      type: String, 
+    password: {
+      type: String,
+      // Phone-authenticated users never get an auth0Id (authController.js
+      // deliberately keeps the temp-phone sub out of it, looking them up by
+      // `phone` instead) — without this, every phone signup/join failed
+      // "password is required" since it has neither a password nor auth0Id.
       required: function () {
-        return !this.auth0Id;
+        return !this.auth0Id && !this.phone;
     }
     },
     profileEmail: {

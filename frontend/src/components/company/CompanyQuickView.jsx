@@ -26,6 +26,12 @@ const tabs = ["Notes", "Tasks", "Meetings", "Folder", "Calendar"];
 const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Drives the slide-in/out transform independently of `company` (which stays
+  // populated across prev/next navigation) so a real close can animate the
+  // panel out before the parent unmounts it — closing was previously instant
+  // because the parent's onClose removes this component from the tree right
+  // away, giving the CSS transition no time to run.
+  const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("Notes");
   const [isExpanded, setIsExpanded] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -106,14 +112,28 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
     }
   }, [companyId]);
 
+  // Slide in once the panel actually has data to show.
+  useEffect(() => {
+    if (company) setIsOpen(true);
+  }, [company]);
+
+  // Slide out first, then unmount — matches how it slides in instead of
+  // vanishing instantly.
+  const handleClose = () => {
+    setIsOpen(false);
+    setTimeout(onClose, 300);
+  };
+
   if (!company && !loading) return null;
 
   return (
     <>
-      {/* Backdrop (mobile only) */}
+      {/* Backdrop — dimmed/blurred on mobile, invisible but still present (and
+          click-catching) on desktop so clicking outside the panel closes it
+          there too instead of falling through to the page underneath. */}
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:hidden z-[9998]"
-        onClick={onClose}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none z-[9998]"
+        onClick={handleClose}
       />
 
       {/* Slide-in Panel — dc-panel-card gives the same rounded, inset card
@@ -126,14 +146,14 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
           fixed dc-panel-card dc-panel-w
           bg-white shadow-2xl z-[9999] transform transition-transform duration-300
           overflow-y-auto
-          ${company ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 z-10 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
             >
               <X size={20} />

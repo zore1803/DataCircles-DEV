@@ -669,7 +669,7 @@ const PlanCard = ({
         <button
           onClick={() => !isDisabled && onSelectPlan(plan)}
           disabled={isDisabled}
-          className={`w-full mt-auto py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center text-sm ${
+          className={`w-full mt-auto h-[42px] px-4 rounded-full font-semibold transition-all duration-200 flex items-center justify-center text-sm ${
             isDisabled
               ? plan.popular
                 ? "bg-white/20 text-white/50 cursor-not-allowed"

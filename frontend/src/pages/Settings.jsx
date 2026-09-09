@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Building,
+  User,
   Users,
   CreditCard,
   Layout,
@@ -28,6 +29,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import BankDetails from "../components/settings/BankDetails";
+import Profile from "./Profile";
 import BrandSettings from "../components/settings/BrandSettings";
 import AddUser from "../components/settings/AddUser";
 import KanbanSettings from "../components/settings/KanbanSettings";
@@ -107,27 +109,32 @@ const Settings = () => {
       return;
     }
 
-    // Simulate loading settings data
+    // A sub-page (e.g. /settings/billing) resolves instantly from the
+    // in-memory settingsItems list and fetches/skeletons its own data once
+    // mounted (BankDetails, BillingCenter, Wallet, etc. each have their own
+    // loading UI) — so it skips the simulated delay and generic tile-grid
+    // skeleton below, which used to show first regardless of destination
+    // and made every sub-page's initial load look identical to the
+    // top-level Settings grid.
+    const sectionId = params.section;
+    if (sectionId) {
+      const selectedItem = settingsItems.find((item) => item.id === sectionId);
+      if (selectedItem) {
+        setActiveSection(selectedItem);
+      } else {
+        navigate("/settings");
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Simulate loading settings data for the top-level grid only.
     const loadSettings = async () => {
       try {
         setLoading(true);
         // Simulate API call or data loading
         await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // Determine active section from URL params
-        const sectionId = params.section;
-        if (sectionId) {
-          const selectedItem = settingsItems.find(
-            (item) => item.id === sectionId
-          );
-          if (selectedItem) {
-            setActiveSection(selectedItem);
-          } else {
-            navigate("/settings");
-          }
-        } else {
-          setActiveSection(null);
-        }
+        setActiveSection(null);
       } finally {
         setLoading(false);
       }
@@ -198,6 +205,18 @@ const Settings = () => {
       hoverBg: "hover:bg-purple-50",
       component: <Referrals />,
       category: "Billing",
+    },
+    {
+      id: "profile",
+      icon: <User className="w-5 h-5" />,
+      label: "Profile",
+      description: "Your account details, photo, and active sessions",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-50",
+      component: <Profile />,
+      category: "General",
     },
     {
       id: "users",
@@ -510,9 +529,6 @@ const Settings = () => {
               Back
             </button>
             <div className="h-6 w-px bg-gray-200 flex-shrink-0" />
-            <div className={`p-2 rounded-lg ${activeSection.bgColor} ${activeSection.color} flex-shrink-0`}>
-              {activeSection.icon}
-            </div>
             <div className="min-w-0">
               <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">
                 {activeSection.label}
@@ -563,7 +579,7 @@ const Settings = () => {
               label, this is the one action the page's footer card carried. */}
           <button
             onClick={() => window.open("https://help.datacircles.in/en", "_blank")}
-            className="hidden md:flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors group flex-shrink-0"
+            className="hidden md:flex items-center gap-2 h-[38px] bg-blue-50 px-4 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors group flex-shrink-0"
           >
             <Globe className="w-4 h-4 text-blue-600" />
             <span className="text-sm font-semibold text-blue-700">
@@ -585,7 +601,7 @@ const Settings = () => {
               <div key={category}>
                 {/* Category Header */}
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-2 rounded-lg shadow-md">
+                  <div className="bg-[#0085FF] p-2 rounded-lg shadow-md">
                     <div className="text-white">
                       {categoryIcons[category] || (
                         <SettingsIcon className="w-5 h-5" />

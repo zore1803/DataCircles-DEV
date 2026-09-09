@@ -543,7 +543,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
               placeholder="Search by transaction ID, order ID, or description..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              className="w-full h-[38px] pl-10 pr-4 border border-[#1F2937]/10 rounded-full focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
           </div>
 
@@ -551,7 +551,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
           <div className="relative">
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-all bg-white font-medium"
+              className="flex items-center gap-2 h-[38px] px-4 border border-[#1F2937]/10 rounded-full hover:bg-gray-50 transition-all bg-white font-medium"
             >
               <FilterIcon size={16} />
               <span>

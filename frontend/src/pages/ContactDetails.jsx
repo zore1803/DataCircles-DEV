@@ -638,7 +638,7 @@ const ContactDetailsPage = () => {
             <button
               title="Edit"
               onClick={handleEdit}
-              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors"
             >
               <Edit2 size={13} />
               Edit

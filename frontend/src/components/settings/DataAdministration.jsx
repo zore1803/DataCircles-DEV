@@ -175,13 +175,13 @@ function DataAdministration() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={() => navigate("/settings/subscription")}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm"
+                    className="bg-[#0085FF] hover:bg-blue-600 text-white px-5 h-[38px] rounded-full font-semibold text-sm transition-colors shadow-sm"
                   >
                     Buy Add-on
                   </button>
                   <button
                     onClick={() => navigate("/settings/subscription")}
-                    className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-white border-2 border-gray-200 hover:bg-gray-50 transition-colors text-sm"
+                    className="px-5 h-[38px] rounded-full font-medium text-gray-700 bg-white border border-[#1F2937]/10 hover:bg-gray-50 transition-colors text-sm"
                   >
                     Upgrade Plan
                   </button>

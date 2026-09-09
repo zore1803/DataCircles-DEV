@@ -295,7 +295,7 @@ const BillingSidebar = ({ subscription }) => {
       <div className="p-6 pt-5">
         <button
           onClick={() => navigate("/settings/subscription")}
-          className="w-full inline-flex items-center justify-center gap-1.5 bg-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+          className="w-full inline-flex items-center justify-center gap-1.5 h-[38px] bg-[#0085FF] text-white text-sm font-semibold px-4 rounded-full hover:bg-blue-600 transition-colors"
         >
           Manage Subscription <ArrowRight className="w-3.5 h-3.5" />
         </button>

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus,
   Filter,
@@ -37,6 +37,18 @@ const CompanyDetails = ({
   const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
   const [searchOwnerQuery, setSearchOwnerQuery] = useState("");
   const [availableUsers, setAvailableUsers] = useState([]);
+  const ownerDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOwnerDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (ownerDropdownRef.current && !ownerDropdownRef.current.contains(e.target)) {
+        setIsOwnerDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOwnerDropdownOpen]);
 
   // 2. --- PERMISSION CHECK LOGIC ---
   const currentUserStr = localStorage.getItem("user");
@@ -317,7 +329,7 @@ const handleOwnerChange = async (newOwnerId) => {
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-500">Owner:</span>
 
-          <div className="relative">
+          <div className="relative" ref={ownerDropdownRef}>
             <button
               onClick={() => hasEditPermission() && setIsOwnerDropdownOpen(!isOwnerDropdownOpen)}
               className={`flex items-center gap-1.5 px-2 py-1 -ml-2 rounded text-sm font-semibold transition-colors ${hasEditPermission() ? 'text-gray-900 hover:bg-gray-50 cursor-pointer' : 'text-gray-900 cursor-default'}`}

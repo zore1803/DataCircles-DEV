@@ -13,7 +13,6 @@ import {
   Download,
   Edit2,
   Trash2,
-  Eye,
   EyeOff,
   Pin,
   PinOff,
@@ -293,7 +292,6 @@ const SalesSubscription = () => {
   };
 
   const openCreate = () => { setEditingSubscription(null); setShowForm(true); };
-  const openEdit = (row) => { setEditingSubscription(row); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setEditingSubscription(null); };
 
   const exitSelectionMode = () => {
@@ -598,13 +596,6 @@ const SalesSubscription = () => {
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={() => { close(); openEdit(row); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
-                    View / Edit
-                  </button>
                   {canGenerate && (
                     <button
                       onClick={() => handleGenerateInvoice(row)}
@@ -820,13 +811,9 @@ const SalesSubscription = () => {
 
             if (vc.key === "subscriptionNumber") {
               baseContent = (
-                <button
-                  onClick={() => openEdit(s)}
-                  className="text-[#0085FF] font-semibold hover:underline truncate text-left"
-                  title={s.subscriptionNumber}
-                >
+                <span className="text-gray-900 font-semibold truncate" title={s.subscriptionNumber}>
                   <HighlightText text={s.subscriptionNumber} query={searchTerm} />
-                </button>
+                </span>
               );
             } else if (vc.key === "customer") {
               baseContent = <span className="text-gray-700 truncate block" title={customerOf(s)}><HighlightText text={customerOf(s)} query={searchTerm} /></span>;
@@ -1463,7 +1450,7 @@ const SalesSubscription = () => {
                           key={`p-${item}`}
                           onClick={() => handlePageChange(item)}
                           onDoubleClick={() => { if (isCurrent) { setPageInput(String(pagination.currentPage)); setEditingPage(true); } }}
-                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${isCurrent ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                          className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${isCurrent ? "bg-[#0085FF] text-white" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                         >
                           {item}
                         </button>

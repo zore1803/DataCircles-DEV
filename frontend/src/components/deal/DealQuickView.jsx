@@ -142,6 +142,9 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
   const [loading, setLoading] = useState(true);
   const [showViewer, setShowViewer] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  // Drives the slide-in/out transform independently of `deal` so a real
+  // close can animate the panel out before the parent unmounts it.
+  const [isOpen, setIsOpen] = useState(false);
 
   const loadDeal = async (id) => {
     setLoading(true);
@@ -168,6 +171,18 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
   useEffect(() => {
     if (dealId) loadDeal(dealId);
   }, [dealId]);
+
+  // Slide in once the panel actually has data to show.
+  useEffect(() => {
+    if (deal) setIsOpen(true);
+  }, [deal]);
+
+  // Slide out first, then unmount — matches how it slides in instead of
+  // vanishing instantly.
+  const handleClose = () => {
+    setIsOpen(false);
+    setTimeout(onClose, 300);
+  };
 
   const downloadPDF = async (id) => {
     try {
@@ -203,10 +218,12 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Backdrop — dimmed/blurred on mobile, invisible but still present (and
+          click-catching) on desktop so clicking outside the panel closes it
+          there too instead of falling through to the page underneath. */}
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:hidden z-[9998]"
-        onClick={onClose}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none z-[9998]"
+        onClick={handleClose}
       />
 
       {/* Slide-in Panel — dc-panel-card matches the rounded, inset card look
@@ -221,14 +238,14 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
           bg-white shadow-2xl z-[9999]
           transform transition-transform duration-300 ease-in-out
           overflow-hidden
-          ${deal ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Sticky Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 z-20 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-full hover:bg-gray-100 text-gray-600 flex-shrink-0"
             >
               <X size={20} />

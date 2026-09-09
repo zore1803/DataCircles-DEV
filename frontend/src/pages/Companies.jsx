@@ -908,14 +908,14 @@ function Companies() {
                       <Star className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
                     )}
                   </div>
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] rounded-lg">
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] border border-gray-200 rounded-full">
                     <button
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         setQuickViewCompanyId(company._id);
                       }}
-                      className="p-1.5 rounded-md bg-white shadow-sm border border-gray-200 hover:bg-blue-50 text-blue-600 transition-colors"
+                      className="p-1.5 rounded-full hover:bg-blue-50 text-blue-600 transition-colors"
                       title="Quick view"
                     >
                       <Eye size={15} />
@@ -925,7 +925,7 @@ function Companies() {
                         e.stopPropagation();
                         handleEdit(company);
                       }}
-                      className="p-1.5 rounded-md hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
+                      className="p-1.5 rounded-full hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-colors duration-150"
                       title="Edit Company"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -935,7 +935,7 @@ function Companies() {
                         e.stopPropagation();
                         handleDelete(company._id);
                       }}
-                      className="p-1.5 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-all duration-150 transform hover:scale-110 active:scale-95"
+                      className="p-1.5 rounded-full hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors duration-150"
                       title="Delete Company"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1681,7 +1681,7 @@ function Companies() {
                     }}
                     title={isCurrent ? "Double-click to type a page number" : undefined}
                     className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${isCurrent
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[#0085FF] text-white"
                       : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                       }`}
                   >
@@ -2294,7 +2294,7 @@ function Companies() {
                                     }}
                                     className="px-4 py-2 align-middle text-sm text-[#1C1B1F] bg-inherit border-r border-b border-[#E1E4EA] last:border-r-0"
                                   >
-                                    <div style={{ opacity: isColDragging ? 0.35 : 1, overflow: "hidden" }}>
+                                    <div style={{ opacity: isColDragging ? 0.35 : 1, overflow: colId === "name" ? "visible" : "hidden" }}>
                                       {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext(),

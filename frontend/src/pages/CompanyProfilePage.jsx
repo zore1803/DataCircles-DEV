@@ -1111,7 +1111,7 @@ const CompanyProfilePage = () => {
             <button
               title="Edit"
               onClick={handleEdit}
-              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors"
             >
               <Edit2 size={13} />
               Edit
@@ -1245,7 +1245,7 @@ const CompanyProfilePage = () => {
                           <button
                             onClick={() => setActiveTab("Deals")}
                             title="Add Deal"
-                            className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                            className="w-7 h-7 flex items-center justify-center rounded-full bg-[#0085FF] hover:bg-blue-600 text-white transition-colors"
                           >
                             <Plus size={14} />
                           </button>
@@ -1485,7 +1485,7 @@ const CompanyProfilePage = () => {
                             key={tab}
                             onClick={() => setActivityFeedFilter(tab)}
                             className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${activityFeedFilter === tab
-                              ? "bg-blue-600 text-white"
+                              ? "bg-[#0085FF] text-white"
                               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                               }`}
                           >
@@ -1582,7 +1582,7 @@ const CompanyProfilePage = () => {
                               )}
                               <span
                                 className={`text-[11px] w-6 h-6 flex items-center justify-center rounded-full ${day === miniCalendar.today
-                                  ? "bg-blue-600 text-white font-semibold"
+                                  ? "bg-[#0085FF] text-white font-semibold"
                                   : day
                                     ? "text-gray-700"
                                     : ""

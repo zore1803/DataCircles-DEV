@@ -222,7 +222,7 @@ const Wallet = () => {
                 key={amount}
                 type="button"
                 onClick={() => setRupeeAmount(String(amount))}
-                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                className={`h-[38px] rounded-full border px-4 text-sm font-semibold transition ${
                   active
                     ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
                     : "border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
@@ -242,7 +242,7 @@ const Wallet = () => {
             >
               Amount to add
             </label>
-            <div className="flex items-center rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+            <div className="flex items-center h-[38px] rounded-full border border-gray-300 bg-white px-3.5 transition focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500">
               <span className="mr-1.5 text-lg text-gray-400">₹</span>
               <input
                 id="wallet-amount"
@@ -263,7 +263,7 @@ const Wallet = () => {
             <button
               onClick={handleBuy}
               disabled={purchasing || !(creditsToBuy > 0)}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+              className="mt-4 flex w-full items-center justify-center gap-2 h-[42px] rounded-full bg-emerald-600 px-5 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
               <Plus className="h-4 w-4" />
               {purchasing ? "Processing…" : "Buy Credits"}

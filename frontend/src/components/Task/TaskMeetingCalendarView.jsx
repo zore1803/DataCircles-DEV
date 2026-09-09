@@ -303,11 +303,11 @@ const TaskMeetingCalendarView = ({
     if (viewMode === "week") {
       const end = weekDays[6];
       const startLabel = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      const endLabel = end.toLocaleDateString("en-US", {
-        month: weekStart.getMonth() === end.getMonth() ? undefined : "short",
-        day: "numeric",
-        year: "numeric",
-      });
+      // Always includes the month (even within the same month as the start
+      // date) rather than omitting it — some Chromium builds have no defined
+      // date pattern for a bare {year, day} combination and fall back to a
+      // literal field-labeled string like "day: 13, 2026".
+      const endLabel = end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
       return `${startLabel} - ${endLabel}`;
     }
     return currentDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });

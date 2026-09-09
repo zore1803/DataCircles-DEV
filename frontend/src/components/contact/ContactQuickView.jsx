@@ -36,6 +36,10 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
   const [activeTabRight, setActiveTabRight] = useState("Notes");
   const [isExpanded, setIsExpanded] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  // Drives the slide-in/out transform independently of `contact` (which
+  // stays populated across prev/next navigation) so a real close can
+  // animate the panel out before the parent unmounts it.
+  const [isOpen, setIsOpen] = useState(false);
 
   const { currentContactIds } = useContactStore();
 
@@ -70,6 +74,18 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
     if (contactId) loadContact(contactId);
   }, [contactId]);
 
+  // Slide in once the panel actually has data to show.
+  useEffect(() => {
+    if (contact) setIsOpen(true);
+  }, [contact]);
+
+  // Slide out first, then unmount — matches how it slides in instead of
+  // vanishing instantly.
+  const handleClose = () => {
+    setIsOpen(false);
+    setTimeout(onClose, 300);
+  };
+
   const goToPrev = () =>
     hasPrev && loadContact(currentContactIds[currentIndex - 1]);
   const goToNext = () =>
@@ -79,10 +95,12 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Backdrop — dimmed/blurred on mobile, invisible but still present (and
+          click-catching) on desktop so clicking outside the panel closes it
+          there too instead of falling through to the page underneath. */}
       <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:hidden z-[9998]"
-        onClick={onClose}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none z-[9998]"
+        onClick={handleClose}
       />
 
       {/* Slide-in Panel – improved responsive widths.
@@ -104,7 +122,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
           transform transition-transform duration-300 ease-in-out
           overflow-hidden
           flex flex-col
-          ${contact ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+          ${isOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
         `}
       >
         {/* Header — was `sticky top-0` inside a content area sized by a
@@ -121,7 +139,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
         <div className="flex-shrink-0 bg-white border-b border-gray-200 z-20 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-full hover:bg-gray-100 text-gray-600 flex-shrink-0"
             >
               <X size={20} />

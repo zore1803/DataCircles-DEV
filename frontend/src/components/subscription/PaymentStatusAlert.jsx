@@ -162,7 +162,7 @@ const PaymentStatusAlert = ({ subscription, onRetryPayment, onResumePayment, onC
               <button
                 onClick={onRetryPayment}
                 disabled={processing}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
+                className="bg-[#0085FF] text-white px-4 h-[38px] rounded-full text-sm font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
               >
                 {processing ? (
                   <>
@@ -184,7 +184,7 @@ const PaymentStatusAlert = ({ subscription, onRetryPayment, onResumePayment, onC
                 <button
                   onClick={onResumePayment}
                   disabled={processing}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
+                  className="bg-[#0085FF] text-white px-4 h-[38px] rounded-full text-sm font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
                 >
                   {processing ? (
                     <>
@@ -203,7 +203,7 @@ const PaymentStatusAlert = ({ subscription, onRetryPayment, onResumePayment, onC
                 <button
                   onClick={onChangePlan}
                   disabled={processing}
-                  className="bg-white text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="bg-white text-blue-700 border border-blue-200 px-4 h-[38px] rounded-full text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Change Plan
                 </button>

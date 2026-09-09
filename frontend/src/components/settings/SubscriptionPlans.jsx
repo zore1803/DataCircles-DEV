@@ -2148,7 +2148,7 @@ const SubscriptionPlans = () => {
           createPortal(
             <button
               onClick={() => setShowBillingCalendar(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0085FF] hover:underline whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-full bg-[#0085FF] text-xs font-semibold text-white hover:bg-blue-600 transition-colors whitespace-nowrap"
             >
               <Calendar className="w-3.5 h-3.5" /> View Billing Calendar
             </button>,

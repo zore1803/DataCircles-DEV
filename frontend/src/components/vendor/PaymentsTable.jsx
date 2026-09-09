@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Skeleton from "../common/Skeleton";
+import StatTile from "../common/StatTile";
 import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
@@ -657,10 +658,9 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       {/* Action Buttons (Portaled to Tab Header) removed */}
 
 
-      {/* Stats Cards — tile markup matches CompanyTasksTab.jsx / CompanyMeetingsTab.jsx's
-          statTiles: h-[72px] card, w-10 h-10 bordered icon box on desktop with a
-          smaller un-boxed icon below lg, stacked label/value, plus a right-aligned
-          subtitle so the tile isn't left with dead space. */}
+      {/* Stats Cards — the shared StatTile the Dashboard KPI row uses, so
+          this reads as the same stat style everywhere instead of its own
+          near-identical bespoke tile. */}
       {showKPIs && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           {[
@@ -675,35 +675,21 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
             },
             { label: "Total", value: filteredPayments.length, icon: Clock, trend: trendStats.total },
           ].map((tile) => (
-            <div
+            <StatTile
               key={tile.label}
-              className="h-[72px] flex items-center gap-2 px-3 bg-white border border-gray-200 rounded-xl min-w-0"
-            >
-              <div className="flex lg:hidden flex-shrink-0 text-blue-600">
-                <tile.icon size={18} />
-              </div>
-              <div className="hidden lg:flex w-10 h-10 text-blue-600 border border-gray-200 rounded-lg items-center justify-center flex-shrink-0">
-                <tile.icon size={20} />
-              </div>
-              <div className="min-w-0 flex-1 flex items-end justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate w-full text-[10px] sm:text-[11px] text-gray-500">
-                    {tile.label}
-                  </p>
-                  <p className={`truncate w-full text-xs sm:text-sm font-semibold ${tile.valueClass || "text-gray-900"}`}>
-                    {tile.value}
-                  </p>
-                </div>
-                {tile.trend && (
-                  <span
-                    className={`hidden sm:inline-flex items-center gap-1 text-[11px] flex-shrink-0 whitespace-nowrap ${tile.trend.up ? "text-green-600" : "text-red-600"}`}
-                  >
-                    {tile.trend.up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                    {tile.trend.up ? "Increased" : "Decreased"} by {tile.trend.pct}%
-                  </span>
-                )}
-              </div>
-            </div>
+              tile={{
+                icon: tile.icon,
+                iconClass: "text-blue-600",
+                label: tile.label,
+                value: tile.value,
+                valueClassName: tile.valueClass,
+                subtitle: tile.trend
+                  ? `${tile.trend.up ? "Increased" : "Decreased"} by ${tile.trend.pct}%`
+                  : undefined,
+                subtitleIcon: tile.trend ? (tile.trend.up ? TrendingUp : TrendingDown) : undefined,
+                subtitleClass: tile.trend ? (tile.trend.up ? "text-green-600" : "text-red-600") : undefined,
+              }}
+            />
           ))}
         </div>
       )}

@@ -18,10 +18,12 @@ import {
   Mail,
   Building2,
   ChevronRight,
+  Circle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { subscriptionAPI } from "../../services/subscriptionApi";
 import { formatPrice } from "../../utils/pricingSnapshot";
+import StatTile from "../common/StatTile";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -46,17 +48,6 @@ const REWARD_STATUS_STYLES = {
   expired: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
   revoked: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
 };
-
-const StatCard = ({ icon, iconBg, label, value, sublabel }) => (
-  <div className="bg-white rounded-2xl border border-gray-200 px-5 py-4 flex items-center gap-4">
-    <div className={`p-2.5 rounded-xl ${iconBg}`}>{icon}</div>
-    <div>
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
-      {sublabel && <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>}
-    </div>
-  </div>
-);
 
 const StatusPill = ({ status, styles }) => (
   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border capitalize ${styles[status] || "bg-gray-100 text-gray-500 border-gray-200"}`}>
@@ -151,35 +142,45 @@ const Referrals = () => {
 
   return (
     <div className="space-y-5">
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={<SendIcon className="w-4 h-4 text-purple-600" />}
-          iconBg="bg-purple-50"
-          label="Referrals sent"
-          value={summary.referralsSent ?? 0}
-          sublabel="Total invitations sent"
+      {/* Stats — same StatTile the Dashboard KPI row uses, so this reads as
+          one consistent stat style across the app instead of its own
+          bespoke card. */}
+      <div className="flex flex-col sm:flex-row items-stretch gap-4">
+        <StatTile
+          tile={{
+            icon: SendIcon,
+            iconClass: "text-purple-600",
+            label: "Referrals sent",
+            value: summary.referralsSent ?? 0,
+            subtitle: "Total invitations sent",
+          }}
         />
-        <StatCard
-          icon={<span className="block w-4 h-4 rounded-full border-2 border-amber-500" />}
-          iconBg="bg-amber-50"
-          label="Pending"
-          value={summary.referralsPending ?? 0}
-          sublabel="Awaiting first payment"
+        <StatTile
+          tile={{
+            icon: Circle,
+            iconClass: "text-amber-500",
+            label: "Pending",
+            value: summary.referralsPending ?? 0,
+            subtitle: "Awaiting first payment",
+          }}
         />
-        <StatCard
-          icon={<Check className="w-4 h-4 text-emerald-600" />}
-          iconBg="bg-emerald-50"
-          label="Qualified"
-          value={summary.referralsQualified ?? 0}
-          sublabel="Completed first payment"
+        <StatTile
+          tile={{
+            icon: Check,
+            iconClass: "text-emerald-600",
+            label: "Qualified",
+            value: summary.referralsQualified ?? 0,
+            subtitle: "Completed first payment",
+          }}
         />
-        <StatCard
-          icon={<Gift className="w-4 h-4 text-purple-600" />}
-          iconBg="bg-purple-50"
-          label="Rewards available"
-          value={summary.rewardsAvailable ?? 0}
-          sublabel="Ready to use"
+        <StatTile
+          tile={{
+            icon: Gift,
+            iconClass: "text-purple-600",
+            label: "Rewards available",
+            value: summary.rewardsAvailable ?? 0,
+            subtitle: "Ready to use",
+          }}
         />
       </div>
 
@@ -234,19 +235,19 @@ const Referrals = () => {
           </div>
 
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
+            <div className="flex-1 flex items-center h-[38px] bg-gray-50 border border-gray-200 rounded-full px-4">
               <span className="text-base font-mono font-bold tracking-wider text-gray-900">{code}</span>
             </div>
             <button
               onClick={() => handleCopy(code)}
               title="Copy code"
-              className="inline-flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-3.5 py-2.5 rounded-lg transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-3.5 rounded-full transition-colors"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
             </button>
             <button
               onClick={() => handleCopy(shareLink)}
-              className="inline-flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap"
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 rounded-full transition-colors whitespace-nowrap"
             >
               <Share2 className="w-3.5 h-3.5" />
               Copy share link
@@ -291,7 +292,7 @@ const Referrals = () => {
                   if (inviteEmailError) setInviteEmailError("");
                 }}
                 placeholder="friend@company.com"
-                className={`w-full bg-gray-50 border rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 ${
+                className={`w-full h-[38px] bg-gray-50 border rounded-full px-3.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 ${
                   inviteEmailError ? "border-red-500" : "border-gray-200"
                 }`}
               />
@@ -303,12 +304,12 @@ const Referrals = () => {
                 onChange={(e) => setInviteMessage(e.target.value)}
                 placeholder="Add a personal message (optional)"
                 rows={2}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400"
+                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-purple-500"
               />
               <button
                 onClick={handleSendInvite}
                 disabled={sendingInvite}
-                className="inline-flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors w-full sm:w-auto"
+                className="inline-flex items-center justify-center gap-1.5 h-[38px] bg-purple-600 hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 rounded-full transition-colors w-full sm:w-auto"
               >
                 <SendIcon className="w-3.5 h-3.5" />
                 {sendingInvite ? "Sending…" : "Send invite"}

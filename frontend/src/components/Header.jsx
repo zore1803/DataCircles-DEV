@@ -1592,7 +1592,7 @@ const Header = () => {
             <button
               onClick={handleGlobalAdd}
               title="New"
-              className="flex items-center justify-center w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-full ring-4 ring-blue-200 transition-colors"
+              className="flex items-center justify-center w-9 h-9 bg-[#0085FF] hover:bg-blue-600 text-white rounded-full ring-4 ring-blue-200 transition-colors"
             >
               {isAddMenuOpen ? (
                 <X className="w-4 h-4" strokeWidth={3} />
