@@ -267,8 +267,8 @@ const PurchaseOrderForm = ({
 
   const statusOptions = [
     { value: "Pending", label: "Pending", icon: Clock, className: "bg-yellow-50 text-yellow-700" },
-    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-green-50 text-green-700" },
-    { value: "Rejected", label: "Rejected", icon: X, className: "bg-red-50 text-red-700" },
+    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-[#E6F7EF] text-[#1FA971]" },
+    { value: "Rejected", label: "Rejected", icon: X, className: "bg-[#FCEAEA] text-[#EA4B4B]" },
     { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-blue-50 text-blue-700" },
   ];
 

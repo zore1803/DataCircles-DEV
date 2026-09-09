@@ -34,17 +34,17 @@ const rewardValueLabel = (reward) =>
   reward.rewardType === "fixed" ? formatPrice(reward.rewardValue) : `${reward.rewardValue}%`;
 
 const REFERRAL_STATUS_STYLES = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  qualified: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  pending: "bg-[#FDF3E6] text-[#EA9927] border-[#F7DDB8]",
+  qualified: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]",
   expired: "bg-gray-100 text-gray-500 border-gray-200",
 };
 
 const REWARD_STATUS_STYLES = {
-  available: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  reserved: "bg-amber-50 text-amber-700 border-amber-200",
+  available: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]",
+  reserved: "bg-[#FDF3E6] text-[#EA9927] border-[#F7DDB8]",
   consumed: "bg-gray-100 text-gray-500 border-gray-200",
-  expired: "bg-gray-100 text-gray-400 border-gray-200",
-  revoked: "bg-red-50 text-red-600 border-red-200",
+  expired: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
+  revoked: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
 };
 
 const StatCard = ({ icon, iconBg, label, value, sublabel }) => (

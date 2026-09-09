@@ -192,7 +192,18 @@ API.interceptors.response.use(
     // Handle 401 Unauthorized errors
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Don't retry for specific endpoints to avoid infinite loops
-      const noRetryEndpoints = ["/auth/me", "/auth/login", "/auth/logout"];
+      // /session/* is included deliberately: application routes still
+      // authenticate off the Auth0/phone JWT, so a browser with no
+      // dc_session cookie 401s these on EVERY private-route mount. Refreshing
+      // the Auth0 token and replaying can't produce a cookie, so the retry is
+      // pure latency — and it runs while PrivateRoute is showing its checking
+      // screen, which is what makes pages flash on navigation.
+      const noRetryEndpoints = [
+        "/auth/me",
+        "/auth/login",
+        "/auth/logout",
+        "/session/",
+      ];
       const shouldSkipRetry = noRetryEndpoints.some((endpoint) =>
         originalRequest.url?.includes(endpoint)
       );

@@ -304,7 +304,7 @@ const PaymentPage = () => {
   const getDirectionBadgeColor = (direction) => {
     return direction === "IN"
       ? "bg-green-100 text-green-800 border-green-200"
-      : "bg-red-100 text-red-800 border-red-200";
+      : "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]";
   };
 
   const handleSort = (key) => {

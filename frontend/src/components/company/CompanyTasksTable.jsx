@@ -78,9 +78,9 @@ const CompanyTasksTable = ({ companyId, setTasks }) => {
 
   const statusOptions = [
     { value: "", label: "All Status", icon: Filter, className: "bg-white border-gray-300 text-gray-700" },
-    { value: "Pending", label: "To Do", icon: Circle, className: "bg-gray-50 border-gray-200 text-gray-600" },
-    { value: "In Progress", label: "In Progress", icon: PlayCircle, className: "bg-blue-50 border-blue-100 text-blue-600" },
-    { value: "Completed", label: "Completed", icon: CheckCircle2, className: "bg-green-50 border-green-100 text-green-600" },
+    { value: "Pending", label: "To Do", icon: Circle, className: "bg-[#EEF2F9] border-[#D6DEEC] text-[#56698A]" },
+    { value: "In Progress", label: "In Progress", icon: PlayCircle, className: "bg-[#E6F8FD] border-[#B8E9F7] text-[#27B4EA]" },
+    { value: "Completed", label: "Completed", icon: CheckCircle2, className: "bg-[#E6F7EF] border-[#B9E7D3] text-[#1FA971]" },
   ];
 
   useEffect(() => {

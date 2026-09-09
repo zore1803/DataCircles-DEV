@@ -262,20 +262,20 @@ const TaskAndMeeting = ({
 
   const getTaskStatusBadge = (status) => {
     const statusClasses = {
-      "To Do": "bg-yellow-100 text-yellow-700",
-      Pending: "bg-yellow-100 text-yellow-700",
-      "In Progress": "bg-blue-100 text-blue-700",
-      Completed: "bg-green-100 text-green-700",
-      Cancelled: "bg-red-100 text-red-700",
+      "To Do": "bg-[#FDF3E6] text-[#EA9927]",
+      Pending: "bg-[#FDF3E6] text-[#EA9927]",
+      "In Progress": "bg-[#E6F8FD] text-[#27B4EA]",
+      Completed: "bg-[#E6F7EF] text-[#1FA971]",
+      Cancelled: "bg-[#FCEAEA] text-[#EA4B4B]",
     };
     return statusClasses[status] || "bg-gray-100 text-gray-700";
   };
 
   const getMeetingStatusBadge = (status) => {
     const statusClasses = {
-      scheduled: "bg-blue-100 text-blue-700",
-      completed: "bg-green-100 text-green-700",
-      cancelled: "bg-red-100 text-red-700",
+      scheduled: "bg-[#E6F8FD] text-[#27B4EA]",
+      completed: "bg-[#E6F7EF] text-[#1FA971]",
+      cancelled: "bg-[#FCEAEA] text-[#EA4B4B]",
       "no-show": "bg-orange-100 text-orange-700",
     };
     return statusClasses[status] || "bg-gray-100 text-gray-700";
@@ -283,9 +283,9 @@ const TaskAndMeeting = ({
 
   const getPriorityBadge = (priority) => {
     const priorityClasses = {
-      high: "bg-red-100 text-red-700",
-      medium: "bg-yellow-100 text-yellow-700",
-      low: "bg-green-100 text-green-700",
+      high: "bg-[#FCEAEA] text-[#EA4B4B]",
+      medium: "bg-[#FDF3E6] text-[#EA9927]",
+      low: "bg-[#E6F7EF] text-[#1FA971]",
     };
     return priorityClasses[priority] || "bg-gray-100 text-gray-700";
   };

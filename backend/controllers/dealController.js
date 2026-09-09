@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 // controllers/dealController.js (updated to handle field types)
 const Deal = require("../models/Deal");
 const Invoice = require("../models/Invoice");
@@ -116,9 +117,9 @@ const getAllDeals = async (req, res) => {
     if (search) {
       preAndConditions.push({
         $or: [
-          { title: { $regex: search, $options: "i" } },
-          { status: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ],
       });
     }

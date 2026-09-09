@@ -42,15 +42,15 @@ const getTaskFieldValue = (task, key) => {
 
 const STATUS_BADGE = {
   Pending: "bg-gray-100 text-gray-700",
-  "In Progress": "bg-blue-50 text-blue-700",
-  Completed: "bg-green-50 text-green-700",
+  "In Progress": "bg-[#E6F8FD] text-[#27B4EA]",
+  Completed: "bg-[#E6F7EF] text-[#1FA971]",
   Cancelled: "bg-gray-200 text-gray-700",
 };
 
 const PRIORITY_BADGE = {
-  high: "bg-red-50 text-red-600",
-  medium: "bg-amber-50 text-amber-700",
-  low: "bg-gray-100 text-gray-600",
+  high: "bg-[#FCEAEA] text-[#EA4B4B]",
+  medium: "bg-[#FDF3E6] text-[#EA9927]",
+  low: "bg-[#EEF2F9] text-[#56698A]",
 };
 
 const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();

@@ -31,12 +31,12 @@ import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
 
 const WALLET_TYPE_META = {
-  CREDIT_PURCHASE: { label: "Purchase", style: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  CREDIT_PURCHASE: { label: "Purchase", style: "bg-[#E6F7EF] text-[#1FA971] ring-[#B9E7D3]" },
   FREE_CREDIT: { label: "Free credit", style: "bg-sky-50 text-sky-700 ring-sky-200" },
   ADMIN_CREDIT: { label: "Admin credit", style: "bg-violet-50 text-violet-700 ring-violet-200" },
   USAGE_DEBIT: { label: "Usage", style: "bg-slate-100 text-slate-600 ring-slate-200" },
-  REFUND: { label: "Refund", style: "bg-amber-50 text-amber-700 ring-amber-200" },
-  ADJUSTMENT: { label: "Adjustment", style: "bg-amber-50 text-amber-700 ring-amber-200" },
+  REFUND: { label: "Refund", style: "bg-[#FDF3E6] text-[#EA9927] ring-[#F7DDB8]" },
+  ADJUSTMENT: { label: "Adjustment", style: "bg-[#FDF3E6] text-[#EA9927] ring-[#F7DDB8]" },
 };
 
 const formatWalletDateTime = (d) =>
@@ -802,7 +802,7 @@ const TenantDetails = () => {
                     label: "Invite Revoked",
                   },
                   user_deleted: {
-                    color: "bg-red-100 text-red-800 border-red-200",
+                    color: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
                     icon: User,
                     label: "User Removed",
                   },

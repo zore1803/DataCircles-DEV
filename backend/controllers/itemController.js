@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Item = require("../models/Item");
 const StockMovement = require("../models/StockMovement");
 
@@ -210,13 +211,13 @@ const getAllItems = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-        { hsnSac: { $regex: search, $options: "i" } },
-        { barcode: { $regex: search, $options: "i" } },
-        { "variants.name": { $regex: search, $options: "i" } }, // Search in variant names
-        { "variants.sku": { $regex: search, $options: "i" } }, // Search in variant SKUs
+        { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { description: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { category: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { hsnSac: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { barcode: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { "variants.name": { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Search in variant names
+        { "variants.sku": { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Search in variant SKUs
       ];
     }
 
@@ -272,13 +273,13 @@ const getAllItemsPaginated = async (req, res) => {
     // Search functionality
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-        { hsnSac: { $regex: search, $options: "i" } },
-        { barcode: { $regex: search, $options: "i" } },
-        { "variants.name": { $regex: search, $options: "i" } }, // Search in variant names
-        { "variants.sku": { $regex: search, $options: "i" } }, // Search in variant SKUs
+        { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { description: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { category: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { hsnSac: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { barcode: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { "variants.name": { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Search in variant names
+        { "variants.sku": { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Search in variant SKUs
       ];
     }
 

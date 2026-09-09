@@ -106,9 +106,9 @@ const getItemStockValue = (item) => {
 const stockStatusOf = (item) => {
   const qty = getItemStock(item);
   const threshold = Number(item.inventory?.lowStockThreshold) || 0;
-  if (qty <= 0) return { key: "out", label: "Out of Stock", cls: "bg-red-100 text-red-800" };
-  if (qty <= threshold) return { key: "low", label: "Low Stock", cls: "bg-amber-100 text-amber-800" };
-  return { key: "in", label: "In Stock", cls: "bg-green-100 text-green-800" };
+  if (qty <= 0) return { key: "out", label: "Out of Stock", cls: "bg-[#FCEAEA] text-[#EA4B4B]" };
+  if (qty <= threshold) return { key: "low", label: "Low Stock", cls: "bg-[#FDF3E6] text-[#EA9927]" };
+  return { key: "in", label: "In Stock", cls: "bg-[#E6F7EF] text-[#1FA971]" };
 };
 
 const relativeTime = (date) => {

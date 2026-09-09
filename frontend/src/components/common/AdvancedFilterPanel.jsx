@@ -3,18 +3,100 @@ import { X, Plus, Trash2, ChevronDown } from "lucide-react";
 import FilterIcon from "./FilterIcon";
 
 import SearchIcon from "./SearchIcon";
-const OPERATORS = [
-  { value: "contains", label: "Contains" },
-  { value: "not_contains", label: "Does not contain" },
-  { value: "is", label: "Is exact" },
-  { value: "is_not", label: "Is not" },
-  { value: "greater_than", label: "Greater than (>)" },
-  { value: "less_than", label: "Less than (<)" },
-  { value: "in", label: "In (comma separated)" },
-  { value: "not_in", label: "Not in (comma separated)" },
-  { value: "is_empty", label: "Is empty" },
-  { value: "is_not_empty", label: "Is not empty" },
-];
+
+const OPERATOR_LABELS = {
+  contains: "Contains",
+  not_contains: "Does not contain",
+  is: "Is exact",
+  is_not: "Is not",
+  greater_than: "Greater than (>)",
+  less_than: "Less than (<)",
+  in: "In (any of)",
+  not_in: "Not in (none of)",
+  is_empty: "Is empty",
+  is_not_empty: "Is not empty",
+};
+
+// Which conditions make sense for which field type — a text field offers no
+// Greater/Less than (comparing strings that way is meaningless to a user
+// picking a filter), a number/date field offers no Contains (substring
+// matching doesn't apply), etc. Order here is the order shown in the
+// dropdown.
+const OPERATORS_BY_TYPE = {
+  text: ["contains", "not_contains", "is", "is_not", "in", "not_in", "is_empty", "is_not_empty"],
+  number: ["is", "is_not", "greater_than", "less_than", "in", "not_in", "is_empty", "is_not_empty"],
+  date: ["is", "is_not", "greater_than", "less_than", "is_empty", "is_not_empty"],
+  select: ["is", "is_not", "in", "not_in", "is_empty", "is_not_empty"],
+};
+
+// A column declares its own `type` (used already by custom fields); an
+// untyped column with an enumerable `options` list is treated as `select`
+// (matches the existing dropdown-of-known-values behavior); anything else
+// defaults to `text` — the safe default for the many columns across the app
+// that don't declare a type at all today.
+const getColumnType = (colDef) => {
+  if (colDef?.type && OPERATORS_BY_TYPE[colDef.type]) return colDef.type;
+  if (colDef?.options && colDef.options.length > 0) return "select";
+  return "text";
+};
+
+const isMultiValueOperator = (op) => op === "in" || op === "not_in";
+const isNoValueOperator = (op) => op === "is_empty" || op === "is_not_empty";
+
+// --- Tag/chip input for "In" / "Not in" — type a value, Enter or comma
+// commits it as a pill, Backspace on an empty draft removes the last one.
+// Stores its value as a real array (the backend's advancedFilters handlers
+// already accept an array OR a comma string for these operators, so this is
+// a pure frontend upgrade with no backend contract change). ---
+const TagInput = ({ value, onChange, placeholder }) => {
+  const [draft, setDraft] = useState("");
+  const tags = Array.isArray(value) ? value : [];
+
+  const commitDraft = () => {
+    const v = draft.trim();
+    if (v && !tags.includes(v)) onChange([...tags, v]);
+    setDraft("");
+  };
+
+  const removeTag = (idx) => onChange(tags.filter((_, i) => i !== idx));
+
+  return (
+    <div className="w-full border border-gray-300 rounded-lg text-sm px-2 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 flex flex-wrap items-center gap-1.5 min-h-[38px]">
+      {tags.map((tag, idx) => (
+        <span
+          key={`${tag}-${idx}`}
+          className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full"
+        >
+          {tag}
+          <button
+            type="button"
+            onClick={() => removeTag(idx)}
+            className="hover:text-blue-900"
+            aria-label={`Remove ${tag}`}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            commitDraft();
+          } else if (e.key === "Backspace" && !draft && tags.length > 0) {
+            removeTag(tags.length - 1);
+          }
+        }}
+        onBlur={commitDraft}
+        placeholder={tags.length === 0 ? placeholder : ""}
+        className="flex-1 min-w-[80px] outline-none bg-transparent"
+      />
+    </div>
+  );
+};
 
 // --- Custom Searchable Dropdown Sub-Component ---
 const SearchableColumnSelect = ({ columns, value, onChange }) => {
@@ -137,6 +219,8 @@ export default function AdvancedFilterPanel({
     return values.length > 0 ? values : null;
   };
 
+  const getColumnDef = (colKey) => columns.find((c) => c.key === colKey);
+
   useEffect(() => {
     if (isOpen) {
       const filtersWithIds = (filters || []).map((f) => ({
@@ -162,19 +246,37 @@ export default function AdvancedFilterPanel({
   const updateFilter = (id, field, value) => {
     setLocalFilters((prev) =>
       prev.map((filter) => {
-        if (filter.id === id) {
-          const updated = { ...filter, [field]: value };
-          if (field === "operator" && (value === "is_empty" || value === "is_not_empty")) {
-            updated.value = "";
+        if (filter.id !== id) return filter;
+        const updated = { ...filter, [field]: value };
+
+        if (field === "column") {
+          // Switching columns can change the field's type, which can make
+          // the currently-selected operator invalid (e.g. was "Greater
+          // than" on a number column, new column is text) — reset to the
+          // new type's first/default operator rather than silently keeping
+          // one that no longer applies. Value is always cleared too, so a
+          // stale free-text value never persists onto a dropdown/tag field.
+          const newType = getColumnType(getColumnDef(value));
+          const validOps = OPERATORS_BY_TYPE[newType];
+          if (!validOps.includes(updated.operator)) {
+            updated.operator = validOps[0];
           }
-          // Reset value when column changes so a stale free-text value
-          // doesn't persist when switching to a column with a dropdown.
-          if (field === "column") {
-            updated.value = "";
-          }
-          return updated;
+          updated.value = isMultiValueOperator(updated.operator) ? [] : "";
         }
-        return filter;
+
+        if (field === "operator") {
+          if (isNoValueOperator(value)) {
+            updated.value = "";
+          } else if (isMultiValueOperator(value) && !Array.isArray(updated.value)) {
+            // Coming from a single-value operator — carry over whatever was
+            // typed as the first tag instead of silently discarding it.
+            updated.value = updated.value ? [String(updated.value)] : [];
+          } else if (!isMultiValueOperator(value) && Array.isArray(updated.value)) {
+            updated.value = updated.value[0] || "";
+          }
+        }
+
+        return updated;
       }),
     );
   };
@@ -183,16 +285,20 @@ export default function AdvancedFilterPanel({
     setLocalFilters((prev) => prev.filter((f) => f.id !== id));
   };
 
+  const isFilterValueFilled = (f) => {
+    if (isNoValueOperator(f.operator)) return true;
+    if (Array.isArray(f.value)) return f.value.length > 0;
+    return String(f.value ?? "").trim() !== "";
+  };
+
   const handleApply = () => {
     const validFilters = localFilters
-      .filter(
-        (f) =>
-          f.column &&
-          f.operator &&
-          (["is_empty", "is_not_empty"].includes(f.operator) ||
-            f.value.trim() !== ""),
-      )
-      .map(({ id, ...rest }) => rest);
+      .filter((f) => f.column && f.operator && isFilterValueFilled(f))
+      .map((f) => {
+        const rest = { ...f };
+        delete rest.id;
+        return rest;
+      });
 
     setFilters(validFilters);
     onApply(validFilters);
@@ -261,9 +367,11 @@ export default function AdvancedFilterPanel({
             </div>
           ) : (
             localFilters.map((filter) => {
-              const isValueDisabled = ["is_empty", "is_not_empty"].includes(
-                filter.operator,
-              );
+              const colDef = getColumnDef(filter.column);
+              const colType = getColumnType(colDef);
+              const availableOps = OPERATORS_BY_TYPE[colType];
+              const isValueDisabled = isNoValueOperator(filter.operator);
+              const isMultiValue = isMultiValueOperator(filter.operator);
 
               return (
                 <div
@@ -304,9 +412,9 @@ export default function AdvancedFilterPanel({
                           }
                           className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                         >
-                          {OPERATORS.map((op) => (
-                            <option key={op.value} value={op.value}>
-                              {op.label}
+                          {availableOps.map((op) => (
+                            <option key={op} value={op}>
+                              {OPERATOR_LABELS[op]}
                             </option>
                           ))}
                         </select>
@@ -320,9 +428,20 @@ export default function AdvancedFilterPanel({
                           <div className="w-full bg-gray-50 border border-gray-200 rounded-lg flex items-center px-3 py-2 text-sm text-gray-400 italic">
                             N/A
                           </div>
+                        ) : isMultiValue ? (
+                          <TagInput
+                            value={filter.value}
+                            onChange={(val) => updateFilter(filter.id, "value", val)}
+                            placeholder="Type a value, press Enter..."
+                          />
                         ) : (() => {
                           const opts = getColumnOptions(filter.column);
-                          if (opts && opts.length > 0) {
+                          // A dropdown of known values only makes sense for
+                          // exact-match conditions — "Greater than 250" or
+                          // "Contains ..." against a closed option list would
+                          // just be picking one option anyway, so those still
+                          // fall through to the type-appropriate input below.
+                          if (opts && opts.length > 0 && (filter.operator === "is" || filter.operator === "is_not")) {
                             return (
                               <select
                                 value={filter.value}
@@ -336,6 +455,31 @@ export default function AdvancedFilterPanel({
                                   <option key={opt} value={opt}>{opt}</option>
                                 ))}
                               </select>
+                            );
+                          }
+                          if (colType === "date") {
+                            return (
+                              <input
+                                type="date"
+                                value={filter.value}
+                                onChange={(e) =>
+                                  updateFilter(filter.id, "value", e.target.value)
+                                }
+                                className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            );
+                          }
+                          if (colType === "number") {
+                            return (
+                              <input
+                                type="number"
+                                value={filter.value}
+                                onChange={(e) =>
+                                  updateFilter(filter.id, "value", e.target.value)
+                                }
+                                placeholder="Enter a number..."
+                                className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
                             );
                           }
                           return (

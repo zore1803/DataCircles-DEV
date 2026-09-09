@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
@@ -372,11 +373,11 @@ const getAllInvoices = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { status: { $regex: search, $options: "i" } },
-        { invoiceNumber: { $regex: search, $options: "i" } },
-        { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
-        { transactionType: { $regex: search, $options: "i" } },
-        { gstRate: { $regex: search, $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { invoiceNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Added receiverGSTIN to search
+        { transactionType: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { gstRate: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 
@@ -522,15 +523,15 @@ const getAllInvoicesPaginated = async (req, res) => {
     // Search functionality
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       query.$or = [
-        { invoiceNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
+        { invoiceNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { deal: { $in: matchingDeals.map((d) => d._id) } },
-        { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
-        { transactionType: { $regex: search, $options: "i" } },
+        { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Added receiverGSTIN to search
+        { transactionType: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         {
           $expr: {
             $regexMatch: {

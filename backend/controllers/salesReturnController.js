@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const SalesReturn = require("../models/SalesReturn");
 const Invoice = require("../models/Invoice");
 const Deal = require("../models/Deal");
@@ -270,11 +271,11 @@ exports.getAllSalesReturns = async (req, res) => {
     const query = { organization: req.user.organization };
     if (search) {
       query.$or = [
-        { returnNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-        { notes: { $regex: search, $options: "i" } },
-        { reason: { $regex: search, $options: "i" } },
-        { "items.name": { $regex: search, $options: "i" } },
+        { returnNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { reason: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { "items.name": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
     const rows = await SalesReturn.find(query).populate(POPULATE).sort({ createdAt: -1 });
@@ -294,11 +295,11 @@ exports.getAllSalesReturnsWithPagination = async (req, res) => {
     const query = { organization: req.user.organization };
     if (search) {
       query.$or = [
-        { returnNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-        { notes: { $regex: search, $options: "i" } },
-        { reason: { $regex: search, $options: "i" } },
-        { "items.name": { $regex: search, $options: "i" } },
+        { returnNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { reason: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { "items.name": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
     if (status) query.status = status;

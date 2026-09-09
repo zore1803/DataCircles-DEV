@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 // controllers/emailController.js
 const EmailLog = require("../models/EmailLog");
 const Company = require("../models/Company");
@@ -91,9 +92,9 @@ const getAllEmailLogs = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { subject: { $regex: search, $options: "i" } },
-        { toEmail: { $regex: search, $options: "i" } },
-        { fromEmail: { $regex: search, $options: "i" } },
+        { subject: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { toEmail: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { fromEmail: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 
@@ -137,9 +138,9 @@ const getAllEmailLogsPaginated = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { subject: { $regex: search, $options: "i" } },
-        { toEmail: { $regex: search, $options: "i" } },
-        { fromEmail: { $regex: search, $options: "i" } },
+        { subject: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { toEmail: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { fromEmail: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 

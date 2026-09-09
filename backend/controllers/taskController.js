@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Task = require("../models/Task");
 const User = require("../models/User");
 const Company = require("../models/Company");
@@ -247,9 +248,9 @@ const getAllTask = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
+        { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { description: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 
@@ -334,7 +335,7 @@ const getAllTasksPaginated = async (req, res) => {
     // Companies/Contacts/Deals/Vendors/Users match the term and match tasks
     // that point at any of them.
     if (search) {
-      const searchRegex = { $regex: search, $options: "i" };
+      const searchRegex = { $regex: buildFuzzySearchPattern(search), $options: "i" };
       const orgFilter = { organization: req.user.organization };
 
       const [matchingCompanies, matchingContacts, matchingDeals, matchingVendors, matchingUsers] =
@@ -475,9 +476,9 @@ const getMyTask = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
+        { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { description: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 

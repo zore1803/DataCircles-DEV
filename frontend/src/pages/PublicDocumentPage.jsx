@@ -6,14 +6,14 @@ import axios from "axios";
 const API_BASE = (import.meta.env.VITE_APP_API_URL || "").replace(/\/$/, "");
 
 const STATUS_CONFIG = {
-  Draft:    { color: "text-gray-500",    bg: "bg-gray-100",   icon: <Clock className="w-3.5 h-3.5" /> },
-  Sent:     { color: "text-blue-600",    bg: "bg-blue-50",    icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-  Accepted: { color: "text-green-600",   bg: "bg-green-50",   icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-  Rejected: { color: "text-red-500",     bg: "bg-red-50",     icon: <XCircle className="w-3.5 h-3.5" /> },
-  Paid:     { color: "text-green-600",   bg: "bg-green-50",   icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  Draft:    { color: "text-[#56698A]",    bg: "bg-[#EEF2F9]",   icon: <Clock className="w-3.5 h-3.5" /> },
+  Sent:     { color: "text-[#27B4EA]",    bg: "bg-[#E6F8FD]",    icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  Accepted: { color: "text-[#1FA971]",   bg: "bg-[#E6F7EF]",   icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  Rejected: { color: "text-[#EA4B4B]",     bg: "bg-[#FCEAEA]",     icon: <XCircle className="w-3.5 h-3.5" /> },
+  Paid:     { color: "text-[#1FA971]",   bg: "bg-[#E6F7EF]",   icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   Unpaid:   { color: "text-amber-500",   bg: "bg-amber-50",   icon: <AlertCircle className="w-3.5 h-3.5" /> },
   Open:     { color: "text-amber-500",   bg: "bg-amber-50",   icon: <AlertCircle className="w-3.5 h-3.5" /> },
-  Void:     { color: "text-gray-400",    bg: "bg-gray-100",   icon: <XCircle className="w-3.5 h-3.5" /> },
+  Void:     { color: "text-[#56698A]",    bg: "bg-[#EEF2F9]",   icon: <XCircle className="w-3.5 h-3.5" /> },
 };
 
 function fmt(amount) {

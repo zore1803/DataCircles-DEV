@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Quotation = require("../models/quotation");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
@@ -277,15 +278,15 @@ exports.getAllQuotations = async (req, res) => {
 
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       andConditions.push({
         $or: [
-          { status: { $regex: search, $options: "i" } },
-          { quotationNumber: { $regex: search, $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { quotationNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           { deal: { $in: matchingDeals.map((d) => d._id) } },
-          { receiverGSTIN: { $regex: search, $options: "i" } },
+          { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ],
       });
     }
@@ -328,15 +329,15 @@ exports.getAllQuotationsPaginated = async (req, res) => {
 
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       andConditions.push({
         $or: [
-          { quotationNumber: { $regex: search, $options: "i" } },
-          { status: { $regex: search, $options: "i" } },
+          { quotationNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           { deal: { $in: matchingDeals.map((d) => d._id) } },
-          { receiverGSTIN: { $regex: search, $options: "i" } },
+          { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           {
             $expr: {
               $regexMatch: {

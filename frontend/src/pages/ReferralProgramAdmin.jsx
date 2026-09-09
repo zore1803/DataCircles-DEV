@@ -20,16 +20,16 @@ import { couponAPI } from "../services/couponApi";
 
 import SearchIcon from "../components/common/SearchIcon";
 const REFERRAL_STATUS_BADGE = {
-  pending: "bg-amber-100 text-amber-700",
-  qualified: "bg-green-100 text-green-700",
-  expired: "bg-gray-100 text-gray-500",
+  pending: "bg-[#FDF3E6] text-[#EA9927]",
+  qualified: "bg-[#E6F7EF] text-[#1FA971]",
+  expired: "bg-[#EEF2F9] text-[#56698A]",
 };
 const REWARD_STATUS_BADGE = {
-  available: "bg-green-100 text-green-700",
-  reserved: "bg-amber-100 text-amber-700",
-  consumed: "bg-gray-100 text-gray-500",
-  expired: "bg-gray-100 text-gray-400",
-  revoked: "bg-red-100 text-red-600",
+  available: "bg-[#E6F7EF] text-[#1FA971]",
+  reserved: "bg-[#FDF3E6] text-[#EA9927]",
+  consumed: "bg-[#EEF2F9] text-[#56698A]",
+  expired: "bg-[#EEF2F9] text-[#56698A]",
+  revoked: "bg-[#FCEAEA] text-[#EA4B4B]",
 };
 
 const fmtDate = (d) => {

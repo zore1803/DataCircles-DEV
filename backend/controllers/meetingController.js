@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Meeting = require("../models/Meeting");
 const Contact = require("../models/Contact");
 const Company = require("../models/Company");
@@ -1560,10 +1561,10 @@ exports.getMeetings = async (req, res) => {
     // Search functionality
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { location: { $regex: search, $options: "i" } },
-        { notes: { $regex: search, $options: "i" } },
+        { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { description: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { location: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 
@@ -1602,10 +1603,10 @@ exports.getAllMeetings = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { location: { $regex: search, $options: "i" } },
-        { notes: { $regex: search, $options: "i" } },
+        { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { description: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { location: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 
@@ -1701,7 +1702,7 @@ exports.getMeetingsPaginated = async (req, res) => {
     // Contacts/Companies/Vendors/Users match the term and match meetings
     // that point at any of them.
     if (search) {
-      const searchRegex = { $regex: search, $options: "i" };
+      const searchRegex = { $regex: buildFuzzySearchPattern(search), $options: "i" };
       const orgFilter = { organization: req.user.organization };
 
       const [matchingContacts, matchingCompanies, matchingVendors, matchingUsers] =

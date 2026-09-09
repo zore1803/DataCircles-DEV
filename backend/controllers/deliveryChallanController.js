@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const DeliveryChallan = require("../models/deliveryChallan");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
@@ -258,13 +259,13 @@ exports.getAllDeliveryChallans = async (req, res) => {
 
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       andConditions.push({
         $or: [
-          { status: { $regex: search, $options: "i" } },
-          { deliveryChallanNumber: { $regex: search, $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { deliveryChallanNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           { deal: { $in: matchingDeals.map((d) => d._id) } },
         ],
       });
@@ -308,13 +309,13 @@ exports.getAllDeliveryChallansPaginated = async (req, res) => {
 
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       andConditions.push({
         $or: [
-          { deliveryChallanNumber: { $regex: search, $options: "i" } },
-          { status: { $regex: search, $options: "i" } },
+          { deliveryChallanNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           { deal: { $in: matchingDeals.map((d) => d._id) } },
           {
             $expr: {

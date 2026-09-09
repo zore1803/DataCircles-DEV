@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Note = require('../models/Note');
 const Contact = require("../models/Contact");
 const Deal = require("../models/Deal");
@@ -219,7 +220,7 @@ exports.getAllNotes = async (req, res) => {
     let query = { organization: req.user.organization };
     
     if (search) {
-      query.note = { $regex: search, $options: 'i' };
+      query.note = { $regex: buildFuzzySearchPattern(search), $options: 'i' };
     }
     
     if (company) {

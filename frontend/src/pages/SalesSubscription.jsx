@@ -66,11 +66,11 @@ const getAncestorZoom = (el) => {
 };
 
 const STATUS_STYLES = {
-  Draft: "bg-gray-100 text-gray-700 border-gray-200",
-  Active: "bg-green-50 text-green-700 border-green-200",
+  Draft: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
+  Active: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]",
   Expired: "bg-gray-100 text-gray-500 border-gray-200",
-  Error: "bg-red-50 text-red-700 border-red-200",
-  Cancelled: "bg-red-50 text-red-700 border-red-200",
+  Error: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
+  Cancelled: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
 };
 const STATUS_OPTIONS = ["Draft", "Active", "Expired", "Error", "Cancelled"];
 

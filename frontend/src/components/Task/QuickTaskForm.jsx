@@ -178,16 +178,16 @@ const QuickTaskForm = ({
   const { taskStatuses } = useSystemSettings();
 
   const statusOptions = taskStatuses.map(status => {
-    if (status === "Pending") return { value: "Pending", label: "Pending", icon: Clock, className: "bg-amber-50 text-amber-600" };
-    if (status === "In Progress") return { value: "In Progress", label: "In Progress", icon: Loader2, className: "bg-blue-50 text-blue-600" };
-    if (status === "Completed") return { value: "Completed", label: "Completed", icon: CheckIcon, className: "bg-emerald-50 text-emerald-600" };
-    return { value: status, label: status, icon: Clock, className: "bg-gray-50 text-gray-600" };
+    if (status === "Pending") return { value: "Pending", label: "Pending", icon: Clock, className: "bg-[#FDF3E6] text-[#EA9927]" };
+    if (status === "In Progress") return { value: "In Progress", label: "In Progress", icon: Loader2, className: "bg-[#E6F8FD] text-[#27B4EA]" };
+    if (status === "Completed") return { value: "Completed", label: "Completed", icon: CheckIcon, className: "bg-[#E6F7EF] text-[#1FA971]" };
+    return { value: status, label: status, icon: Clock, className: "bg-[#EEF2F9] text-[#56698A]" };
   });
 
   const priorityOptions = [
-    { value: "low", label: "Low", icon: Flag, className: "bg-green-50 text-green-600" },
-    { value: "medium", label: "Medium", icon: Flag, className: "bg-yellow-50 text-yellow-600" },
-    { value: "high", label: "High", icon: Flag, className: "bg-red-50 text-red-600" },
+    { value: "low", label: "Low", icon: Flag, className: "bg-[#E6F7EF] text-[#1FA971]" },
+    { value: "medium", label: "Medium", icon: Flag, className: "bg-[#FDF3E6] text-[#EA9927]" },
+    { value: "high", label: "High", icon: Flag, className: "bg-[#FCEAEA] text-[#EA4B4B]" },
   ];
 
   const relationOptions = [

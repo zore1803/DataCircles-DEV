@@ -102,8 +102,8 @@ const MeetingsInformation = ({ meetings }) => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 border-r border-[#F2F2F7] min-w-[215px]">
-                                    <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${meeting.status === 'scheduled' ? 'bg-blue-50 text-blue-500' :
-                                        meeting.status === 'completed' ? 'bg-green-50 text-green-500' :
+                                    <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${meeting.status === 'scheduled' ? 'bg-[#E6F8FD] text-[#27B4EA]' :
+                                        meeting.status === 'completed' ? 'bg-[#E6F7EF] text-[#1FA971]' :
                                             'bg-gray-50 text-gray-500'
                                         }`}>
                                         {meeting.status?.charAt(0).toUpperCase() + meeting.status?.slice(1)}
@@ -111,7 +111,7 @@ const MeetingsInformation = ({ meetings }) => {
                                 </td>
                                 <td className="px-6 py-4 min-w-[215px]">
                                     <div className="flex gap-2">
-                                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${meeting.priority === 'high' ? 'bg-red-50 text-red-500' :
+                                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${meeting.priority === 'high' ? 'bg-[#FCEAEA] text-[#EA4B4B]' :
                                             meeting.priority === 'medium' ? 'bg-yellow-50 text-yellow-500' :
                                                 'bg-green-50 text-green-500'
                                             }`}>

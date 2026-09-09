@@ -323,15 +323,15 @@ const CompanyTaskForm = ({
   const [relatedDealId, setRelatedDealId] = useState("");
 
   const statusOptions = [
-    { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-600' },
-    { value: 'Completed', label: 'Completed', icon: CheckIcon, className: 'bg-emerald-50 text-emerald-600' },
-    { value: 'In Progress', label: 'In Progress', icon: Loader2, className: 'bg-blue-50 text-blue-600' },
+    { value: 'Pending', label: 'Pending', icon: Clock, className: 'bg-[#FDF3E6] text-[#EA9927]' },
+    { value: 'Completed', label: 'Completed', icon: CheckIcon, className: 'bg-[#E6F7EF] text-[#1FA971]' },
+    { value: 'In Progress', label: 'In Progress', icon: Loader2, className: 'bg-[#E6F8FD] text-[#27B4EA]' },
   ];
 
   const priorityOptions = [
-    { value: 'low', label: 'Low', icon: Flag, className: 'bg-green-50 text-green-600' },
-    { value: 'medium', label: 'Medium', icon: Flag, className: 'bg-yellow-50 text-yellow-600' },
-    { value: 'high', label: 'High', icon: Flag, className: 'bg-red-50 text-red-600' },
+    { value: 'low', label: 'Low', icon: Flag, className: 'bg-[#E6F7EF] text-[#1FA971]' },
+    { value: 'medium', label: 'Medium', icon: Flag, className: 'bg-[#FDF3E6] text-[#EA9927]' },
+    { value: 'high', label: 'High', icon: Flag, className: 'bg-[#FCEAEA] text-[#EA4B4B]' },
   ];
 
   const fetchCompanyDetails = async () => {

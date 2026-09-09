@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Vendor = require("../models/Vendor");
 const Payment = require("../models/Payment");
 const vendorService = require("../services/vendorService");
@@ -30,12 +31,12 @@ exports.getAllVendors = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
-        { gstin: { $regex: search, $options: 'i' } },
-        { 'additionalFields.value': { $regex: search, $options: 'i' } }
+        { name: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { email: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { phone: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { company: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { gstin: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'additionalFields.value': { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
     
@@ -67,18 +68,18 @@ exports.getAllVendorsWithPagination = async (req, res) => {
     // Search functionality
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
-        { gstin: { $regex: search, $options: 'i' } },
-        { 'address.line1': { $regex: search, $options: 'i' } },
-        { 'address.line2': { $regex: search, $options: 'i' } },
-        { 'address.city': { $regex: search, $options: 'i' } },
-        { 'address.state': { $regex: search, $options: 'i' } },
-        { 'address.pincode': { $regex: search, $options: 'i' } },
-        { 'address.country': { $regex: search, $options: 'i' } },
-        { 'additionalFields.value': { $regex: search, $options: 'i' } }
+        { name: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { email: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { phone: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { company: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { gstin: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'address.line1': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'address.line2': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'address.city': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'address.state': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'address.pincode': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'address.country': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'additionalFields.value': { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
     
@@ -396,9 +397,9 @@ exports.getAllPaymentsWithPagination = async (req, res) => {
     // Search functionality
     if (search) {
       query.$or = [
-        { notes: { $regex: search, $options: 'i' } },
-        { bank: { $regex: search, $options: 'i' } },
-        { paymentType: { $regex: search, $options: 'i' } }
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { bank: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { paymentType: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
     

@@ -22,7 +22,7 @@ const STATUS_CONFIG = {
   draft: { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" },
   published: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
   paused: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-  archived: { bg: "bg-gray-50", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400" },
+  archived: { bg: "bg-[#EEF2F9]", text: "text-[#56698A]", border: "border-[#D6DEEC]", dot: "bg-[#56698A]" },
 };
 const FormStatusBadge = ({ status }) => {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
@@ -625,18 +625,18 @@ function SubmissionDrawer({ formId, submissionId, onClose }) {
 }
 
 const REVIEW_STATUS_BADGE = {
-  not_required: "bg-gray-100 text-gray-500",
-  needs_review: "bg-amber-100 text-amber-700",
-  resolved: "bg-green-100 text-green-700",
+  not_required: "bg-[#EEF2F9] text-[#56698A]",
+  needs_review: "bg-[#FDF3E6] text-[#EA9927]",
+  resolved: "bg-[#E6F7EF] text-[#1FA971]",
 };
 const IMPORT_STATUS_BADGE = {
-  not_imported: "bg-gray-100 text-gray-500",
-  imported: "bg-blue-100 text-blue-700",
+  not_imported: "bg-[#EEF2F9] text-[#56698A]",
+  imported: "bg-[#E6F8FD] text-[#27B4EA]",
 };
 const PROCESSING_STATUS_BADGE = {
-  pending: "bg-gray-100 text-gray-500",
-  validated: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
+  pending: "bg-[#EEF2F9] text-[#56698A]",
+  validated: "bg-[#E6F7EF] text-[#1FA971]",
+  rejected: "bg-[#FCEAEA] text-[#EA4B4B]",
 };
 function StatusPill({ value, labelMap, colorMap }) {
   return (

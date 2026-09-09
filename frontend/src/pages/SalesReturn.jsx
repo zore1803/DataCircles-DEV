@@ -81,11 +81,11 @@ const getAncestorZoom = (el) => {
 };
 
 const STATUS_STYLES = {
-  Draft: "bg-gray-100 text-gray-700 border-gray-200",
-  Pending: "bg-amber-50 text-amber-700 border-amber-200",
-  Confirmed: "bg-green-50 text-green-700 border-green-200",
-  Refunded: "bg-blue-50 text-blue-700 border-blue-200",
-  Cancelled: "bg-red-50 text-red-700 border-red-200",
+  Draft: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
+  Pending: "bg-[#FDF3E6] text-[#EA9927] border-[#F7DDB8]",
+  Confirmed: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]",
+  Refunded: "bg-[#E6F8FD] text-[#27B4EA] border-[#B8E9F7]",
+  Cancelled: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
 };
 const STATUS_OPTIONS = ["Draft", "Pending", "Confirmed", "Refunded", "Cancelled"];
 

@@ -342,9 +342,9 @@ const CompanyProfilePage = () => {
   // Deal stages: the data model only tracks Open/Won/Lost (no Lead/Qualified/
   // Negotiation sub-stages), so the pipeline funnel reflects that.
   const pipelineStages = [
-    { key: "Open", label: "Open", color: "bg-yellow-50 text-yellow-700" },
-    { key: "Won", label: "Won", color: "bg-green-100 text-green-700" },
-    { key: "Lost", label: "Lost", color: "bg-red-50 text-red-600" },
+    { key: "Open", label: "Open", color: "bg-[#FDF3E6] text-[#EA9927]" },
+    { key: "Won", label: "Won", color: "bg-[#E6F7EF] text-[#1FA971]" },
+    { key: "Lost", label: "Lost", color: "bg-[#FCEAEA] text-[#EA4B4B]" },
   ];
   const pipelineData = pipelineStages.map((stage) => {
     const stageDeals = deals.filter(

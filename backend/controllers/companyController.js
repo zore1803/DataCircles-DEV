@@ -4,6 +4,7 @@ const Deal = require('../models/Deal');
 const Meeting = require('../models/Meeting');
 const Task = require('../models/Task');
 const companyService = require('../services/companyService');
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 
 const createCompany = async (req, res) => {
   try {
@@ -25,14 +26,18 @@ const getAllCompanies = async (req, res) => {
     let query = { organization: req.user.organization };
 
     if (search) {
+      // & and "and" are treated as interchangeable (see utils/searchRegex) —
+      // a customer typing "finance and banking" should still find "Finance &
+      // Banking" and vice versa, since users don't reliably type the symbol.
+      const pattern = buildFuzzySearchPattern(search);
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { industry: { $regex: search, $options: "i" } },
-        { gstin: { $regex: search, $options: "i" } },
-        { website: { $regex: search, $options: "i" } },
-        { address: { $regex: search, $options: "i" } },
-        { leadSource: { $regex: search, $options: "i" } },
-        { "additionalFields.value": { $regex: search, $options: "i" } },
+        { name: { $regex: pattern, $options: "i" } },
+        { industry: { $regex: pattern, $options: "i" } },
+        { gstin: { $regex: pattern, $options: "i" } },
+        { website: { $regex: pattern, $options: "i" } },
+        { address: { $regex: pattern, $options: "i" } },
+        { leadSource: { $regex: pattern, $options: "i" } },
+        { "additionalFields.value": { $regex: pattern, $options: "i" } },
       ];
     }
 
@@ -76,14 +81,15 @@ const getAllCompaniesPaginated = async (req, res) => {
     const query = { organization: req.user.organization };
 
     if (search) {
+      const pattern = buildFuzzySearchPattern(search);
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { industry: { $regex: search, $options: "i" } },
-        { gstin: { $regex: search, $options: "i" } },
-        { address: { $regex: search, $options: "i" } },
-        { website: { $regex: search, $options: "i" } },
-        { leadSource: { $regex: search, $options: "i" } },
-        { "additionalFields.value": { $regex: search, $options: "i" } },
+        { name: { $regex: pattern, $options: "i" } },
+        { industry: { $regex: pattern, $options: "i" } },
+        { gstin: { $regex: pattern, $options: "i" } },
+        { address: { $regex: pattern, $options: "i" } },
+        { website: { $regex: pattern, $options: "i" } },
+        { leadSource: { $regex: pattern, $options: "i" } },
+        { "additionalFields.value": { $regex: pattern, $options: "i" } },
       ];
     }
 

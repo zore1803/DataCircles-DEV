@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const BankDetails = require("../models/BankDetails");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const Payment = require("../models/Payment");
@@ -66,11 +67,11 @@ exports.getAllBankDetails = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { bank: { $regex: search, $options: "i" } },
-        { accountHolder: { $regex: search, $options: "i" } },
-        { branch: { $regex: search, $options: "i" } },
-        { ifscCode: { $regex: search, $options: "i" } },
-        { upi: { $regex: search, $options: "i" } },
+        { bank: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { accountHolder: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { branch: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { ifscCode: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { upi: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 

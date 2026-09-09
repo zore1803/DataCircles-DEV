@@ -53,9 +53,9 @@ const ParticipantChip = ({ user, onRemove, isRemovable = false }) => (
 
 const PriorityChip = ({ priority }) => {
   const colors = {
-    low: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-    medium: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
-    high: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+    low: { bg: 'bg-[#E6F7EF]', text: 'text-[#1FA971]', border: 'border-[#B9E7D3]' },
+    medium: { bg: 'bg-[#FDF3E6]', text: 'text-[#EA9927]', border: 'border-[#F7DDB8]' },
+    high: { bg: 'bg-[#FCEAEA]', text: 'text-[#EA4B4B]', border: 'border-[#F5C7C7]' },
   };
   const color = colors[priority] || colors.medium;
 
@@ -335,9 +335,9 @@ const CompanyMeetingForm = ({
   ];
 
   const priorityOptions = [
-    { value: 'low', label: 'Low', icon: Flag, className: 'bg-green-50 text-green-600' },
-    { value: 'medium', label: 'Medium', icon: Flag, className: 'bg-yellow-50 text-yellow-600' },
-    { value: 'high', label: 'High', icon: Flag, className: 'bg-red-50 text-red-600' },
+    { value: 'low', label: 'Low', icon: Flag, className: 'bg-[#E6F7EF] text-[#1FA971]' },
+    { value: 'medium', label: 'Medium', icon: Flag, className: 'bg-[#FDF3E6] text-[#EA9927]' },
+    { value: 'high', label: 'High', icon: Flag, className: 'bg-[#FCEAEA] text-[#EA4B4B]' },
   ];
 
   const durationOptions = [

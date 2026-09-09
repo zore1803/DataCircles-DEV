@@ -23,9 +23,9 @@ const initialState = {
 
 const PriorityChip = ({ priority }) => {
   const colors = {
-    low: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
-    medium: { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
-    high: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
+    low: { bg: "bg-[#E6F7EF]", text: "text-[#1FA971]", border: "border-[#B9E7D3]" },
+    medium: { bg: "bg-[#FDF3E6]", text: "text-[#EA9927]", border: "border-[#F7DDB8]" },
+    high: { bg: "bg-[#FCEAEA]", text: "text-[#EA4B4B]", border: "border-[#F5C7C7]" },
   };
   const color = colors[priority] || colors.medium;
   

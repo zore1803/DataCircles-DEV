@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 // controllers/inventoryController.js
 // The Inventory surface over the existing Item collection. Inventory is deliberately NOT a
 // separate catalogue: an inventory row IS an Item of type "product", so
@@ -63,10 +64,10 @@ const getInventory = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-        { hsnSac: { $regex: search, $options: "i" } },
-        { barcode: { $regex: search, $options: "i" } },
+        { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { category: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { hsnSac: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { barcode: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
       ];
     }
 

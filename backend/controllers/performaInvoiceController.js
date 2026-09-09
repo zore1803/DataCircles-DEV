@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const PerformaInvoice = require("../models/ProformaInvoice");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
@@ -247,14 +248,14 @@ const getAllPerformaInvoices = async (req, res) => {
 
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       query.$or = [
-        { status: { $regex: search, $options: "i" } },
-        { performaInvoiceNumber: { $regex: search, $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { performaInvoiceNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { deal: { $in: matchingDeals.map((d) => d._id) } },
-        { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
+        { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Added receiverGSTIN to search
       ];
     }
 
@@ -300,14 +301,14 @@ const getAllPerformaInvoicesPaginated = async (req, res) => {
     // Search functionality
     if (search) {
       const matchingDeals = await Deal.find(
-        { organization: req.user.organization, title: { $regex: search, $options: "i" } },
+        { organization: req.user.organization, title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { _id: 1 }
       );
       query.$or = [
-        { performaInvoiceNumber: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
+        { performaInvoiceNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         { deal: { $in: matchingDeals.map((d) => d._id) } },
-        { receiverGSTIN: { $regex: search, $options: "i" } }, // Added receiverGSTIN to search
+        { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } }, // Added receiverGSTIN to search
         {
           $expr: {
             $regexMatch: {

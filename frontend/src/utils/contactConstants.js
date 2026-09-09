@@ -81,33 +81,33 @@ const STATUS_TONE = {
 const TONE_CLASSES = {
     slate: {
         column: "bg-slate-50 border-slate-200",
-        badge: "bg-slate-100 text-slate-700",
-        chip: "bg-slate-100 text-slate-800 border-slate-200",
+        badge: "bg-[#EEF2F9] text-[#56698A]",
+        chip: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
     },
     amber: {
         column: "bg-amber-50 border-amber-200",
-        badge: "bg-amber-50 text-amber-600",
-        chip: "bg-amber-100 text-amber-800 border-amber-200",
+        badge: "bg-[#FDF3E6] text-[#EA9927]",
+        chip: "bg-[#FDF3E6] text-[#EA9927] border-[#F7DDB8]",
     },
     blue: {
         column: "bg-blue-50 border-blue-200",
-        badge: "bg-blue-50 text-blue-600",
-        chip: "bg-blue-100 text-blue-800 border-blue-200",
+        badge: "bg-[#E6F8FD] text-[#27B4EA]",
+        chip: "bg-[#E6F8FD] text-[#27B4EA] border-[#B8E9F7]",
     },
     red: {
         column: "bg-red-50 border-red-200",
-        badge: "bg-red-50 text-red-600",
-        chip: "bg-red-100 text-red-800 border-red-200",
+        badge: "bg-[#FCEAEA] text-[#EA4B4B]",
+        chip: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
     },
     green: {
         column: "bg-green-50 border-green-200",
-        badge: "bg-green-50 text-green-600",
-        chip: "bg-green-100 text-green-800 border-green-200",
+        badge: "bg-[#E6F7EF] text-[#1FA971]",
+        chip: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]",
     },
     gray: {
         column: "bg-gray-50 border-gray-200",
-        badge: "bg-gray-100 text-gray-600",
-        chip: "bg-gray-200 text-gray-800 border-gray-300",
+        badge: "bg-[#EEF2F9] text-[#56698A]",
+        chip: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
     },
 };
 

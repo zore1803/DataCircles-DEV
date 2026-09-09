@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Company = require("../models/Company");
 const Contact = require("../models/Contact");
 const Deal = require("../models/Deal");
@@ -19,22 +20,22 @@ exports.globalSearch = async (req, res) => {
       const companyQuery = { organization: orgId };
       if (search) {
         companyQuery.$or = [
-          { name: { $regex: search, $options: "i" } },
-          { industry: { $regex: search, $options: "i" } },
-          { gstin: { $regex: search, $options: "i" } },
-          { website: { $regex: search, $options: "i" } },
-          { address: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { industry: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { gstin: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { website: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { address: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ];
       }
 
       const contactQuery = { organization: orgId };
       if (search) {
         contactQuery.$or = [
-          { name: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phone: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { email: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { phone: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ];
       }
       if (lifecycleStage) contactQuery.lifecycleStage = lifecycleStage;
@@ -43,21 +44,21 @@ exports.globalSearch = async (req, res) => {
       const dealQuery = { organization: orgId };
       if (search) {
         dealQuery.$or = [
-          { title: { $regex: search, $options: "i" } },
-          { status: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ];
       }
 
       const vendorQuery = { organization: orgId };
       if (search) {
         vendorQuery.$or = [
-          { name: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phone: { $regex: search, $options: "i" } },
-          { company: { $regex: search, $options: "i" } },
-          { gstin: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { email: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { phone: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { company: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { gstin: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ];
       }
 
@@ -66,9 +67,9 @@ exports.globalSearch = async (req, res) => {
       const noteQuery = { organization: orgId };
       if (search) {
         noteQuery.$or = [
-          { title: { $regex: search, $options: "i" } },
-          { note: { $regex: search, $options: "i" } },
-          { noteType: { $regex: search, $options: "i" } },
+          { title: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { note: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { noteType: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ];
       }
 
@@ -79,10 +80,10 @@ exports.globalSearch = async (req, res) => {
       const invoiceQuery = { organization: orgId };
       if (search) {
         invoiceQuery.$or = [
-          { invoiceNumber: { $regex: search, $options: "i" } },
-          { status: { $regex: search, $options: "i" } },
-          { receiverGSTIN: { $regex: search, $options: "i" } },
-          { "items.name": { $regex: search, $options: "i" } },
+          { invoiceNumber: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { status: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { receiverGSTIN: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "items.name": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
         ];
       }
 

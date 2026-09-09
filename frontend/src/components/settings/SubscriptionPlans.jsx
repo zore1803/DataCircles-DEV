@@ -1,5 +1,6 @@
 // components/settings/SubscriptionPlans.jsx
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, Calendar, ShieldCheck, RotateCcw, ReceiptText } from "lucide-react";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 import PlanCard from "../subscription/PlanCard";
@@ -167,6 +168,12 @@ const SubscriptionPlans = () => {
     scheduledChanges,
   } = useSubscription();
   const [showConfetti, setShowConfetti] = useState(false);
+  // In-app replacement for window.confirm() when the customer closes the
+  // Razorpay tab mid-mandate — holds the pending Promise's resolver so the
+  // two modal buttons can settle it, since startMandatePolling needs to
+  // await the customer's choice before deciding whether to retry.
+  const [tabClosedPrompt, setTabClosedPrompt] = useState(null); // { resolve } | null
+  const confirmRetryAfterTabClosed = () => new Promise((resolve) => setTabClosedPrompt({ resolve }));
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelFeedback, setCancelFeedback] = useState("");
@@ -235,11 +242,20 @@ const SubscriptionPlans = () => {
     }
   };
 
+  // Depend on the actual persisted cycle value, not the whole `subscription`
+  // object — fetchSubscription() returns a brand-new object on every call,
+  // including silent background refetches (page-visibility changes, the
+  // mandate-settlement poll, etc.) that leave billingCycle unchanged. Keying
+  // off the object reference re-ran this on every one of those, snapping the
+  // toggle back to the server's stored cycle mid-browse (e.g. flipping to
+  // Annual to compare pricing would silently revert to Monthly moments
+  // later). Only fire when the real value changes — a genuine plan/cycle
+  // update — not on every incidental refetch.
   useEffect(() => {
     if (subscription?.subscription) {
       setBillingCycle(subscription.subscription.billingCycle || "monthly");
     }
-  }, [subscription]);
+  }, [subscription?.subscription?.billingCycle]);
 
   // Two distinct gates, deliberately separated:
   //  - couponAppliesAtCheckout: the coupon is actually WIRED to discount the
@@ -1230,9 +1246,28 @@ const SubscriptionPlans = () => {
         window.open(registrationLink.shortUrl, '_blank', 'noopener,noreferrer');
       }
       setCheckoutJourneyState('confirming_mandate');
-      startMandatePolling();
+      startMandatePolling(popupWindow);
     }, 2500);
   };
+
+  // Resolves as soon as the given window reports .closed — used so
+  // startMandatePolling can react immediately to the customer closing the
+  // Razorpay tab, instead of silently sitting on the full-screen "Confirming
+  // your mandate..." overlay for the entire 5-minute poll timeout. Never
+  // resolves if no window reference exists (the fallback window.open() path
+  // above doesn't keep one) — callers race this against the real settlement
+  // poll, so having no popup reference just means this half of the race
+  // never wins.
+  const waitForPopupClose = (popupWindow) =>
+    new Promise((resolve) => {
+      if (!popupWindow) return;
+      const id = setInterval(() => {
+        if (popupWindow.closed) {
+          clearInterval(id);
+          resolve();
+        }
+      }, 800);
+    });
 
   // Opens a blank tab synchronously, before any await breaks the user-gesture
   // chain — must be called at the very start of a click handler, never after
@@ -1241,7 +1276,43 @@ const SubscriptionPlans = () => {
   // Checkout instead), so no stray blank tab is left behind.
   const openBlankRegistrationTab = () => {
     try {
-      return window.open('', '_blank', 'noopener,noreferrer');
+      // Deliberately NOT passing 'noopener' here — most browsers return null
+      // from window.open() when 'noopener' is in the features string, since
+      // that flag's whole point is severing the caller's own reference to the
+      // new window. That was silently defeating the entire pre-open pattern:
+      // this call still opened a real blank tab, but the null return made
+      // openRegistrationLinkJourney below think the pre-opened tab was gone,
+      // so it fell back to window.open()-ing a SECOND tab for the Razorpay
+      // link — leaving the original blank tab orphaned forever (exactly the
+      // "blank tab + separate Razorpay tab" bug reported via live QA).
+      // Reverse-tabnabbing protection (the reason noopener existed here) is
+      // preserved without sacrificing the reference: null out the new
+      // window's own `opener` directly instead.
+      const win = window.open('', '_blank');
+      if (win) {
+        try { win.opener = null; } catch { /* best-effort; some browsers disallow this */ }
+        // Blank tab used to sit on a genuinely empty about:blank page for the
+        // whole API-call + pacing-delay wait before it navigates to Razorpay
+        // — indistinguishable from a broken/frozen tab. A minimal inline
+        // loading message (no external assets — this document gets replaced
+        // by Razorpay's page moments later anyway) tells the customer it's
+        // working, not stuck.
+        try {
+          win.document.write(`
+            <!doctype html><html><head><title>Redirecting…</title>
+            <style>
+              html,body{height:100%;margin:0;display:flex;align-items:center;justify-content:center;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;}
+              .wrap{text-align:center;color:#111827;}
+              .spinner{width:40px;height:40px;margin:0 auto 16px;border-radius:50%;border:3px solid #E1E4EA;border-top-color:#0085FF;animation:spin 0.8s linear infinite;}
+              @keyframes spin{to{transform:rotate(360deg);}}
+              p{font-size:14px;color:#6B7280;margin:0;}
+            </style></head>
+            <body><div class="wrap"><div class="spinner"></div><p>Redirecting you to Razorpay…</p></div></body></html>
+          `);
+          win.document.close();
+        } catch { /* non-fatal — worst case it just stays blank until navigation */ }
+      }
+      return win;
     } catch {
       return null;
     }
@@ -1779,14 +1850,52 @@ const SubscriptionPlans = () => {
   // page can reasonably take a few minutes, unlike an already-open Checkout
   // JS modal. Never trusts local state, only the freshly-fetched value each
   // time (same discipline as startPolling/waitForSettlement.js).
-  const startMandatePolling = async () => {
-    const result = await waitForSettlement({
-      fetchLatest: fetchSubscription,
-      isSettled: (data) => !!data?.subscription?.isPaymentConfirmed,
-      intervalMs: 5000,
-      timeoutMs: 5 * 60 * 1000,
-    });
+  const startMandatePolling = async (popupWindow) => {
+    // Race the real settlement poll against the customer closing the
+    // Razorpay tab — found via live QA: closing that tab used to leave the
+    // full-screen "Confirming your mandate..." overlay up for the entire
+    // 5-minute timeout with no indication anything was wrong, since the poll
+    // itself has no way to know the tab is gone until it finally times out.
+    const outcome = await Promise.race([
+      waitForSettlement({
+        fetchLatest: fetchSubscription,
+        isSettled: (data) => !!data?.subscription?.isPaymentConfirmed,
+        intervalMs: 5000,
+        timeoutMs: 5 * 60 * 1000,
+      }).then((result) => ({ kind: "settlement", result })),
+      waitForPopupClose(popupWindow).then(() => ({ kind: "closed" })),
+    ]);
     if (pollCancelledRef.current) return;
+
+    if (outcome.kind === "closed") {
+      // The tab closing doesn't itself prove the mandate wasn't approved —
+      // check once more immediately in case the webhook already landed
+      // (e.g. approved on Razorpay's page a moment before the tab closed).
+      const latest = await fetchSubscription();
+      if (pollCancelledRef.current) return;
+      if (latest?.subscription?.isPaymentConfirmed) {
+        setCheckoutJourneyState('success');
+        setMessage({ type: "success", text: "Payment confirmed! Subscription updated successfully." });
+        setTimeout(() => {
+          setCheckoutJourneyState(null);
+          window.location.reload();
+        }, 2000);
+        return;
+      }
+      setCheckoutJourneyState(null);
+      const retry = await confirmRetryAfterTabClosed();
+      if (retry) {
+        handleResumePayment();
+      } else {
+        setMessage({
+          type: "warning",
+          text: "Payment setup wasn't completed. You can resume it anytime from here.",
+        });
+      }
+      return;
+    }
+
+    const result = outcome.result;
     if (result.settled) {
       setCheckoutJourneyState('success');
       setMessage({ type: "success", text: "Payment confirmed! Subscription updated successfully." });
@@ -1923,16 +2032,130 @@ const SubscriptionPlans = () => {
 
       <BillingCalendarModal isOpen={showBillingCalendar} onClose={() => setShowBillingCalendar(false)} />
 
+      {/* In-app replacement for window.confirm() — the browser's native
+          dialog looked like an error/security prompt, not part of the
+          product. Same modal shell used elsewhere on this page (rounded-2xl
+          card, centered, backdrop). */}
+      {tabClosedPrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200000] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-6 h-6 text-amber-600" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-1.5">Payment incomplete</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                The Razorpay tab was closed before your subscription could be activated. Would you like to try again?
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => { tabClosedPrompt.resolve(false); setTabClosedPrompt(null); }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Not Now
+                </button>
+                <button
+                  onClick={() => { tabClosedPrompt.resolve(true); setTabClosedPrompt(null); }}
+                  className="flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                  style={{ background: "var(--btn-primary, #0085FF)" }}
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
-        <div className="text-center mb-8">
-          {subscription?.subscription && (
+        <PaymentStatusAlert
+          subscription={subscription?.subscription}
+          onRetryPayment={handleRetryPayment}
+          onResumePayment={handleResumePayment}
+          onChangePlan={() => document.getElementById('plan-cards-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          processing={processing || paymentInProgress}
+        />
+
+        <CurrentSubscriptionInfo
+          subscription={subscription.subscription}
+          allPlanAddons={planAddons}
+          billingCycle={billingCycle}
+        />
+
+        {subscription?.subscription?.isPaymentConfirmed && !subscription?.subscription?.isTrialActive && (
+          <div className="mb-6">
+            {/* Show cancel button only when no cancellation and no pending downgrade */}
+            {!subscription?.subscription?.cancelAtPeriodEnd && !hasValidPendingUpdate(subscription?.subscription) && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="inline-flex items-center px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-200 font-medium text-sm"
+                disabled={processing || paymentInProgress}
+              >
+                Cancel Subscription
+              </button>
+            )}
+            {/* Show cancellation banner only for actual cancellations (no pendingUpdate means it's not a downgrade) */}
+            {subscription?.subscription?.cancelAtPeriodEnd && !hasValidPendingUpdate(subscription?.subscription) && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-yellow-900 mb-1">Cancellation Scheduled</h4>
+                    <p className="text-sm text-yellow-800">
+                      Your subscription will be cancelled on{" "}
+                      <strong>
+                        {(() => {
+                          const d = subscription.subscription.currentPeriodEnd ? new Date(subscription.subscription.currentPeriodEnd) : null;
+                          return d && d.getFullYear() >= 2020
+                            ? d.toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })
+                            : "the end of your billing period";
+                        })()}
+                      </strong>
+                      . You will continue to have access to all features until then.
+                    </p>
+                    <button
+                      onClick={handleUndoCancellation}
+                      disabled={processing || paymentInProgress}
+                      className="mt-2 text-sm font-medium text-yellow-900 underline hover:text-yellow-700 disabled:opacity-50"
+                    >
+                      Undo Cancellation
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg border-l-4 ${
+            message.type === "success" ? "bg-green-50 text-green-800 border-green-500"
+            : message.type === "warning" ? "bg-yellow-50 text-yellow-800 border-yellow-500"
+            : "bg-red-50 text-red-800 border-red-500"
+          }`}>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm font-medium">{message.text}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Lives in the shared Settings header strip (see Settings.jsx's
+            #settings-header-actions target), not centered above the plan
+            cards — this is a page-level action, not part of the pricing
+            content itself. */}
+        {subscription?.subscription && document.getElementById('settings-header-actions') &&
+          createPortal(
             <button
               onClick={() => setShowBillingCalendar(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0085FF] hover:underline mb-3"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0085FF] hover:underline whitespace-nowrap"
             >
               <Calendar className="w-3.5 h-3.5" /> View Billing Calendar
-            </button>
+            </button>,
+            document.getElementById('settings-header-actions')
           )}
+
+        <div className="text-center mb-8 mt-12">
           <h1 className="text-[32px] font-bold text-gray-900 tracking-[-0.02em] mb-2">Choose Your Plan</h1>
           <p className="text-gray-500 text-sm max-w-2xl mx-auto mb-6">
             Flexible pricing for teams of all sizes. Start with a free trial or scale with annual savings.
@@ -1966,7 +2189,13 @@ const SubscriptionPlans = () => {
             </div>
           </div>
 
-          {!subscription?.subscription?.trialUsed && !subscription?.subscription?.isPaymentConfirmed && (
+          {/* Tied directly to whether the Trial card is actually in the grid
+              below (getVisiblePlans' own trial rule), not a separately
+              re-derived trialUsed/isPaymentConfirmed check — those two used
+              to drift apart (e.g. a subscription record exists, trial not
+              used, not paid, but isTrialActive is false), showing this badge
+              while no Trial card was actually on screen to back it up. */}
+          {getVisiblePlans().some((p) => p.trial) && (
             <div className="inline-flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 px-4 py-2 rounded-lg border border-green-200 text-sm font-medium mb-6">
               <Gift className="w-4 h-4" />
               7-Day Free Trial Available
@@ -1987,6 +2216,88 @@ const SubscriptionPlans = () => {
             <span className="inline-flex items-center gap-1.5">
               <ReceiptText className="w-3.5 h-3.5 text-gray-400" /> GST invoice on every payment
             </span>
+          </div>
+        </div>
+
+        <div className="my-12" id="plan-cards-grid">
+          <div className={`grid gap-4 ${
+            getVisiblePlans().length === 3 ? "md:grid-cols-3" : "md:grid-cols-2 lg:grid-cols-4"
+          }`}>
+            {getVisiblePlans().map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                currentSubscription={subscription?.subscription}
+                billingCycle={billingCycle}
+                onSelectPlan={handlePlanSelection}
+                /* Bug found via live QA (Aug 2026): cancelAtPeriodEnd used to
+                   be OR'd into `processing` — but PlanCard.jsx's button
+                   renders a literal spinner + "Processing..." label
+                   whenever `processing` is truthy, with no regard for
+                   `action`. cancelAtPeriodEnd is a PERMANENT flag (stays
+                   true for the rest of the billing term, not a transient
+                   in-flight request), so every card got stuck showing
+                   "Processing..." forever after a successful cancellation —
+                   a real, live-blocking regression, not the same root cause
+                   as the earlier CAW razorpay.subscriptions.cancel() bug
+                   (verified separately, traced to this exact prop wiring
+                   instead). `processing` must only ever reflect an ACTUAL
+                   in-flight request. A pending cancellation is a `locked`
+                   concept (this codebase's own existing "disabled without
+                   spinner" pattern, see PlanCard.jsx's `locked` prop
+                   comment) — folded in below instead. */
+                processing={processing || paymentInProgress}
+                /* Phase 3 full-context-switch fix: a monthly-only scheduled
+                   change (pendingUpdate) must never lock/target-mark cards
+                   while viewing Annual — that pending change belongs to the
+                   committed monthly cycle, not to a fresh annual purchase
+                   context. Gated on billingCycle matching the subscription's
+                   OWN committed cycle, exactly like isCurrentPlan() already
+                   does in PlanCard.jsx. cancelAtPeriodEnd is cycle-agnostic
+                   (a cancellation freezes billing changes regardless of
+                   which cycle is being viewed), so it's OR'd in unconditionally. */
+                locked={
+                  (billingCycle === subscription?.subscription?.billingCycle && hasValidPendingUpdate(subscription?.subscription)) ||
+                  !!subscription?.subscription?.cancelAtPeriodEnd
+                }
+                isScheduledTarget={billingCycle === subscription?.subscription?.billingCycle && hasValidPendingUpdate(subscription?.subscription) && subscription?.subscription?.pendingUpdate?.planName === plan.id}
+                isExpanded={expandedPlan === plan.id}
+                onExpand={() => handleExpandPlan(plan.id)}
+                addons={planAddons[plan.id]}
+                allPlanAddons={planAddons}
+                // Scoped to THIS plan's own key — see selectedAddons'
+                // declaration comment for why a shared object leaked
+                // Starter's selections into Growth's card.
+                selectedAddons={selectedAddons[plan.id] || {}}
+                onAddonChange={(key, qty) =>
+                  setSelectedAddons((prev) => ({ ...prev, [plan.id]: { ...(prev[plan.id] || {}), [key]: qty } }))
+                }
+                addonPurchaseCycle={addonPurchaseCycle[plan.id] || null}
+                onAddonCycleChange={(cyc) =>
+                  setAddonPurchaseCycle((prev) => ({ ...prev, [plan.id]: cyc }))
+                }
+                onRemoveAddon={handleRemoveAddon}
+                // Found via live QA: for a paying org (couponAppliesAtCheckout
+                // false), this always passed null — so an upgrade-target card
+                // never previewed the org's OWN already-attached, still-recurring
+                // coupon (e.g. Business showing ₹650 with no discount on the
+                // card, while the upgrade dialog correctly priced it at ₹637 via
+                // the backend preview, which does read fullRulesSnapshot). Falls
+                // back to the subscription's own persisted rules whenever that
+                // coupon is still eligible for future billing — same eligibility
+                // question isCouponStillRecurring already answers for the
+                // current-plan card's own snapshot branch, just extended to
+                // every OTHER card so upgrade previews stop silently omitting a
+                // discount the backend will actually apply.
+                couponRules={
+                  couponAppliesAtCheckout && appliedCoupon?.valid
+                    ? appliedCoupon.rules
+                    : (subscription?.subscription?.appliedCoupon?.fullRulesSnapshot && isCouponStillRecurring(subscription.subscription.appliedCoupon))
+                    ? subscription.subscription.appliedCoupon.fullRulesSnapshot
+                    : null
+                }
+              />
+            ))}
           </div>
         </div>
 
@@ -2131,19 +2442,20 @@ const SubscriptionPlans = () => {
                   <div className="mt-2">
                     {!couponReplacePreview ? (
                       <>
-                        <div className="flex items-center gap-2">
+                        <div className={`flex items-center h-9 border ${replaceCouponInput ? "border-[#0085FF]" : "border-[#E1E4EA]"} rounded-full bg-white transition-colors focus-within:border-[#0085FF] overflow-hidden`}>
                           <input
                             value={replaceCouponInput}
                             onChange={(e) => { setReplaceCouponInput(e.target.value.toUpperCase()); setCouponActionError(""); }}
                             onKeyDown={(e) => e.key === "Enter" && handlePreviewReplaceCoupon()}
                             placeholder="New coupon code"
                             disabled={couponActionLoading}
-                            className="flex-1 px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 disabled:bg-gray-50"
+                            className="flex-1 h-full px-4 text-xs bg-transparent focus:outline-none disabled:bg-gray-50"
                           />
                           <button
                             onClick={handlePreviewReplaceCoupon}
                             disabled={couponActionLoading || !replaceCouponInput.trim()}
-                            className="px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="h-full px-4 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ background: "var(--btn-primary, #0085FF)" }}
                           >
                             {couponActionLoading ? "Checking..." : "Apply"}
                           </button>
@@ -2205,21 +2517,22 @@ const SubscriptionPlans = () => {
               </div>
             ) : (
               <div>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <div className={`flex items-center h-10 border ${couponInput ? "border-[#0085FF]" : "border-[#E1E4EA]"} rounded-full bg-white transition-colors focus-within:border-[#0085FF] overflow-hidden`}>
+                  <div className="relative flex-1 h-full">
+                    <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     <input
                       value={couponInput}
                       onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(""); }}
                       onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
                       placeholder="Have a coupon code?"
-                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full h-full pl-9 pr-3 bg-transparent text-sm uppercase focus:outline-none"
                     />
                   </div>
                   <button
                     onClick={() => applyCoupon()}
                     disabled={validatingCoupon || !couponInput.trim()}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50"
+                    className="h-full px-5 text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ background: "var(--btn-primary, #0085FF)" }}
                   >
                     {validatingCoupon ? "..." : "Apply"}
                   </button>
@@ -2261,21 +2574,21 @@ const SubscriptionPlans = () => {
               </div>
             ) : (
               <div>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Gift className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <div className={`flex items-center h-10 border ${referralCodeInput ? "border-purple-400" : "border-[#E1E4EA]"} rounded-full bg-white transition-colors focus-within:border-purple-400 overflow-hidden`}>
+                  <div className="relative flex-1 h-full">
+                    <Gift className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     <input
                       value={referralCodeInput}
                       onChange={(e) => { setReferralCodeInput(e.target.value.toUpperCase()); setReferralError(""); }}
                       onKeyDown={(e) => e.key === "Enter" && handleApplyReferral()}
                       placeholder="Have a referral code?"
-                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full h-full pl-9 pr-3 bg-transparent text-sm uppercase focus:outline-none"
                     />
                   </div>
                   <button
                     onClick={handleApplyReferral}
                     disabled={applyingReferral || !referralCodeInput.trim()}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                    className="h-full px-5 text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
                   >
                     {applyingReferral ? "..." : "Apply"}
                   </button>
@@ -2285,160 +2598,6 @@ const SubscriptionPlans = () => {
             )}
           </div>
         )}
-
-        <PaymentStatusAlert
-          subscription={subscription?.subscription}
-          onRetryPayment={handleRetryPayment}
-          onResumePayment={handleResumePayment}
-          onChangePlan={() => document.getElementById('plan-cards-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-          processing={processing || paymentInProgress}
-        />
-
-        <CurrentSubscriptionInfo
-          subscription={subscription.subscription}
-          allPlanAddons={planAddons}
-          billingCycle={billingCycle}
-        />
-
-        {subscription?.subscription?.isPaymentConfirmed && !subscription?.subscription?.isTrialActive && (
-          <div className="mb-6">
-            {/* Show cancel button only when no cancellation and no pending downgrade */}
-            {!subscription?.subscription?.cancelAtPeriodEnd && !hasValidPendingUpdate(subscription?.subscription) && (
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-all duration-200 font-medium text-sm"
-                disabled={processing || paymentInProgress}
-              >
-                Cancel Subscription
-              </button>
-            )}
-            {/* Show cancellation banner only for actual cancellations (no pendingUpdate means it's not a downgrade) */}
-            {subscription?.subscription?.cancelAtPeriodEnd && !hasValidPendingUpdate(subscription?.subscription) && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-yellow-900 mb-1">Cancellation Scheduled</h4>
-                    <p className="text-sm text-yellow-800">
-                      Your subscription will be cancelled on{" "}
-                      <strong>
-                        {(() => {
-                          const d = subscription.subscription.currentPeriodEnd ? new Date(subscription.subscription.currentPeriodEnd) : null;
-                          return d && d.getFullYear() >= 2020
-                            ? d.toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })
-                            : "the end of your billing period";
-                        })()}
-                      </strong>
-                      . You will continue to have access to all features until then.
-                    </p>
-                    <button
-                      onClick={handleUndoCancellation}
-                      disabled={processing || paymentInProgress}
-                      className="mt-2 text-sm font-medium text-yellow-900 underline hover:text-yellow-700 disabled:opacity-50"
-                    >
-                      Undo Cancellation
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {message && (
-          <div className={`mb-6 p-4 rounded-lg border-l-4 ${
-            message.type === "success" ? "bg-green-50 text-green-800 border-green-500"
-            : message.type === "warning" ? "bg-yellow-50 text-yellow-800 border-yellow-500"
-            : "bg-red-50 text-red-800 border-red-500"
-          }`}>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 flex-shrink-0" />
-              <span className="text-sm font-medium">{message.text}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="my-12" id="plan-cards-grid">
-          <div className={`grid gap-4 ${
-            getVisiblePlans().length === 3 ? "md:grid-cols-3" : "md:grid-cols-2 lg:grid-cols-4"
-          }`}>
-            {getVisiblePlans().map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                currentSubscription={subscription?.subscription}
-                billingCycle={billingCycle}
-                onSelectPlan={handlePlanSelection}
-                /* Bug found via live QA (Aug 2026): cancelAtPeriodEnd used to
-                   be OR'd into `processing` — but PlanCard.jsx's button
-                   renders a literal spinner + "Processing..." label
-                   whenever `processing` is truthy, with no regard for
-                   `action`. cancelAtPeriodEnd is a PERMANENT flag (stays
-                   true for the rest of the billing term, not a transient
-                   in-flight request), so every card got stuck showing
-                   "Processing..." forever after a successful cancellation —
-                   a real, live-blocking regression, not the same root cause
-                   as the earlier CAW razorpay.subscriptions.cancel() bug
-                   (verified separately, traced to this exact prop wiring
-                   instead). `processing` must only ever reflect an ACTUAL
-                   in-flight request. A pending cancellation is a `locked`
-                   concept (this codebase's own existing "disabled without
-                   spinner" pattern, see PlanCard.jsx's `locked` prop
-                   comment) — folded in below instead. */
-                processing={processing || paymentInProgress}
-                /* Phase 3 full-context-switch fix: a monthly-only scheduled
-                   change (pendingUpdate) must never lock/target-mark cards
-                   while viewing Annual — that pending change belongs to the
-                   committed monthly cycle, not to a fresh annual purchase
-                   context. Gated on billingCycle matching the subscription's
-                   OWN committed cycle, exactly like isCurrentPlan() already
-                   does in PlanCard.jsx. cancelAtPeriodEnd is cycle-agnostic
-                   (a cancellation freezes billing changes regardless of
-                   which cycle is being viewed), so it's OR'd in unconditionally. */
-                locked={
-                  (billingCycle === subscription?.subscription?.billingCycle && hasValidPendingUpdate(subscription?.subscription)) ||
-                  !!subscription?.subscription?.cancelAtPeriodEnd
-                }
-                isScheduledTarget={billingCycle === subscription?.subscription?.billingCycle && hasValidPendingUpdate(subscription?.subscription) && subscription?.subscription?.pendingUpdate?.planName === plan.id}
-                isExpanded={expandedPlan === plan.id}
-                onExpand={() => handleExpandPlan(plan.id)}
-                addons={planAddons[plan.id]}
-                allPlanAddons={planAddons}
-                // Scoped to THIS plan's own key — see selectedAddons'
-                // declaration comment for why a shared object leaked
-                // Starter's selections into Growth's card.
-                selectedAddons={selectedAddons[plan.id] || {}}
-                onAddonChange={(key, qty) =>
-                  setSelectedAddons((prev) => ({ ...prev, [plan.id]: { ...(prev[plan.id] || {}), [key]: qty } }))
-                }
-                addonPurchaseCycle={addonPurchaseCycle[plan.id] || null}
-                onAddonCycleChange={(cyc) =>
-                  setAddonPurchaseCycle((prev) => ({ ...prev, [plan.id]: cyc }))
-                }
-                onRemoveAddon={handleRemoveAddon}
-                // Found via live QA: for a paying org (couponAppliesAtCheckout
-                // false), this always passed null — so an upgrade-target card
-                // never previewed the org's OWN already-attached, still-recurring
-                // coupon (e.g. Business showing ₹650 with no discount on the
-                // card, while the upgrade dialog correctly priced it at ₹637 via
-                // the backend preview, which does read fullRulesSnapshot). Falls
-                // back to the subscription's own persisted rules whenever that
-                // coupon is still eligible for future billing — same eligibility
-                // question isCouponStillRecurring already answers for the
-                // current-plan card's own snapshot branch, just extended to
-                // every OTHER card so upgrade previews stop silently omitting a
-                // discount the backend will actually apply.
-                couponRules={
-                  couponAppliesAtCheckout && appliedCoupon?.valid
-                    ? appliedCoupon.rules
-                    : (subscription?.subscription?.appliedCoupon?.fullRulesSnapshot && isCouponStillRecurring(subscription.subscription.appliedCoupon))
-                    ? subscription.subscription.appliedCoupon.fullRulesSnapshot
-                    : null
-                }
-              />
-            ))}
-          </div>
-        </div>
 
         <div className="overflow-hidden">
           <FeatureComparisonTable plans={planStructure} />

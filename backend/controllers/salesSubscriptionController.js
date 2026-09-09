@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const SalesSubscription = require("../models/SalesSubscription");
 const Invoice = require("../models/Invoice");
 const Deal = require("../models/Deal");
@@ -166,7 +167,7 @@ exports.getAllSalesSubscriptionsWithPagination = async (req, res) => {
       // on this collection can never match it. Resolve the matching deals
       // first and fold their ids into the $or, otherwise searching a customer
       // name returns nothing even though the search box advertises it.
-      const nameRe = { $regex: search, $options: "i" };
+      const nameRe = { $regex: buildFuzzySearchPattern(search), $options: "i" };
       const [matchingContacts, matchingCompanies] = await Promise.all([
         Contact.find({ organization: req.user.organization, name: nameRe }).select("_id").lean(),
         Company.find({ organization: req.user.organization, name: nameRe }).select("_id").lean(),

@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
@@ -100,8 +101,8 @@ const getTenants = async (req, res) => {
     const query = {};
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { adminEmail: { $regex: search, $options: 'i' } }
+        { name: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { adminEmail: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
 
@@ -227,10 +228,10 @@ const getUsers = async (req, res) => {
     
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { profileEmail: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } }
+        { name: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { email: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { profileEmail: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { phone: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
 
@@ -434,8 +435,8 @@ const getBilling = async (req, res) => {
         {
           $match: {
             $or: [
-              { 'organization.name': { $regex: search, $options: 'i' } },
-              { planName: { $regex: search, $options: 'i' } }
+              { 'organization.name': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+              { planName: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
             ]
           }
         },
@@ -465,8 +466,8 @@ const getBilling = async (req, res) => {
         {
           $match: {
             $or: [
-              { 'organization.name': { $regex: search, $options: 'i' } },
-              { planName: { $regex: search, $options: 'i' } }
+              { 'organization.name': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+              { planName: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
             ]
           }
         },
@@ -488,8 +489,8 @@ const getBilling = async (req, res) => {
         {
           $match: {
             $or: [
-              { 'organization.name': { $regex: search, $options: 'i' } },
-              { planName: { $regex: search, $options: 'i' } }
+              { 'organization.name': { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+              { planName: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
             ]
           }
         },
@@ -849,8 +850,8 @@ const getSupportTickets = async (req, res) => {
               query, // status / priority
               {
                 $or: [
-                  { subject: { $regex: search, $options: 'i' } },
-                  { 'org.name': { $regex: search, $options: 'i' } }
+                  { subject: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+                  { 'org.name': { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
                 ]
               }
             ]
@@ -1176,9 +1177,9 @@ const getTickets = async (req, res) => {
     
     if (search) {
       query.$or = [
-        { subject: { $regex: search, $options: 'i' } },
-        { organizationName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+        { subject: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { organizationName: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { email: { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
 

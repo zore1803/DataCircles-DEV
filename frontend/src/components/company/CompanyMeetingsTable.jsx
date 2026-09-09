@@ -78,9 +78,9 @@ const CompanyMeetingsTable = ({ companyId, setMeetings }) => {
 
   const statusOptions = [
     { value: "", label: "All Status", icon: Filter, className: "bg-white border-gray-300 text-gray-700" },
-    { value: "scheduled", label: "Scheduled", icon: Circle, className: "bg-gray-50 border-gray-200 text-gray-600" },
-    { value: "completed", label: "Completed", icon: CheckCircle2, className: "bg-blue-50 border-blue-100 text-blue-600" },
-    { value: "cancelled", label: "Cancelled", icon: XCircle, className: "bg-red-50 border-red-100 text-red-600" },
+    { value: "scheduled", label: "Scheduled", icon: Circle, className: "bg-[#EEF2F9] border-[#D6DEEC] text-[#56698A]" },
+    { value: "completed", label: "Completed", icon: CheckCircle2, className: "bg-[#E6F8FD] border-[#B8E9F7] text-[#27B4EA]" },
+    { value: "cancelled", label: "Cancelled", icon: XCircle, className: "bg-[#FCEAEA] border-[#F5C7C7] text-[#EA4B4B]" },
     { value: "no-show", label: "No Show", icon: AlertCircle, className: "bg-orange-50 border-orange-100 text-orange-600" },
   ];
 
@@ -183,9 +183,9 @@ const CompanyMeetingsTable = ({ companyId, setMeetings }) => {
 
   const getStatusBadge = (status) => {
     const statusStyles = {
-      "scheduled": "bg-gray-100 text-gray-700 border border-gray-300",
+      "scheduled": "bg-[#EEF2F9] text-[#56698A] border border-[#D6DEEC]",
       "completed": "bg-gray-900 text-white",
-      "cancelled": "bg-gray-200 text-gray-700 border border-gray-300",
+      "cancelled": "bg-[#EEF2F9] text-[#56698A] border border-[#D6DEEC]",
       "no-show": "bg-gray-300 text-gray-800"
     };
     return statusStyles[status] || "bg-gray-100 text-gray-800";

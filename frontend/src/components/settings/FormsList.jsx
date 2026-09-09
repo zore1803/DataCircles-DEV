@@ -27,7 +27,7 @@ const STATUS_CONFIG = {
   draft: { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", dot: "bg-gray-400" },
   published: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
   paused: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-  archived: { bg: "bg-gray-50", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400" },
+  archived: { bg: "bg-[#EEF2F9]", text: "text-[#56698A]", border: "border-[#D6DEEC]", dot: "bg-[#56698A]" },
 };
 
 const FormStatusBadge = ({ status }) => {

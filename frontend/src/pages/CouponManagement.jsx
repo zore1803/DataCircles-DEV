@@ -58,10 +58,10 @@ const statusOf = (coupon) => {
 };
 
 const STATUS_BADGE = {
-  active: "bg-green-100 text-green-700",
-  expired: "bg-gray-100 text-gray-500",
-  disabled: "bg-red-100 text-red-600",
-  scheduled: "bg-blue-100 text-blue-600",
+  active: "bg-[#E6F7EF] text-[#1FA971]",
+  expired: "bg-[#EEF2F9] text-[#56698A]",
+  disabled: "bg-[#FCEAEA] text-[#EA4B4B]",
+  scheduled: "bg-[#E6F8FD] text-[#27B4EA]",
 };
 
 const Field = ({ label, children }) => (

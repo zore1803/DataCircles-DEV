@@ -518,6 +518,12 @@ const Settings = () => {
                 {activeSection.description}
               </p>
             </div>
+            {/* Portal target for a settings tab's own header-strip actions
+                (e.g. SubscriptionPlans' "View Billing Calendar" link) — this
+                shell is shared by every settings tab, so a child section
+                can't render into it via normal composition. Empty for any
+                tab that doesn't use it. */}
+            <div id="settings-header-actions" className="ml-auto flex-shrink-0 flex items-center gap-3" />
           </div>
         </div>
 

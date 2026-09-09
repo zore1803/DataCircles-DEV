@@ -116,9 +116,9 @@ const MeetingsTable = ({ contactId }) => {
 
   const getStatusBadge = (status) => {
     const statusStyles = {
-      scheduled: "bg-gray-100 text-gray-700 border border-gray-300",
+      scheduled: "bg-[#EEF2F9] text-[#56698A] border border-[#D6DEEC]",
       completed: "bg-gray-900 text-white",
-      cancelled: "bg-gray-200 text-gray-700 border border-gray-300",
+      cancelled: "bg-[#EEF2F9] text-[#56698A] border border-[#D6DEEC]",
       "no-show": "bg-gray-300 text-gray-800",
     };
     return statusStyles[status] || "bg-gray-100 text-gray-800";

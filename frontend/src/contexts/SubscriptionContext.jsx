@@ -49,14 +49,20 @@ export const SubscriptionProvider = ({ children }) => {
 
   const fetchSubscription = async () => {
     try {
-      setLoading(true);
+      // Only show the full-page loading state on the very first fetch.
+      // Background refetches — the PENDING_MANDATE/checkout-settlement polls
+      // in SubscriptionPlans.jsx call this every few seconds — must not flip
+      // this flag, or every consumer gating on `loading` (e.g. the plans page
+      // rendering <Shimmer/> while loading) unmounts to a skeleton and back
+      // on every single poll tick, which reads as the whole page blinking.
+      if (subscription === null) setLoading(true);
       setError(null);
-      
+
       // Don't make API call if not authenticated
       if (!isUserAuthenticated()) {
-        setSubscription({ 
-          hasSubscription: false, 
-          trialEligible: true 
+        setSubscription({
+          hasSubscription: false,
+          trialEligible: true
         });
         setLoading(false);
         return;

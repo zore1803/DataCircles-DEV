@@ -327,10 +327,10 @@ const PurchaseOrderPage = () => {
   });
 
   const statusOptions = [
-    { value: "Pending", label: "Pending", icon: Clock, className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
-    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-green-50 text-green-700 border-green-200" },
-    { value: "Rejected", label: "Rejected", icon: X, className: "bg-red-50 text-red-700 border-red-200" },
-    { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-blue-50 text-blue-700 border-blue-200" },
+    { value: "Pending", label: "Pending", icon: Clock, className: "bg-[#FDF3E6] text-[#EA9927] border-[#F7DDB8]" },
+    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]" },
+    { value: "Rejected", label: "Rejected", icon: X, className: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]" },
+    { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-[#E6F8FD] text-[#27B4EA] border-[#B8E9F7]" },
   ];
 
   // Columns available in the rule-builder filter panel (mirrors Companies.jsx pattern).

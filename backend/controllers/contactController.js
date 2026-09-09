@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 // controllers/contactController.js (updated to handle field types)
 const Contact = require("../models/Contact");
 const Company = require("../models/Company");
@@ -109,17 +110,17 @@ const getAllContacts = async (req, res) => {
     if (search) {
       const matchingCompanies = await Company.find({
         organization: req.user.organization,
-        name: { $regex: search, $options: "i" },
+        name: { $regex: buildFuzzySearchPattern(search), $options: "i" },
       }).select("_id");
 
       andConditions.push({
         $or: [
-          { name: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phone: { $regex: search, $options: "i" } },
-          { stageStatus: { $regex: search, $options: "i" } },
-          { lifecycleStage: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { email: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { phone: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { stageStatus: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { lifecycleStage: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           { company: { $in: matchingCompanies.map((c) => c._id) } },
         ],
       });
@@ -188,17 +189,17 @@ const getAllContactsPaginated = async (req, res) => {
     if (search) {
       const matchingCompanies = await Company.find({
         organization: req.user.organization,
-        name: { $regex: search, $options: "i" },
+        name: { $regex: buildFuzzySearchPattern(search), $options: "i" },
       }).select("_id");
 
       preAndConditions.push({
         $or: [
-          { name: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phone: { $regex: search, $options: "i" } },
-          { stageStatus: { $regex: search, $options: "i" } },
-          { lifecycleStage: { $regex: search, $options: "i" } },
-          { "additionalFields.value": { $regex: search, $options: "i" } },
+          { name: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { email: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { phone: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { stageStatus: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { lifecycleStage: { $regex: buildFuzzySearchPattern(search), $options: "i" } },
+          { "additionalFields.value": { $regex: buildFuzzySearchPattern(search), $options: "i" } },
           { company: { $in: matchingCompanies.map((c) => c._id) } },
         ],
       });

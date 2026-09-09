@@ -63,10 +63,10 @@ const columnHelper = createColumnHelper();
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
-  { key: "success", label: "Success", icon: CheckCircle2, badgeClass: "bg-green-100 text-green-700 border-transparent" },
-  { key: "pending", label: "Pending", icon: Clock, badgeClass: "bg-yellow-100 text-yellow-700 border-transparent" },
-  { key: "failed", label: "Failed", icon: XCircle, badgeClass: "bg-red-100 text-red-700 border-transparent" },
-  { key: "cancelled", label: "Cancelled", icon: Ban, badgeClass: "bg-gray-100 text-gray-700 border-transparent" },
+  { key: "success", label: "Success", icon: CheckCircle2, badgeClass: "bg-[#E6F7EF] text-[#1FA971] border-transparent" },
+  { key: "pending", label: "Pending", icon: Clock, badgeClass: "bg-[#FDF3E6] text-[#EA9927] border-transparent" },
+  { key: "failed", label: "Failed", icon: XCircle, badgeClass: "bg-[#FCEAEA] text-[#EA4B4B] border-transparent" },
+  { key: "cancelled", label: "Cancelled", icon: Ban, badgeClass: "bg-[#EEF2F9] text-[#56698A] border-transparent" },
 ];
 
 const statusBadge = (status) => {

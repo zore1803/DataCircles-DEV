@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const VendorNote = require('../models/VendorNote');
 
 // CREATE Vendor Note
@@ -49,8 +50,8 @@ exports.getAllVendorNotes = async (req, res) => {
       // Search across both the title and the body, so notes are findable by
       // either now that titles exist.
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { note: { $regex: search, $options: 'i' } },
+        { title: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { note: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
       ];
     }
     

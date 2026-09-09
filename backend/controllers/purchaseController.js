@@ -1,3 +1,4 @@
+const { buildFuzzySearchPattern } = require('../utils/searchRegex');
 const Purchase = require("../models/Purchase");
 const Vendor = require("../models/Vendor");
 const PurchaseOrder = require("../models/PurchaseOrder");
@@ -192,10 +193,10 @@ exports.getAllPurchases = async (req, res) => {
 
     if (search) {
       query.$or = [
-        { purchaseNumber: { $regex: search, $options: 'i' } },
-        { status: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } },
-        { 'items.name': { $regex: search, $options: 'i' } }
+        { purchaseNumber: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'items.name': { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
 
@@ -232,10 +233,10 @@ exports.getAllPurchasesWithPagination = async (req, res) => {
     // Search functionality
     if (search) {
       query.$or = [
-        { purchaseNumber: { $regex: search, $options: 'i' } },
-        { status: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } },
-        { 'items.name': { $regex: search, $options: 'i' } }
+        { purchaseNumber: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { status: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { notes: { $regex: buildFuzzySearchPattern(search), $options: 'i' } },
+        { 'items.name': { $regex: buildFuzzySearchPattern(search), $options: 'i' } }
       ];
     }
 

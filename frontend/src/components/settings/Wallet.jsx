@@ -38,12 +38,12 @@ const formatRupees = (n) =>
   })}`;
 
 const TYPE_META = {
-  CREDIT_PURCHASE: { label: "Purchase", style: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  CREDIT_PURCHASE: { label: "Purchase", style: "bg-[#E6F7EF] text-[#1FA971] ring-[#B9E7D3]" },
   FREE_CREDIT: { label: "Free credit", style: "bg-sky-50 text-sky-700 ring-sky-200" },
   ADMIN_CREDIT: { label: "Admin credit", style: "bg-violet-50 text-violet-700 ring-violet-200" },
   USAGE_DEBIT: { label: "Usage", style: "bg-slate-100 text-slate-600 ring-slate-200" },
-  REFUND: { label: "Refund", style: "bg-amber-50 text-amber-700 ring-amber-200" },
-  ADJUSTMENT: { label: "Adjustment", style: "bg-amber-50 text-amber-700 ring-amber-200" },
+  REFUND: { label: "Refund", style: "bg-[#FDF3E6] text-[#EA9927] ring-[#F7DDB8]" },
+  ADJUSTMENT: { label: "Adjustment", style: "bg-[#FDF3E6] text-[#EA9927] ring-[#F7DDB8]" },
 };
 
 // Usage-based features that will consume credits once they ship. Listed here so
