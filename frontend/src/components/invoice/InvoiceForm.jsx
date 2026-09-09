@@ -2267,6 +2267,7 @@ const CreateInvoicePanel = ({
           notes: sourceDoc.notes || "",
           terms: sourceDoc.terms || "",
           signature: sourceDoc.signature || "",
+          bankDetails: sourceDoc.bankDetails?._id || sourceDoc.bankDetails || "",
           status: initialDoc ? sourceDoc.status : "Draft",
         }
       : {
@@ -2291,6 +2292,7 @@ const CreateInvoicePanel = ({
           notes: defaultNotesForNewDoc,
           terms: defaultTermsForNewDoc,
           signature: "",
+          bankDetails: "",
           status: "Draft",
         };
     return formOverride ? { ...base, ...formOverride } : base;
@@ -2311,6 +2313,11 @@ const CreateInvoicePanel = ({
   const [showTemplates, setShowTemplates] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
+  // Org's saved bank accounts (Settings → Bank Details), offered as a
+  // dropdown so this document can print a specific one instead of always
+  // the org's default (`bankDetails` above, used only for the live preview).
+  const [orgBanks, setOrgBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(false);
   // Numbering (prefix/suffix/next number) comes from DocumentSettings.
   const [docSettings, setDocSettings] = useState({
     invoicePrefix: "INV-",
@@ -2482,6 +2489,29 @@ const CreateInvoicePanel = ({
       }
     })();
   }, [type, showTemplates]);
+
+  // Full list of the org's saved bank accounts, for the Select Bank dropdown.
+  useEffect(() => {
+    (async () => {
+      setBanksLoading(true);
+      try {
+        const res = await API.get("/bank-details/all");
+        setOrgBanks(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        console.error("Failed to load bank details", err);
+        setOrgBanks([]);
+      } finally {
+        setBanksLoading(false);
+      }
+    })();
+  }, []);
+
+  // The bank the live preview (and its UPI QR) should actually show: the one
+  // explicitly picked in Select Bank, falling back to the org's default
+  // (`bankDetails`, fetched separately above) when none is picked — same
+  // resolution order the backend's resolveBankDetails uses for the PDF.
+  const effectiveBankDetails =
+    orgBanks.find((b) => b._id === form.bankDetails) || bankDetails;
 
   // The panel is an overlay, not a route. Push a history entry while it's open
   // so the browser Back button closes the panel and stays on Accounting,
@@ -2817,6 +2847,7 @@ const CreateInvoicePanel = ({
         notes: form.notes,
         terms: form.terms,
         signature: form.signature,
+        bankDetails: form.bankDetails || null,
         amount: finalTotal,
         items: form.items.map((it) => ({
           itemId: it.isVariant ? it.parentItemId : it._id,
@@ -3904,6 +3935,7 @@ const CreateInvoicePanel = ({
 
           <SectionHeader number={sectionNo.summary} title={`${docName} Summary`} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
+            <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <FieldLabel>{docName} Discount</FieldLabel>
               <div className="flex items-center gap-2">
@@ -3966,6 +3998,37 @@ const CreateInvoicePanel = ({
               </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
+            </div>
+
+            {/* Select Bank — org's saved bank accounts (Settings → Bank
+                Details), printed on the document when one is picked; left
+                unset, PDF generation falls back to the org's default bank. */}
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Select Bank</FieldLabel>
+              <div className="relative">
+                <select
+                  value={form.bankDetails || ""}
+                  onChange={(e) => setField("bankDetails", e.target.value)}
+                  disabled={banksLoading}
+                  className="w-full h-[38px] appearance-none pl-3.5 pr-8 text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {banksLoading
+                      ? "Loading banks…"
+                      : orgBanks.length === 0
+                        ? "No banks added yet"
+                        : "Use organization's default bank"}
+                  </option>
+                  {orgBanks.map((b) => (
+                    <option key={b._id} value={b._id}>
+                      {b.bank} •••• {String(b.accountNumber || "").slice(-4)}
+                      {b.isDefault ? " (Default)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </div>
+            </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -4168,7 +4231,7 @@ const CreateInvoicePanel = ({
                 <InvoiceLivePreview
                   form={form}
                   orgDetails={orgDetails}
-                  bankDetails={bankDetails}
+                  bankDetails={effectiveBankDetails}
                   type={type}
                   template={previewTemplate}
                   supportsTax={supportsTax}
@@ -4233,7 +4296,7 @@ const CreateInvoicePanel = ({
                 <InvoiceLivePreview
                   form={form}
                   orgDetails={orgDetails}
-                  bankDetails={bankDetails}
+                  bankDetails={effectiveBankDetails}
                   type={type}
                   template={previewTemplate}
                   supportsTax={supportsTax}

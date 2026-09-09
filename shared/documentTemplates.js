@@ -301,7 +301,10 @@ export function computeDocument(doc, type = "tax") {
 }
 
 export function buildUpiUri(doc, options = {}) {
-  const { type = "tax", orgDetails, upiId = DEFAULT_UPI_ID, amount } = options;
+  // No hardcoded fallback VPA: a document with no UPI ID configured on its
+  // bank must produce no payable QR, not silently route payment to
+  // whatever placeholder ID happened to be here.
+  const { type = "tax", orgDetails, upiId = "", amount } = options;
   const vpa = (upiId || "").trim();
   if (!vpa) return "";
 
@@ -529,7 +532,7 @@ export function buildDocumentHtml(doc, options = {}) {
 
   // â”€â”€ Assemble context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const ctx = {
-    t, doc, org, bank, upiId,
+    t, doc, org, bank, upiId, upiQrSvg,
     esc, fmt, formatDate, formatPostalAddress,
     dealName, docLabel, docNumber, copySubtitle,
     notes, terms,

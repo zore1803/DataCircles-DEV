@@ -13,6 +13,7 @@ const PurchaseReturn = require('../models/PurchaseReturn');
 const SalesReturn = require('../models/SalesReturn');
 const Branding = require('../models/Branding');
 const getDefaultBankDetails = require('../utils/getDefaultBankDetails');
+const { resolveBankDetails } = require('../utils/getDefaultBankDetails');
 const htmlDocumentPdf = require('../utils/htmlDocumentPdf');
 const purchaseDocumentPdf = require('../utils/purchaseDocumentPdf');
 const { toPrintableDoc: toPrintableSalesReturnDoc } = require('../controllers/salesReturnController');
@@ -151,7 +152,7 @@ router.get('/:type/:id/download', async (req, res) => {
       const bankDetails = await getDefaultBankDetails(doc.organization);
       pdfBuffer = await htmlDocumentPdf(toPrintableSalesReturnDoc(doc), bankDetails, orgDetails, 'salesReturn');
     } else {
-      const bankDetails = await getDefaultBankDetails(doc.organization);
+      const bankDetails = await resolveBankDetails(doc.organization, doc.bankDetails);
       pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
     }
 
@@ -200,7 +201,7 @@ router.post('/:type/:id/email', async (req, res) => {
       const bankDetails = await getDefaultBankDetails(doc.organization);
       pdfBuffer = await htmlDocumentPdf(toPrintableSalesReturnDoc(doc), bankDetails, orgDetails, 'salesReturn');
     } else {
-      const bankDetails = await getDefaultBankDetails(doc.organization);
+      const bankDetails = await resolveBankDetails(doc.organization, doc.bankDetails);
       pdfBuffer = await htmlDocumentPdf(doc, bankDetails, orgDetails, DOC_TYPES[type]);
     }
 

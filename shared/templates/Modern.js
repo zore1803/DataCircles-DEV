@@ -66,9 +66,9 @@ export const css = `
 
 export function html(ctx) {
   const {
-    t, doc, org, bank, esc, fmt, formatDate,
+    t, doc, org, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle,
-    upiQrSvg, upiId,
+    upiQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -222,13 +222,6 @@ export function html(ctx) {
 
   <div class="dc-footer-row">
     ${qrBlock}
-    <div class="dc-bank">
-      <div class="dc-label">Bank Details:</div>
-      <div>Bank: ${esc(bank.bank || "—")}</div>
-      <div>Account #: ${esc(bank.accountNumber || "—")}</div>
-      <div>IFSC: ${esc(bank.ifscCode || "—")}</div>
-      <div>Branch: ${esc(bank.branch || "—")}</div>
-    </div>
     <div class="dc-sign">
       <div style="font-weight:bold;margin-bottom:4px;">For ${esc(org.companyName || "Your Company")}</div>
       ${sigImg ? `<img class="dc-sign-img" src="${esc(sigImg)}" />` : `<div style="height:44px;"></div>`}

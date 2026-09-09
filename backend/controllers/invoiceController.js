@@ -3,6 +3,7 @@ const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
+const { resolveBankDetails } = require("../utils/getDefaultBankDetails");
 const Branding = require("../models/Branding");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
@@ -79,6 +80,7 @@ const createInvoice = async (req, res) => {
       nextInvoiceNumber,
       billingAddress,
       shippingAddress,
+      bankDetails,
     } = req.body;
 
     // Validate items
@@ -243,6 +245,7 @@ const createInvoice = async (req, res) => {
       shippingAddress: finalShippingAddress,
       transactionType: isTaxInvoice ? transactionType || "intra" : undefined,
       gstRate: isTaxInvoice ? gstRate || 18 : undefined,
+      bankDetails: bankDetails || null,
       invoiceNumber: finalInvoiceNumber,
       user: req.user.id,
       organization: req.user.organization,
@@ -649,7 +652,7 @@ const downloadInvoice = async (req, res) => {
     if (!invoice) {
       return res.status(404).json({ error: "Invoice not found" });
     }
-    const bankDetails = await getDefaultBankDetails(req.user.organization);
+    const bankDetails = await resolveBankDetails(req.user.organization, invoice.bankDetails);
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
@@ -752,6 +755,7 @@ const updateInvoice = async (req, res) => {
       shippingAddress,
       transactionType,
       gstRate,
+      bankDetails,
     } = req.body;
 
     // Validate items
@@ -882,6 +886,7 @@ const updateInvoice = async (req, res) => {
     invoice.shippingAddress = finalShippingAddress;
     invoice.transactionType = isTaxInvoice ? transactionType || "intra" : undefined;
     invoice.gstRate = isTaxInvoice ? gstRate || 18 : undefined;
+    invoice.bankDetails = bankDetails || null;
 
     await invoice.save({ session });
 

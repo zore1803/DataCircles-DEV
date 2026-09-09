@@ -58,7 +58,7 @@ export const css = `
 .dcsheet.t-Vintage .vt-paid-row .dc-tick { font-size: 13px; }
 .dcsheet.t-Vintage .vt-bottom { display: flex; flex-direction: column; }
 /* ── footer: bank | UPI | signature ── */
-.dcsheet.t-Vintage .vt-footer { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 1px solid var(--ink); }
+.dcsheet.t-Vintage .vt-footer { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-bank, .dcsheet.t-Vintage .vt-upi { padding: 0; border-right: 1px solid var(--ink); font-size: 9px; }
 .dcsheet.t-Vintage .vt-col-title { font-size: 8px; font-weight: bold; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; padding: 7px 12px; border-bottom: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-bank-grid { display: grid; grid-template-columns: auto 1fr; }
@@ -81,7 +81,7 @@ export const css = `
 
 export function html(ctx) {
   const {
-    t, doc, org, bank, upiId, upiQrSvg, esc, fmt, formatDate,
+    t, doc, org, upiQrSvg, upiId, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
@@ -251,15 +251,6 @@ export function html(ctx) {
   ${doc.status === "Paid" ? `<div class="vt-paid-row"><span class="dc-tick">&#10003;</span><span>Amount Paid</span></div>` : ""}
   <!-- Bank details | Pay using UPI | Signature -->
   <div class="vt-footer">
-    <div class="vt-bank">
-      <div class="vt-col-title">Bank Details</div>
-      <div class="vt-bank-grid">
-        <div class="vt-bank-cell lbl">Bank</div><div class="vt-bank-cell val">${esc(bank.bank || "—")}</div>
-        <div class="vt-bank-cell lbl">Account #</div><div class="vt-bank-cell val">${esc(bank.accountNumber || "—")}</div>
-        <div class="vt-bank-cell lbl">IFSC</div><div class="vt-bank-cell val">${esc(bank.ifscCode || "—")}</div>
-        <div class="vt-bank-cell lbl">Branch</div><div class="vt-bank-cell val">${esc(bank.branch || "—")}</div>
-      </div>
-    </div>
     <div class="vt-upi">
       <div class="vt-col-title">Pay using UPI:</div>
       <div class="vt-upi-body">

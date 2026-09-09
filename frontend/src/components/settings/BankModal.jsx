@@ -91,7 +91,7 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
       toast.error('Enter UPI ID to verify');
       return;
     }
-    const regex = /^[\w.-]{2,256}@[\w]{2,64}$/;
+    const regex = /^[\w.-]{2,256}@[\w.-]{2,64}$/;
     setUpiChecking(true);
     if (regex.test(upi)) {
       toast.success('UPI ID looks valid');
@@ -124,7 +124,7 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
     const upi = form.upi.trim();
     if (upi) {
       // No symbols before '@', no spaces, simple format check
-      const upiRegex = /^[\w.-]{2,256}@[A-Za-z0-9]{2,64}$/;
+      const upiRegex = /^[\w.-]{2,256}@[\w.-]{2,64}$/;
       if (!upiRegex.test(upi)) {
         toast.error("Invalid UPI ID format");
         return;

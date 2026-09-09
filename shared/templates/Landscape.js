@@ -55,9 +55,9 @@ export const css = `
 
 export function html(ctx) {
   const {
-    t, doc, org, bank, esc, fmt, formatDate,
+    t, doc, org, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow, hsnRows,
-    upiQrSvg, upiId,
+    upiQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -99,7 +99,10 @@ export function html(ctx) {
 
   const qrBlock =
     upiQrSvg && t.grandTotal > 0
-      ? `<div class="ls-qr-block">${upiQrSvg}</div>`
+      ? `<div class="ls-qr-block">
+          <div style="font-weight:bold;text-transform:uppercase;font-size:8.5px;color:var(--muted);margin-bottom:3px;">Pay using UPI:</div>
+          ${upiQrSvg}
+        </div>`
       : "";
 
   return `
@@ -164,15 +167,7 @@ export function html(ctx) {
       <div class="ls-totals-left">
         <div class="ls-totals-left-text">
           <div style="font-weight:bold;margin-bottom:4px;">Total Items / Qty : ${t.rows.length} / ${t.totalQty.toFixed ? t.totalQty.toFixed(3) : t.totalQty}</div>
-          <div style="margin-bottom:8px;">Total amount (in words): <b>INR ${esc(t.amountInWords)}</b></div>
-          <div style="font-weight:bold;text-transform:uppercase;font-size:8.5px;color:var(--muted);margin-bottom:3px;">Bank Details:</div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:9px;">
-            <div style="color:var(--muted);">Bank</div><div>${esc(bank.bank || "—")}</div>
-            <div style="color:var(--muted);">Account #</div><div>${esc(bank.accountNumber || "—")}</div>
-            <div style="color:var(--muted);">IFSC</div><div>${esc(bank.ifscCode || "—")}</div>
-            <div style="color:var(--muted);">Branch</div><div>${esc(bank.branch || "—")}</div>
-          </div>
-          ${upiId ? `<div style="margin-top:6px;font-size:9px;">UPI ID: ${esc(upiId)}</div>` : ""}
+          <div>Total amount (in words): <b>INR ${esc(t.amountInWords)}</b></div>
         </div>
         ${qrBlock}
       </div>

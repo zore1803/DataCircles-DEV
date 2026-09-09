@@ -438,6 +438,8 @@ const InvoiceFormFull = ({
   const [quickAddQty, setQuickAddQty] = useState(1);
   const [savedSignatures, setSavedSignatures] = useState([]);
   const [signaturesLoading, setSignaturesLoading] = useState(false);
+  const [orgBanks, setOrgBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(false);
   const [showQuickDealForm, setShowQuickDealForm] = useState(false);
   const [localDeals, setLocalDeals] = useState(deals);
   const [sellerState, setSellerState] = useState("");
@@ -638,7 +640,7 @@ const InvoiceFormFull = ({
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
         attachments: sourceData.attachments || [],
-        bankDetails: sourceData.bankDetails || "",
+        bankDetails: sourceData.bankDetails?._id || sourceData.bankDetails || "",
         signature: sourceData.signature || "",
       });
       setHasUnsavedChanges(false);
@@ -704,6 +706,25 @@ const InvoiceFormFull = ({
     };
 
     loadSignatures();
+  }, []);
+
+  // Bank accounts saved under Settings → Bank Details, offered as a dropdown
+  // so the invoice can print a specific one instead of always the org's
+  // default (getDefaultBankDetails on the backend).
+  useEffect(() => {
+    const loadBanks = async () => {
+      setBanksLoading(true);
+      try {
+        const res = await API.get("/bank-details/all");
+        setOrgBanks(Array.isArray(res.data) ? res.data : []);
+      } catch (error) {
+        console.error("Failed to load bank details", error);
+        setOrgBanks([]);
+      } finally {
+        setBanksLoading(false);
+      }
+    };
+    loadBanks();
   }, []);
 
   // Live preview of the number this invoice will actually get on save (from
@@ -1121,6 +1142,7 @@ const InvoiceFormFull = ({
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         signature: form.signature,
+        bankDetails: form.bankDetails || null,
         amount: (() => {
           let t = form.isTaxInvoice
             ? computeDocument(form, "invoice").grandTotal
@@ -2015,25 +2037,49 @@ const InvoiceFormFull = ({
                       <span className="text-gray-600 font-medium">₹{formatNumberFixed(totalItemDiscounts + invoiceDiscountAmount - roundOffAmount)}</span>
                     </div>
 
-                    <div className="flex justify-end gap-2 text-xs pt-1">
-                      <label className="flex items-center gap-1.5 cursor-pointer text-gray-500">
-                        Hide Totals
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                          checked={form.hideTotals}
-                          onChange={(e) => {
-                            setForm((p) => ({ ...p, hideTotals: e.target.checked }));
-                            setHasUnsavedChanges(true);
-                          }}
-                        />
-                      </label>
-                    </div>
-                    
                     <div className="text-xs text-gray-400 italic text-right mt-1">
                       {numberToWords(finalTotal)}
                     </div>
                   </div>
+                </div>
+
+                {/* Select Bank — org's saved bank accounts (Settings → Bank
+                    Details), printed on the document when one is picked;
+                    left unset, PDF generation falls back to the org's
+                    default bank. */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Select Bank</label>
+                  <div className="relative">
+                    <select
+                      value={form.bankDetails || ""}
+                      onChange={(e) => {
+                        setForm((prev) => ({ ...prev, bankDetails: e.target.value }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      disabled={banksLoading}
+                      className="w-full h-[38px] appearance-none pl-3.5 pr-8 text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <option value="">
+                        {banksLoading
+                          ? "Loading banks…"
+                          : orgBanks.length === 0
+                            ? "No banks added yet"
+                            : "Use organization's default bank"}
+                      </option>
+                      {orgBanks.map((b) => (
+                        <option key={b._id} value={b._id}>
+                          {b.bank} •••• {String(b.accountNumber || "").slice(-4)}
+                          {b.isDefault ? " (Default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  </div>
+                  {orgBanks.length === 0 && !banksLoading && (
+                    <p className="text-xs text-[#99A0AE]">
+                      Add a bank account in Settings → Bank Details to select it here.
+                    </p>
+                  )}
                 </div>
 
                 {/* Signature — same functional select + preview + default-

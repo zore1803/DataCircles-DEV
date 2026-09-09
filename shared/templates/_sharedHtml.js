@@ -14,7 +14,7 @@
 
 export function sharedHtml(ctx) {
   const {
-    t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
+    t, doc, org, esc, fmt, formatDate, formatPostalAddress,
     dealName, docLabel, docNumber, notes, terms, copySubtitle,
     discountRow, hsnRows, itemRows, qrBlock,
   } = ctx;
@@ -87,13 +87,6 @@ export function sharedHtml(ctx) {
       <div>Total Items / Qty : ${t.rows.length} / ${t.totalQty}</div>
       <div>Total amount (in words): INR ${esc(t.amountInWords)}</div>
       <div class="dc-bank-row">
-        <div class="dc-bank">
-          <div class="dc-label dc-mt">Bank Details:</div>
-          <div>Bank: ${esc(bank.bank || "—")}</div>
-          <div>Account #: ${esc(bank.accountNumber || "—")}</div>
-          <div>IFSC: ${esc(bank.ifscCode || "—")}</div>
-          <div>Branch: ${esc(bank.branch || "—")}</div>
-        </div>
         ${qrBlock}
       </div>
     </div>

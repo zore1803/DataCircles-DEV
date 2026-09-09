@@ -421,7 +421,10 @@ const Settings = () => {
     if (item.id === "help-center") {
       window.open("https://help.datacircles.in/en", "_blank");
     } else {
-      navigate(`/settings/${item.id}`);
+      // Marks this as an in-Settings navigation so the sidebar keeps
+      // "Settings" pilled instead of switching to "Forms" (which has its
+      // own direct sidebar shortcut to the same /settings/forms route).
+      navigate(`/settings/${item.id}`, { state: { viaSettingsNav: true } });
     }
   };
 

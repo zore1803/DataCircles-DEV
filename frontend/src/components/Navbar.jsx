@@ -338,6 +338,7 @@ const Navbar = () => {
     { name: "Inventory", href: "/inventory", icon: Warehouse },
     { name: "System", isHeader: true },
     { name: "Insights", href: "/insights", icon: InsightsIcon },
+    { name: "Forms", href: "/settings/forms", icon: FileText },
     { name: "Settings", href: "/settings", icon: SettingsIcon },
   ];
 
@@ -392,13 +393,23 @@ const Navbar = () => {
   }, []);
 
   const isCurrentPath = (href) => {
+    // "/settings/forms" is reachable two ways — the sidebar's own Forms
+    // shortcut, or clicking the Forms tile inside Settings — and only one of
+    // Forms/Settings should pill at a time. Settings.jsx marks the latter
+    // with `viaSettingsNav` navigation state; its absence means the sidebar
+    // link was used directly.
+    const onSettingsForms = location.pathname === "/settings/forms";
+    const cameViaSettingsTile = !!location.state?.viaSettingsNav;
+    if (href === "/settings/forms") return onSettingsForms && !cameViaSettingsTile;
+    if (href === "/settings") {
+      return location.pathname.startsWith("/settings") && !(onSettingsForms && !cameViaSettingsTile);
+    }
     if (location.pathname === href) return true;
     return (
       (href === "/companies" && location.pathname.startsWith("/companies/")) ||
       (href === "/contacts" && location.pathname.startsWith("/contacts/")) ||
       (href === "/deals" && location.pathname.startsWith("/deals/")) ||
-      (href === "/vendors" && location.pathname.startsWith("/vendors/")) ||
-      (href === "/settings" && location.pathname.startsWith("/settings"))
+      (href === "/vendors" && location.pathname.startsWith("/vendors/"))
     );
   };
 

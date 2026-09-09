@@ -20,12 +20,14 @@ export const css = `
 .dcsheet.t-Service .srv-grand { font-size: 14px; font-weight: bold; color: #111; margin-top: 4px; }
 .dcsheet.t-Service .srv-footer-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 32px; font-size: 10px; }
 .dcsheet.t-Service .srv-bank-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 9.5px; }
+.dcsheet.t-Service .dc-qr-img svg { width: 72px; height: 72px; display: block; }
 `;
 
 export function html(ctx) {
   const {
-    t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
+    t, doc, org, esc, fmt, formatDate, formatPostalAddress,
     dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow,
+    upiQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -99,14 +101,10 @@ export function html(ctx) {
   </div>
   <div class="srv-footer-row">
     <div>
-      <div style="font-weight:bold;margin-bottom:4px;">Bank Details:</div>
-      <div class="srv-bank-grid">
-        <div style="color:var(--muted);">Bank</div><div>${esc(bank.bank || "—")}</div>
-        <div style="color:var(--muted);">Account Holder</div><div>${esc(bank.accountHolder || org.companyName || "—")}</div>
-        <div style="color:var(--muted);">Account #</div><div>${esc(bank.accountNumber || "—")}</div>
-        <div style="color:var(--muted);">IFSC Code</div><div>${esc(bank.ifscCode || "—")}</div>
-        <div style="color:var(--muted);">Branch</div><div>${esc(bank.branch || "—")}</div>
-      </div>
+      ${upiQrSvg && t.grandTotal > 0 ? `
+        <div style="font-weight:bold;margin-bottom:4px;">Pay using UPI:</div>
+        <div class="dc-qr-img">${upiQrSvg}</div>
+      ` : ""}
     </div>
     <div style="text-align:right;color:#555;">
       <div style="font-size:9.5px;margin-bottom:4px;">For ${esc(org.companyName || "Your Company")}</div>

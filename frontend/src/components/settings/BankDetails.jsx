@@ -15,7 +15,6 @@ import {
   Trash2,
   CheckCircle,
   ArrowRight,
-  Link2,
   Landmark,
   Star,
   ArrowLeftRight,
@@ -156,10 +155,6 @@ const BankDetails = () => {
     toast("Transfer Funds is coming soon", { icon: "🏦" });
   };
 
-  const handleConnectAxis = () => {
-    toast("Connect Axis Bank integration is coming soon", { icon: "🔗" });
-  };
-
   if (loading) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -194,14 +189,6 @@ const BankDetails = () => {
             >
               <ArrowLeftRight className="h-4 w-4" />
               Transfer Funds
-            </button>
-            <button
-              type="button"
-              onClick={handleConnectAxis}
-              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 shadow-sm transition hover:bg-rose-100"
-            >
-              <Link2 className="h-4 w-4" />
-              Connect Axis
             </button>
             <button
               type="button"

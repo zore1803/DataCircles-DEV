@@ -39,6 +39,10 @@ const invoiceSchema = new mongoose.Schema({
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },
   receiverGSTIN: { type: String }, // Added receiverGSTIN field
+  // Which of the organization's saved bank accounts to print on this
+  // document. Left unset, PDF generation falls back to the org's default
+  // bank (getDefaultBankDetails) — same behavior as before this field existed.
+  bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
   transactionType: { type: String, enum: ['intra', 'inter'], default: 'intra' },
   gstRate: { type: Number, min: 0, max: 100, default: 18 },
   items: [{
