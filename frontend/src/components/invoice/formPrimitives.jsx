@@ -59,10 +59,10 @@ export const AddressFieldsGroup = ({ label, value, onChange, disabled = false, r
   const safeValue = value || emptyAddress();
   const fieldBorder = invalid
     ? "border-red-400 focus:ring-red-500/20 focus:border-red-500"
-    : "border-slate-200 focus:ring-blue-500/20 focus:border-[#0085FF]";
-  const inputCls = `w-full h-11 px-3.5 rounded-[12px] border ${fieldBorder} bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200`;
-  // Match the height/radius of the plain inputs beside them.
-  const pickerTriggerCls = "h-11 rounded-[12px] text-[13px]";
+    : "border-[#1F2937]/10 focus:ring-blue-500";
+  const inputCls = `w-full h-[38px] px-3.5 rounded-full border ${fieldBorder} bg-white text-[13px] text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-50 focus:outline-none focus:ring-1 transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200`;
+  // Match the height/radius/pill shape of the company form's inputs beside them.
+  const pickerTriggerCls = "h-[38px] rounded-full text-[13px]";
 
   const stateOptions = INDIA_STATES.map((n) => ({ value: n, label: n }));
   // Scoped to the selected state; before one is picked, offer every city we
@@ -270,10 +270,10 @@ export const PickerSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => { if (!disabled) setOpen((v) => !v); }}
-        className={`w-full ${triggerClassName} flex items-center gap-2 px-3 border bg-white text-left focus:outline-none transition-colors disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed ${
+        className={`w-full ${triggerClassName} flex items-center gap-2 px-3.5 border bg-white text-left focus:outline-none focus:ring-1 transition-all disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed ${
           invalid
-            ? "border-red-400 hover:border-red-500 focus:border-red-500"
-            : "border-[#E1E4EA] hover:border-[#C9CFD8] focus:border-[#0085FF]"
+            ? "border-red-400 focus:ring-red-500"
+            : "border-[#1F2937]/10 focus:ring-blue-500"
         }`}
       >
         {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />}

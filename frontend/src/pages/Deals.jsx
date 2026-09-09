@@ -664,7 +664,14 @@ const ModernKanbanColumn = React.memo(({
           additional cards scroll internally instead of growing the page. */}
       <div
         ref={setNodeRef}
-        className={`overflow-y-auto dc-card-scroll w-full px-[18px] pb-[18px] pt-3 transition-colors ${isOver ? "bg-blue-50/40" : ""}`}
+        // flex-1 + min-h-0: columns are flex items in a row, so every column
+        // box stretches to the tallest one's height — but this droppable only
+        // wrapped its own cards, so in a SHORT column all that empty space
+        // below the last card looked droppable while dnd-kit saw nothing
+        // there. Dropping into it produced over === null and the card
+        // reverted. Growing this to fill the column makes the whole visible
+        // column area a real drop target.
+        className={`overflow-y-auto dc-card-scroll w-full flex-1 min-h-0 px-[18px] pb-[18px] pt-3 transition-colors ${isOver ? "bg-blue-50/40" : ""}`}
         style={{ maxHeight: "1030px" }}
       >
         <div
@@ -2811,8 +2818,22 @@ function Deals() {
             {/* Table View Implementation */}
             {/* Bulk-actions banner now lives in the fixed title strip (replaces it when rows are selected) */}
 
-            <div className="relative bg-white border border-[#E1E4EA] -mx-6">
-              <div ref={tableScrollRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "866px" }}>
+            <div
+              ref={tableScrollRef}
+              className="overflow-x-auto overflow-y-auto top-[calc(118px+156px+var(--dc-offline-offset,0px))] lg:top-[calc(128px+104px+var(--dc-offline-offset,0px))]"
+              style={{
+                // Edge-to-edge fixed pane bounded between the KPI strip
+                // (118/156 mobile, 128/104 desktop — its own top+height, so
+                // this starts exactly where that ends) and the pagination
+                // bar, same architecture Companies.jsx already uses — not a
+                // bordered/rounded "card" floating in normal page flow.
+                position: "fixed",
+                left: "var(--sidebar-width, 0px)",
+                right: 0,
+                bottom: 64,
+                background: "#fff",
+              }}
+            >
                 <DealsTable
                   scrollContainerRef={tableScrollRef}
                   sortedTableDeals={paginatedTableDeals}
@@ -2840,7 +2861,6 @@ function Deals() {
                   externalColumnOrder={persistedColumnOrderKeys}
                 />
               </div>
-            </div>
 
             {sortedTableDeals.length > 0 && !showKanban && (
               <div

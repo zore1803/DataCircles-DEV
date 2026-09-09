@@ -225,8 +225,8 @@ const ItemSearchSelect = ({
       {/* Same static box shape as the Companies.jsx search bar (h-10,
           rounded-full, #E1E4EA border, #0085FF focus) — without its
           expand/collapse animation, which doesn't apply here. */}
-      <div className="relative h-10 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-colors hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white overflow-hidden">
-        <div className="pl-3 pr-2 flex items-center justify-center flex-shrink-0">
+      <div className="relative h-[38px] flex items-center border border-[#1F2937]/10 rounded-full bg-white transition-all focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden">
+        <div className="pl-3.5 pr-2 flex items-center justify-center flex-shrink-0">
           <SearchIcon className="w-4 h-4 text-[#525866]" />
         </div>
 
@@ -237,7 +237,7 @@ const ItemSearchSelect = ({
           value={searchTerm}
           onChange={handleSearchChange}
           onFocus={handleInputFocus}
-          className="w-full h-full bg-transparent text-sm focus:outline-none pr-4 min-w-[100px]"
+          className="w-full h-full bg-transparent text-[13px] text-[#1F2937] focus:outline-none pr-4 min-w-[100px]"
           aria-label="Search items or variants"
         />
       </div>
@@ -1473,6 +1473,7 @@ const InvoiceFormFull = ({
                       displayKey="title"
                       valueKey="_id"
                       className="w-full"
+                      compact
                     />
                   </div>
                   {dealError && (
@@ -1487,7 +1488,7 @@ const InvoiceFormFull = ({
                     <input
                       ref={dateInputRef}
                       type="date"
-                      className={`w-full pl-3 pr-8 py-2.5 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:border-blue-500 ${dateError ? "border-red-500 focus:ring-red-500/20" : "border-gray-300 focus:ring-blue-500/20"}`}
+                      className={`w-full h-[38px] px-3.5 text-[13px] border rounded-full bg-white focus:outline-none focus:ring-1 transition-all ${dateError ? "border-red-400 focus:ring-red-500" : "border-[#1F2937]/10 focus:ring-blue-500"}`}
                       value={form.date}
                       onChange={(e) => {
                         const newDate = e.target.value;
@@ -1514,14 +1515,11 @@ const InvoiceFormFull = ({
                 <div className="md:col-span-3 space-y-2">
                   <div className="flex items-center gap-1">
                     <label className="text-sm font-semibold text-gray-700">Due Date</label>
-                    <div className="group relative">
-                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
-                    </div>
                   </div>
                   <div className="relative">
                     <input
                       type="date"
-                      className="w-full pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      className="w-full h-[38px] px-3.5 text-[13px] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                       value={form.dueDate}
                       min={new Date().toISOString().split("T")[0]}
                       onChange={(e) => {
@@ -1554,9 +1552,6 @@ const InvoiceFormFull = ({
                 <div className="md:col-span-3 space-y-2">
                   <div className="flex items-center gap-1">
                     <label className="text-sm font-semibold text-gray-700">Reference</label>
-                    <div className="group relative">
-                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
-                    </div>
                   </div>
                   <input
                     type="text"
@@ -1566,7 +1561,7 @@ const InvoiceFormFull = ({
                       setForm((prev) => ({ ...prev, reference: e.target.value }));
                       setHasUnsavedChanges(true);
                     }}
-                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full h-[38px] px-3.5 text-[13px] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                   />
                 </div>
 
@@ -1646,9 +1641,6 @@ const InvoiceFormFull = ({
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-slate-800">Products & Services</h3>
-                  <div className="group relative">
-                    <div className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px] cursor-help">?</div>
-                  </div>
                   <button
                     type="button"
                     onClick={handleOpenItemForm}
@@ -1662,9 +1654,6 @@ const InvoiceFormFull = ({
                     <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" defaultChecked />
                     Show description
                   </label>
-                  <button type="button" className="text-gray-400 hover:text-gray-600" aria-label="Settings">
-                    <Settings className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
 
@@ -1697,12 +1686,12 @@ const InvoiceFormFull = ({
                     placeholder="Qty"
                     value={quickAddQty}
                     onChange={(e) => setQuickAddQty(e.target.value)}
-                    className="w-20 h-[42px] text-center text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 flex-shrink-0"
+                    className="w-20 h-[38px] text-center text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all flex-shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
                     type="button"
                     onClick={handleAddToBill}
-                    className="h-[42px] px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
+                    className="h-[38px] px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-[#158FFF] hover:opacity-90 text-white text-[13px] font-semibold rounded-full transition-colors whitespace-nowrap"
                   >
                     <Plus className="w-4 h-4" />
                     Add to Bill
@@ -1776,7 +1765,7 @@ const InvoiceFormFull = ({
                               handleItemChange(index, "quantity", e.target.value);
                               setHasUnsavedChanges(true);
                             }}
-                            className="w-full text-center text-sm border border-gray-200 rounded-lg px-2 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                            className="w-full text-center text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full px-3 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             required
                           />
                         </div>
@@ -1793,32 +1782,35 @@ const InvoiceFormFull = ({
                               handleItemChange(index, "rate", e.target.value);
                               setHasUnsavedChanges(true);
                             }}
-                            className="w-full text-right text-sm border border-gray-200 rounded-lg px-2 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                            className="w-full text-right text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full px-3 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             required
                           />
                         </div>
 
                         {/* GST % */}
                         <div className="col-span-1">
-                          <select
-                            value={item.gstRate ?? 0}
-                            onChange={(e) => {
-                              handleItemChange(index, "gstRate", parseFloat(e.target.value));
-                              setHasUnsavedChanges(true);
-                            }}
-                            className="w-full text-center text-sm border border-gray-200 rounded-lg px-1 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                          >
-                            <option value={0}>0%</option>
-                            <option value={5}>5%</option>
-                            <option value={12}>12%</option>
-                            <option value={18}>18%</option>
-                            <option value={28}>28%</option>
-                          </select>
+                          <div className="relative">
+                            <select
+                              value={item.gstRate ?? 0}
+                              onChange={(e) => {
+                                handleItemChange(index, "gstRate", parseFloat(e.target.value));
+                                setHasUnsavedChanges(true);
+                              }}
+                              className="w-full appearance-none text-center text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full pl-2 pr-5 py-2.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                            >
+                              <option value={0}>0%</option>
+                              <option value={5}>5%</option>
+                              <option value={12}>12%</option>
+                              <option value={18}>18%</option>
+                              <option value={28}>28%</option>
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                          </div>
                         </div>
 
                         {/* Discount */}
                         <div className="col-span-2">
-                          <div className="flex items-center gap-1 border border-gray-200 rounded-lg bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-colors overflow-hidden">
+                          <div className="flex items-center border border-[#1F2937]/10 rounded-full bg-gray-50 focus-within:bg-white focus-within:ring-1 focus-within:ring-blue-500 transition-all overflow-hidden">
                             <input
                               type="number" onWheel={(e) => e.target.blur()}
                               placeholder="0"
@@ -1829,19 +1821,22 @@ const InvoiceFormFull = ({
                                 handleItemChange(index, "discount", e.target.value);
                                 setHasUnsavedChanges(true);
                               }}
-                              className="w-full min-w-0 text-center text-sm px-2 py-2.5 bg-transparent focus:outline-none"
+                              className="w-full min-w-0 text-center text-[13px] text-[#1F2937] pl-3 pr-1 py-2.5 bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
-                            <select
-                              value={item.discountType}
-                              onChange={(e) => {
-                                handleItemChange(index, "discountType", e.target.value);
-                                setHasUnsavedChanges(true);
-                              }}
-                              className="w-12 text-xs font-medium border-l border-gray-200 bg-gray-100 py-3 focus:outline-none cursor-pointer"
-                            >
-                              <option value="percentage">%</option>
-                              <option value="amount">₹</option>
-                            </select>
+                            <div className="relative flex-shrink-0">
+                              <select
+                                value={item.discountType}
+                                onChange={(e) => {
+                                  handleItemChange(index, "discountType", e.target.value);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-14 appearance-none text-xs font-medium text-[#1F2937] border-l border-[#1F2937]/10 bg-gray-100 pl-2 pr-5 py-3 focus:outline-none cursor-pointer"
+                              >
+                                <option value="percentage">%</option>
+                                <option value="amount">₹</option>
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            </div>
                           </div>
                         </div>
 
@@ -1930,33 +1925,6 @@ const InvoiceFormFull = ({
                   />
                 </div>
 
-                {/* E-Waybill & Attachments */}
-                <div className="pt-4 space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <div className="relative">
-                      <input type="checkbox" className="sr-only peer" />
-                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700">Create E-Waybill</span>
-                  </label>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm font-semibold text-gray-700">Attach files</span>
-                      <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
-                    </div>
-                    <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 border-dashed rounded-lg hover:border-gray-400 transition-colors">
-                      <span className="text-lg">↑</span> Attach Files (Max: 5)
-                    </button>
-                  </div>
-
-                  <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
-                    <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
-                      {/* empty state */}
-                    </div>
-                    Use Coupons
-                  </label>
-                </div>
               </div>
 
               {/* Right Column: Totals, Bank, Signature */}
@@ -1966,14 +1934,14 @@ const InvoiceFormFull = ({
                 <div className="bg-[#EBF5EE] rounded-xl p-5 shadow-sm space-y-4 relative">
                   <div className="flex justify-end gap-2 items-center mb-2">
                     <span className="text-xs text-gray-500 font-medium">Extra Discount</span>
-                    <div className="flex items-center border border-gray-200 bg-white rounded-lg overflow-hidden h-8">
+                    <div className="flex items-center border border-[#1F2937]/10 bg-white rounded-full overflow-hidden h-[38px] focus-within:ring-1 focus-within:ring-blue-500 transition-all">
                       <select
                         value={form.discount.type}
                         onChange={(e) => {
                           handleDiscountChange("type", e.target.value);
                           setHasUnsavedChanges(true);
                         }}
-                        className="text-xs font-medium text-gray-600 bg-transparent border-r border-gray-200 pl-3 pr-2 py-1 focus:outline-none cursor-pointer"
+                        className="text-xs font-medium text-gray-600 bg-transparent border-r border-[#1F2937]/10 pl-3.5 pr-2 py-1 focus:outline-none cursor-pointer"
                       >
                         <option value="fixed">₹</option>
                         <option value="percentage">%</option>
@@ -1988,7 +1956,7 @@ const InvoiceFormFull = ({
                           handleDiscountChange("value", e.target.value);
                           setHasUnsavedChanges(true);
                         }}
-                        className="w-16 text-right text-xs pr-3 pl-1 focus:outline-none"
+                        className="w-16 text-right text-[13px] text-[#1F2937] pr-3.5 pl-1 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -2066,17 +2034,6 @@ const InvoiceFormFull = ({
                       {numberToWords(finalTotal)}
                     </div>
                   </div>
-                </div>
-
-                {/* Select Bank */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <label className="text-sm font-semibold text-gray-700">Select Bank</label>
-                    <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
-                  </div>
-                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-lg text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
-                    <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
-                  </button>
                 </div>
 
                 {/* Signature — same functional select + preview + default-

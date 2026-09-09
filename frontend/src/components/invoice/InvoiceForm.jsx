@@ -2977,7 +2977,7 @@ const CreateInvoicePanel = ({
 
   const dealOptions = deals.map((d) => ({ value: d._id, label: d.title }));
   const inputClass =
-    "w-full h-10 px-2.5 rounded-lg border border-[#E1E4EA] bg-white text-[13px] text-[#1F2937] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] transition-colors";
+    "w-full h-[38px] px-3.5 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
 
   // Catalogue descriptions can be stored as rich-text HTML; show plain text in
   // the description field instead of raw markup.
@@ -3304,6 +3304,7 @@ const CreateInvoicePanel = ({
                   placeholder="Search and select deal"
                   icon={Search}
                   invalid={fieldErrors.deal}
+                  triggerClassName="h-[38px] rounded-full"
                   onSelect={(o) => {
                     setFieldErrors((prev) => ({ ...prev, deal: false }));
                     // Switching the deal always replaces the Receiver GSTIN
@@ -3343,7 +3344,7 @@ const CreateInvoicePanel = ({
                   type="button"
                   onClick={onAddDeal}
                   title="Create a new deal"
-                  className="w-10 h-10 flex-shrink-0 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
+                  className="w-[38px] h-[38px] flex-shrink-0 rounded-full bg-[#158FFF] hover:opacity-90 text-white flex items-center justify-center transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -3588,7 +3589,7 @@ const CreateInvoicePanel = ({
                   onFocus={() => { if (quickAddSearch && !quickAddId) setQuickAddOpen(true); }}
                   onBlur={() => setTimeout(() => setQuickAddOpen(false), 150)}
                   placeholder="Search items or variants…"
-                  className="w-full h-[42px] pl-9 pr-8 text-[13px] bg-white border border-[#E1E4EA] rounded-lg focus:outline-none focus:border-[#0085FF] placeholder:text-[#99A0AE]"
+                  className="w-full h-[38px] pl-9 pr-8 text-[13px] text-[#1F2937] bg-white border border-[#1F2937]/10 rounded-full focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
                 />
                 {(quickAddSearch || quickAddId) && (
                   <button
@@ -3639,12 +3640,12 @@ const CreateInvoicePanel = ({
                   value={quickAddQty}
                   onChange={(e) => setQuickAddQty(e.target.value)}
                   onWheel={(e) => e.target.blur()}
-                  className="w-20 h-[42px] text-center text-[13px] border border-[#E1E4EA] rounded-lg bg-white focus:outline-none focus:border-[#0085FF] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-20 h-[38px] text-center text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <button
                   type="button"
                   onClick={handleAddToBill}
-                  className="h-[42px] px-4 flex items-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-semibold rounded-lg transition-colors whitespace-nowrap"
+                  className="h-[38px] px-4 flex items-center gap-1.5 bg-[#158FFF] hover:opacity-90 text-white text-[13px] font-semibold rounded-full transition-colors whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4" />
                   Add to Bill
@@ -3829,7 +3830,7 @@ const CreateInvoicePanel = ({
                 value={form.notes}
                 onChange={(e) => setField("notes", e.target.value)}
                 placeholder={`A short message to the customer, e.g. "Thank you for the business!"`}
-                className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-[#1F2937]/10 text-[13px] text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-y"
               />
             </div>
             <div className="flex flex-col">
@@ -3848,7 +3849,7 @@ const CreateInvoicePanel = ({
                 value={form.terms}
                 onChange={(e) => setField("terms", e.target.value)}
                 placeholder={"1. Goods once sold cannot be taken back or exchanged.\n2. Subject to local jurisdiction."}
-                className="w-full px-3 py-2 rounded-lg border border-[#E1E4EA] text-[13px] placeholder:text-[#99A0AE] focus:outline-none focus:border-[#0085FF] resize-y"
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-[#1F2937]/10 text-[13px] text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-y"
               />
             </div>
           </div>
@@ -3857,12 +3858,12 @@ const CreateInvoicePanel = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
             <div className="flex flex-col gap-1">
               <FieldLabel>Signature</FieldLabel>
-              <div className="relative flex items-center h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+              <div className="relative flex items-center h-[38px] rounded-full border border-[#1F2937]/10 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden transition-all">
                 <select
                   value={form.signature}
                   onChange={(e) => setField("signature", e.target.value)}
                   disabled={signaturesLoading}
-                  className="flex-1 min-w-0 h-full pl-3 pr-8 text-[13px] bg-transparent appearance-none focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex-1 min-w-0 h-full pl-3.5 pr-8 text-[13px] text-[#1F2937] bg-transparent appearance-none focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <option value="">No signature</option>
                   {savedSignatures.map((sig) => (
@@ -3906,7 +3907,7 @@ const CreateInvoicePanel = ({
             <div className="flex flex-col gap-1">
               <FieldLabel>{docName} Discount</FieldLabel>
               <div className="flex items-center gap-2">
-              <div className="relative flex items-center flex-1 min-w-0 h-10 rounded-lg border border-[#E1E4EA] focus-within:border-[#0085FF] overflow-hidden">
+              <div className="relative flex items-center flex-1 min-w-0 h-[38px] rounded-full border border-[#1F2937]/10 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden transition-all">
                 <input
                   type="number"
                   min="0"
@@ -3934,7 +3935,7 @@ const CreateInvoicePanel = ({
                     }
                     setField("discount", { ...form.discount, value: clamped });
                   }}
-                  className="flex-1 min-w-0 h-full px-2.5 text-[13px] focus:outline-none"
+                  className="flex-1 min-w-0 h-full px-3.5 text-[13px] text-[#1F2937] focus:outline-none"
                 />
                 <div className="flex items-stretch h-full">
                   <span className="w-7 flex items-center justify-center text-[13px] font-semibold text-[#0085FF]">

@@ -14,6 +14,7 @@ import ColumnSettingsPanel from "../ColumnSettingsPanel";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import { getAncestorZoom } from "../../utils/domUtils";
 import BulkActionBar from "../common/BulkActionBar";
+import BulkActions from "../BulkActions";
 import { useBulkStrip } from "../../hooks/useBulkSelection";
 import useSearchOverlayOpen from "../../hooks/useSearchOverlayOpen";
 import * as XLSX from "xlsx";
@@ -88,6 +89,8 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     limit: 20,
@@ -460,6 +463,45 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
     }
   };
 
+  // One field at a time across the selected entries, same shared BulkActions
+  // dialog the Items/Products pages use. Kept to the fields that are safe to
+  // set in bulk — amount/date are per-entry facts, not batch edits.
+  const ledgerFieldConfig = {
+    fields: [
+      { key: "category", label: "Category", type: "text" },
+      {
+        key: "paymentType",
+        label: "Mode",
+        type: "select",
+        options: ["UPI", "Cash", "Card", "Net Banking", "Cheque", "EMI"],
+      },
+      { key: "status", label: "Status", type: "select", options: ["Pending", "Paid"] },
+      { key: "notes", label: "Notes", type: "text" },
+    ],
+  };
+
+  const handleBulkUpdate = async ({ field, value, itemIds }) => {
+    setBulkUpdating(true);
+    try {
+      // Sequential for the same reason handleBulkDelete is.
+      let failed = 0;
+      for (const id of itemIds) {
+        try {
+          await API.put(`/expenses/${id}`, { [field]: value });
+        } catch {
+          failed += 1;
+        }
+      }
+      if (failed) toast.error(`${failed} of ${itemIds.length} could not be updated`);
+      else toast.success(`${itemIds.length} updated`);
+      setSelectedIds([]);
+      setShowBulkActions(false);
+      fetchData();
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
   const closeRowMenu = () => {
     setOpenMenu(null);
     setRowMenuPos(null);
@@ -622,6 +664,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
             onDeselectAll={() => setSelectedIds([])}
             onExport={handleExport}
             onDelete={handleBulkDelete}
+            onUpdateStatus={() => setShowBulkActions(true)}
             onCancel={() => setSelectedIds([])}
           />
         ) : (
@@ -1494,6 +1537,16 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
         onEdit={(row) => { setViewRow(null); openEdit(row); }}
         onConvert={(row) => { setViewRow(null); handleConvert(row); }}
         convertLabel={convertTargetLabel}
+      />
+
+      <BulkActions
+        isOpen={showBulkActions}
+        onClose={() => setShowBulkActions(false)}
+        selectedItems={sortedRows.filter((r) => selectedIds.includes(r._id))}
+        onBulkUpdate={handleBulkUpdate}
+        fieldConfig={ledgerFieldConfig}
+        module="expenses"
+        loading={bulkUpdating}
       />
 
     </div>

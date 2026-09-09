@@ -6400,6 +6400,27 @@ const Insights = () => {
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
       .slice(0, 5);
 
+    // Invoiced value split by status, in the same {name, value, pct} shape
+    // DealsIndustryTreemap takes — this replaced a single fixed-width blue
+    // box that only restated the total already shown above it and left most
+    // of the card empty.
+    const invoicesByStatus = (() => {
+      const totals = {};
+      filteredData.filteredInvoices.forEach((inv) => {
+        const status = inv.status || "Draft";
+        totals[status] = (totals[status] || 0) + (inv.amount || 0);
+      });
+      const entries = Object.entries(totals)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const top = entries.slice(0, 4).map(([name, value]) => ({ name, value }));
+      const restValue = entries.slice(4).reduce((sum, [, v]) => sum + v, 0);
+      const items = restValue > 0 ? [...top, { name: "Others", value: restValue }] : top;
+      items.sort((a, b) => b.value - a.value);
+      const total = items.reduce((sum, i) => sum + i.value, 0);
+      return items.map((i) => ({ ...i, pct: total > 0 ? Math.round((i.value / total) * 100) : 0 }));
+    })();
+
     const recentInvoiceActivity = [...filteredData.filteredInvoices]
       .filter((i) => i.updatedAt || i.createdAt)
       .sort(
@@ -6510,23 +6531,14 @@ const Insights = () => {
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl p-6 flex flex-col justify-between max-w-[220px]" style={{ background: "#0085FF", height: 420 }}>
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-sm font-medium text-white/80">INVOICES</span>
-                <div className="flex items-center gap-1 text-white/90 flex-shrink-0">
-                  {totalInvoicedChange >= 0 ? (
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  ) : (
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  )}
-                  <span className="text-xs font-medium">
-                    {Math.abs(totalInvoicedChange).toFixed(2)}%
-                  </span>
+            <div className="mt-4">
+              {invoicesByStatus.length === 0 ? (
+                <div className="flex items-center justify-center text-sm text-gray-400" style={{ height: 327 }}>
+                  No invoices yet
                 </div>
-              </div>
-              <div className="text-2xl font-semibold text-white">
-                ₹{formatNumberToIndian(Math.round(totalAmount))}
-              </div>
+              ) : (
+                <DealsIndustryTreemap items={invoicesByStatus} />
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-4">

@@ -20,6 +20,7 @@ import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import PageSkeleton from "../components/common/PageSkeleton";
 import StockMovementModal from "../components/inventory/StockMovementModal";
+import BulkActions from "../components/BulkActions";
 import HighlightText from "../components/common/HighlightText";
 import StatTile from "../components/common/StatTile";
 
@@ -220,6 +221,44 @@ export default function Inventory() {
      Mirrors Deals.jsx: the strip's unmount is delayed so it can play a
      slide-out-right exit on deselect, matching the slide-in-left entrance. */
   const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Same shape ProductsServices.jsx uses — both pages edit the same /items
+  // collection, so one field at a time across the selected rows.
+  const inventoryFieldConfig = {
+    fields: [
+      { key: "category", label: "Category", type: "text" },
+      { key: "purchasePrice", label: "Purchase Price", type: "text" },
+      { key: "sellingPrice", label: "Sale Price", type: "text" },
+      { key: "isActive", label: "Status", type: "boolean" },
+    ],
+  };
+
+  const handleBulkUpdateItems = async ({ field, value, itemIds }) => {
+    setBulkLoading(true);
+    try {
+      const parsed =
+        field === "purchasePrice" || field === "sellingPrice"
+          ? Number(value)
+          : field === "isActive"
+            ? value === "true"
+            : value;
+      await Promise.all(itemIds.map((id) => API.put(`/items/${id}`, { [field]: parsed })));
+      await fetchData();
+      toast.success(`Successfully updated ${itemIds.length} item(s)`);
+      setSelectedIds([]);
+      setShowBulkActions(false);
+    } catch (err) {
+      if (err.response?.status === 402) {
+        toast.error(err.response?.data?.message || "An active subscription is required to make changes.");
+      } else {
+        toast.error(err.response?.data?.error || "Bulk update failed");
+      }
+    } finally {
+      setBulkLoading(false);
+    }
+  };
   const [showBulkStrip, setShowBulkStrip] = useState(false);
   const [bulkStripClosing, setBulkStripClosing] = useState(false);
   useEffect(() => {
@@ -834,6 +873,7 @@ export default function Inventory() {
               const rows = filteredItems.filter((i) => selectedIds.includes(i._id));
               handleExportExcel(rows.length > 0 ? rows : filteredItems);
             }}
+            onUpdateStatus={() => setShowBulkActions(true)}
             onCancel={() => setSelectedIds([])}
           />
         ) : (
@@ -1293,6 +1333,16 @@ export default function Inventory() {
       </div>
 
       {/* ── Stock In / Stock Out ─────────────────────────────────────── */}
+      <BulkActions
+        isOpen={showBulkActions}
+        onClose={() => setShowBulkActions(false)}
+        selectedItems={items.filter((i) => selectedIds.includes(i._id))}
+        onBulkUpdate={handleBulkUpdateItems}
+        fieldConfig={inventoryFieldConfig}
+        module="items"
+        loading={bulkLoading}
+      />
+
       <StockMovementModal
         isOpen={stockModal.open}
         item={stockModal.item}

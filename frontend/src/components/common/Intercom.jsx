@@ -78,6 +78,11 @@ export default function Intercom({ isAuthenticated, isSetupComplete }) {
           created_at: user.createdAt
             ? Math.floor(new Date(user.createdAt).getTime() / 1000)
             : undefined,
+          // Default launcher sits flush in the bottom-right corner, right on
+          // top of the fixed pagination bar every list page has there —
+          // nudged up so it always clears it, app-wide (not per-page).
+          vertical_padding: 90,
+          horizontal_padding: 24,
         };
 
         window.Intercom?.("boot", window.intercomSettings);

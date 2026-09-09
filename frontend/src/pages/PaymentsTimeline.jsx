@@ -1632,15 +1632,18 @@ export default function PaymentsTimeline() {
         </div>
       </div>
 
-      {/* ── Bulk-action strip — its own band directly above the KPIs, so the
-          account cards above it stay visible while rows are selected. ── */}
+      {/* ── Bulk-action strip — takes over the KPI band's slot rather than
+          inserting a band of its own, so selecting rows doesn't push the
+          whole page down by an extra row (same "strip replaces the bar"
+          pattern as Companies/Accounting). Falls back to its own height
+          when the KPI band is hidden via the three-dot menu. ── */}
       {stripVisible && (
         <div
           className="fixed right-0 box-border flex items-center bg-white border-b border-[#E1E4EA] px-4 sm:px-6 lg:px-8"
           style={{
             left: "var(--sidebar-width, 0px)",
             top: TOOLBAR_BOTTOM,
-            height: BULK_STRIP_HEIGHT,
+            height: showStats ? KPI_BAND_HEIGHT : BULK_STRIP_HEIGHT,
             zIndex: 39,
             boxSizing: "border-box",
           }}
@@ -1669,10 +1672,10 @@ export default function PaymentsTimeline() {
           (bordered band, 40x40 icon boxes, gap-6 between cards), narrowing
           to the selection when rows are selected. Toggled via the
           three-dot menu's Hide/Unhide KPIs item. ─────────────────────── */}
-      {showStats && (
+      {showStats && !stripVisible && (
         <div
           className="fixed right-0 box-border flex flex-col justify-center bg-white border-b border-[#E1E4EA] px-6 py-6"
-          style={{ left: "var(--sidebar-width, 0px)", top: TOOLBAR_BOTTOM + (stripVisible ? BULK_STRIP_HEIGHT : 0), height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
+          style={{ left: "var(--sidebar-width, 0px)", top: TOOLBAR_BOTTOM, height: KPI_BAND_HEIGHT, zIndex: 38, boxSizing: "border-box" }}
         >
           <div className="grid grid-cols-2 lg:flex lg:flex-row lg:items-stretch gap-3 lg:gap-6">
             {[
@@ -1712,10 +1715,16 @@ export default function PaymentsTimeline() {
         style={{
           left: "var(--sidebar-width, 0px)",
           bottom: 64,
+          // The strip and the KPI band occupy the SAME slot now (one or the
+          // other, never both), so this adds a single band's height —
+          // whichever is currently showing — instead of summing them.
           top:
             TOOLBAR_BOTTOM +
-            (stripVisible ? BULK_STRIP_HEIGHT : 0) +
-            (showStats ? KPI_BAND_HEIGHT : 0),
+            (showStats
+              ? KPI_BAND_HEIGHT
+              : stripVisible
+                ? BULK_STRIP_HEIGHT
+                : 0),
           paddingLeft: "var(--content-inset, 16px)",
         }}
       >

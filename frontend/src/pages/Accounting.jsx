@@ -1217,7 +1217,6 @@ const Accounting = () => {
   const [showBulkEmailGroupedModal, setShowBulkEmailGroupedModal] = useState(false);
   const [bulkUpdateStatus, setBulkUpdateStatus] = useState("");
   const [bulkUpdating, setBulkUpdating] = useState(false);
-  const [bulkShowMoreMenu, setBulkShowMoreMenu] = useState(false);
   const [bulkConvertMenuOpen, setBulkConvertMenuOpen] = useState(false);
   const [bulkConverting, setBulkConverting] = useState(false);
   const [bulkSignatureUpdating, setBulkSignatureUpdating] = useState(false);
@@ -2294,27 +2293,22 @@ const Accounting = () => {
       }
 
       case "status":
+        // Plain, non-interactive pill — matching the status badge everywhere
+        // else in the app (Purchases, Purchase Orders, ...). This used to be
+        // a live <select> that changed the record's status on pick, right
+        // from the table; status changes now only happen through the row's
+        // own Edit action, not an inline control easy to bump by accident.
         return (
           <div className="relative inline-block">
-            <select
-              value={doc?.status}
-              onChange={(e) =>
-                handleStatusChange(doc._id, e.target.value, activeTab)
-              }
-              className={`inline-flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs font-semibold ${getStatusBadgeColor(
-                doc.status
-              )} focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer`}
+            <span
+              className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeColor(doc.status)}`}
             >
-              {statusOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+              {doc.status}
+            </span>
             {searchQuery && searchQuery.trim() && doc.status
               ?.toLowerCase()
               .includes(searchQuery.trim().toLowerCase()) && (
-                <span className="absolute inset-0 rounded-lg ring-2 ring-yellow-300 pointer-events-none" />
+                <span className="absolute inset-0 rounded-full ring-2 ring-yellow-300 pointer-events-none" />
               )}
           </div>
         );
@@ -2349,7 +2343,7 @@ const Accounting = () => {
             mirroring the Companies page layout and slide animation. */}
         {showBulkStrip && (
           <div
-            className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
+            className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
             style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
           >
             <div
@@ -2430,73 +2424,6 @@ const Accounting = () => {
                     )}
                   </div>
                 )}
-                <div className="relative flex items-center">
-                  <button
-                    onClick={() => setBulkShowMoreMenu(!bulkShowMoreMenu)}
-                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
-                  >
-                    <MoreVertical className="w-4 h-4 text-gray-600" />
-                    More
-                  </button>
-                  {bulkShowMoreMenu && (
-                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-50 overflow-hidden">
-                      {activeTab === "tax" && (
-                        <button
-                          onClick={() => { setBulkShowMoreMenu(false); toast.error("Record Payment coming soon"); }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
-                        >
-                          <IndianRupee className="w-4 h-4 text-emerald-600" />
-                          Record Payment
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { setBulkShowMoreMenu(false); handleBulkPrint(); }}
-                        disabled={bulkPrinting}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
-                      >
-                        <Printer className="w-4 h-4 text-gray-600" />
-                        Print
-                      </button>
-                      <button
-                        onClick={() => { setBulkShowMoreMenu(false); setShowBulkSignatureModal(true); }}
-                        disabled={bulkSignatureLoading}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
-                      >
-                        <PenTool className="w-4 h-4 text-blue-600" />
-                        Change Signature
-                      </button>
-                      <button
-                        onClick={() => { 
-                          if(window.confirm(`Are you sure you want to remove the signature from ${selectedIds.length} documents?`)) {
-                            handleBulkSignatureUpdate("", true);
-                          } else {
-                            setBulkShowMoreMenu(false);
-                          }
-                        }}
-                        disabled={bulkSignatureLoading}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100 disabled:opacity-50"
-                      >
-                        <X className="w-4 h-4 text-red-600" />
-                        Remove Signature
-                      </button>
-                      <button
-                        onClick={() => { setBulkShowMoreMenu(false); toast.info("Digital signing feature coming soon. You will be able to send documents for e-signature here."); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-b border-gray-100"
-                      >
-                        <FileText className="w-4 h-4 text-blue-600" />
-                        Digital Sign
-                      </button>
-                      <button
-                        onClick={() => { setBulkShowMoreMenu(false); handleBulkDownloadPdf(); }}
-                        disabled={bulkDownloading}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors disabled:opacity-50"
-                      >
-                        <Layers className="w-4 h-4 text-indigo-600" />
-                        Merge
-                      </button>
-                    </div>
-                  )}
-                </div>
                 <button
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={bulkDeleting}

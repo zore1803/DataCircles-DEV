@@ -1075,7 +1075,7 @@ export default function DealsTable({
                             right: isRightSticky ? pinnedRightOffsets[colId] ?? 0 : "auto",
                             zIndex: isSticky ? 10 : 1,
                           }}
-                          className={`${colId === "selection" ? "px-0" : "px-3"} py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA] ${colId === "selection" && isLastRow ? "rounded-bl-lg" : ""}`}
+                          className={`${colId === "selection" ? "px-0" : "px-3"} py-2 text-sm font-medium text-[#222530] align-middle bg-inherit border-r border-b border-[#E1E4EA]`}
                         >
                           <div style={{ overflow: "hidden" }}>
                             {flexRender(

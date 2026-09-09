@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { NAV_RESET_EVENT } from "../hooks/useNavReset";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
+import { useSubscription } from "../contexts/SubscriptionContext";
 
 
 import {
@@ -190,6 +191,15 @@ const secondary = {
 const Navbar = () => {
   const { logout: auth0Logout } = useAuth0();
   const isSearchOverlayOpen = useSearchOverlayOpen();
+  // Same trial/unpaid condition Header.jsx uses for its countdown pill —
+  // the sidebar's Upgrade Pro card used to show unconditionally regardless
+  // of plan/trial state, telling an already-paying customer to "unlock all
+  // benefits" they already have. Read from SubscriptionContext (already
+  // fetched app-wide, refreshed on every billing mutation) instead of a
+  // second /auth/me call.
+  const { subscription: subscriptionState } = useSubscription();
+  const sub = subscriptionState?.subscription;
+  const shouldShowUpgradeCard = !!(sub?.isTrialActive || (sub?.trialUsed && !sub?.isPaymentConfirmed));
   const [profile, setProfile] = useState("");
   const [kanbanName, setKanbanName] = useState("");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -971,20 +981,12 @@ const Navbar = () => {
           {/* Book a Call + Upgrade card. Expanded only: the collapsed rail is
               64px, so there's nothing sensible to show there. Widths match the
               nav rows above (full width inside the same px-2 gutter) rather
-              than a fixed 204px, so the card lines up with the sidebar edges. */}
-          {(isHovered || isMobileOpen) && (
+              than a fixed 204px, so the card lines up with the sidebar edges.
+              Gated on the same trial/unpaid condition as the header's
+              countdown pill — a paying, non-trial account no longer sees
+              "unlock all benefits" it already has. */}
+          {(isHovered || isMobileOpen) && shouldShowUpgradeCard && (
             <div className="flex-shrink-0 flex flex-col items-start gap-3.5 px-2 pt-8 pb-2">
-              <button
-                type="button"
-                onClick={() => setIsMobileOpen(false)}
-                className={`${CTA_PILL} w-full h-[42px] px-6 gap-2`}
-                style={CTA_PILL_STYLE}
-              >
-                <span className="text-[12px] font-normal leading-5 text-center text-white whitespace-nowrap">
-                  Book a Call
-                </span>
-              </button>
-
               <div className="box-border flex flex-col items-start p-4 gap-3.5 w-full bg-[#F2F5F8] border border-[#E1E4EA] rounded-[14px]">
                 <div className="flex flex-col items-start gap-1.5 self-stretch">
                   <span className="text-[16px] font-semibold leading-[120%] text-[#181B25]">
@@ -1006,6 +1008,19 @@ const Navbar = () => {
                   <Crown className="w-5 h-5 flex-shrink-0 text-white" />
                   <span className="text-[14px] font-normal leading-5 text-center text-white whitespace-nowrap">
                     Upgrade Plan
+                  </span>
+                </button>
+                {/* Book a Call now lives inside the upgrade card rather than
+                    as its own standalone pill above it — one grouped CTA
+                    block instead of two competing buttons stacked. */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileOpen(false)}
+                  className={`${CTA_PILL} self-stretch h-[42px] px-6 gap-2`}
+                  style={CTA_PILL_STYLE}
+                >
+                  <span className="text-[12px] font-normal leading-5 text-center text-white whitespace-nowrap">
+                    Book a Call
                   </span>
                 </button>
               </div>

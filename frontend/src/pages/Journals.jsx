@@ -1057,7 +1057,7 @@ export default function Journals() {
       {/* ── Bulk selection strip ─────────────────────────────────────── */}
       {showBulkStrip && (
         <div
-          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-blue-200 bg-blue-50 flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
+          className="fixed right-0 h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E1E4EA] bg-white flex items-center top-[calc(54px+var(--dc-offline-offset,0px))] lg:top-[calc(64px+var(--dc-offline-offset,0px))]"
           style={{ left: "var(--sidebar-width, 0px)", zIndex: 41 }}
         >
           <div
@@ -1096,24 +1096,14 @@ export default function Journals() {
                 Delete
               </button>
               {activeTab === "active" && (
-                <>
-                  <button
-                    onClick={handleBulkClose}
-                    disabled={isClosingBulk}
-                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
-                  >
-                    {isClosingBulk ? <Loader2 className="w-4 h-4 animate-spin text-orange-600" /> : <Lock className="w-4 h-4 text-orange-600" />}
-                    Close All
-                  </button>
-                  <button
-                    onClick={handleBulkCancel}
-                    disabled={isCancellingBulk}
-                    className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
-                  >
-                    {isCancellingBulk ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
-                    Cancel All
-                  </button>
-                </>
+                <button
+                  onClick={handleBulkClose}
+                  disabled={isClosingBulk}
+                  className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
+                >
+                  {isClosingBulk ? <Loader2 className="w-4 h-4 animate-spin text-orange-600" /> : <Lock className="w-4 h-4 text-orange-600" />}
+                  Close All
+                </button>
               )}
               {(activeTab === "cancelled" || activeTab === "settled") && (
                 <button
