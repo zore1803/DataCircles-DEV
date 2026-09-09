@@ -27,7 +27,6 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [ifscLoading, setIfscLoading] = useState(false);
-  const [upiChecking, setUpiChecking] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -83,22 +82,6 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
     } finally {
       setIfscLoading(false);
     }
-  };
-
-  const handleVerifyUPI = () => {
-    const upi = form.upi.trim();
-    if (!upi) {
-      toast.error('Enter UPI ID to verify');
-      return;
-    }
-    const regex = /^[\w.-]{2,256}@[\w.-]{2,64}$/;
-    setUpiChecking(true);
-    if (regex.test(upi)) {
-      toast.success('UPI ID looks valid');
-    } else {
-      toast.error('Invalid UPI format');
-    }
-    setUpiChecking(false);
   };
 
   const handleSubmit = async (e) => {
@@ -289,23 +272,13 @@ export default function BankModal({ isOpen, onClose, onSave, initialData, hasExi
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">UPI (Optional)</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={form.upi}
-                  onChange={(e) => handleChange("upi", e.target.value)}
-                  placeholder="e.g. yourname@upi"
-                  className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleVerifyUPI}
-                  disabled={upiChecking || !form.upi.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
-                >
-                  {upiChecking ? <RefreshCw className="animate-spin h-4 w-4 inline" /> : 'Verify'}
-                </button>
-              </div>
+              <input
+                type="text"
+                value={form.upi}
+                onChange={(e) => handleChange("upi", e.target.value)}
+                placeholder="e.g. yourname@upi"
+                className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+              />
               <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-gray-500">
                 <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                 This UPI ID will be used to generate Dynamic QR codes on the invoices and bills.
