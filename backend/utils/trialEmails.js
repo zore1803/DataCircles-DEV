@@ -9,8 +9,13 @@
 
 const sendGridMail = require('./sendGridMail');
 
-// Standard footer for every DataCircles lifecycle email. Kept here so the
-// wording stays identical across the three senders below.
+// Standard sign-off + footer for every DataCircles lifecycle email. Kept here
+// so the wording stays identical across the three senders below.
+const SIGNOFF_HTML = `
+  <tr><td style="padding:0 40px 32px;">
+    <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0;">Regards,<br>Team DataCircles</p>
+  </td></tr>
+`;
 const FOOTER_HTML = `
   <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
     <p style="color:#718096;font-size:12px;margin:0 0 4px;">DataCircles | datacircles.in | Need help? support@datacircles.in</p>
@@ -58,7 +63,7 @@ async function sendTrialStartedEmail(user, organization, trialEnd) {
                 Your trial ends on <strong>${trialEndFormatted}</strong>. You can choose a plan at any time from Settings &gt; Subscription, and your data and setup carry over.
               </p>
             </td></tr>
-            ${FOOTER_HTML}
+            ${SIGNOFF_HTML}            ${FOOTER_HTML}
           </table>
         </td></tr>
       </table>
@@ -112,7 +117,7 @@ async function sendTrialEndingEmail(user, organization, trialEnd, hoursRemaining
                 </td></tr>
               </table>
             </td></tr>
-            ${FOOTER_HTML}
+            ${SIGNOFF_HTML}            ${FOOTER_HTML}
           </table>
         </td></tr>
       </table>
@@ -160,7 +165,7 @@ async function sendTrialExpiredEmail(user, organization) {
                 </td></tr>
               </table>
             </td></tr>
-            ${FOOTER_HTML}
+            ${SIGNOFF_HTML}            ${FOOTER_HTML}
           </table>
         </td></tr>
       </table>

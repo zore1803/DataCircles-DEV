@@ -26,6 +26,7 @@ function wrapEmail({ heading, bodyHtml }) {
             <tr><td style="padding:40px;">
               <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">${heading}</h1>
               ${bodyHtml}
+              <p style="color:#4a5568;font-size:15px;line-height:1.6;margin-top:24px;">Regards,<br>Team DataCircles</p>
             </td></tr>
             <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
               <p style="color:#718096;font-size:12px;margin:0 0 4px;">DataCircles | datacircles.in | Need help? support@datacircles.in</p>

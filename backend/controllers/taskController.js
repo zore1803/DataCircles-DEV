@@ -229,7 +229,7 @@ const createTask = async (req, res) => {
     </table>
 
     <p>Open the task in DataCircles to review it or update its status.</p>
-    <p style="margin-top: 30px;">DataCircles</p>
+    <p style="margin-top: 30px;">Regards,<br>Team DataCircles</p>
   </div>
 `,
       });
@@ -778,7 +778,7 @@ const updateTask = async (req, res) => {
     </table>
 
     <p>Open the task in DataCircles to review it or update its status.</p>
-    <p style="margin-top: 30px;">DataCircles</p>
+    <p style="margin-top: 30px;">Regards,<br>Team DataCircles</p>
   </div>
 `,
           });

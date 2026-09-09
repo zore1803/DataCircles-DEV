@@ -132,7 +132,7 @@ const generateMeetingCreationEmail = (meetingDetails) => {
           <p>Add it to your calendar so you have time to prepare.</p>
         </div>
         <div class="footer">
-          <p>DataCircles</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -202,7 +202,7 @@ const generateMeetingUpdateEmail = (meetingDetails, changes) => {
           <p>Update your calendar to match.</p>
         </div>
         <div class="footer">
-          <p>DataCircles</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -268,7 +268,7 @@ const generateMeetingReminderEmail = (meetingDetails) => {
           <p>Prepare any materials you need for this meeting.</p>
         </div>
         <div class="footer">
-          <p>DataCircles</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -322,7 +322,7 @@ const generateMeetingCancellationEmail = (meetingDetails) => {
           </div>
         </div>
         <div class="footer">
-          <p>DataCircles</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -1334,7 +1334,7 @@ exports.completeMeeting = async (req, res) => {
             <p>Scheduled for ${meetingDetails.scheduledAt}.</p>
             ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ""}
             ${outcome ? `<p><strong>Outcome:</strong> ${outcome}</p>` : ""}
-            <p style="margin-top:24px;">DataCircles</p>
+            <p style="margin-top:24px;">Regards,<br>Team DataCircles</p>
           </div>
         `;
 
@@ -1346,7 +1346,7 @@ exports.completeMeeting = async (req, res) => {
           ${notes ? `Notes: ${notes}` : ""}
           ${outcome ? `Outcome: ${outcome}` : ""}
 
-          DataCircles
+          Team DataCircles
         `;
 
         await sendGridMail({

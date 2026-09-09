@@ -449,7 +449,7 @@ const updateDealStatus = async (req, res) => {
                   ).toLocaleDateString("en-IN")}</td></tr>
                 </table>
                 <p>Review the updated deal and take any next steps.</p>
-                <p style="margin-top: 30px;">DataCircles</p>
+                <p style="margin-top: 30px;">Regards,<br>Team DataCircles</p>
               </div>
             `;
           }

@@ -60,7 +60,7 @@ async function notifyAdminsOfNewStaff({ organization, staffUser }) {
       <p style="color: #6b7280; font-size: 13px;">
         Review or adjust what they can access from Settings &gt; User Management.
       </p>
-      <p style="color: #374151; font-size: 15px; margin-top: 24px;">Regards,<br>The DataCircles Team</p>
+      <p style="color: #374151; font-size: 15px; margin-top: 24px;">Regards,<br>Team DataCircles</p>
     </div>
   `;
 
@@ -171,9 +171,12 @@ const generateInviteEmailHTML = (
               <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 10px 0 0;">
                 New to DataCircles? You can sign in with your existing Google, Facebook, GitHub, or LinkedIn account, or create an account with your phone number.
               </p>
+              <p style="color: #23272a; font-size: 15px; line-height: 1.6; margin: 24px 0 0;">
+                Regards,<br>Team DataCircles
+              </p>
             </td>
           </tr>
-          
+
           <!-- Divider -->
           <tr>
             <td style="padding: 0 40px;">
@@ -309,6 +312,9 @@ const generateReferralEmailHTML = (
               </p>
               <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 10px 0 0;">
                 This invitation was sent by ${senderName}. If it is not relevant to you, you can ignore this email.
+              </p>
+              <p style="color: #23272a; font-size: 15px; line-height: 1.6; margin: 24px 0 0;">
+                Regards,<br>Team DataCircles
               </p>
             </td>
           </tr>
@@ -938,6 +944,9 @@ exports.sendEmailOtp = async (req, res) => {
                   <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
                     This code expires in <strong>10 minutes</strong>. If you didn't request it, you can ignore this email.
                   </p>
+                  <p style="color: #4a5568; font-size: 14px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
+                    Regards,<br>Team DataCircles
+                  </p>
                 </td>
               </tr>
 
@@ -1439,7 +1448,7 @@ exports.forgotPassword = async (req, res) => {
           <p>We received a request to reset the password for your DataCircles account. Use the link below to choose a new one.</p>
           <p><a href="${resetLink}">Reset password</a></p>
           <p>This link expires in 1 hour. If you didn't make this request, no action is needed and your password stays the same.</p>
-          <p style="margin-top:24px;">Regards,<br>The DataCircles Team</p>
+          <p style="margin-top:24px;">Regards,<br>Team DataCircles</p>
         </div>
       `,
     });
