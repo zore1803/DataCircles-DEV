@@ -197,13 +197,15 @@ const createTask = async (req, res) => {
     for (const u of usersData) {
       sendGridMail({
         to: u.email,
-        subject: "New Task Assigned",
-        text: "please complete the task before due date",
+        subject: `You've been assigned a task: "${task.title}"`,
+        text: `You've been assigned a task in DataCircles. Task: ${task.title}. Due: ${
+          task.dueDate ? new Date(task.dueDate).toLocaleDateString("en-IN") : "not set"
+        }.`,
         html: `
   <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
-    <h2 style="color: #2c3e50;">New Task Assigned</h2>
+    <h2 style="color: #2c3e50;">You've been assigned a task</h2>
     <p>Hi ${u.name || ""},</p>
-    <p>You have been assigned a new task. Please find the details below:</p>
+    <p>You have been assigned a task in DataCircles. The details are below.</p>
 
     <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
       <tr>
@@ -217,7 +219,7 @@ const createTask = async (req, res) => {
       <tr>
         <td style="padding: 8px; font-weight: bold;">Due Date:</td>
         <td style="padding: 8px;">${
-          task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "N/A"
+          task.dueDate ? new Date(task.dueDate).toLocaleDateString("en-IN") : "N/A"
         }</td>
       </tr>
       <tr>
@@ -226,8 +228,8 @@ const createTask = async (req, res) => {
       </tr>
     </table>
 
-    <p>Please make sure to complete the task before the due date.</p>
-    <p style="margin-top: 30px;">Best regards,<br>Your Team</p>
+    <p>Open the task in DataCircles to review it or update its status.</p>
+    <p style="margin-top: 30px;">DataCircles</p>
   </div>
 `,
       });
@@ -742,13 +744,15 @@ const updateTask = async (req, res) => {
         for (const u of usersData) {
           sendGridMail({
             to: u.email,
-            subject: "New Task Assigned",
-            text: "please complete the task before due date",
+            subject: `You've been assigned a task: "${updatedTask.title}"`,
+            text: `You've been assigned a task in DataCircles. Task: ${updatedTask.title}. Due: ${
+              updatedTask.dueDate ? new Date(updatedTask.dueDate).toLocaleDateString("en-IN") : "not set"
+            }.`,
             html: `
   <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
-    <h2 style="color: #2c3e50;">New Task Assigned</h2>
+    <h2 style="color: #2c3e50;">You've been assigned a task</h2>
     <p>Hi ${u.name || ""},</p>
-    <p>You have been assigned a new task. Please find the details below:</p>
+    <p>You have been assigned a task in DataCircles. The details are below.</p>
 
     <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
       <tr>
@@ -763,7 +767,7 @@ const updateTask = async (req, res) => {
         <td style="padding: 8px; font-weight: bold;">Due Date:</td>
         <td style="padding: 8px;">${
           updatedTask.dueDate
-            ? new Date(updatedTask.dueDate).toLocaleDateString()
+            ? new Date(updatedTask.dueDate).toLocaleDateString("en-IN")
             : "N/A"
         }</td>
       </tr>
@@ -773,8 +777,8 @@ const updateTask = async (req, res) => {
       </tr>
     </table>
 
-    <p>Please make sure to complete the task before the due date.</p>
-    <p style="margin-top: 30px;">Best regards,<br>Your Team</p>
+    <p>Open the task in DataCircles to review it or update its status.</p>
+    <p style="margin-top: 30px;">DataCircles</p>
   </div>
 `,
           });

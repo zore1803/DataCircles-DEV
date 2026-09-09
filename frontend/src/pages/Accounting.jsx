@@ -514,7 +514,7 @@ const InvoiceViewer = ({
 
   const handleWhatsAppShare = () => {
     const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-    const text = `${title} #${docNumber || ""}\n${url}`;
+    const text = `${title} ${docNumber || ""}\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
@@ -625,7 +625,7 @@ const InvoiceViewer = ({
                           iconClass: "text-indigo-600",
                           onClick: () => {
                             const url = `${window.location.origin}/accounting?view=${type}&id=${id}`;
-                            const text = `${title} #${docNumber || ""} - ${url}`;
+                            const text = `${title} ${docNumber || ""}: ${url}`;
                             window.location.href = `sms:?body=${encodeURIComponent(text)}`;
                           },
                         },
@@ -1937,14 +1937,14 @@ const Accounting = () => {
     if (!doc) return;
     const link = `${window.location.origin}/view/${apiPathFor(type)}/${doc._id}`;
     const num = doc[numberKeyFor(type)];
-    const customerName = doc.deal?.contactPerson || doc.deal?.title || "Customer";
+    const customerName = doc.deal?.contactPerson || doc.deal?.title || "Sir/Madam";
     setEmailComposeTo(doc.deal?.contact?.email || doc.deal?.company?.email || doc.deal?.email || "");
     setEmailComposeCc("");
     setEmailComposeBcc("");
     setEmailComposeSubject(`${docNameFor(type)} ${num || ""}`);
     setEmailComposeBody(
       textToEmailHtml(
-        `Hi ${customerName},\n\nPlease find attached your ${docNameFor(type)}${num ? ` #${num}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`
+        `Dear ${customerName},\n\nPlease find attached your ${docNameFor(type)}${num ? ` ${num}` : ""}.\n\nYou can also view or download it online: ${link}\n\nRegards`
       )
     );
     setEmailCompose({ doc, type });
@@ -3939,7 +3939,7 @@ const Accounting = () => {
                 const fillTpl = (tpl) => tpl
                   .replace(/{customerName}/g, customerName)
                   .replace(/{docType}/g, docNameFor(t))
-                  .replace(/{number}/g, num || "—")
+                  .replace(/{number}/g, num || "")
                   .replace(/{amount}/g, amt)
                   .replace(/{link}/g, link)
                   .replace(/{company}/g, shareCompanyName || "");
@@ -3947,14 +3947,14 @@ const Accounting = () => {
                 // Matches the fixed shape shown in Settings → Message Templates →
                 // WhatsApp preview: greeting/details/footer are fixed, only the
                 // two lines are user-editable.
-                const buildWaMsg = (tpl) => `Hello! *${customerName}*\n\n${tpl?.line1 || "Your " + docNameFor(t) + " is ready to view."}\n\nDocument No: ${num || "—"}\nTotal: ${amt}\nLink: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nThanks\n*${shareCompanyName || "our team"}*`;
+                const buildWaMsg = (tpl) => `Hello ${customerName || ""},\n\n${tpl?.line1 || "Your " + docNameFor(t) + " from " + (shareCompanyName || "us") + " is ready."}\n\nDocument: ${num || "n/a"}\nTotal: ${amt}\nView/download: ${link}${tpl?.line2 ? `\n\n${tpl.line2}` : ""}\n\nRegards,\n${shareCompanyName || "the sender"}`;
                 const buildSmsMsg = (tpl) => tpl?.body
                   ? fillTpl(tpl.body)
-                  : `Your ${docNameFor(t)}${num ? ` #${num}` : ""} is ready. View & Download: ${link}`;
-                const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `${docNameFor(t)} ${num || ""}`;
+                  : `${shareCompanyName || "We"}: your ${docNameFor(t)}${num ? ` ${num}` : ""} is ready. View/download: ${link}`;
+                const buildEmailSubject = (tpl) => tpl?.subject ? fillTpl(tpl.subject) : `${docNameFor(t)} ${num || ""}${shareCompanyName ? ` from ${shareCompanyName}` : ""}`.trim();
                 const buildEmailBody = (tpl) => tpl?.body
                   ? fillTpl(tpl.body)
-                  : `Hi ${customerName},\n\nPlease find attached your ${docNameFor(t)}${num ? ` #${num}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`;
+                  : `Dear ${customerName || "Sir/Madam"},\n\nPlease find attached your ${docNameFor(t)}${num ? ` ${num}` : ""}.\n\nYou can also view or download it online: ${link}\n\nRegards,\n${shareCompanyName || "the sender"}`;
 
                 const channels = {
                   whatsapp: {
@@ -4046,7 +4046,7 @@ const Accounting = () => {
           const fillEmailTpl = (tpl) => tpl
             .replace(/{customerName}/g, cname)
             .replace(/{docType}/g, dname)
-            .replace(/{number}/g, dnum || "—")
+            .replace(/{number}/g, dnum || "")
             .replace(/{amount}/g, eAmt)
             .replace(/{link}/g, link)
             .replace(/{company}/g, shareCompanyName || "");
@@ -4058,14 +4058,14 @@ const Accounting = () => {
               nextSubject = fillEmailTpl(saved.subject || "");
               nextBody = textToEmailHtml(fillEmailTpl(saved.body || ""));
             } else if (key === "standard") {
-              nextSubject = `${dname} ${dnum || ""}`;
-              nextBody = textToEmailHtml(`Hi ${cname},\n\nPlease find attached your ${dname}${dnum ? ` #${dnum}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`);
+              nextSubject = `${dname} ${dnum || ""}${shareCompanyName ? ` from ${shareCompanyName}` : ""}`.trim();
+              nextBody = textToEmailHtml(`Dear ${cname || "Sir/Madam"},\n\nPlease find attached your ${dname}${dnum ? ` ${dnum}` : ""}.\n\nYou can also view or download it online: ${link}\n\nRegards,\n${shareCompanyName || "the sender"}`);
             } else if (key === "reminder") {
               nextSubject = `Reminder: ${dname} ${dnum || ""} pending`;
-              nextBody = textToEmailHtml(`Hi ${cname},\n\nThis is a friendly reminder that your ${dname}${dnum ? ` #${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nPlease feel free to reach out if you have any questions.\n\nBest regards`);
+              nextBody = textToEmailHtml(`Dear ${cname || "Sir/Madam"},\n\nThis is a reminder that your ${dname}${dnum ? ` ${dnum}` : ""} is awaiting your review.\n\nView it here: ${link}\n\nContact us if you have any questions.\n\nRegards,\n${shareCompanyName || "the sender"}`);
             } else if (key === "followup") {
               nextSubject = `Following up on ${dname} ${dnum || ""}`;
-              nextBody = textToEmailHtml(`Hi ${cname},\n\nI wanted to follow up regarding ${dname}${dnum ? ` #${dnum}` : ""} shared earlier.\n\nView / Download: ${link}\n\nLooking forward to hearing from you.`);
+              nextBody = textToEmailHtml(`Dear ${cname || "Sir/Madam"},\n\nWe wanted to follow up regarding ${dname}${dnum ? ` ${dnum}` : ""} shared earlier.\n\nView or download: ${link}\n\nWe look forward to hearing from you.\n\nRegards,\n${shareCompanyName || "the sender"}`);
             }
             setEmailComposeSubject(nextSubject);
             setEmailComposeBody(nextBody);

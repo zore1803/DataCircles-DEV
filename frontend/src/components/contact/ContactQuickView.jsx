@@ -208,7 +208,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
                           className="text-gray-500 flex-shrink-0"
                         />
                         <a
-                          href={`mailto:${contact.email}`}
+                          href={`mailto:${contact.email}?body=${encodeURIComponent(`Dear ${contact.name || "Sir/Madam"},\n\n\nRegards`)}`}
                           className="text-blue-600 hover:underline truncate"
                         >
                           {contact.email}

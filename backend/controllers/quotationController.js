@@ -627,12 +627,30 @@ exports.sendQuotationEmail = async (req, res) => {
     // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(quotation, bankDetails, orgDetails, "quotation");
 
+    const companyName = orgDetails?.companyName || "";
+    const contactName = quotation.deal.contactPerson || "Sir/Madam";
+    const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "");
+    const fmtAmt = (n) => (Number.isFinite(Number(n)) ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(n)) : "");
+    const issueDate = fmtDate(quotation.date);
+    const totalAmt = fmtAmt(quotation.amount);
+    const validUntil = fmtDate(quotation.dueDate);
+
+    const bodyLines = [
+      `Dear ${contactName},`,
+      "",
+      `Please find attached quotation ${quotation.quotationNumber}${issueDate ? `, dated ${issueDate}` : ""}${totalAmt ? `, for a total of ${totalAmt}` : ""}.`,
+      validUntil ? `This quotation is valid until ${validUntil}.` : "",
+      "Let us know if you would like any changes.",
+      "",
+      "Regards,",
+      companyName || "The sender",
+    ].filter((line, i, arr) => !(line === "" && arr[i - 1] === ""));
+
     const mailOptions = {
       to: quotation.deal.email || req.body.email,
-      subject: `Quotation ${quotation.quotationNumber}`,
-      text: `Dear ${
-        quotation.deal.contactPerson || "Customer"
-      },\n\nPlease find attached the quotation.\n\nBest regards,\nYour Company`,
+      replyTo: req.user.email,
+      subject: `Quotation ${quotation.quotationNumber}${companyName ? ` from ${companyName}` : ""}`,
+      text: bodyLines.join("\n"),
       attachments: [
         {
           filename: `Quotation-${quotation.quotationNumber}.pdf`,

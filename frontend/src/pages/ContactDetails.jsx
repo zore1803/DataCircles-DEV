@@ -301,8 +301,10 @@ const ContactDetailsPage = () => {
       if (platform === "whatsapp") {
         // Strip out non-numeric characters (except '+') for the WhatsApp API
         const cleanNumber = urlOrNumber.replace(/[^\d+]/g, "");
+        const senderName = JSON.parse(localStorage.getItem("user") || "{}").name || "";
+        const opener = `Hello ${contact?.name || ""}, this is ${senderName}.`.replace(/\s+/g, " ").trim();
         window.open(
-          `https://wa.me/${cleanNumber}`,
+          `https://wa.me/${cleanNumber}?text=${encodeURIComponent(opener)}`,
           "_blank",
           "noopener,noreferrer",
         );

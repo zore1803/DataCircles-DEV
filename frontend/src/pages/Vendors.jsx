@@ -585,7 +585,7 @@ function Vendors() {
       case "email":
         return vendor.email ? (
           <a
-            href={`mailto:${vendor.email}`}
+            href={`mailto:${vendor.email}?body=${encodeURIComponent(`Dear ${vendor.name || "Sir/Madam"},\n\n\nRegards`)}`}
             className="text-sm font-medium text-blue-600 hover:underline transition-colors truncate block"
           >
             <HighlightText text={vendor.email} query={searchTerm} />

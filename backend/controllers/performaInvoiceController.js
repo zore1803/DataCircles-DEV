@@ -707,11 +707,29 @@ const sendPerformaInvoiceEmail = async (req, res) => {
       return res.status(400).json({ error: "No recipient email address available" });
     }
 
-    const subject = req.body.subject || `Proforma Invoice ${pi.performaInvoiceNumber}`;
-    const body = req.body.body || `Dear ${pi.deal?.contactPerson || "Customer"},\n\nPlease find attached your proforma invoice.\n\nBest regards`;
+    const companyName = orgDetails?.companyName || "";
+    const contactName = pi.deal?.contactPerson || "Sir/Madam";
+    const issueDate = pi.date
+      ? new Date(pi.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+      : "";
+    const totalAmt = Number.isFinite(Number(pi.amount))
+      ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(pi.amount))
+      : "";
+
+    const subject = req.body.subject || `Proforma Invoice ${pi.performaInvoiceNumber}${companyName ? ` from ${companyName}` : ""}`;
+    const body = req.body.body || [
+      `Dear ${contactName},`,
+      "",
+      `Please find attached proforma invoice ${pi.performaInvoiceNumber}${issueDate ? `, dated ${issueDate}` : ""}${totalAmt ? `, for a total of ${totalAmt}` : ""}.`,
+      "To confirm this order, please arrange payment as per the details on the invoice. Contact us if anything needs adjusting.",
+      "",
+      "Regards,",
+      companyName || "The sender",
+    ].join("\n");
 
     await sendGridMail({
       to: recipient,
+      replyTo: req.user.email,
       subject,
       text: body,
       attachments: [

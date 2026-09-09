@@ -1426,14 +1426,14 @@ export default function EInvoicing() {
               const r = shareMenu.row;
               const link = `${window.location.origin}/e-invoicing?invoice=${r._id}`;
               const num = r.invoiceNumber;
-              const customerName = r.customer?.name || "Customer";
+              const customerName = r.customer?.name || "Sir/Madam";
               const amt = r.amount != null ? formatINR(r.amount) : "";
               const closeMenu = () => { setShareMenu(null); setShareMenuChannel(null); };
 
-              const waMsg = `Hello! *${customerName}*\n\nYour e-invoice is ready.\n\nInvoice No: ${num || "—"}\nAmount: ${amt}\nIRN: ${r.irn || "—"}\nLink: ${link}\n\nThanks`;
-              const smsMsg = `Your e-invoice${num ? ` #${num}` : ""} (${amt}) is ready. View: ${link}`;
+              const waMsg = `Hello ${customerName},\n\nYour e-invoice is ready.\n\nInvoice: ${num || "n/a"}\nAmount: ${amt}\nIRN: ${r.irn || "n/a"}\nView/download: ${link}\n\nRegards`;
+              const smsMsg = `Your e-invoice${num ? ` ${num}` : ""} for ${amt} is ready. View/download: ${link}`;
               const emailSubject = `E-Invoice ${num || ""}`;
-              const emailBody = `Hi ${customerName},%0D%0A%0D%0APlease find your e-invoice${num ? ` #${num}` : ""} details below.%0D%0A%0D%0AAmount: ${amt}%0D%0AIRN: ${r.irn || "—"}%0D%0AAck No: ${r.ackNo || "—"}%0D%0A%0D%0AView: ${link}`;
+              const emailBody = `Dear ${customerName},%0D%0A%0D%0APlease find your e-invoice${num ? ` ${num}` : ""} details below.%0D%0A%0D%0AAmount: ${amt}%0D%0AIRN: ${r.irn || "n/a"}%0D%0AAck No: ${r.ackNo || "n/a"}%0D%0A%0D%0AView or download: ${link}%0D%0A%0D%0ARegards`;
 
               if (shareMenuChannel === "confirm") {
                 return null;

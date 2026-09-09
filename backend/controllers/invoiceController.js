@@ -1209,11 +1209,29 @@ const bulkEmailGrouped = async (req, res) => {
       if (attachments.length === 0) continue;
 
       try {
+        const companyName = orgDetails?.companyName || "your supplier";
+        const invoiceCount = attachments.length;
+        const groupTotal = group.invoices.reduce(
+          (sum, inv) => sum + (Number.isFinite(Number(inv.amount)) ? Number(inv.amount) : 0),
+          0
+        );
+        const totalAmt = new Intl.NumberFormat("en-IN", {
+          style: "currency", currency: "INR", minimumFractionDigits: 2,
+        }).format(groupTotal);
+
         await sendGridMail({
           replyTo: req.user.email,
           to: group.email,
-          subject: `Your Invoices from ${orgDetails?.companyName || "Us"}`,
-          text: `Dear ${group.customerName},\n\nPlease find attached your invoice(s).\n\nBest regards,\n${orgDetails?.companyName || ""}`,
+          subject: `Invoice(s) from ${companyName}`,
+          text: [
+            `Dear ${group.customerName},`,
+            "",
+            `Please find attached ${invoiceCount} invoice${invoiceCount === 1 ? "" : "(s)"} from ${companyName}, totalling ${totalAmt}.`,
+            "Payment terms and bank details are on each invoice. Reply to this email with any questions.",
+            "",
+            "Regards,",
+            companyName,
+          ].join("\n"),
           attachments,
         });
         // Mark the invoices whose PDFs were generated as successful
@@ -1298,11 +1316,16 @@ const addInvoicePayment = async (req, res) => {
       ? await Branding.findOne({ organization: req.user.organization }).lean()
       : null;
 
+    const balanceDue = Math.max(0, invoice.amount - newTotalPaid);
+    const fmtInr = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(n);
+
     if (notifyByEmail && customerEmail) {
       sendPaymentEmail({
         to: customerEmail,
+        contactName: req.body.customerName,
         invoiceNumber: invoice.invoiceNumber,
         amount: parsedAmount,
+        balanceDue,
         paymentDate,
         paymentMethod,
         reference,
@@ -1312,11 +1335,11 @@ const addInvoicePayment = async (req, res) => {
     }
 
     if (notifyBySMS && customerPhone) {
-      const orgName = branding?.companyName || "us";
-      const formatted = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(parsedAmount);
+      const orgName = branding?.companyName || "your supplier";
+      const balanceClause = balanceDue > 0 ? ` Balance: ${fmtInr(balanceDue)}.` : "";
       sendSMS({
         phone: customerPhone,
-        message: `Payment of ${formatted} received for invoice ${invoice.invoiceNumber}. Thank you! - ${orgName}`,
+        message: `${orgName}: payment of ${fmtInr(parsedAmount)} received for invoice ${invoice.invoiceNumber}.${balanceClause} Thank you.`,
       }).catch((err) => console.error("Payment receipt SMS failed:", err.message));
     }
 

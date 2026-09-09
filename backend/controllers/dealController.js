@@ -6,6 +6,7 @@ const sendGridMail = require("../utils/sendGridMail");
 const NotificationSettings = require("../models/NotificationSettings");
 const EmailTemplate = require("../models/EmailTemplate");
 const User = require("../models/User");
+const Branding = require("../models/Branding");
 const { getOwnedCompanyIds } = require("../utils/ownedCompanies");
 
 // Mirrors companyController's isOwnedByUser, using the same `user`/`createdBy` fields
@@ -365,6 +366,13 @@ const updateDealStatus = async (req, res) => {
 
     // Proceed only if status actually changed
     if (oldStatus !== newStatus) {
+      // Sender's own company name, for the notification sign-off.
+      const senderBranding = await Branding.findOne({ organization: req.user.organization })
+        .sort({ updatedAt: -1 })
+        .lean();
+      const senderCompanyName = senderBranding?.companyName || "your account manager's company";
+      const dealAmountLabel = `₹${parseInt(deal.amount || 0).toLocaleString("en-IN")}`;
+
       // ✅ Check for users who have notifications enabled for this transition
       const notificationSettings = await NotificationSettings.find({
         organization: req.user.organization,
@@ -414,36 +422,34 @@ const updateDealStatus = async (req, res) => {
               .replace(/(<br\s*\/?>){2,}/g, "<br>") // limit consecutive line breaks
               .trim();
           } else {
-            // ✅ STEP 3: Fallback to default HTML
-            subject = `Deal Status Updated: ${deal.title}`;
+            // ✅ STEP 3: Fallback to default HTML (internal staff copy)
+            subject = `Deal "${deal.title}" moved to ${newStatus}`;
             htmlBody = `
               <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
-                <h2 style="color: #2c3e50;">Deal Status Updated</h2>
+                <h2 style="color: #2c3e50;">Deal status updated</h2>
                 <p>Hi ${user.name || ""},</p>
-                <p>The status of the deal <strong>${
+                <p>The deal <strong>${
                   deal.title
-                }</strong> has been updated. Please find the details below:</p>
+                }</strong> has moved from ${oldStatus} to ${newStatus}. The details are below.</p>
                 <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                  <tr><td style="padding: 8px; font-weight: bold;">Deal Title:</td><td style="padding: 8px;">${
+                  <tr><td style="padding: 8px; font-weight: bold;">Deal title:</td><td style="padding: 8px;">${
                     deal.title
                   }</td></tr>
-                  <tr><td style="padding: 8px; font-weight: bold;">Old Status:</td><td style="padding: 8px;">${oldStatus}</td></tr>
-                  <tr><td style="padding: 8px; font-weight: bold;">New Status:</td><td style="padding: 8px;">${newStatus}</td></tr>
-                  <tr><td style="padding: 8px; font-weight: bold;">Amount:</td><td style="padding: 8px;">₹${parseInt(
-                    deal.amount || 0,
-                  ).toLocaleString()}</td></tr>
+                  <tr><td style="padding: 8px; font-weight: bold;">Old status:</td><td style="padding: 8px;">${oldStatus}</td></tr>
+                  <tr><td style="padding: 8px; font-weight: bold;">New status:</td><td style="padding: 8px;">${newStatus}</td></tr>
+                  <tr><td style="padding: 8px; font-weight: bold;">Amount:</td><td style="padding: 8px;">${dealAmountLabel}</td></tr>
                   <tr><td style="padding: 8px; font-weight: bold;">Company:</td><td style="padding: 8px;">${
                     deal.company?.name || "N/A"
                   }</td></tr>
                   <tr><td style="padding: 8px; font-weight: bold;">Contact:</td><td style="padding: 8px;">${
                     deal.contact?.name || "N/A"
                   }</td></tr>
-                  <tr><td style="padding: 8px; font-weight: bold;">Updated At:</td><td style="padding: 8px;">${new Date(
+                  <tr><td style="padding: 8px; font-weight: bold;">Updated at:</td><td style="padding: 8px;">${new Date(
                     deal.updatedAt,
-                  ).toLocaleDateString()}</td></tr>
+                  ).toLocaleDateString("en-IN")}</td></tr>
                 </table>
-                <p>Please review the updated deal status and take any necessary actions.</p>
-                <p style="margin-top: 30px;">Best regards,<br>Your Team</p>
+                <p>Review the updated deal and take any next steps.</p>
+                <p style="margin-top: 30px;">DataCircles</p>
               </div>
             `;
           }
@@ -457,7 +463,7 @@ const updateDealStatus = async (req, res) => {
         }
 
         console.log(
-          `✅ Deal ${deal._id} updated from ${oldStatus} → ${newStatus}. Emails sent to ${notificationUserIds.length} user(s).`,
+          `Deal ${deal._id} updated from ${oldStatus} to ${newStatus}. Emails sent to ${notificationUserIds.length} user(s).`,
         );
       }
 
@@ -495,33 +501,25 @@ const updateDealStatus = async (req, res) => {
             .replace(/(<br\s*\/?>){2,}/g, "<br>") // limit consecutive line breaks
             .trim();
         } else {
-          // Fallback to default HTML for contact
-          subject = `Deal Status Updated: ${deal.title}`;
+          // Fallback to default HTML for the customer contact
+          subject = `Update on ${deal.title} from ${senderCompanyName}`;
           htmlBody = `
             <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
-              <h2 style="color: #2c3e50;">Deal Status Updated</h2>
-              <p>Hi ${deal.contact.name || ""},</p>
-              <p>The status of your deal <strong>${
+              <h2 style="color: #2c3e50;">Update on ${deal.title}</h2>
+              <p>Dear ${deal.contact.name || "Sir/Madam"},</p>
+              <p>There is an update on <strong>${
                 deal.title
-              }</strong> has been updated. Please find the details below:</p>
+              }</strong>: it has moved from ${oldStatus} to ${newStatus}.</p>
               <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                <tr><td style="padding: 8px; font-weight: bold;">Deal Title:</td><td style="padding: 8px;">${
+                <tr><td style="padding: 8px; font-weight: bold;">Deal:</td><td style="padding: 8px;">${
                   deal.title
                 }</td></tr>
-                <tr><td style="padding: 8px; font-weight: bold;">Previous Status:</td><td style="padding: 8px;">${oldStatus}</td></tr>
-                <tr><td style="padding: 8px; font-weight: bold;">Current Status:</td><td style="padding: 8px;">${newStatus}</td></tr>
-                <tr><td style="padding: 8px; font-weight: bold;">Amount:</td><td style="padding: 8px;">₹${parseInt(
-                  deal.amount || 0,
-                ).toLocaleString()}</td></tr>
-                <tr><td style="padding: 8px; font-weight: bold;">Company:</td><td style="padding: 8px;">${
-                  deal.company?.name || "N/A"
-                }</td></tr>
-                <tr><td style="padding: 8px; font-weight: bold;">Updated At:</td><td style="padding: 8px;">${new Date(
-                  deal.updatedAt,
-                ).toLocaleDateString()}</td></tr>
+                <tr><td style="padding: 8px; font-weight: bold;">Previous status:</td><td style="padding: 8px;">${oldStatus}</td></tr>
+                <tr><td style="padding: 8px; font-weight: bold;">Current status:</td><td style="padding: 8px;">${newStatus}</td></tr>
+                <tr><td style="padding: 8px; font-weight: bold;">Value:</td><td style="padding: 8px;">${dealAmountLabel}</td></tr>
               </table>
-              <p>If you have any questions, please don't hesitate to reach out to us.</p>
-              <p style="margin-top: 30px;">Best regards,<br>Your Team</p>
+              <p>We will be in touch with the next steps. Reply to this email if you have any questions.</p>
+              <p style="margin-top: 30px;">Regards,<br>${senderCompanyName}</p>
             </div>
           `;
         }

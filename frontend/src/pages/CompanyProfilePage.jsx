@@ -775,7 +775,9 @@ const CompanyProfilePage = () => {
       if (platform === 'whatsapp') {
         // Strip out non-numeric characters (except '+') for the WhatsApp API
         const cleanNumber = urlOrNumber.replace(/[^\d+]/g, '');
-        window.open(`https://wa.me/${cleanNumber}`, '_blank', 'noopener,noreferrer');
+        const senderName = JSON.parse(localStorage.getItem('user') || '{}').name || '';
+        const opener = `Hello ${company?.companyName || company?.name || ''}, this is ${senderName}.`.replace(/\s+/g, ' ').trim();
+        window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(opener)}`, '_blank', 'noopener,noreferrer');
       } else {
         window.open(urlOrNumber, '_blank', 'noopener,noreferrer');
       }

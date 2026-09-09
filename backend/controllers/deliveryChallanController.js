@@ -600,12 +600,24 @@ exports.sendDeliveryChallanEmail = async (req, res) => {
     // inside htmlDocumentPdf, which renders the same markup as the live preview.
     const pdfBuffer = await htmlDocumentPdf(deliveryChallan, bankDetails, orgDetails, "deliveryChallan");
 
+    const companyName = orgDetails?.companyName || "";
+    const contactName = deliveryChallan.deal.contactPerson || "Sir/Madam";
+    const issueDate = deliveryChallan.date
+      ? new Date(deliveryChallan.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+      : "";
+
     const mailOptions = {
       to: deliveryChallan.deal.email || req.body.email,
-      subject: `Delivery Challan ${deliveryChallan.deliveryChallanNumber}`,
-      text: `Dear ${
-        deliveryChallan.deal.contactPerson || "Customer"
-      },\n\nPlease find attached the delivery challan.\n\nBest regards,\nYour Company`,
+      replyTo: req.user.email,
+      subject: `Delivery Challan ${deliveryChallan.deliveryChallanNumber}${companyName ? ` from ${companyName}` : ""}`,
+      text: [
+        `Dear ${contactName},`,
+        "",
+        `Please find attached delivery challan ${deliveryChallan.deliveryChallanNumber}${issueDate ? `, dated ${issueDate}` : ""}, covering the items dispatched to you.`,
+        "",
+        "Regards,",
+        companyName || "The sender",
+      ].join("\n"),
       attachments: [
         {
           filename: `DeliveryChallan-${deliveryChallan.deliveryChallanNumber}.pdf`,

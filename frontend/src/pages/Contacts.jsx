@@ -756,7 +756,7 @@ function Contacts() {
       case "email":
         return (
           <a
-            href={`mailto:${contact.email}`}
+            href={`mailto:${contact.email}?body=${encodeURIComponent(`Dear ${contact.name || "Sir/Madam"},\n\n\nRegards`)}`}
             className="text-sm text-gray-700 hover:text-blue-600 transition-colors truncate"
           >
             {contact.email}
@@ -1183,7 +1183,7 @@ function Contacts() {
               baseContent = (
                 <div className="truncate w-full" title={contact.email}>
                   <a
-                    href={`mailto:${contact.email}`}
+                    href={`mailto:${contact.email}?body=${encodeURIComponent(`Dear ${contact.name || "Sir/Madam"},\n\n\nRegards`)}`}
                     className="text-sm text-blue-600 hover:underline transition-colors"
                   >
                     <HighlightText text={contact.email} query={searchTerm} />
@@ -2245,7 +2245,7 @@ function Contacts() {
           <div className="flex items-center gap-2 text-xs text-gray-600 group">
             <Mail className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <a
-              href={`mailto:${contact.email}`}
+              href={`mailto:${contact.email}?body=${encodeURIComponent(`Dear ${contact.name || "Sir/Madam"},\n\n\nRegards`)}`}
               className="truncate hover:text-blue-600 hover:underline transition-colors"
             >
               {contact.email}

@@ -67,7 +67,7 @@ export default function ExpenseReceiptModal({
 
   if (!isOpen || !record) return null;
 
-  const shareText = `${noun} ${receiptNo} — ${money(record.amount)}${
+  const shareText = `${noun} ${receiptNo}: ${money(record.amount)}${
     record.category ? ` (${record.category})` : ""
   }`;
 
