@@ -114,14 +114,14 @@ const generateMeetingCreationEmail = (meetingDetails) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Meeting Scheduled</h1>
+          <h1>Meeting scheduled</h1>
         </div>
         <div class="content">
-          <p>A new meeting has been scheduled. Here are the details:</p>
-          
+          <p>A meeting has been scheduled. The details are below.</p>
+
           <div class="details">
             <h3>${meetingDetails.title}</h3>
-            <p><strong>Date & Time:</strong> ${meetingDetails.scheduledAt}</p>
+            <p><strong>Date and time:</strong> ${meetingDetails.scheduledAt}</p>
             <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
             <p><strong>Location:</strong> ${meetingDetails.location}</p>
             <p><strong>Type:</strong> ${meetingDetails.meetingType}</p>
@@ -129,11 +129,11 @@ const generateMeetingCreationEmail = (meetingDetails) => {
             <p><strong>Participants:</strong> ${meetingDetails.participants}</p>
             <p><strong>Description:</strong> ${meetingDetails.description}</p>
           </div>
-          
-          <p>Please make sure to mark this in your calendar and prepare accordingly.</p>
+
+          <p>Add it to your calendar so you have time to prepare.</p>
         </div>
         <div class="footer">
-          <p>This is an automated message from your CRM system.</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -141,17 +141,17 @@ const generateMeetingCreationEmail = (meetingDetails) => {
   `;
 
   const text = `
-    Meeting Scheduled: ${meetingDetails.title}
-    
-    Date & Time: ${meetingDetails.scheduledAt}
+    Meeting scheduled: ${meetingDetails.title}
+
+    Date and time: ${meetingDetails.scheduledAt}
     Duration: ${meetingDetails.duration}
     Location: ${meetingDetails.location}
     Type: ${meetingDetails.meetingType}
     Related ${meetingDetails.entityType}: ${meetingDetails.entityName}
     Participants: ${meetingDetails.participants}
     Description: ${meetingDetails.description}
-    
-    Please make sure to mark this in your calendar and prepare accordingly.
+
+    Add it to your calendar so you have time to prepare.
   `;
 
   return { html, text };
@@ -162,7 +162,7 @@ const generateMeetingUpdateEmail = (meetingDetails, changes) => {
   const changesHtml = Object.entries(changes)
     .map(
       ([key, { from, to }]) =>
-        `<li><strong>${key}:</strong> ${from} → ${to}</li>`
+        `<li><strong>${key}:</strong> ${from} to ${to}</li>`
     )
     .join("");
 
@@ -183,27 +183,27 @@ const generateMeetingUpdateEmail = (meetingDetails, changes) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Meeting Updated</h1>
+          <h1>Meeting updated</h1>
         </div>
         <div class="content">
-          <p>The following meeting has been updated:</p>
-          
+          <p>A meeting has been updated. The current details are below.</p>
+
           <div class="details">
             <h3>${meetingDetails.title}</h3>
-            <p><strong>Date & Time:</strong> ${meetingDetails.scheduledAt}</p>
+            <p><strong>Date and time:</strong> ${meetingDetails.scheduledAt}</p>
             <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
             <p><strong>Location:</strong> ${meetingDetails.location}</p>
           </div>
-          
+
           <div class="changes">
-            <h4>Changes Made:</h4>
+            <h4>What changed</h4>
             <ul>${changesHtml}</ul>
           </div>
-          
-          <p>Please update your calendar accordingly.</p>
+
+          <p>Update your calendar to match.</p>
         </div>
         <div class="footer">
-          <p>This is an automated message from your CRM system.</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -211,21 +211,21 @@ const generateMeetingUpdateEmail = (meetingDetails, changes) => {
   `;
 
   const changesText = Object.entries(changes)
-    .map(([key, { from, to }]) => `${key}: ${from} → ${to}`)
+    .map(([key, { from, to }]) => `${key}: ${from} to ${to}`)
     .join("\n");
 
   const text = `
-    Meeting Updated: ${meetingDetails.title}
-    
-    Current Details:
-    Date & Time: ${meetingDetails.scheduledAt}
+    Meeting updated: ${meetingDetails.title}
+
+    Current details:
+    Date and time: ${meetingDetails.scheduledAt}
     Duration: ${meetingDetails.duration}
     Location: ${meetingDetails.location}
-    
-    Changes Made:
+
+    What changed:
     ${changesText}
-    
-    Please update your calendar accordingly.
+
+    Update your calendar to match.
   `;
 
   return { html, text };
@@ -250,26 +250,26 @@ const generateMeetingReminderEmail = (meetingDetails) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Meeting Reminder</h1>
+          <h1>Meeting reminder</h1>
         </div>
         <div class="content">
           <div class="reminder">
-            <h2>⏰ Your meeting starts in 1 hour!</h2>
+            <h2>Your meeting starts in 1 hour</h2>
           </div>
-          
+
           <div class="details">
             <h3>${meetingDetails.title}</h3>
-            <p><strong>Date & Time:</strong> ${meetingDetails.scheduledAt}</p>
+            <p><strong>Date and time:</strong> ${meetingDetails.scheduledAt}</p>
             <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
             <p><strong>Location:</strong> ${meetingDetails.location}</p>
             <p><strong>Type:</strong> ${meetingDetails.meetingType}</p>
             <p><strong>Description:</strong> ${meetingDetails.description}</p>
           </div>
-          
-          <p>Don't forget to prepare any materials you might need for this meeting.</p>
+
+          <p>Prepare any materials you need for this meeting.</p>
         </div>
         <div class="footer">
-          <p>This is an automated reminder from your CRM system.</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -277,16 +277,16 @@ const generateMeetingReminderEmail = (meetingDetails) => {
   `;
 
   const text = `
-    Meeting Reminder - Starting in 1 hour!
-    
+    Meeting reminder: starts in 1 hour
+
     ${meetingDetails.title}
-    Date & Time: ${meetingDetails.scheduledAt}
+    Date and time: ${meetingDetails.scheduledAt}
     Duration: ${meetingDetails.duration}
     Location: ${meetingDetails.location}
     Type: ${meetingDetails.meetingType}
     Description: ${meetingDetails.description}
-    
-    Don't forget to prepare any materials you might need for this meeting.
+
+    Prepare any materials you need for this meeting.
   `;
 
   return { html, text };
@@ -310,22 +310,20 @@ const generateMeetingCancellationEmail = (meetingDetails) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Meeting Cancelled</h1>
+          <h1>Meeting cancelled</h1>
         </div>
         <div class="content">
-          <p>The following meeting has been cancelled:</p>
-          
+          <p>The meeting below has been cancelled. You can remove it from your calendar.</p>
+
           <div class="details">
             <h3>${meetingDetails.title}</h3>
             <p><strong>Was scheduled for:</strong> ${meetingDetails.scheduledAt}</p>
             <p><strong>Duration:</strong> ${meetingDetails.duration}</p>
             <p><strong>Location:</strong> ${meetingDetails.location}</p>
           </div>
-          
-          <p>Please remove this meeting from your calendar. We apologize for any inconvenience.</p>
         </div>
         <div class="footer">
-          <p>This is an automated message from your CRM system.</p>
+          <p>Regards,<br>Team DataCircles</p>
         </div>
       </div>
     </body>
@@ -333,13 +331,13 @@ const generateMeetingCancellationEmail = (meetingDetails) => {
   `;
 
   const text = `
-    Meeting Cancelled: ${meetingDetails.title}
-    
+    Meeting cancelled: ${meetingDetails.title}
+
     Was scheduled for: ${meetingDetails.scheduledAt}
     Duration: ${meetingDetails.duration}
     Location: ${meetingDetails.location}
-    
-    Please remove this meeting from your calendar. We apologize for any inconvenience.
+
+    The meeting has been cancelled. You can remove it from your calendar.
   `;
 
   return { html, text };
@@ -587,7 +585,7 @@ exports.createMeeting = async (req, res) => {
 
         await sendGridMail({
           to: u.email,
-          subject: `Meeting Scheduled: ${meetingDetails.title}`,
+          subject: `Meeting scheduled: ${meetingDetails.title}`,
           text: emailContent.text,
           html: emailContent.html,
         });
@@ -1164,7 +1162,7 @@ exports.updateMeeting = async (req, res) => {
 
           await sendGridMail({
             to: u.email,
-            subject: `Meeting Updated: ${meetingDetails.title}`,
+            subject: `Meeting updated: ${meetingDetails.title}`,
             text: emailContent.text,
             html: emailContent.html,
           });
@@ -1243,7 +1241,7 @@ exports.deleteMeeting = async (req, res) => {
 
         await sendGridMail({
           to: u.email,
-          subject: `Meeting Cancelled: ${meetingDetails.title}`,
+          subject: `Meeting cancelled: ${meetingDetails.title}`,
           text: emailContent.text,
           html: emailContent.html,
         });
@@ -1331,30 +1329,30 @@ exports.completeMeeting = async (req, res) => {
         const meetingDetails = formatMeetingDetails(meeting);
 
         const html = `
-          <h2>Meeting Completed: ${meetingDetails.title}</h2>
-          <p>The meeting scheduled for ${
-            meetingDetails.scheduledAt
-          } has been marked as completed.</p>
-          ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ""}
-          ${outcome ? `<p><strong>Outcome:</strong> ${outcome}</p>` : ""}
-          <p>Thank you for your participation.</p>
+          <div style="font-family:Arial,sans-serif;color:#333;">
+            <h2>Meeting completed: ${meetingDetails.title}</h2>
+            <p>The meeting below is marked complete.</p>
+            <p>Scheduled for ${meetingDetails.scheduledAt}.</p>
+            ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ""}
+            ${outcome ? `<p><strong>Outcome:</strong> ${outcome}</p>` : ""}
+            <p style="margin-top:24px;">Regards,<br>Team DataCircles</p>
+          </div>
         `;
 
         const text = `
-          Meeting Completed: ${meetingDetails.title}
-          
-          The meeting scheduled for ${
-            meetingDetails.scheduledAt
-          } has been marked as completed.
+          Meeting completed: ${meetingDetails.title}
+
+          The meeting below is marked complete.
+          Scheduled for ${meetingDetails.scheduledAt}.
           ${notes ? `Notes: ${notes}` : ""}
           ${outcome ? `Outcome: ${outcome}` : ""}
-          
-          Thank you for your participation.
+
+          Team DataCircles
         `;
 
         await sendGridMail({
           to: u.email,
-          subject: `Meeting Completed: ${meetingDetails.title}`,
+          subject: `Meeting completed: ${meetingDetails.title}`,
           text,
           html,
         });

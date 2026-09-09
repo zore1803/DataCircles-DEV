@@ -943,7 +943,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                           <td key={col.id} style={cellStyle} className="px-3 text-left" title={contact.email}>
                             <div className="flex items-center justify-between gap-2">
                               <a
-                                href={`mailto:${contact.email}`}
+                                href={`mailto:${contact.email}?body=${encodeURIComponent(`Dear ${contact.name || "Sir/Madam"},\n\n\nRegards`)}`}
                                 className="text-[14px] leading-5 font-medium text-blue-600 hover:underline transition-colors truncate block min-w-0"
                               >
                                 <HighlightText text={contact.email} query={searchTerm} />

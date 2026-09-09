@@ -596,7 +596,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
     if (channel === "whatsapp") {
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
     } else if (channel === "email") {
-      window.location.href = `mailto:?subject=${encodeURIComponent(`${noun} - ${money(row.amount)}`)}&body=${encodeURIComponent(text)}`;
+      window.location.href = `mailto:?subject=${encodeURIComponent(`${noun} ${row.category || "Uncategorised"} (${money(row.amount)})`)}&body=${encodeURIComponent(text)}`;
     } else if (channel === "sms") {
       window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
     }

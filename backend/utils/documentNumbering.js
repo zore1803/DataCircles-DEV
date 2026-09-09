@@ -120,7 +120,7 @@ function seedTemplateLibrariesFromLegacy(settings) {
     out.whatsappTemplates = [{
       id: crypto.randomUUID(),
       name: 'Default',
-      line1: settings.whatsappLine1 || 'Thanks for your business!',
+      line1: settings.whatsappLine1 || 'Your {docType} from {company} is ready.',
       line2: settings.whatsappLine2 || '',
       isDefault: true,
       createdAt: new Date(),
@@ -132,7 +132,7 @@ function seedTemplateLibrariesFromLegacy(settings) {
     out.smsTemplates = [{
       id: crypto.randomUUID(),
       name: 'Default',
-      body: settings.smsTemplate || 'Your {docType} #{number} from {company} is ready. View & Download: {link}',
+      body: settings.smsTemplate || '{company}: your {docType} {number} is ready. View/download: {link}',
       isDefault: true,
       createdAt: new Date(),
     }];
@@ -144,7 +144,7 @@ function seedTemplateLibrariesFromLegacy(settings) {
       id: crypto.randomUUID(),
       name: 'Default',
       subject: settings.emailSubjectTemplate || '{docType} {number} from {company}',
-      body: settings.emailBodyTemplate || 'Hi {customerName},\n\nPlease find attached your {docType} #{number}.\n\nYou can also view and download it online:\n{link}\n\nThank you for your business!\n\nBest regards,\n{company}',
+      body: settings.emailBodyTemplate || 'Dear {customerName},\n\nPlease find attached your {docType} {number}.\n\nYou can also view or download it online:\n{link}\n\nRegards,\n{company}',
       isDefault: true,
       createdAt: new Date(),
     }];

@@ -2,7 +2,7 @@
 //
 // Email senders for super-admin-initiated subscription changes (trial
 // adjusted, trial ended, subscription cancelled on the org's behalf).
-// Same sendGridMail pattern as trialEmails.js — kept in a separate file
+// Same sendGridMail pattern as trialEmails.js, kept in a separate file
 // since these are admin-triggered notices, not part of the automatic
 // trial lifecycle.
 
@@ -21,14 +21,16 @@ function wrapEmail({ heading, bodyHtml }) {
         <tr><td align="center">
           <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
             <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width:180px;">
+              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
             </td></tr>
             <tr><td style="padding:40px;">
               <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">${heading}</h1>
               ${bodyHtml}
+              <p style="color:#4a5568;font-size:15px;line-height:1.6;margin-top:24px;">Regards,<br>Team DataCircles</p>
             </td></tr>
             <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
-              <p style="color:#718096;font-size:12px;margin:0;">Powered by DataCircles Technology</p>
+              <p style="color:#718096;font-size:12px;margin:0 0 4px;">DataCircles | datacircles.in | Need help? support@datacircles.in</p>
+              <p style="color:#718096;font-size:12px;margin:0;">You're receiving this email because you have a DataCircles account.</p>
             </td></tr>
           </table>
         </td></tr>
@@ -46,6 +48,7 @@ async function sendTrialAdjustedByAdminEmail(user, organization, trialEnd, adjus
   }
 
   const direction = adjustmentDays > 0 ? 'extended' : 'reduced';
+  const dayCount = Math.abs(adjustmentDays);
   const trialEndFormatted = new Date(trialEnd).toLocaleDateString('en-IN', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -54,17 +57,20 @@ async function sendTrialAdjustedByAdminEmail(user, organization, trialEnd, adjus
     heading: `Your trial was ${direction} by our team`,
     bodyHtml: `
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> was ${direction} by ${Math.abs(adjustmentDays)} day${Math.abs(adjustmentDays) === 1 ? '' : 's'} by our support team.
+        Hi ${user.name || 'there'}, our support team has ${direction} the free trial for <strong>${organization?.name || 'your workspace'}</strong> by ${dayCount} day${dayCount === 1 ? '' : 's'}.
       </p>
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
         Your trial now ends on <strong>${trialEndFormatted}</strong>.
+      </p>
+      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
+        Questions? Reply to this email or contact support@datacircles.in.
       </p>
     `,
   });
 
   await sendGridMail({
     to: toEmail,
-    subject: `Your DataCircles trial was ${direction}`,
+    subject: `Your DataCircles trial now ends on ${trialEndFormatted}`,
     html,
   });
 }
@@ -80,10 +86,10 @@ async function sendTrialEndedByAdminEmail(user, organization) {
     heading: 'Your trial has ended',
     bodyHtml: `
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> was ended by our support team.
+        Hi ${user.name || 'there'}, our support team has ended the free trial for <strong>${organization?.name || 'your workspace'}</strong>. Your data is safe and remains available to view.
       </p>
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Your data is safe and you can still view everything you've added. To keep adding and editing data, subscribe to a plan that fits your needs.
+        To continue adding and editing data, choose a plan.
       </p>
       <table role="presentation" width="100%" style="margin:24px 0;">
         <tr><td align="center">
@@ -92,6 +98,9 @@ async function sendTrialEndedByAdminEmail(user, organization) {
           </a>
         </td></tr>
       </table>
+      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
+        Questions? Contact support@datacircles.in.
+      </p>
     `,
   });
 
@@ -109,19 +118,31 @@ async function sendSubscriptionCancelledByAdminEmail(user, organization, current
     return;
   }
 
+  const accessEnd = currentPeriodEnd
+    ? new Date(currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'the end of your current billing period';
+
   const bodyHtml = isTrial
     ? `
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, your trial for <strong>${organization?.name || 'your workspace'}</strong> was cancelled by our support team.
+        Hi ${user.name || 'there'}, our support team has cancelled the trial for <strong>${organization?.name || 'your workspace'}</strong>.
+      </p>
+      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
+        Your data stays available to view in read-only mode.
+      </p>
+      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
+        If this was unexpected, contact support@datacircles.in and we'll be glad to help.
       </p>
     `
     : `
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        Hi ${user.name || 'there'}, your subscription for <strong>${organization?.name || 'your workspace'}</strong> was cancelled by our support team.
+        Hi ${user.name || 'there'}, our support team has cancelled the DataCircles subscription for <strong>${organization?.name || 'your workspace'}</strong>.
       </p>
       <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-        You'll continue to have access to all features until
-        <strong>${currentPeriodEnd ? new Date(currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'the end of your current billing period'}</strong>.
+        You'll keep full access until <strong>${accessEnd}</strong>. After that, your data stays available to view in read-only mode.
+      </p>
+      <p style="color:#4a5568;font-size:15px;line-height:1.6;">
+        If this was unexpected, contact support@datacircles.in and we'll be glad to help.
       </p>
     `;
 

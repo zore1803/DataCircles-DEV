@@ -119,11 +119,11 @@ const documentSettingsSchema = new mongoose.Schema(
     },
     whatsappTemplate: {
       type: String,
-      default: 'Hello! *{customerName}*\n\nYour {docType} is ready to view.\n\nDocument No: {number}\nTotal: ₹{amount}\nLink: {link}\n\nThank you for your business!',
+      default: 'Hello {customerName},\n\nYour {docType} from {company} is ready.\n\nDocument: {number}\nTotal: ₹{amount}\nView/download: {link}\n\nRegards,\n{company}',
     },
     whatsappLine1: {
       type: String,
-      default: 'Thanks for your business!',
+      default: 'Your {docType} from {company} is ready.',
     },
     whatsappLine2: {
       type: String,
@@ -131,7 +131,7 @@ const documentSettingsSchema = new mongoose.Schema(
     },
     smsTemplate: {
       type: String,
-      default: 'Your {docType} #{number} from {company} is ready. View & Download: {link}',
+      default: '{company}: your {docType} {number} is ready. View/download: {link}',
     },
     emailSubjectTemplate: {
       type: String,
@@ -139,7 +139,7 @@ const documentSettingsSchema = new mongoose.Schema(
     },
     emailBodyTemplate: {
       type: String,
-      default: 'Hi {customerName},\n\nPlease find attached your {docType} #{number}.\n\nYou can also view and download it online:\n{link}\n\nThank you for your business!\n\nBest regards,\n{company}',
+      default: 'Dear {customerName},\n\nPlease find attached your {docType} {number}.\n\nYou can also view or download it online:\n{link}\n\nRegards,\n{company}',
     },
     // Named template libraries — lets an org keep several message variants per
     // channel (e.g. "Standard", "Payment Reminder") and pick one at send time.

@@ -4134,7 +4134,7 @@ async function handlePaymentCaptured(razorpayPayment) {
 
             const org = await Organization.findById(addonSubscription.organization);
             const html = generateInviteEmailHTML(process.env.FRONTEND_URL, org.name, pendingInvite.invitedByName || '');
-            sendGridMail({ to: pendingInvite.email, subject: "Invitation to DataCircles CRM", html });
+            sendGridMail({ to: pendingInvite.email, subject: `${pendingInvite.invitedByName || "A colleague"} has invited you to join ${org.name} on DataCircles`, html });
             console.log(`Pending invite for ${pendingInvite.email} finalized after seat purchase (order ${razorpayPayment.order_id})`);
           }
         } catch (inviteErr) {
@@ -6116,7 +6116,7 @@ exports.sendReferralEmail = async (req, res) => {
     const senderName = req.user.name || req.user.email || 'A DataCircles user';
 
     const html = generateReferralEmailHTML(referralLink, org?.name || '', senderName, message?.trim() || '');
-    await sendGridMail({ to: email.trim(), subject: `${senderName} invited you to try DataCircles`, html });
+    await sendGridMail({ to: email.trim(), subject: `${senderName} thinks DataCircles could help your team`, html });
 
     res.json({ success: true });
   } catch (error) {

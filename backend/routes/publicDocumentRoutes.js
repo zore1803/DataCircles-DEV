@@ -210,7 +210,25 @@ router.post('/:type/:id/email', async (req, res) => {
     const docNum = doc[numKey] || '';
     const filename = `${docName.replace(/ /g, '-')}-${docNum}.pdf`;
 
-    const htmlBody = body || `Please find attached your ${docName}.`;
+    // Standardised default body (used only when the compose panel sends none).
+    const companyName = orgDetails?.companyName || 'your supplier';
+    const contactName = doc.deal?.contactPerson || doc.deal?.contact?.name || doc.vendor?.name || 'Sir/Madam';
+    const issueDate = doc.date
+      ? new Date(doc.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const totalAmt = Number.isFinite(Number(doc.amount))
+      ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(Number(doc.amount))
+      : '';
+    const defaultBody = [
+      `Dear ${contactName},`,
+      '',
+      `Please find attached ${docName.toLowerCase()} ${docNum}${issueDate ? `, dated ${issueDate}` : ''}${totalAmt ? `, for ${totalAmt}` : ''}.`,
+      '',
+      'Regards,',
+      companyName,
+    ].join('<br>');
+
+    const htmlBody = body || defaultBody;
     // The compose panel sends rich-text HTML; SendGrid still wants a
     // plain-text fallback for clients that don't render HTML, so strip tags
     // for the `text` field rather than sending markup as literal text.
@@ -225,7 +243,7 @@ router.post('/:type/:id/email', async (req, res) => {
       to: email,
       cc: ccList.length ? ccList : undefined,
       bcc: bccList.length ? bccList : undefined,
-      subject: subject || `${docName} ${docNum}`,
+      subject: subject || `${docName} ${docNum} from ${companyName}`,
       text: textBody,
       html: htmlBody,
       attachments: [

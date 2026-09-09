@@ -431,7 +431,9 @@ const VendorDetailsPageNew = () => {
     if (urlOrNumber && urlOrNumber.trim() !== "") {
       if (platform === "whatsapp") {
         const cleanNumber = urlOrNumber.replace(/[^\d+]/g, "");
-        window.open(`https://wa.me/${cleanNumber}`, "_blank", "noopener,noreferrer");
+        const senderName = JSON.parse(localStorage.getItem("user") || "{}").name || "";
+        const opener = `Hello ${vendor?.name || ""}, this is ${senderName}.`.replace(/\s+/g, " ").trim();
+        window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(opener)}`, "_blank", "noopener,noreferrer");
       } else {
         window.open(urlOrNumber, "_blank", "noopener,noreferrer");
       }

@@ -1,14 +1,27 @@
 // utils/trialEmails.js
 //
 // Email senders for the trial lifecycle: started, ending soon (48h/24h),
-// and expired. Uses the existing sendGridMail utility — same pattern as
-// your invite/OTP emails elsewhere in the codebase.
+// and expired. Uses the existing sendGridMail utility, same pattern as
+// the invite/OTP emails elsewhere in the codebase.
 //
-// IMPORTANT: sendGridMail's `from` parameter is ignored — it always sends
-// from yash.mishra@datacircles.in regardless of what's passed. Don't try
-// to override that here.
+// NOTE: the actual From address is controlled by the SendGrid configuration,
+// not by the `from` value passed here, so it is not set in this file.
 
 const sendGridMail = require('./sendGridMail');
+
+// Standard sign-off + footer for every DataCircles lifecycle email. Kept here
+// so the wording stays identical across the three senders below.
+const SIGNOFF_HTML = `
+  <tr><td style="padding:0 40px 32px;">
+    <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0;">Regards,<br>Team DataCircles</p>
+  </td></tr>
+`;
+const FOOTER_HTML = `
+  <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
+    <p style="color:#718096;font-size:12px;margin:0 0 4px;">DataCircles | datacircles.in | Need help? support@datacircles.in</p>
+    <p style="color:#718096;font-size:12px;margin:0;">You're receiving this email because you have a DataCircles account.</p>
+  </td></tr>
+`;
 
 // Picks the right email field depending on how the user signed up.
 // Google/GitHub/Facebook users have `email`; phone-signup users have
@@ -39,23 +52,18 @@ async function sendTrialStartedEmail(user, organization, trialEnd) {
         <tr><td align="center">
           <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
             <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width:180px;">
+              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
             </td></tr>
             <tr><td style="padding:40px;">
-              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your free trial has started!</h1>
+              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your DataCircles trial is active</h1>
               <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Hi ${user.name || 'there'}, your 7-day free trial for <strong>${organization?.name || 'your workspace'}</strong> is now active.
+                Hi ${user.name || 'there'}, your 7-day free trial for <strong>${organization?.name || 'your workspace'}</strong> is now active, with full access to all Growth plan features.
               </p>
               <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Your trial ends on <strong>${trialEndFormatted}</strong>. You'll have full access to all Growth plan features until then.
-              </p>
-              <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                When you're ready, you can upgrade anytime from your Settings &rarr; Subscription page.
+                Your trial ends on <strong>${trialEndFormatted}</strong>. You can choose a plan at any time from Settings &gt; Subscription, and your data and setup carry over.
               </p>
             </td></tr>
-            <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
-              <p style="color:#718096;font-size:12px;margin:0;">Powered by DataCircles Technology</p>
-            </td></tr>
+            ${SIGNOFF_HTML}            ${FOOTER_HTML}
           </table>
         </td></tr>
       </table>
@@ -65,7 +73,7 @@ async function sendTrialStartedEmail(user, organization, trialEnd) {
 
   await sendGridMail({
     to: toEmail,
-    subject: 'Your DataCircles free trial has started',
+    subject: 'Your DataCircles trial is active',
     html,
   });
 }
@@ -91,15 +99,15 @@ async function sendTrialEndingEmail(user, organization, trialEnd, hoursRemaining
         <tr><td align="center">
           <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
             <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width:180px;">
+              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
             </td></tr>
             <tr><td style="padding:40px;">
-              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your trial ends in ${hoursRemaining} hours</h1>
+              <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your trial ends on ${trialEndFormatted}</h1>
               <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> ends on <strong>${trialEndFormatted}</strong>.
+                Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> ends on <strong>${trialEndFormatted}</strong>, about ${hoursRemaining} hours from now.
               </p>
               <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                After your trial ends, you'll still be able to view all your existing data, but you won't be able to add or edit anything until you subscribe to a plan.
+                To keep adding and editing data after that, choose a plan. Your existing data stays available to view either way.
               </p>
               <table role="presentation" width="100%" style="margin:24px 0;">
                 <tr><td align="center">
@@ -109,9 +117,7 @@ async function sendTrialEndingEmail(user, organization, trialEnd, hoursRemaining
                 </td></tr>
               </table>
             </td></tr>
-            <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
-              <p style="color:#718096;font-size:12px;margin:0;">Powered by DataCircles Technology</p>
-            </td></tr>
+            ${SIGNOFF_HTML}            ${FOOTER_HTML}
           </table>
         </td></tr>
       </table>
@@ -121,7 +127,7 @@ async function sendTrialEndingEmail(user, organization, trialEnd, hoursRemaining
 
   await sendGridMail({
     to: toEmail,
-    subject: `Your DataCircles trial ends in ${hoursRemaining} hours`,
+    subject: `Your DataCircles trial ends on ${trialEndFormatted}`,
     html,
   });
 }
@@ -141,15 +147,15 @@ async function sendTrialExpiredEmail(user, organization) {
         <tr><td align="center">
           <table role="presentation" width="600" style="background-color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;">
             <tr><td style="padding:32px 40px;text-align:center;background-color:#000;">
-              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="Data Circles" style="max-width:180px;">
+              <img src="https://www.datacircles.in/assets/DataCirclesBWLogo.jpg" alt="DataCircles" style="max-width:180px;">
             </td></tr>
             <tr><td style="padding:40px;">
               <h1 style="color:#23272a;font-size:24px;margin:0 0 16px;">Your trial has ended</h1>
               <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> has ended.
+                Hi ${user.name || 'there'}, your free trial for <strong>${organization?.name || 'your workspace'}</strong> has ended. Your data is safe and you can still sign in to view everything you've added.
               </p>
               <p style="color:#4a5568;font-size:15px;line-height:1.6;">
-                Your data is safe and you can still view everything you've added. To keep adding and editing data, subscribe to a plan that fits your needs.
+                To start adding and editing again, choose a plan that fits your team.
               </p>
               <table role="presentation" width="100%" style="margin:24px 0;">
                 <tr><td align="center">
@@ -159,9 +165,7 @@ async function sendTrialExpiredEmail(user, organization) {
                 </td></tr>
               </table>
             </td></tr>
-            <tr><td style="background-color:#f8f9fb;padding:24px 40px;text-align:center;">
-              <p style="color:#718096;font-size:12px;margin:0;">Powered by DataCircles Technology</p>
-            </td></tr>
+            ${SIGNOFF_HTML}            ${FOOTER_HTML}
           </table>
         </td></tr>
       </table>

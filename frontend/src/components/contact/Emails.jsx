@@ -47,6 +47,14 @@ const Emails = ({ contactId, contactEmail }) => {
     if (showCompose) {
       setShouldRender(true);
       setTimeout(() => setIsSliding(true), 10);
+      // Seed a house-style scaffold so every message opens with a
+      // consistent greeting and sign-off. Only when the body is still empty
+      // so we never overwrite a draft.
+      setBody((prev) => {
+        if (prev && prev !== '<p><br></p>') return prev;
+        const senderName = user?.name || '';
+        return `<p>Dear Sir/Madam,</p><p><br></p><p><br></p><p>Regards,</p><p>${senderName}</p>`;
+      });
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);

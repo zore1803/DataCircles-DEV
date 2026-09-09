@@ -35,29 +35,34 @@ export default function ShareFlyoutMenu({
     (tpl || "")
       .replace(/{customerName}/g, recipientName || "")
       .replace(/{docType}/g, docTypeLabel)
-      .replace(/{number}/g, docNumber || "—")
+      .replace(/{number}/g, docNumber || "")
       .replace(/{amount}/g, amountLabel || "")
       .replace(/{link}/g, link)
       .replace(/{company}/g, companyName || "");
 
   const buildWaMsg = (tpl) => {
     // line1/line2 can carry the same {customerName}/{docType}/… placeholders
-    // as the email/SMS templates — Settings' template editor now lets the
-    // user drop chips into these lines, so we resolve them here on the way
-    // out, same as fillTpl does for SMS/email above.
-    const l1 = tpl?.line1 ? fillTpl(tpl.line1) : ("Your " + docTypeLabel + " is ready to view.");
+    // as the email/SMS templates. Settings' template editor lets the user
+    // drop chips into these lines, so we resolve them here on the way out,
+    // same as fillTpl does for SMS/email above.
+    const l1 = tpl?.line1
+      ? fillTpl(tpl.line1)
+      : `Your ${docTypeLabel} from ${companyName || "us"} is ready.`;
     const l2 = tpl?.line2 ? fillTpl(tpl.line2) : "";
-    return `Hello! *${recipientName || ""}*\n\n${l1}\n\nDocument No: ${docNumber || "—"}\nTotal: ${amountLabel || ""}\nLink: ${link}${l2 ? `\n\n${l2}` : ""}\n\nThanks\n*${companyName || "our team"}*`;
+    return `Hello ${recipientName || ""},\n\n${l1}\n\nDocument: ${docNumber || "n/a"}\nTotal: ${amountLabel || "n/a"}\nView/download: ${link}${l2 ? `\n\n${l2}` : ""}\n\nRegards,\n${companyName || "the sender"}`;
   };
   const buildSmsMsg = (tpl) =>
     tpl?.body
       ? fillTpl(tpl.body)
-      : `Your ${docTypeLabel}${docNumber ? ` #${docNumber}` : ""} is ready. View & Download: ${link}`;
-  const buildEmailSubject = (tpl) => (tpl?.subject ? fillTpl(tpl.subject) : `${docTypeLabel} ${docNumber || ""}`);
+      : `${companyName || "We"}: your ${docTypeLabel}${docNumber ? ` ${docNumber}` : ""}${amountLabel ? ` for ${amountLabel}` : ""} is ready. View/download: ${link}`;
+  const buildEmailSubject = (tpl) =>
+    tpl?.subject
+      ? fillTpl(tpl.subject)
+      : `${docTypeLabel} ${docNumber || ""}${companyName ? ` from ${companyName}` : ""}`.trim();
   const buildEmailBody = (tpl) =>
     tpl?.body
       ? fillTpl(tpl.body)
-      : `Hi ${recipientName || ""},\n\nPlease find attached your ${docTypeLabel}${docNumber ? ` #${docNumber}` : ""}.\n\nYou can also view it online: ${link}\n\nThank you for your business!`;
+      : `Dear ${recipientName || "Sir/Madam"},\n\nPlease find attached your ${docTypeLabel}${docNumber ? ` ${docNumber}` : ""}.\n\nYou can also view or download it online: ${link}\n\nRegards,\n${companyName || "the sender"}`;
 
   const channels = {
     whatsapp: {
