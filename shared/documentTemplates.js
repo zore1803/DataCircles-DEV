@@ -57,6 +57,7 @@ import * as Vintage      from "./templates/Vintage.js";
 import * as Professional from "./templates/Professional.js";
 import * as Landscape    from "./templates/Landscape.js";
 import * as Service      from "./templates/Service.js";
+import * as Detailed     from "./templates/Detailed.js";
 
 // â”€â”€ Registry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //   Key order here determines the order in the template picker.
@@ -73,6 +74,7 @@ export const REGISTRY = {
   Professional,
   Landscape,
   Service,
+  Detailed,
 };
 
 export const DOCUMENT_TEMPLATES = Object.keys(REGISTRY);
@@ -442,6 +444,7 @@ export function buildDocumentHtml(doc, options = {}) {
     dealName:     dealNameOverride,
     documentNumber,
     upiQrSvg,
+    eInvoiceQrSvg,
     upiId,
     copyType      = "original",
   } = options;
@@ -534,6 +537,8 @@ export function buildDocumentHtml(doc, options = {}) {
     dealName, docLabel, docNumber, copySubtitle,
     notes, terms,
     discountRow, hsnRows, itemRows, qrBlock,
+    // Raw SVGs for templates that place the QR themselves (Landscape, Detailed).
+    upiQrSvg, eInvoiceQrSvg,
   };
 
   const css = BASE_CSS + (tpl.css || "");
