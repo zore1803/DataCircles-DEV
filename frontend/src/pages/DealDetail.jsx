@@ -164,8 +164,16 @@ function DealDetail() {
       if (newEntryRef.current && !newEntryRef.current.contains(e.target))
         setShowNewEntryMenu(false);
     };
+    const onScroll = () => {
+      setShowActionsMenu(false);
+      setShowNewEntryMenu(false);
+    };
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      window.removeEventListener("scroll", onScroll, true);
+    };
   }, []);
 
   const fetchInvoices = async () => {

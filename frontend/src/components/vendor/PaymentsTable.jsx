@@ -94,7 +94,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
   }, [autoOpenCreate, onAutoOpenCreateConsumed]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
   const filterButtonRef = useRef(null);
 
@@ -127,7 +127,11 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
   };
 
   const handleSort = (key, direction) => {
-    setSortConfig({ key, direction });
+    setSortConfig((prev) =>
+      prev.key === key && prev.direction === direction
+        ? { key: null, direction: null }
+        : { key, direction },
+    );
   };
 
   useEffect(() => {
@@ -683,6 +687,10 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
         </div>
       )}
 
+      {showKPIs && (
+        <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+      )}
+
       {/* Payments table — same chrome as the CompanyProfilePage tabs: bordered
           shell, sticky #F5F7FA header, per-row selection and a bulk strip. */}
       {stripVisible ? (
@@ -700,15 +708,23 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       ) : (
         <div className="flex items-center gap-4 mb-3" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search payments..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             ref={filterButtonRef}
@@ -739,14 +755,14 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
               which defaults to hidden anyway) has been removed outright. */}
           <button
             onClick={() => handleOpenForm("IN")}
-            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-800 transition-colors flex-shrink-0 shadow-sm"
+            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-[#0070D9] transition-colors flex-shrink-0 shadow-sm"
           >
             <ArrowDownCircle size={18} />
             <span>Got</span>
           </button>
           <button
             onClick={() => handleOpenForm("OUT")}
-            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-blue-700 text-white text-sm font-medium rounded-full hover:bg-blue-900 transition-colors flex-shrink-0 shadow-sm"
+            className="flex items-center justify-center gap-2 h-[44px] px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-[#0070D9] transition-colors flex-shrink-0 shadow-sm"
           >
             <ArrowUpCircle size={18} />
             <span>Gave</span>
@@ -754,6 +770,19 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
         </div>
       )}
 
+      {!loading && localPayments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <CreditCard size={28} className="mb-3 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => handleOpenForm("IN")}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            <ArrowDownCircle size={16} />
+            Add new payment
+          </button>
+        </div>
+      ) : (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedPayments}
@@ -790,27 +819,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
             </div>
           }
           emptyContent={
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                <CreditCard className="w-8 h-8 text-gray-400" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">No Payments Found</h3>
-                <p className="text-sm text-gray-600">
-                  {search || activeFilterCount
-                    ? "Try clearing the search or filters."
-                    : "Add your first payment to get started."}
-                </p>
-              </div>
-              {!search && !activeFilterCount && (
-                <button
-                  onClick={() => handleOpenForm("IN")}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-                >
-                  Add Payment
-                </button>
-              )}
-            </div>
+            <p className="text-gray-500 text-sm font-medium">No payments found.</p>
           }
         />
 
@@ -828,6 +837,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
           />
         </div>
       </div>
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

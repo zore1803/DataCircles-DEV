@@ -2,6 +2,7 @@ import DeleteIcon from "../common/DeleteIcon";
 import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
+import SearchIcon from "../common/SearchIcon";
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
@@ -28,7 +29,6 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
-import SearchIcon from "../common/SearchIcon";
 import SettingsIcon from "../common/SettingsIcon";
 import InvoiceLivePreview from "./InvoiceLivePreview";
 import InsufficientStockDialog from "../common/InsufficientStockDialog";
@@ -3328,7 +3328,7 @@ const CreateInvoicePanel = ({
                   value={form.deal}
                   options={dealOptions}
                   placeholder="Search and select deal"
-                  icon={Search}
+                  icon={SearchIcon}
                   invalid={fieldErrors.deal}
                   triggerClassName="h-[38px] rounded-full"
                   onSelect={(o) => {

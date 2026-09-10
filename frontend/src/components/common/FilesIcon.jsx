@@ -6,12 +6,13 @@
  * path is filled with `currentColor`, so colour comes from a `text-*`
  * class.
  */
-const FilesIcon = ({ className = "w-4 h-4", ...props }) => (
+const FilesIcon = ({ className = "w-4 h-4", size, style, ...props }) => (
   <svg
     viewBox="0 0 20 20"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
+    style={size != null ? { width: size, height: size, ...style } : style}
     aria-hidden="true"
     focusable="false"
     {...props}

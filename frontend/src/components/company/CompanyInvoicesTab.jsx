@@ -144,7 +144,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
   const getInvoiceFieldValue = (invoice, key) => {
     switch (key) {
@@ -239,10 +239,14 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
 
   const handleSort = (key, forceDirection = null) => {
     setSortConfig((prev) => {
-      if (forceDirection) return { key, direction: forceDirection };
-      return prev.key === key
-        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" };
+      if (forceDirection) {
+        return prev.key === key && prev.direction === forceDirection
+          ? { key: null, direction: null }
+          : { key, direction: forceDirection };
+      }
+      if (prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { key: null, direction: null };
     });
   };
   // Keeps the table box a fixed height that ends at the bottom of the screen,

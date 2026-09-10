@@ -1511,18 +1511,20 @@ const Header = () => {
                   independently via DIM_CHROME_EVENT; this is just the tint,
                   and also doubles as the click-outside-to-close target. */}
               <div
-                className="fixed inset-0 z-[9998] bg-black/40"
+                className="fixed inset-0 z-[200000] bg-black/40"
                 onClick={handleSearchClose}
               />
               {/* Starts pinned exactly over the real search slot (searchOrigin,
                   captured via getBoundingClientRect) and, once searchCentered
                   flips a tick later, transitions left/width/top to the centred
                   target — a real slide from where it was, not a jump-cut.
-                  z-index above the backdrop (9998) — and above the sidebar
-                  (9995) and the pagination bar (9992), which otherwise sat in
-                  front of the backdrop and stayed sharp/undimmed. */}
+                  z-index above the backdrop (200000) — and above every
+                  page-level portaled menu (row-actions/share/convert flyouts
+                  go up to ~100051), the sidebar (9995) and the pagination bar
+                  (9992), any of which could otherwise be left open under the
+                  overlay and show through undimmed. */}
               <div
-                className="fixed z-[9999] transition-all duration-300 ease-out"
+                className="fixed z-[200001] transition-all duration-300 ease-out"
                 style={
                   searchCentered
                     ? { top: 10, left: "50%", width: 760, transform: "translateX(-50%)" }

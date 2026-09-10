@@ -213,7 +213,27 @@ function Vendors() {
 
   // Toolbar UI state — same shape as Accounting.jsx's action row.
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef(null);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
+
+  // Click-outside (and scroll) to close the overflow ("⋮") menu — same
+  // pattern as Companies.jsx's moreMenuRef listener, plus a scroll close so
+  // the menu doesn't drift away from its trigger.
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handleClickOutside = (event) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setShowMoreMenu(false);
+      }
+    };
+    const handleScroll = () => setShowMoreMenu(false);
+    document.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [showMoreMenu]);
 
   // Search expand/collapse animation — same mechanics as Companies.jsx: the
   // title/subtitle shrink away and the search pill grows via a width
@@ -701,7 +721,7 @@ function Vendors() {
             <div
               ref={dropdownRef}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-40 z-[9999] flex flex-col bg-white border border-[#E1E4EA] rounded-lg shadow-lg text-left py-1"
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -709,36 +729,37 @@ function Vendors() {
                   handleEditVendor(vendor);
                   handleCloseDropdown();
                 }}
-                className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <EditIcon className="w-4 h-4 text-gray-400" /> Edit
+                <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" /> Edit
               </button>
               <button
                 onClick={() => {
                   handleOpenPaymentModal(vendor._id, "IN");
                   handleCloseDropdown();
                 }}
-                className="w-full text-left px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-green-600 hover:bg-green-50 whitespace-nowrap"
               >
-                <HistoryIcon className="w-4 h-4" /> Credited
+                <HistoryIcon className="w-3.5 h-3.5" /> Credited
               </button>
               <button
                 onClick={() => {
                   handleOpenPaymentModal(vendor._id, "OUT");
                   handleCloseDropdown();
                 }}
-                className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
               >
-                <HistoryIcon className="w-4 h-4" /> Debited
+                <HistoryIcon className="w-3.5 h-3.5" /> Debited
               </button>
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
                 onClick={() => {
                   handleDelete(vendor._id);
                   handleCloseDropdown();
                 }}
-                className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors border-t border-gray-100"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
               >
-                <DeleteIcon className="w-4 h-4" /> Delete
+                <DeleteIcon className="w-3.5 h-3.5" /> Delete
               </button>
             </div>
           </>,
@@ -1366,7 +1387,7 @@ function Vendors() {
             </button>
           </div>
 
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0" ref={moreMenuRef}>
             <button
               onClick={(e) => {
                 e.stopPropagation();

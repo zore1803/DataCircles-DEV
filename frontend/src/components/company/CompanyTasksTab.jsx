@@ -549,14 +549,21 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
     setShowTaskForm(true);
   };
 
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const handleSort = (key, direction) => {
-    if (direction) { setSortConfig({ key, direction }); return; }
-    setSortConfig((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" },
-    );
+    if (direction) {
+      setSortConfig((prev) =>
+        prev.key === key && prev.direction === direction
+          ? { key: null, direction: null }
+          : { key, direction },
+      );
+      return;
+    }
+    setSortConfig((prev) => {
+      if (prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { key: null, direction: null };
+    });
   };
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});

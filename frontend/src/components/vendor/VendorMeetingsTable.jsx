@@ -8,7 +8,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import StatTile from "../common/StatTile";
-import { CalendarCheck, Clock3 } from "lucide-react";
+import { CalendarCheck, Clock3, X } from "lucide-react";
+import TeamIcon from "../common/TeamIcon";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
@@ -92,7 +93,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
   }, [autoOpenCreate, onAutoOpenCreateConsumed]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
   const filterButtonRef = useRef(null);
 
@@ -125,7 +126,11 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
   };
 
   const handleSort = (key, direction) => {
-    setSortConfig({ key, direction });
+    setSortConfig((prev) =>
+      prev.key === key && prev.direction === direction
+        ? { key: null, direction: null }
+        : { key, direction },
+    );
   };
 
   const refetchMeetings = useCallback(async () => {
@@ -546,6 +551,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
           Visibility is driven by the parent page's own Financial Summary
           strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
       {showKPIs && (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {loading && !meetings.length
           ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
@@ -563,6 +569,9 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
               />
             ))}
       </div>
+
+      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+      </>
       )}
 
       {/* Action Buttons (Portaled to Tab Header) removed */}
@@ -582,15 +591,23 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
       ) : (
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search meetings..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              placeholder="Search meetings by title, deal, or participants..."
+              className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             ref={filterButtonRef}
@@ -616,13 +633,30 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
               setShowMeetingForm(true);
             }}
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-            style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
+            style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+            title="Add Meeting"
           >
-            <PlusIcon className="w-4 h-4 text-gray-700" />
+            <PlusIcon className="w-4 h-4" />
           </button>
         </div>
       )}
 
+      {!loading && meetings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <TeamIcon className="w-7 h-7 mb-3 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => {
+              setEditingMeeting(null);
+              setShowMeetingForm(true);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Add new meeting
+          </button>
+        </div>
+      ) : (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedMeetings}
@@ -657,17 +691,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
             </div>
           }
           emptyContent={
-            <div className="flex flex-col items-center gap-2">
-              <CalendarIcon className="w-10 h-10 text-gray-400" />
-              <p className="text-sm text-gray-600">
-                {search || activeFilterCount ? "No meetings match your filters" : "No meetings yet"}
-              </p>
-              <p className="text-xs text-gray-500">
-                {search || activeFilterCount
-                  ? "Try clearing the search or filters"
-                  : "Meetings will appear here once created"}
-              </p>
-            </div>
+            <p className="text-gray-500 text-sm font-medium">No meetings found.</p>
           }
         />
 
@@ -685,6 +709,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
           />
         </div>
       </div>
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

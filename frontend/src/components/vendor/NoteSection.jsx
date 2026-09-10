@@ -676,7 +676,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
   ]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
   const handleColumnReorder = (draggedKey, targetKey) => {
     setColumnOrder((prev) => {
@@ -707,7 +707,11 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
   };
 
   const handleSort = (key, direction) => {
-    setSortConfig({ key, direction });
+    setSortConfig((prev) =>
+      prev.key === key && prev.direction === direction
+        ? { key: null, direction: null }
+        : { key, direction },
+    );
   };
 
   const filteredNotes = useMemo(() => {
@@ -1009,6 +1013,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
           Visibility is driven by the parent page's own Financial Summary
           strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
       {showKPIs && (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {initialLoading && !notes.length
           ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
@@ -1026,6 +1031,9 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
               />
             ))}
       </div>
+
+      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+      </>
       )}
 
         {stripVisible ? (
@@ -1043,15 +1051,23 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
         ) : (
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search notes..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              placeholder="Search by note by name, vendor..."
+              className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <div className="relative flex items-center gap-1.5 p-1 bg-[#F1F1F5] rounded-full flex-shrink-0 overflow-hidden" style={{ height: "44px" }}>
             <span
@@ -1112,20 +1128,21 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
       {viewMode === "grid" ? (
         initialLoading ? (
           <NoteGridSkeleton />
-        ) : paginatedNotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-gray-200">
-            <StickyNote className="w-10 h-10 text-gray-400 mb-2" />
-            <p className="text-sm text-gray-600">
-              {searchTerm || activeFilterCount ? "No notes match your search" : "No notes yet"}
-            </p>
-            {!searchTerm && !activeFilterCount && (
-              <button
-                onClick={() => setIsEditorOpen(true)}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
-              >
-                Create Note
-              </button>
-            )}
+        ) : notes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+            <StickyNote size={28} className="mb-3 text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setIsEditorOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add new note
+            </button>
+          </div>
+        ) : filteredNotes.length === 0 ? (
+          <div className="flex items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-sm font-medium">
+            No notes found.
           </div>
         ) : (
           <div>
@@ -1196,20 +1213,21 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
               </div>
             }
             emptyContent={
-              <div className="flex flex-col items-center gap-2">
-                <StickyNote className="w-10 h-10 text-gray-400" />
-                <p className="text-sm text-gray-600">
-                  {searchTerm || activeFilterCount ? "No notes match your search" : "No notes yet"}
-                </p>
-                {!searchTerm && !activeFilterCount && (
+              notes.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 text-gray-500">
+                  <StickyNote size={28} className="text-gray-400" />
                   <button
+                    type="button"
                     onClick={() => setIsEditorOpen(true)}
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
+                    className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
                   >
-                    Create Note
+                    <PlusIcon className="w-4 h-4" />
+                    Add new note
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm font-medium">No notes found.</p>
+              )
             }
           />
           <div className="border-t border-[#E1E4EA] px-5">

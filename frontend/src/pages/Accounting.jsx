@@ -820,6 +820,45 @@ const Accounting = () => {
   // or null to show the main WhatsApp/Email/SMS/Copy-Link list.
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
   const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
+  // Hover-open/close for the Share flyout, tracked with a reference count
+  // rather than a plain cancel/schedule pair. The menu box and the flyout
+  // are two separate portaled subtrees, so React doesn't guarantee which
+  // one's enter/leave synthetic event fires first when the cursor crosses
+  // from one to the other — a plain "leave schedules, enter cancels" pair
+  // can have the leave's schedule land AFTER the enter's cancel, arming a
+  // close timer nothing then cancels. Counting concurrent hovers across
+  // both regions and only closing when it reaches zero is immune to that
+  // ordering.
+  const shareHoverCountRef = useRef(0);
+  const shareHoverTimeoutRef = useRef(null);
+  const clearShareCloseTimer = () => {
+    if (shareHoverTimeoutRef.current) {
+      clearTimeout(shareHoverTimeoutRef.current);
+      shareHoverTimeoutRef.current = null;
+    }
+  };
+  const cancelShareFlyoutClose = () => {
+    shareHoverCountRef.current += 1;
+    clearShareCloseTimer();
+  };
+  const scheduleShareFlyoutClose = () => {
+    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
+    if (shareHoverCountRef.current > 0) return;
+    clearShareCloseTimer();
+    shareHoverTimeoutRef.current = setTimeout(() => {
+      setShareMenu(null);
+      setShareMenuChannel(null);
+    }, 150);
+  };
+  // Immediate, unconditional close — used by closeRowMenu, the scroll
+  // handler, and Convert's mutual-exclusion kill, none of which are hover
+  // transitions the reference count needs to arbitrate.
+  const forceCloseShareFlyout = () => {
+    shareHoverCountRef.current = 0;
+    clearShareCloseTimer();
+    setShareMenu(null);
+    setShareMenuChannel(null);
+  };
   const [emailCompose, setEmailCompose] = useState(null); // { doc, type }
   const [emailComposeTo, setEmailComposeTo] = useState("");
   const [emailComposeCc, setEmailComposeCc] = useState("");
@@ -1191,14 +1230,77 @@ const Accounting = () => {
   const [viewerId, setViewerId] = useState(null);
   const [viewerType, setViewerType] = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
-  const [openConvertMenu, setOpenConvertMenu] = useState(null);
-  const [convertMenuPos, setConvertMenuPos] = useState(null);
+  const [openConvertMenu, setOpenConvertMenu] = useState(null); // doc._id
+  const [convertMenuPos, setConvertMenuPos] = useState(null); // { doc, type, targets, x, y }
+  // Hover-open/close for the Convert flyout — same reference-count pattern
+  // as the Share flyout above (see its comment for why a plain cancel/
+  // schedule pair isn't safe across two separate portaled subtrees).
+  const convertHoverCountRef = useRef(0);
+  const convertHoverTimeoutRef = useRef(null);
+  const clearConvertCloseTimer = () => {
+    if (convertHoverTimeoutRef.current) {
+      clearTimeout(convertHoverTimeoutRef.current);
+      convertHoverTimeoutRef.current = null;
+    }
+  };
+  const cancelConvertFlyoutClose = () => {
+    convertHoverCountRef.current += 1;
+    clearConvertCloseTimer();
+  };
+  const scheduleConvertFlyoutClose = () => {
+    convertHoverCountRef.current = Math.max(0, convertHoverCountRef.current - 1);
+    if (convertHoverCountRef.current > 0) return;
+    clearConvertCloseTimer();
+    convertHoverTimeoutRef.current = setTimeout(() => {
+      setOpenConvertMenu(null);
+      setConvertMenuPos(null);
+    }, 150);
+  };
+  // Immediate, unconditional close — see forceCloseShareFlyout's comment.
+  const forceCloseConvertFlyout = () => {
+    convertHoverCountRef.current = 0;
+    clearConvertCloseTimer();
+    setOpenConvertMenu(null);
+    setConvertMenuPos(null);
+  };
+  // Native addEventListener via ref, NOT React's onMouseEnter/onMouseLeave
+  // props — confirmed by direct testing that React's synthetic mouseleave
+  // does not reliably fire when the pointer moves from one createPortal
+  // tree into another (the menu box and the flyout are separate portals),
+  // so the reference count above never balances and the flyout gets stuck
+  // either open forever or closes immediately depending on which side
+  // silently drops its event. Native listeners don't have this gap.
+  // useRef(...).current freezes the callback identity so React attaches it
+  // once per portal-element mount rather than on every render; it's safe
+  // to use the first render's cancel/schedule closures since they only
+  // ever touch stable refs and setState setters.
+  const menuBoxHoverRefCb = useRef((el) => {
+    if (!el) return;
+    el.addEventListener("mouseenter", () => {
+      cancelShareFlyoutClose();
+      cancelConvertFlyoutClose();
+    });
+    el.addEventListener("mouseleave", () => {
+      scheduleShareFlyoutClose();
+      scheduleConvertFlyoutClose();
+    });
+  }).current;
+  const shareFlyoutHoverRefCb = useRef((el) => {
+    if (!el) return;
+    el.addEventListener("mouseenter", cancelShareFlyoutClose);
+    el.addEventListener("mouseleave", scheduleShareFlyoutClose);
+  }).current;
+  const convertFlyoutHoverRefCb = useRef((el) => {
+    if (!el) return;
+    el.addEventListener("mouseenter", cancelConvertFlyoutClose);
+    el.addEventListener("mouseleave", scheduleConvertFlyoutClose);
+  }).current;
   // Single "⋮" menu per row, replacing the old strip of individual icon
-  // buttons — every row action lives here now, with Convert as a nested
-  // submenu (rowMenuConvertOpen) instead of its own flyout.
+  // buttons — every row action lives here now. Convert and Share both open
+  // as hover flyouts beside the row (see openConvertMenu/shareMenu) rather
+  // than swapping the panel's own content.
   const [openRowMenu, setOpenRowMenu] = useState(null);
   const [rowMenuPos, setRowMenuPos] = useState(null);
-  const [rowMenuConvertOpen, setRowMenuConvertOpen] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showBrandingModal, setShowBrandingModal] = useState(false);
@@ -1279,18 +1381,26 @@ const Accounting = () => {
       if (showFilterMenu) setShowFilterMenu(false);
       if (showMoreMenu) setShowMoreMenu(false);
     };
-    // The convert menu is fixed-positioned, so any scroll would leave it
-    // floating at stale coordinates — close it instead of tracking.
-    // (The row "⋮" menu below closes via its own full-screen portal overlay,
-    // same pattern as Companies.jsx's row-actions menu, instead of this
-    // document-listener approach.)
+    // Scroll closes every menu here outright rather than tracking position —
+    // all of them (including the row "⋮" menu, which otherwise only closes
+    // via its own full-screen portal overlay on click) are fixed-positioned
+    // and would be left floating at stale coordinates once the table under
+    // them scrolls.
     const handleScroll = () => {
       if (openConvertMenu) {
         setOpenConvertMenu(null);
         setConvertMenuPos(null);
       }
+      if (showFilterMenu) setShowFilterMenu(false);
+      if (showMoreMenu) setShowMoreMenu(false);
+      if (openRowMenu) {
+        setOpenRowMenu(null);
+        setRowMenuPos(null);
+        forceCloseShareFlyout();
+        forceCloseConvertFlyout();
+      }
     };
-    if (openConvertMenu || showFilterMenu || showMoreMenu) {
+    if (openConvertMenu || showFilterMenu || showMoreMenu || openRowMenu) {
       document.addEventListener("click", handleClickOutside);
       window.addEventListener("scroll", handleScroll, true);
     }
@@ -1298,7 +1408,7 @@ const Accounting = () => {
       document.removeEventListener("click", handleClickOutside);
       window.removeEventListener("scroll", handleScroll, true);
     };
-  }, [openConvertMenu, showFilterMenu, showMoreMenu]);
+  }, [openConvertMenu, showFilterMenu, showMoreMenu, openRowMenu]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -2004,21 +2114,23 @@ const Accounting = () => {
   // Every row action lives behind one "⋮" trigger, instead of a dedicated
   // "Actions" table column (there is no such column any more — the trigger
   // is appended into whichever data column ends up rendering last, so it
-  // keeps following the last column through reordering/pinning). Convert is
-  // a nested submenu (rowMenuConvertOpen) inside the same panel rather than
-  // its own separate flyout. Positioning/closing mirrors Companies.jsx's
-  // row-actions menu exactly (also used by Deals): portal to document.body
-  // so it's never clipped by an ancestor's stacking context, a full-screen
-  // invisible overlay to close on outside click (no fragile
-  // document-listener/stopPropagation dance), and top/left clamped on both
-  // ends so it can never render off-screen or behind the sticky header.
+  // keeps following the last column through reordering/pinning). Convert
+  // and Share both open as hover flyouts beside the panel (see
+  // openConvertMenu/shareMenu above) rather than swapping the panel's own
+  // content. Positioning/closing mirrors Companies.jsx's row-actions menu
+  // exactly (also used by Deals): portal to document.body so it's never
+  // clipped by an ancestor's stacking context, a full-screen invisible
+  // overlay to close on outside click (no fragile document-listener/
+  // stopPropagation dance), and top/left clamped on both ends so it can
+  // never render off-screen or behind the sticky header.
   const renderRowActions = (doc) => {
     const conversionTargets = getConversionTargets(activeTab);
     const menuOpen = openRowMenu === doc._id;
     const closeRowMenu = () => {
       setOpenRowMenu(null);
       setRowMenuPos(null);
-      setRowMenuConvertOpen(false);
+      forceCloseShareFlyout();
+      forceCloseConvertFlyout();
     };
     return (
       <div className="relative flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -2031,12 +2143,12 @@ const Accounting = () => {
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 224;
+            const MENU_W = 160;
             const MARGIN = 8;
             // Conservative estimate for the tallest state (main menu
             // with every optional item shown) — clamped below so it can
             // never render off-screen regardless of the real height.
-            const MENU_H = 300;
+            const MENU_H = 260;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -2052,18 +2164,14 @@ const Accounting = () => {
             calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
             calcLeft = Math.max(calcLeft, MARGIN);
 
-            // Only one row flyout at a time, and always starts fresh on
-            // the main menu even if a different row's Convert submenu
-            // was left open.
-            setOpenConvertMenu(null);
-            setConvertMenuPos(null);
-            setShareMenu(null);
-            setShareMenuChannel(null);
-            setRowMenuConvertOpen(false);
+            // Only one row flyout at a time, and always starts fresh even
+            // if a different row's Convert/Share flyout was left open.
+            forceCloseConvertFlyout();
+            forceCloseShareFlyout();
             setRowMenuPos({ top: calcTop, left: calcLeft });
             setOpenRowMenu(doc._id);
           }}
-          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <MoreIcon className="w-4 h-4" />
         </button>
@@ -2073,10 +2181,12 @@ const Accounting = () => {
             <div
               key={doc._id}
               style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
-              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
+              className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
+              // Native listeners (menuBoxHoverRefCb), not onMouseEnter/
+              // onMouseLeave — see that ref's comment for why.
+              ref={menuBoxHoverRefCb}
             >
-              {!rowMenuConvertOpen ? (
-                <>
+              <>
                   {activeTab === "tax" && doc.status !== "Paid" && (
                     <button
                       onClick={() => {
@@ -2084,9 +2194,9 @@ const Accounting = () => {
                         setSelectedInvoiceForPayment(doc);
                         setPaymentModalOpen(true);
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                     >
-                      <IndianRupee className="w-4 h-4 text-emerald-600" />
+                      <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
                       Record Payment
                     </button>
                   )}
@@ -2095,9 +2205,9 @@ const Accounting = () => {
                       closeRowMenu();
                       handleView(doc, activeTab);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EyeIcon className="w-4 h-4 text-blue-600" />
+                    <EyeIcon className="w-3.5 h-3.5 text-blue-600" />
                     View
                   </button>
                   <button
@@ -2105,9 +2215,9 @@ const Accounting = () => {
                       closeRowMenu();
                       handleEdit(doc, activeTab);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EditIcon className="w-4 h-4 text-blue-600" />
+                    <EditIcon className="w-3.5 h-3.5 text-blue-600" />
                     Edit
                   </button>
                   <button
@@ -2115,46 +2225,85 @@ const Accounting = () => {
                       closeRowMenu();
                       handleDownload(doc._id, activeTab);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <DownloadIcon className="w-4 h-4 text-green-600" />
+                    <DownloadIcon className="w-3.5 h-3.5 text-green-600" />
                     Download
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Anchor the share flyout off this menu's own
-                      // position rather than the (now-closed) trigger
-                      // button's rect.
-                      const DROPDOWN_W = 208;
-                      const anchorRight = rowMenuPos.left + 224;
-                      closeRowMenu();
+                    onMouseEnter={(e) => {
+                      // Hover is counted at the menu-box level (above), not
+                      // here — this only opens the flyout the first time.
+                      // Kill Convert's flyout outright rather than letting
+                      // its own grace-period timeout run — otherwise moving
+                      // straight from Share to Convert (or back) briefly
+                      // shows both stacked on top of each other.
+                      forceCloseConvertFlyout();
+                      // Already open for this row — skip recomputing/
+                      // resetting state. Calling setShareMenu with a fresh
+                      // object on every mouseenter (even a no-op reposition)
+                      // re-renders the row, which can nudge layout by a
+                      // sub-pixel under a stationary cursor and refire
+                      // mouseenter — a self-sustaining blink.
+                      if (shareMenu?.doc?._id === doc._id) return;
+                      // Flyout opens beside this row, to the left of the
+                      // menu — the main menu stays open behind it, so it
+                      // anchors off the row's own rect rather than the
+                      // menu's (which closeRowMenu used to be needed for).
+                      const zMenu = getAncestorZoom(document.body);
+                      const DROPDOWN_W = 160;
+                      const GAP = 0;
+                      const rect = e.currentTarget.getBoundingClientRect();
                       setShareMenu({
                         doc,
                         type: activeTab,
-                        x: Math.max(4, anchorRight - DROPDOWN_W),
-                        y: rowMenuPos.top,
+                        x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                        y: rect.top / zMenu,
                       });
                       setShareMenuChannel(null);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Share2 className="w-4 h-4 text-blue-600" />
-                    Share via WhatsApp/Email/SMS
+                    <span className="flex items-center gap-2">
+                      <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                      Share
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                   </button>
                   {conversionTargets.length > 0 && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRowMenuConvertOpen(true);
+                      onMouseEnter={(e) => {
+                        // Hover is counted at the menu-box level (above),
+                        // not here — this only opens the flyout the first
+                        // time.
+                        // Same instant-kill of the other flyout as Share's
+                        // onMouseEnter above.
+                        forceCloseShareFlyout();
+                        // Same already-open guard as Share's onMouseEnter —
+                        // see comment there.
+                        if (openConvertMenu === doc._id) return;
+                        const zMenu = getAncestorZoom(document.body);
+                        const DROPDOWN_W = 210; // matches the flyout's own w-[210px]
+                        const GAP = 0;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setConvertMenuPos({
+                          doc,
+                          type: activeTab,
+                          targets: conversionTargets,
+                          x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                          y: rect.top / zMenu,
+                        });
+                        setOpenConvertMenu(doc._id);
                       }}
-                      className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                     >
                       <span className="flex items-center gap-2">
-                        <Repeat className="w-4 h-4 text-orange-600" />
+                        <Repeat className="w-3.5 h-3.5 text-orange-600" />
                         Convert
                       </span>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                     </button>
                   )}
                   <button
@@ -2162,51 +2311,54 @@ const Accounting = () => {
                       closeRowMenu();
                       handleDuplicate(doc._id, activeTab);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Copy className="w-4 h-4 text-indigo-600" />
+                    <Copy className="w-3.5 h-3.5 text-indigo-600" />
                     Duplicate
                   </button>
-                  <div className="border-t border-gray-100 my-1" />
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
                     onClick={() => {
                       closeRowMenu();
                       handleDelete(doc._id, activeTab);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                   >
-                    <DeleteIcon className="w-4 h-4" />
+                    <DeleteIcon className="w-3.5 h-3.5" />
                     Delete
                   </button>
                 </>
-              ) : (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRowMenuConvertOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Back
-                  </button>
-                  {conversionTargets.map((targetType) => (
-                    <button
-                      key={targetType}
-                      onClick={() => {
-                        handleConvert(doc._id, activeTab, targetType);
-                        closeRowMenu();
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <Repeat className="w-4 h-4 text-orange-600" />
-                      Convert to{" "}
-                      {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
-                    </button>
-                  ))}
-                </>
-              )}
+            </div>
+          </>,
+          document.body
+        )}
+        {openConvertMenu === doc._id && convertMenuPos && createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[100009]"
+              onClick={() => { setOpenConvertMenu(null); setConvertMenuPos(null); }}
+            />
+            <div
+              className="fixed z-[100010] w-[210px] overflow-hidden bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+              style={{ top: convertMenuPos.y, left: convertMenuPos.x }}
+              ref={convertFlyoutHoverRefCb}
+            >
+              {convertMenuPos.targets.map((targetType) => (
+                <button
+                  key={targetType}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleConvert(convertMenuPos.doc._id, convertMenuPos.type, targetType);
+                    closeRowMenu();
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50"
+                >
+                  <Repeat className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+                  <span className="truncate">
+                    Convert to {targetType === "tax" ? "Tax Invoice" : docNameFor(targetType)}
+                  </span>
+                </button>
+              ))}
             </div>
           </>,
           document.body
@@ -3263,8 +3415,12 @@ const Accounting = () => {
         {/* Two-pane create/edit screen — each document type uses its own
             thin wrapper around the shared CreateInvoicePanel. */}
         {showCreatePanel && (() => {
+          // `key` is pulled out to its own variable rather than living inside
+          // panelProps — React warns (and reconciliation misbehaves) if a
+          // spread object passed as {...panelProps} still contains a "key"
+          // field, since JSX must see key directly on the element itself.
+          const panelKey = `${activeTab}-${editPanelDoc?._id || "new"}`;
           const panelProps = {
-            key: `${activeTab}-${editPanelDoc?._id || "new"}`,
             deals,
             initialDoc: editPanelDoc,
             conversionData,
@@ -3333,6 +3489,7 @@ const Accounting = () => {
               />
             ) : (
               <CreateInvoicePanel
+                key={panelKey}
                 {...panelProps}
                 type="tax"
                 formOverride={formHandoff}
@@ -3370,6 +3527,7 @@ const Accounting = () => {
               />
             ) : (
               <CreateQuotationPanel
+                key={panelKey}
                 {...panelProps}
                 formOverride={formHandoff}
                 onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setQuotationFullWidth(true); }}
@@ -3403,6 +3561,7 @@ const Accounting = () => {
               />
             ) : (
               <CreatePerformaPanel
+                key={panelKey}
                 {...panelProps}
                 formOverride={formHandoff}
                 onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setPerformaFullWidth(true); }}
@@ -3427,6 +3586,7 @@ const Accounting = () => {
               />
             ) : (
               <CreateChallanPanel
+                key={panelKey}
                 {...panelProps}
                 formOverride={formHandoff}
                 onRequestFullWidth={(currentForm) => { setFormHandoff(currentForm); setChallanFullWidth(true); }}
@@ -3844,8 +4004,9 @@ const Accounting = () => {
           <>
             <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
             <div
-              className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+              className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
               style={{ top: shareMenu.y, left: shareMenu.x }}
+              ref={shareFlyoutHoverRefCb}
             >
               {(() => {
                 const link = `${window.location.origin}/view/${apiPathFor(shareMenu.type)}/${shareMenu.doc._id}`;
@@ -3915,7 +4076,7 @@ const Accounting = () => {
                     <>
                       <button
                         onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                       >
                         ← Back
                       </button>
@@ -3923,10 +4084,10 @@ const Accounting = () => {
                         <button
                           key={tpl.id}
                           onClick={(e) => { e.stopPropagation(); send(tpl); }}
-                          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                         >
                           <span className="truncate">{tpl.name}</span>
-                          {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                          {tpl.isDefault && <span className="text-[9px] text-green-600 font-semibold flex-shrink-0">Default</span>}
                         </button>
                       ))}
                     </>
@@ -3934,16 +4095,16 @@ const Accounting = () => {
                 }
 
                 const items = [
-                  { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
-                  { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
-                  { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
-                  { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+                  { label: "WhatsApp", icon: <MessageCircle className="w-3.5 h-3.5 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                  { label: "Email", icon: <Mail className="w-3.5 h-3.5 text-blue-600" />, onClick: () => openChannel("email") },
+                  { label: "SMS", icon: <MessageSquare className="w-3.5 h-3.5 text-purple-600" />, onClick: () => openChannel("sms") },
+                  { label: "Copy Link", icon: <Copy className="w-3.5 h-3.5 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
                 ];
                 return items.map(({ label, icon, onClick }) => (
                   <button
                     key={label}
                     onClick={(e) => { e.stopPropagation(); onClick(); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
                     {icon}
                     {label}

@@ -406,7 +406,7 @@ const VendorDetailsPageNew = () => {
     fetchVendorDetails();
   }, [id]);
 
-  // Close menus on outside click
+  // Close menus on outside click (or scroll)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
@@ -416,8 +416,16 @@ const VendorDetailsPageNew = () => {
         setShowNewEntryMenu(false);
       }
     };
+    const handleScroll = () => {
+      setShowActionsMenu(false);
+      setShowNewEntryMenu(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
   }, []);
 
   /* ── Helpers ── */
@@ -992,7 +1000,7 @@ const VendorDetailsPageNew = () => {
                 <button
                   title="Edit"
                   onClick={handleEdit}
-                  className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+                  className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-[#0085FF] hover:bg-[#0078E8] rounded-full transition-colors"
                 >
                   <EditIcon size={13} />
                   Edit
@@ -1386,7 +1394,7 @@ const VendorDetailsPageNew = () => {
                       key={tab}
                       onClick={() => setActivityFeedFilter(tab)}
                       className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${activityFeedFilter === tab
-                          ? "bg-blue-600 text-white"
+                          ? "bg-[#0085FF] text-white"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                         }`}
                     >

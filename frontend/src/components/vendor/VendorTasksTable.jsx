@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import StatTile from "../common/StatTile";
-import { ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
+import { ListChecks, Clock, AlertCircle, CheckCircle, X } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
@@ -101,7 +101,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
   }, [autoOpenCreate, onAutoOpenCreateConsumed]);
   const [hiddenColumns, setHiddenColumns] = useState(new Set());
   const [pinnedColumns, setPinnedColumns] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
   const filterButtonRef = useRef(null);
 
@@ -134,7 +134,11 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
   };
 
   const handleSort = (key, direction) => {
-    setSortConfig({ key, direction });
+    setSortConfig((prev) =>
+      prev.key === key && prev.direction === direction
+        ? { key: null, direction: null }
+        : { key, direction },
+    );
   };
 
   const refetchTasks = useCallback(async () => {
@@ -552,6 +556,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
           Visibility is driven by the parent page's own Financial Summary
           strip toggle (VendorDetailsPageNew.jsx's ⋮ menu), same as PaymentsTable. */}
       {showKPIs && (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {loading && !tasks.length
           ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />)
@@ -569,6 +574,9 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
               />
             ))}
       </div>
+
+      <div className="-mx-6" style={{ marginTop: 24, paddingBottom: 24, borderTop: "1px solid #E1E4EA" }} />
+      </>
       )}
 
       {/* Action Buttons are portaled from here into the Tab Header using ReactDOM.createPortal. */}
@@ -587,15 +595,23 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
       ) : (
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search tasks..."
-              className="w-full h-full pl-10 pr-3.5 border rounded-full text-sm focus:outline-none focus:border-blue-300"
-              style={{ borderColor: "rgba(31, 41, 55, 0.1)" }}
+              placeholder="Search by tasks..."
+              className="w-full h-full pl-11 pr-3.5 border border-[rgba(31,41,55,0.1)] rounded-full text-sm focus:outline-none focus:border-[#0085FF]"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 focus:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <button
             ref={filterButtonRef}
@@ -621,13 +637,30 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
               setShowTaskForm(true);
             }}
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
-            style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
+            style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
+            title="Add Task"
           >
-            <PlusIcon className="w-4 h-4 text-gray-700" />
+            <PlusIcon className="w-4 h-4" />
           </button>
         </div>
       )}
 
+      {!loading && tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
+          <ListChecks size={28} className="mb-3 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => {
+              setEditingTask(null);
+              setShowTaskForm(true);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Add new task
+          </button>
+        </div>
+      ) : (
       <div className="bg-white border border-[#E1E4EA] rounded-xl shadow-[0px_2px_4px_rgba(28,27,31,0.04)] overflow-hidden">
         <DataTable
           data={paginatedTasks}
@@ -662,17 +695,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
             </div>
           }
           emptyContent={
-            <div className="flex flex-col items-center gap-2">
-              <CalendarIcon className="w-10 h-10 text-gray-400" />
-              <p className="text-sm text-gray-600">
-                {search || activeFilterCount ? "No tasks match your filters" : "No tasks yet"}
-              </p>
-              <p className="text-xs text-gray-500">
-                {search || activeFilterCount
-                  ? "Try clearing the search or filters"
-                  : "Tasks will appear here once created"}
-              </p>
-            </div>
+            <p className="text-gray-500 text-sm font-medium">No tasks found.</p>
           }
         />
         
@@ -690,6 +713,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
           />
         </div>
       </div>
+      )}
 
       <CompanyFilterPanel
         isOpen={showFilterPanel}

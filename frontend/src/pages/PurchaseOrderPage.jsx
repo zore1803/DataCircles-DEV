@@ -44,7 +44,7 @@ import {
   Strikethrough as StrikethroughIcon,
   ListOrdered,
   List as ListIcon,
-  Link as LinkIcon, ArrowUp, ArrowDown } from "lucide-react";
+  Link as LinkIcon, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
@@ -259,9 +259,42 @@ const PurchaseOrderPage = () => {
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
 
-  // Share via WhatsApp/Email/SMS + Copy Link
+  // Share via WhatsApp/Email/SMS + Copy Link — opens as a hover flyout
+  // beside the row menu (same pattern as Accounting.jsx), so the main menu
+  // stays open behind it and a short grace period keeps it open while the
+  // cursor crosses the gap to the flyout itself.
   const [shareMenu, setShareMenu] = useState(null); // { x, y, doc }
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  // Reference-counted hover tracking across the menu box and the flyout —
+  // see SalesReturn.jsx's fuller comment for why a plain cancel/schedule
+  // pair isn't safe across two separate portaled subtrees.
+  const shareHoverCountRef = useRef(0);
+  const shareHoverTimeoutRef = useRef(null);
+  const clearShareCloseTimer = () => {
+    if (shareHoverTimeoutRef.current) {
+      clearTimeout(shareHoverTimeoutRef.current);
+      shareHoverTimeoutRef.current = null;
+    }
+  };
+  const cancelShareFlyoutClose = () => {
+    shareHoverCountRef.current += 1;
+    clearShareCloseTimer();
+  };
+  const scheduleShareFlyoutClose = () => {
+    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
+    if (shareHoverCountRef.current > 0) return;
+    clearShareCloseTimer();
+    shareHoverTimeoutRef.current = setTimeout(() => {
+      setShareMenu(null);
+      setShareMenuChannel(null);
+    }, 150);
+  };
+  const forceCloseShareFlyout = () => {
+    shareHoverCountRef.current = 0;
+    clearShareCloseTimer();
+    setShareMenu(null);
+    setShareMenuChannel(null);
+  };
   const [waTemplatesList, setWaTemplatesList] = useState([]);
   const [smsTemplatesList, setSmsTemplatesList] = useState([]);
   const [emailTemplatesList, setEmailTemplatesList] = useState([]);
@@ -893,6 +926,7 @@ const PurchaseOrderPage = () => {
       setOpenRowActionsId(null);
       setRowActionsPos(null);
       setActiveRowMenuState("main");
+      forceCloseShareFlyout();
     };
     return (
       <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
@@ -905,9 +939,9 @@ const PurchaseOrderPage = () => {
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 224;
+            const MENU_W = 160;
             const MARGIN = 8;
-            const MENU_H = 340;
+            const MENU_H = 300;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -929,7 +963,7 @@ const PurchaseOrderPage = () => {
             setOpenRowActionsId(po._id);
             setActiveRowMenuState("main");
           }}
-          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <MoreIcon className="w-4 h-4" />
         </button>
@@ -939,15 +973,21 @@ const PurchaseOrderPage = () => {
             <div
               key={po._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
+              className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
+              // Share's flyout hover is tracked at this menu-box level, not
+              // the narrow Share row alone — see SalesReturn.jsx's comment
+              // for why per-button mouseleave flickers against the flyout
+              // beside it.
+              onMouseEnter={cancelShareFlyoutClose}
+              onMouseLeave={scheduleShareFlyoutClose}
             >
               {activeRowMenuState === "status" ? (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-3.5 h-3.5" />
                     Back
                   </button>
                   {statusOptions.map(st => {
@@ -957,7 +997,7 @@ const PurchaseOrderPage = () => {
                       <button
                         key={optVal}
                         onClick={(e) => { e.stopPropagation(); updateSingleStatus(po._id, optVal); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-gray-700'}`}
+                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-[#161618] hover:bg-gray-50'}`}
                       >
                         {optLabel}
                       </button>
@@ -968,72 +1008,83 @@ const PurchaseOrderPage = () => {
                 <>
                   <button
                     onClick={() => { closeRowMenu(); handleView(po); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EyeIcon className="w-4 h-4 text-blue-600" />
+                    <EyeIcon className="w-3.5 h-3.5 text-blue-600" />
                     View
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleEdit(po); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EditIcon className="w-4 h-4 text-blue-600" />
+                    <EditIcon className="w-3.5 h-3.5 text-blue-600" />
                     Edit
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleDownload(po); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <DownloadIcon className="w-4 h-4 text-green-600" />
+                    <DownloadIcon className="w-3.5 h-3.5 text-green-600" />
                     Download
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onMouseEnter={(e) => {
+                      // Hover is counted at the menu-box level (above), not
+                      // here — this only opens the flyout the first time.
+                      // Already open for this row — skip recomputing/
+                      // resetting state (see SalesReturn.jsx's comment for
+                      // why a no-op reposition on every mouseenter blinks).
+                      if (shareMenu?.doc?._id === po._id) return;
+                      const zMenu = getAncestorZoom(document.body);
                       const DROPDOWN_W = 208;
-                      const anchorRight = rowActionsPos.left + 224;
-                      closeRowMenu();
+                      const GAP = 0;
+                      const rect = e.currentTarget.getBoundingClientRect();
                       setShareMenu({
                         doc: po,
-                        x: Math.max(4, anchorRight - DROPDOWN_W),
-                        y: rowActionsPos.top,
+                        x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                        y: rect.top / zMenu,
                       });
                       setShareMenuChannel(null);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Share2 className="w-4 h-4 text-blue-600" />
-                    Share via WhatsApp/Email/SMS
-                  </button>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={() => { closeRowMenu(); handleDelete(po._id); }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  >
-                    <DeleteIcon className="w-4 h-4" />
-                    Delete
+                    <span className="flex items-center gap-2">
+                      <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                      Share
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                   </button>
                   {po.status !== "Delivered" && (
-                    <>
-                      <div className="border-t border-gray-100 my-1" />
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                      className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Repeat className="w-3.5 h-3.5 text-orange-600" />
                         Change Status
-                      </button>
-                    </>
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
                   )}
-                  <div className="border-t border-gray-100 my-1" />
                   <button
                     onClick={() => { closeRowMenu(); handleConvertToPurchase(po); }}
                     disabled={convertingPOId === po._id || !!po.convertedPurchase}
                     title={po.convertedPurchase ? `Already converted to ${po.convertedPurchase.purchaseNumber}` : undefined}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${
                       !po.convertedPurchase && (po.status === "Approved" || po.status === "Delivered") ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 cursor-not-allowed"
                     } disabled:opacity-50`}
                   >
+                    <RefreshCw className="w-3.5 h-3.5" />
                     {convertingPOId === po._id ? "Converting…" : "Convert to Purchase"}
+                  </button>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={() => { closeRowMenu(); handleDelete(po._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <DeleteIcon className="w-3.5 h-3.5" />
+                    Delete
                   </button>
                 </>
               )}
@@ -2113,6 +2164,8 @@ const PurchaseOrderPage = () => {
           <div
             className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
             style={{ top: shareMenu.y, left: shareMenu.x }}
+            onMouseEnter={cancelShareFlyoutClose}
+            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const link = `${window.location.origin}/view/purchaseOrder/${shareMenu.doc._id}`;

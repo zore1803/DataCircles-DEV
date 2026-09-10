@@ -134,6 +134,36 @@ export default function EInvoicing() {
 
   const [shareMenu, setShareMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  // Reference-counted hover tracking across the menu box and the flyout —
+  // see SalesReturn.jsx's fuller comment for why a plain cancel/schedule
+  // pair isn't safe across two separate portaled subtrees.
+  const shareHoverCountRef = useRef(0);
+  const shareHoverTimeoutRef = useRef(null);
+  const clearShareCloseTimer = () => {
+    if (shareHoverTimeoutRef.current) {
+      clearTimeout(shareHoverTimeoutRef.current);
+      shareHoverTimeoutRef.current = null;
+    }
+  };
+  const cancelShareFlyoutClose = () => {
+    shareHoverCountRef.current += 1;
+    clearShareCloseTimer();
+  };
+  const scheduleShareFlyoutClose = () => {
+    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
+    if (shareHoverCountRef.current > 0) return;
+    clearShareCloseTimer();
+    shareHoverTimeoutRef.current = setTimeout(() => {
+      setShareMenu(null);
+      setShareMenuChannel(null);
+    }, 150);
+  };
+  const forceCloseShareFlyout = () => {
+    shareHoverCountRef.current = 0;
+    clearShareCloseTimer();
+    setShareMenu(null);
+    setShareMenuChannel(null);
+  };
 
   const [selectedIds, setSelectedIds] = useState([]);
   const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -705,6 +735,7 @@ export default function EInvoicing() {
   const closeRowActions = () => {
     setOpenRowActionsId(null);
     setRowActionsPos(null);
+    forceCloseShareFlyout();
   };
 
   const handleView = (r) => {
@@ -791,6 +822,8 @@ export default function EInvoicing() {
               ref={rowActionsRef}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              onMouseEnter={cancelShareFlyoutClose}
+              onMouseLeave={scheduleShareFlyoutClose}
             >
               <button onClick={() => handleView(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
                 <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
@@ -799,17 +832,23 @@ export default function EInvoicing() {
                 <DownloadIcon className="w-4 h-4 text-[#1C1B1F]" /> Download
               </button>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
+                onMouseEnter={(e) => {
+                  // Hover is counted at the menu-box level (above), not
+                  // here — this only opens the flyout the first time.
+                  if (shareMenu?.row?._id === r._id) return;
+                  const zMenu = getAncestorZoom(document.body);
                   const DROPDOWN_W = 208;
-                  const anchorRight = rowActionsPos.left + 200;
-                  closeRowActions();
-                  setShareMenu({ row: r, x: Math.max(4, anchorRight - DROPDOWN_W), y: rowActionsPos.top });
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setShareMenu({ row: r, x: Math.max(4, rect.left / zMenu - DROPDOWN_W), y: rect.top / zMenu });
                   setShareMenuChannel(null);
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Share2 className="w-3.5 h-3.5 text-[#1C1B1F]" /> Share
+                <span className="flex items-center gap-2">
+                  <Share2 className="w-3.5 h-3.5 text-[#1C1B1F]" /> Share
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
               </button>
 
               {r.status === "Success" && (
@@ -1416,6 +1455,8 @@ export default function EInvoicing() {
           <div
             className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
             style={{ top: shareMenu.y, left: shareMenu.x }}
+            onMouseEnter={cancelShareFlyoutClose}
+            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const r = shareMenu.row;

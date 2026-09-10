@@ -745,8 +745,18 @@ const CompanyProfilePage = () => {
         setShowActionsMenu(false);
       }
     };
+    // Scroll closes both menus outright rather than tracking their
+    // position — same reasoning as Accounting.jsx's convert menu.
+    const handleScroll = () => {
+      setShowNewEntryMenu(false);
+      setShowActionsMenu(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
   }, []);
 
   // Open the income chart already scrolled to the current month, not the oldest one.

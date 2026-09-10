@@ -1,5 +1,5 @@
 import MoreIcon from "./MoreIcon";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
 
@@ -14,6 +14,21 @@ export default function RowActionsMenu({ actions }) {
   const btnRef = useRef(null);
 
   const visibleActions = actions.filter(Boolean);
+
+  // The menu is portaled and fixed-positioned against the trigger's
+  // viewport coords at open time — a scroll anywhere (the page, or a
+  // scrollable table body) would leave it floating at stale coordinates,
+  // so close it outright instead of tracking.
+  useEffect(() => {
+    if (!open) return;
+    const handleScroll = () => {
+      setOpen(false);
+      setPos(null);
+    };
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [open]);
+
   if (visibleActions.length === 0) return null;
 
   return (

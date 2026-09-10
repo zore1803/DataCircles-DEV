@@ -8,12 +8,13 @@
  * lucide icon it replaced. The unread-count badge stays a separate overlay
  * element rendered by the caller — this component is just the bell mark.
  */
-const BellIcon = ({ className = "w-4 h-4", ...props }) => (
+const BellIcon = ({ className = "w-4 h-4", size, style, ...props }) => (
   <svg
     viewBox="0 0 16 20"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
+    style={size != null ? { width: size, height: size, ...style } : style}
     aria-hidden="true"
     focusable="false"
     {...props}

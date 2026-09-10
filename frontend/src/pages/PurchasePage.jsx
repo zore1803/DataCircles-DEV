@@ -34,7 +34,7 @@ import {
   Strikethrough as StrikethroughIcon,
   ListOrdered,
   List as ListIcon,
-  Link as LinkIcon, ArrowUp, ArrowDown } from "lucide-react";
+  Link as LinkIcon, ArrowUp, ArrowDown, Repeat, IndianRupee } from "lucide-react";
 import toast from "react-hot-toast";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import Skeleton from "../components/common/Skeleton";
@@ -203,6 +203,36 @@ const PurchasePage = () => {
 
   const [shareMenu, setShareMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  // Reference-counted hover tracking across the menu box and the flyout —
+  // see SalesReturn.jsx's fuller comment for why a plain cancel/schedule
+  // pair isn't safe across two separate portaled subtrees.
+  const shareHoverCountRef = useRef(0);
+  const shareHoverTimeoutRef = useRef(null);
+  const clearShareCloseTimer = () => {
+    if (shareHoverTimeoutRef.current) {
+      clearTimeout(shareHoverTimeoutRef.current);
+      shareHoverTimeoutRef.current = null;
+    }
+  };
+  const cancelShareFlyoutClose = () => {
+    shareHoverCountRef.current += 1;
+    clearShareCloseTimer();
+  };
+  const scheduleShareFlyoutClose = () => {
+    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
+    if (shareHoverCountRef.current > 0) return;
+    clearShareCloseTimer();
+    shareHoverTimeoutRef.current = setTimeout(() => {
+      setShareMenu(null);
+      setShareMenuChannel(null);
+    }, 150);
+  };
+  const forceCloseShareFlyout = () => {
+    shareHoverCountRef.current = 0;
+    clearShareCloseTimer();
+    setShareMenu(null);
+    setShareMenuChannel(null);
+  };
   const [waTemplatesList, setWaTemplatesList] = useState([]);
   const [smsTemplatesList, setSmsTemplatesList] = useState([]);
   const [emailTemplatesList, setEmailTemplatesList] = useState([]);
@@ -809,6 +839,7 @@ const PurchasePage = () => {
       setOpenRowActionsId(null);
       setRowActionsPos(null);
       setActiveRowMenuState("main");
+      forceCloseShareFlyout();
     };
     return (
       <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
@@ -821,9 +852,9 @@ const PurchasePage = () => {
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 224;
+            const MENU_W = 160;
             const MARGIN = 8;
-            const MENU_H = 340;
+            const MENU_H = 300;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -839,13 +870,12 @@ const PurchasePage = () => {
             calcLeft = Math.min(calcLeft, viewportW - MENU_W - MARGIN);
             calcLeft = Math.max(calcLeft, MARGIN);
 
-            setShareMenu(null);
-            setShareMenuChannel(null);
+            forceCloseShareFlyout();
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(p._id);
             setActiveRowMenuState("main");
           }}
-          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <MoreIcon className="w-4 h-4" />
         </button>
@@ -855,15 +885,17 @@ const PurchasePage = () => {
             <div
               key={p._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
+              className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
+              onMouseEnter={cancelShareFlyoutClose}
+              onMouseLeave={scheduleShareFlyoutClose}
             >
               {activeRowMenuState === "status" ? (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-3.5 h-3.5" />
                     Back
                   </button>
                   {statusOptions.map(st => {
@@ -873,7 +905,7 @@ const PurchasePage = () => {
                       <button
                         key={optVal}
                         onClick={(e) => { e.stopPropagation(); updateSingleStatus(p._id, optVal); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${p.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-gray-700'}`}
+                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${p.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-[#161618] hover:bg-gray-50'}`}
                       >
                         {optLabel}
                       </button>
@@ -884,71 +916,78 @@ const PurchasePage = () => {
                 <>
                   <button
                     onClick={() => { closeRowMenu(); handleView(p); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EyeIcon className="w-4 h-4 text-blue-600" />
+                    <EyeIcon className="w-3.5 h-3.5 text-blue-600" />
                     View
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleEdit(p); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EditIcon className="w-4 h-4 text-blue-600" />
+                    <EditIcon className="w-3.5 h-3.5 text-blue-600" />
                     Edit
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleDownload(p); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <DownloadIcon className="w-4 h-4 text-green-600" />
+                    <DownloadIcon className="w-3.5 h-3.5 text-green-600" />
                     Download
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const DROPDOWN_W = 208;
-                      const anchorRight = rowActionsPos.left + 224;
-                      closeRowMenu();
+                    onMouseEnter={(e) => {
+                      // Hover is counted at the menu-box level (above), not
+                      // here — this only opens the flyout the first time.
+                      if (shareMenu?.doc?._id === p._id) return;
+                      const zMenu = getAncestorZoom(document.body);
+                      const DROPDOWN_W = 160;
+                      const GAP = 0;
+                      const rect = e.currentTarget.getBoundingClientRect();
                       setShareMenu({
                         doc: p,
-                        x: Math.max(4, anchorRight - DROPDOWN_W),
-                        y: rowActionsPos.top,
+                        x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                        y: rect.top / zMenu,
                       });
                       setShareMenuChannel(null);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Share2 className="w-4 h-4 text-blue-600" />
-                    Share via WhatsApp/Email/SMS
-                  </button>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={() => { closeRowMenu(); handleDelete(p._id); }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  >
-                    <DeleteIcon className="w-4 h-4" />
-                    Delete
+                    <span className="flex items-center gap-2">
+                      <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                      Share
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                   </button>
                   {p.status !== "Paid" && (
-                    <>
-                      <div className="border-t border-gray-100 my-1" />
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                      className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Repeat className="w-3.5 h-3.5 text-orange-600" />
                         Change Status
-                      </button>
-                    </>
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
                   )}
-                  <div className="border-t border-gray-100 my-1" />
+                  {p.status !== "Cancelled" && p.status !== "Paid" && (
+                    <button
+                      onClick={() => { closeRowMenu(); handleRecordPayment(p); }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-blue-600 hover:bg-blue-50 whitespace-nowrap"
+                    >
+                      <IndianRupee className="w-3.5 h-3.5" />
+                      Record Payment
+                    </button>
+                  )}
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
-                    disabled={p.status === "Cancelled" || p.status === "Paid"}
-                    onClick={() => { closeRowMenu(); handleRecordPayment(p); }}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-                      p.status === "Cancelled" || p.status === "Paid" ? "text-gray-400 cursor-not-allowed" : "text-blue-600 hover:bg-blue-50"
-                    }`}
+                    onClick={() => { closeRowMenu(); handleDelete(p._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                   >
-                    Record Payment
+                    <DeleteIcon className="w-3.5 h-3.5" />
+                    Delete
                   </button>
                 </>
               )}
@@ -1010,7 +1049,7 @@ const PurchasePage = () => {
               <div className="flex items-center justify-between w-full group">
                 <span className="truncate flex-1 min-w-0 flex items-center gap-1.5" title={vc.label}>
                   <span className="truncate">{vc.label}</span>
-                  {sortConfig.key === vc.key && (sortConfig.direction === "asc"
+                  {sortConfig.key === (vc.sortKey || vc.key) && (sortConfig.direction === "asc"
                     ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
                     : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
                   {pinSide && (
@@ -2046,8 +2085,10 @@ const PurchasePage = () => {
         <>
           <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
+            onMouseEnter={cancelShareFlyoutClose}
+            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const link = `${window.location.origin}/view/purchase/${shareMenu.doc._id}`;
@@ -2111,7 +2152,7 @@ const PurchasePage = () => {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                     >
                       ← Back
                     </button>
@@ -2119,10 +2160,10 @@ const PurchasePage = () => {
                       <button
                         key={tpl.id}
                         onClick={(e) => { e.stopPropagation(); send(tpl); }}
-                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                       >
                         <span className="truncate">{tpl.name}</span>
-                        {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                        {tpl.isDefault && <span className="text-[9px] text-green-600 font-semibold flex-shrink-0">Default</span>}
                       </button>
                     ))}
                   </>
@@ -2130,16 +2171,16 @@ const PurchasePage = () => {
               }
 
               const items = [
-                { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
-                { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
-                { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
-                { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+                { label: "WhatsApp", icon: <MessageCircle className="w-3.5 h-3.5 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                { label: "Email", icon: <Mail className="w-3.5 h-3.5 text-blue-600" />, onClick: () => openChannel("email") },
+                { label: "SMS", icon: <MessageSquare className="w-3.5 h-3.5 text-purple-600" />, onClick: () => openChannel("sms") },
+                { label: "Copy Link", icon: <Copy className="w-3.5 h-3.5 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
               ];
               return items.map(({ label, icon, onClick }) => (
                 <button
                   key={label}
                   onClick={(e) => { e.stopPropagation(); onClick(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                 >
                   {icon}
                   {label}

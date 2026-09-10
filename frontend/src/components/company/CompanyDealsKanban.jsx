@@ -606,18 +606,26 @@ export default function CompanyDealsKanban({
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
   // An explicit `direction` (from the column menu's Sort Ascending / Sort
-  // Descending items) sets that direction outright. Called without one — e.g.
-  // clicking the header label — it toggles, as before.
+  // Descending items) sets that direction outright, or clears it if it's
+  // already the active sort. Called without one — e.g. clicking the header
+  // label — it cycles asc -> desc -> off.
   const handleSort = (key, direction) => {
-    if (direction) { setSortConfig({ key, direction }); return; }
-    setSortConfig((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" },
-    );
+    if (direction) {
+      setSortConfig((prev) =>
+        prev.key === key && prev.direction === direction
+          ? { key: null, direction: null }
+          : { key, direction },
+      );
+      return;
+    }
+    setSortConfig((prev) => {
+      if (prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return { key: null, direction: null };
+    });
   };
   const [localViewMode, setLocalViewMode] = useState("board");
   const viewMode = controlledViewMode ?? localViewMode;

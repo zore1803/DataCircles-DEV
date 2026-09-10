@@ -137,6 +137,62 @@ const SalesReturn = () => {
   // consistent across modules.
   const [shareMenu, setShareMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  // Hover-open/close for the Share flyout, tracked with a reference count
+  // rather than a plain cancel/schedule pair. The menu box and the flyout
+  // are two separate portaled subtrees, so React doesn't guarantee which
+  // one's enter/leave synthetic event fires first when the cursor crosses
+  // from one to the other — a plain "leave schedules, enter cancels" pair
+  // can have the leave's schedule land AFTER the enter's cancel, arming a
+  // close timer nothing then cancels. Counting concurrent hovers across
+  // both regions and only closing when it reaches zero is immune to that
+  // ordering.
+  const shareHoverCountRef = useRef(0);
+  const shareHoverTimeoutRef = useRef(null);
+  const clearShareCloseTimer = () => {
+    if (shareHoverTimeoutRef.current) {
+      clearTimeout(shareHoverTimeoutRef.current);
+      shareHoverTimeoutRef.current = null;
+    }
+  };
+  const cancelShareFlyoutClose = () => {
+    shareHoverCountRef.current += 1;
+    clearShareCloseTimer();
+  };
+  const scheduleShareFlyoutClose = () => {
+    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
+    if (shareHoverCountRef.current > 0) return;
+    clearShareCloseTimer();
+    shareHoverTimeoutRef.current = setTimeout(() => {
+      setShareMenu(null);
+      setShareMenuChannel(null);
+    }, 150);
+  };
+  // Immediate, unconditional close — used by closeRowMenu/scroll-close,
+  // which aren't hover transitions the reference count needs to arbitrate.
+  const forceCloseShareFlyout = () => {
+    shareHoverCountRef.current = 0;
+    clearShareCloseTimer();
+    setShareMenu(null);
+    setShareMenuChannel(null);
+  };
+  // Native addEventListener via ref, NOT React's onMouseEnter/onMouseLeave
+  // props — confirmed by direct testing that React's synthetic mouseleave
+  // does not reliably fire when the pointer moves from one createPortal
+  // tree into another (the menu box and the flyout are separate portals),
+  // so the reference count above never balances. Native listeners don't
+  // have this gap. useRef(...).current freezes the callback identity so
+  // React attaches it once per portal-element mount rather than on every
+  // render.
+  const menuBoxHoverRefCb = useRef((el) => {
+    if (!el) return;
+    el.addEventListener("mouseenter", cancelShareFlyoutClose);
+    el.addEventListener("mouseleave", scheduleShareFlyoutClose);
+  }).current;
+  const shareFlyoutHoverRefCb = useRef((el) => {
+    if (!el) return;
+    el.addEventListener("mouseenter", cancelShareFlyoutClose);
+    el.addEventListener("mouseleave", scheduleShareFlyoutClose);
+  }).current;
   const [waTemplatesList, setWaTemplatesList] = useState([]);
   const [smsTemplatesList, setSmsTemplatesList] = useState([]);
   const [emailTemplatesList, setEmailTemplatesList] = useState([]);
@@ -622,7 +678,11 @@ const SalesReturn = () => {
 
   const renderRowActionsMenu = (row) => {
     const isOpen = openRowActionsId === row._id;
-    const close = () => { setOpenRowActionsId(null); setRowActionsPos(null); };
+    const close = () => {
+      setOpenRowActionsId(null);
+      setRowActionsPos(null);
+      forceCloseShareFlyout();
+    };
     return (
       <div
         className="relative flex-shrink-0"
@@ -634,9 +694,9 @@ const SalesReturn = () => {
             e.stopPropagation();
             if (isOpen) return close();
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 224;
+            const MENU_W = 160;
             const MARGIN = 8;
-            const MENU_H = 340;
+            const MENU_H = 300;
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
             const viewportW = window.innerWidth / zMenu;
@@ -661,77 +721,92 @@ const SalesReturn = () => {
             <div className="fixed inset-0 z-[9998]" onClick={close} />
             <div
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] py-1 max-h-[70vh] overflow-y-auto"
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
+              // Native listeners (menuBoxHoverRefCb), not onMouseEnter/
+              // onMouseLeave — see that ref's comment for why.
+              ref={menuBoxHoverRefCb}
             >
               <button
                 onClick={() => { close(); openPreview(row); }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <EyeIcon className="w-4 h-4 text-blue-600" />
+                <EyeIcon className="w-3.5 h-3.5 text-blue-600" />
                 View
               </button>
               <button
                 onClick={() => { close(); openEdit(row); }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <EditIcon className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-3.5 h-3.5 text-blue-600" />
                 Edit
               </button>
               <button
                 onClick={() => { close(); handleDownload(row); }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <DownloadIcon className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-3.5 h-3.5 text-green-600" />
                 Download PDF
               </button>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const DROPDOWN_W = 208;
-                  const anchorRight = rowActionsPos.left + 224;
-                  close();
+                onMouseEnter={(e) => {
+                  // Hover is counted at the menu-box level (above), not
+                  // here — this only opens the flyout the first time.
+                  // Already open for this row — skip recomputing/resetting
+                  // state. Calling setShareMenu with a fresh object on every
+                  // mouseenter (even a no-op reposition) re-renders the row,
+                  // which can nudge layout by a sub-pixel under a stationary
+                  // cursor and refire mouseenter — a self-sustaining blink.
+                  if (shareMenu?.doc?._id === row._id) return;
+                  const zMenu = getAncestorZoom(document.body);
+                  const DROPDOWN_W = 160;
+                  const GAP = 0;
+                  const rect = e.currentTarget.getBoundingClientRect();
                   setShareMenu({
                     doc: row,
-                    x: Math.max(4, anchorRight - DROPDOWN_W),
-                    y: rowActionsPos.top,
+                    x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                    y: rect.top / zMenu,
                   });
                   setShareMenuChannel(null);
                 }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Share2 className="w-4 h-4 text-blue-600" />
-                Share via WhatsApp/Email/SMS
+                <span className="flex items-center gap-2">
+                  <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                  Share
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
               </button>
               {row.status === "Confirmed" && (
                 <button
                   onClick={() => { close(); handleStatusChange(row, "Refunded"); }}
-                  className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-blue-600 hover:bg-blue-50 whitespace-nowrap"
                 >
-                  <DollarSign className="w-4 h-4" />
+                  <DollarSign className="w-3.5 h-3.5" />
                   Mark Refunded
                 </button>
               )}
               {row.status !== "Confirmed" && row.status !== "Refunded" && (
                 <>
-                  <div className="border-t border-gray-100 my-1" />
-                  <div className="px-4 py-1 text-[10px] uppercase text-gray-400">Change status</div>
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <div className="px-2 py-1 text-[10px] uppercase text-gray-400">Change status</div>
                   {STATUS_OPTIONS.filter((s) => s !== row.status).map((s) => (
                     <button
                       key={s}
                       onClick={() => { close(); handleStatusChange(row, s); }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      className="w-full flex items-center px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                     >
                       → {s}
                     </button>
                   ))}
                 </>
               )}
-              <div className="border-t border-gray-100 my-1" />
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button
                 onClick={() => { close(); handleDelete(row._id); }}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
               >
-                <DeleteIcon className="w-4 h-4" />
+                <DeleteIcon className="w-3.5 h-3.5" />
                 Delete
               </button>
             </div>
@@ -1013,8 +1088,10 @@ const SalesReturn = () => {
         <>
           <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
+            onMouseEnter={cancelShareFlyoutClose}
+            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const link = `${window.location.origin}/view/salesReturn/${shareMenu.doc._id}`;
@@ -1078,7 +1155,7 @@ const SalesReturn = () => {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                     >
                       ← Back
                     </button>
@@ -1086,10 +1163,10 @@ const SalesReturn = () => {
                       <button
                         key={tpl.id}
                         onClick={(e) => { e.stopPropagation(); send(tpl); }}
-                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                       >
                         <span className="truncate">{tpl.name}</span>
-                        {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                        {tpl.isDefault && <span className="text-[9px] text-green-600 font-semibold flex-shrink-0">Default</span>}
                       </button>
                     ))}
                   </>
@@ -1097,16 +1174,16 @@ const SalesReturn = () => {
               }
 
               const items = [
-                { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
-                { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
-                { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
-                { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+                { label: "WhatsApp", icon: <MessageCircle className="w-3.5 h-3.5 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                { label: "Email", icon: <Mail className="w-3.5 h-3.5 text-blue-600" />, onClick: () => openChannel("email") },
+                { label: "SMS", icon: <MessageSquare className="w-3.5 h-3.5 text-purple-600" />, onClick: () => openChannel("sms") },
+                { label: "Copy Link", icon: <Copy className="w-3.5 h-3.5 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
               ];
               return items.map(({ label, icon, onClick }) => (
                 <button
                   key={label}
                   onClick={(e) => { e.stopPropagation(); onClick(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                 >
                   {icon}
                   {label}

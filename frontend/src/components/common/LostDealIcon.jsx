@@ -4,12 +4,13 @@
  * centred inside a square icon slot without stretching; the path is
  * filled with `currentColor`, so colour comes from a `text-*` class.
  */
-const LostDealIcon = ({ className = "w-4 h-4", ...props }) => (
+const LostDealIcon = ({ className = "w-4 h-4", size, style, ...props }) => (
   <svg
     viewBox="0 0 21 20"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
+    style={size != null ? { width: size, height: size, ...style } : style}
     aria-hidden="true"
     focusable="false"
     {...props}

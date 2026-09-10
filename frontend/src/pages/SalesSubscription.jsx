@@ -67,11 +67,11 @@ const getAncestorZoom = (el) => {
 };
 
 const STATUS_STYLES = {
-  Draft: "bg-[#EEF2F9] text-[#56698A] border-[#D6DEEC]",
-  Active: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]",
-  Expired: "bg-gray-100 text-gray-500 border-gray-200",
-  Error: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
-  Cancelled: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]",
+  Draft: "bg-[#EEF2F9] text-[#56698A]",
+  Active: "bg-[#E6F7EF] text-[#1FA971]",
+  Expired: "bg-gray-100 text-gray-500",
+  Error: "bg-[#FCEAEA] text-[#EA4B4B]",
+  Cancelled: "bg-[#FCEAEA] text-[#EA4B4B]",
 };
 const STATUS_OPTIONS = ["Draft", "Active", "Expired", "Error", "Cancelled"];
 
@@ -552,9 +552,9 @@ const SalesSubscription = () => {
             e.stopPropagation();
             if (isOpen) return close();
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 200;
+            const MENU_W = 160;
             const MARGIN = 8;
-            const MENU_H = 280;
+            const MENU_H = 260;
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
             const viewportW = window.innerWidth / zMenu;
@@ -580,7 +580,7 @@ const SalesSubscription = () => {
             <div className="fixed inset-0 z-[9998]" onClick={close} />
             <div
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               {activeRowMenuState === "status" ? (
                 <>
@@ -615,12 +615,16 @@ const SalesSubscription = () => {
                   )}
                   {statusChoices.length > 0 && (
                     <>
-                      <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                      {canGenerate && <div className="w-full border-t border-[#F1F1F5] my-0.5" />}
                       <button
                         onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                        className="w-full text-left px-2 py-1.5 text-xs text-[#161618] hover:bg-gray-50 rounded-md"
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                       >
-                        Change Status
+                        <span className="flex items-center gap-2">
+                          <Repeat className="w-3.5 h-3.5 text-orange-600" />
+                          Change Status
+                        </span>
+                        <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                       </button>
                     </>
                   )}
@@ -829,7 +833,7 @@ const SalesSubscription = () => {
             } else if (vc.key === "status") {
               baseContent = (
                 <div className="flex items-center justify-start">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${STATUS_STYLES[s.status] || STATUS_STYLES.Draft}`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[s.status] || STATUS_STYLES.Draft}`}>
                     {s.status}
                   </span>
                 </div>
