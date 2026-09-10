@@ -35,6 +35,9 @@ const invoiceSchema = new mongoose.Schema({
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
+  // Bank account printed on this document. Chosen via the invoice form's
+  // "Select Bank" dropdown; when unset the org's default bank is used.
+  bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
   isTaxInvoice: { type: Boolean, default: false },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },

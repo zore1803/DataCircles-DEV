@@ -35,9 +35,9 @@ export const css = `
 .dcsheet.t-Compact .cx-hsn th { background: var(--wash); }
 .dcsheet.t-Compact .cx-hsn .cx-hsn-tot td { font-weight: bold; background: #fafbfc; }
 .dcsheet.t-Compact .cx-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 8px; font-size: 7.5px; }
-.dcsheet.t-Compact .cx-sign { text-align: right; min-width: 150px; }
-.dcsheet.t-Compact .cx-sign img { max-height: 34px; margin-left: auto; display: block; object-fit: contain; }
-.dcsheet.t-Compact .cx-sign-line { border-top: 1px solid var(--ink); padding-top: 2px; margin-top: 22px; }
+.dcsheet.t-Compact .cx-sign { text-align: right; width: 160px; flex-shrink: 0; }
+.dcsheet.t-Compact .cx-sign img { max-height: 34px; margin: 2px 0 0 auto; display: block; object-fit: contain; }
+.dcsheet.t-Compact .cx-sign-line { display: inline-block; border-top: 1px solid var(--ink); padding-top: 2px; margin-top: 6px; min-width: 110px; }
 .dcsheet.t-Compact .r { text-align: right; }
 .dcsheet.t-Compact .c { text-align: center; }
 `;
@@ -45,7 +45,7 @@ export const css = `
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const rupee = "&#8377;";
@@ -119,6 +119,7 @@ export function html(ctx) {
 
   <div class="cx-lower">
     <div class="cx-strip">
+      <div class="dc-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
       <div><b>${t.rows.length}</b> items &middot; <b>${fmt(t.totalQty)}</b> qty</div>
       <div style="margin-top:2px;">In words: INR ${esc(t.amountInWords)}</div>
       <div style="margin-top:4px;"><span class="cx-lab">Bank:</span> ${esc(bank.bank || "—")} &middot; A/c ${esc(bank.accountNumber || "—")} &middot; IFSC ${esc(bank.ifscCode || "—")}${bank.branch ? " &middot; " + esc(bank.branch) : ""}</div>
@@ -150,5 +151,6 @@ export function html(ctx) {
       <div class="cx-sign-line">Authorised Signatory</div>
     </div>
   </div>
+
   `;
 }

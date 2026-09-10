@@ -27,7 +27,10 @@ export const css = `
 .dcsheet.t-Vibrant .vb-iname { font-weight: 700; }
 .dcsheet.t-Vibrant .vb-idesc { color: var(--muted); font-size: 8.5px; margin-top: 1px; white-space: pre-line; }
 .dcsheet.t-Vibrant .vb-tsub { color: var(--muted); font-size: 8px; }
-.dcsheet.t-Vibrant .vb-split { display: grid; grid-template-columns: 1fr 260px; gap: 12px; }
+.dcsheet.t-Vibrant .vb-split { display: grid; grid-template-columns: 1fr 260px; gap: 12px; align-items: start; }
+.dcsheet.t-Vibrant .vb-bank-row { display: flex; align-items: center; gap: 16px; }
+.dcsheet.t-Vibrant .vb-pay-qr { flex-shrink: 0; text-align: center; }
+.dcsheet.t-Vibrant .vb-pay-qr svg { width: 58px; height: 58px; display: block; }
 .dcsheet.t-Vibrant .vb-totcard { background: var(--wash); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
 .dcsheet.t-Vibrant .vb-trow { display: flex; justify-content: space-between; padding: 4px 0; }
 .dcsheet.t-Vibrant .vb-trow span:first-child { color: var(--muted); }
@@ -48,7 +51,7 @@ export const css = `
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const rupee = "&#8377;";
@@ -137,11 +140,15 @@ export function html(ctx) {
     <div style="color:#5f7a6f;margin-top:10px;">In words: INR ${esc(t.amountInWords)} &middot; ${t.rows.length} item${t.rows.length === 1 ? "" : "s"} / ${fmt(t.totalQty)} qty</div>
 
     <div class="vb-split" style="margin-top:12px;">
-      <div>
-        <div class="vb-k">Bank details</div>
-        <div>${esc(bank.bank || "—")}</div>
-        <div style="color:#5f7a6f;">A/c ${esc(bank.accountNumber || "—")} &middot; IFSC ${esc(bank.ifscCode || "—")}</div>
-        ${bank.branch ? `<div style="color:#5f7a6f;">${esc(bank.branch)}</div>` : ""}
+      <div class="vb-bank-row">
+        <div>
+          <div class="vb-k">Bank details</div>
+          <div>${esc(bank.bank || "—")}</div>
+          <div style="color:#5f7a6f;">A/c No.: ${esc(bank.accountNumber || "—")}</div>
+          <div style="color:#5f7a6f;">IFSC: ${esc(bank.ifscCode || "—")}</div>
+          ${bank.branch ? `<div style="color:#5f7a6f;">Branch: ${esc(bank.branch)}</div>` : ""}
+        </div>
+        <div class="vb-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
       </div>
       <div class="vb-totcard">
         <div class="vb-trow"><span>Taxable amount</span><span>${rupee}${fmt(t.grossTaxable)}</span></div>
@@ -174,5 +181,6 @@ export function html(ctx) {
       </div>
     </div>
   </div>
+
   `;
 }

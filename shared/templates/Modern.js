@@ -37,7 +37,7 @@ export const css = `
 .dcsheet.t-Modern .dc-item-hsn { font-size: 8.5px; color: var(--muted); margin-top: 2px; }
 .dcsheet.t-Modern .dc-item-desc { font-size: 9px; color: var(--muted); white-space: pre-line; margin-top: 3px; }
 
-.dcsheet.t-Modern .dc-totals { display: block; margin-top: 10px; }
+.dcsheet.t-Modern .dc-totals { display: block; border: 0; margin-top: 10px; }
 .dcsheet.t-Modern .dc-totals-right { padding: 0; max-width: 260px; margin-left: auto; }
 .dcsheet.t-Modern .dc-trow { display: flex; justify-content: space-between; padding: 2px 0; }
 .dcsheet.t-Modern .dc-grand { display: flex; justify-content: space-between; border-top: 1px solid var(--ink); margin-top: 4px; padding-top: 6px; font-size: 16px; font-weight: bold; }
@@ -47,10 +47,12 @@ export const css = `
 .dcsheet.t-Modern .dc-payable span:first-child { font-weight: normal; font-size: 11px; margin-right: 24px; color: var(--muted); }
 .dcsheet.t-Modern .dc-payable span:last-child { font-weight: bold; }
 
-.dcsheet.t-Modern .dc-footer-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 20px; gap: 16px; }
-.dcsheet.t-Modern .dc-upi-block { text-align: left; }
+.dcsheet.t-Modern .dc-footer-row { display: flex; align-items: flex-start; margin-top: 20px; gap: 22px; }
+.dcsheet.t-Modern .dc-upi-block { text-align: left; padding-left: 10px; }
+.dcsheet.t-Modern .dc-sign { margin-left: auto; }
 .dcsheet.t-Modern .dc-upi-cap { font-weight: bold; font-size: 9.5px; margin-bottom: 4px; }
 .dcsheet.t-Modern .dc-qr-img svg { width: 78px; height: 78px; display: block; }
+.dcsheet.t-Modern .dc-bank { margin-top: 18px; }
 .dcsheet.t-Modern .dc-bank .dc-label { font-weight: bold; margin-bottom: 3px; }
 .dcsheet.t-Modern .dc-bank > div { margin-bottom: 2px; font-size: 9.5px; }
 .dcsheet.t-Modern .dc-sign { text-align: right; }
@@ -61,14 +63,14 @@ export const css = `
 .dcsheet.t-Modern .dc-notes-row .dc-label { font-weight: bold; margin-bottom: 3px; }
 .dcsheet.t-Modern .dc-terms { font-size: 8.5px; margin-top: 10px; white-space: pre-line; }
 
-.dcsheet.t-Modern .dc-page-footer { margin-top: 24px; font-size: 8.5px; color: var(--muted); }
+/* Footer ("Page 1 / 1 …") is bottom-pinned by the shared BASE_CSS rule. */
 `;
 
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle,
-    upiQrSvg, upiId,
+    payQrSvg, upiId,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -136,13 +138,10 @@ export function html(ctx) {
       ? `<div class="dc-trow"><span>Discount${t.discountType === "percentage" ? ` (${t.discountValue}%)` : ""}</span><span>&#8377;${fmt(t.documentDiscount)}</span></div>`
       : "";
 
-  const qrBlock =
-    upiQrSvg && t.grandTotal > 0
-      ? `<div class="dc-upi-block">
+  const qrBlock = `<div class="dc-upi-block">
           <div class="dc-upi-cap">Pay using UPI:</div>
-          <div class="dc-qr-img">${upiQrSvg}</div>
-        </div>`
-      : "";
+          <div class="dc-qr-img">${payQrSvg}</div>
+        </div>`;
 
   return `
   <div class="dc-header">
@@ -241,6 +240,5 @@ export function html(ctx) {
     ${terms ? `<div class="dc-label" style="margin-top:10px;">Terms and Conditions:</div><div class="dc-terms">${esc(terms)}</div>` : ""}
   </div>
 
-  <div class="dc-page-footer">Page 1 / 1&nbsp;&nbsp;This is a digitally signed document.</div>
   `;
 }

@@ -14,6 +14,8 @@ export const css = `
 .dcsheet.t-Corporate .cp-doc-copy { font-size: 7.5px; color: #aebbcd; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
 .dcsheet.t-Corporate .cp-doc-no { font-size: 11px; margin-top: 8px; }
 .dcsheet.t-Corporate .cp-body { padding: 22px 26px; }
+/* Align the "Page 1 / 1 …" line with the body's 26px inset. */
+.dcsheet.t-Corporate .dc-page-footer { padding: 0 26px 22px; }
 .dcsheet.t-Corporate .cp-strip { display: grid; grid-template-columns: 1.4fr 1fr; gap: 0; border: 1px solid var(--line); }
 .dcsheet.t-Corporate .cp-strip > div { padding: 12px 14px; }
 .dcsheet.t-Corporate .cp-strip > div:first-child { border-right: 1px solid var(--line); }
@@ -40,6 +42,10 @@ export const css = `
 .dcsheet.t-Corporate .cp-words { color: var(--muted); }
 .dcsheet.t-Corporate .cp-bank { margin-top: 8px; }
 .dcsheet.t-Corporate .cp-bank div { padding: 1px 0; }
+/* Bank lines and the QR sit side by side, close together. */
+.dcsheet.t-Corporate .cp-bank-row { display: flex; align-items: center; gap: 16px; }
+.dcsheet.t-Corporate .cp-pay-qr { flex-shrink: 0; text-align: center; }
+.dcsheet.t-Corporate .cp-pay-qr svg { width: 58px; height: 58px; display: block; }
 .dcsheet.t-Corporate table.cp-hsn { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 8.5px; }
 .dcsheet.t-Corporate .cp-hsn th, .dcsheet.t-Corporate .cp-hsn td { border: 1px solid var(--line); padding: 5px 7px; }
 .dcsheet.t-Corporate .cp-hsn th { background: var(--wash); color: var(--navy); text-transform: uppercase; letter-spacing: .5px; }
@@ -47,8 +53,8 @@ export const css = `
 .dcsheet.t-Corporate .cp-foot { display: grid; grid-template-columns: 1fr 220px; margin-top: 16px; }
 .dcsheet.t-Corporate .cp-notes { font-size: 9px; color: var(--muted); padding-right: 16px; }
 .dcsheet.t-Corporate .cp-sign { text-align: right; }
-.dcsheet.t-Corporate .cp-sign img { max-height: 44px; margin-left: auto; display: block; object-fit: contain; }
-.dcsheet.t-Corporate .cp-sign-line { border-top: 2px solid var(--navy); padding-top: 4px; margin-top: 34px; font-weight: 700; }
+.dcsheet.t-Corporate .cp-sign img { max-height: 44px; margin: 2px 0 0 auto; display: block; object-fit: contain; }
+.dcsheet.t-Corporate .cp-sign-line { display: inline-block; min-width: 120px; border-top: 2px solid var(--navy); padding-top: 4px; margin-top: 8px; font-weight: 700; }
 .dcsheet.t-Corporate .r { text-align: right; }
 .dcsheet.t-Corporate .c { text-align: center; }
 `;
@@ -56,7 +62,7 @@ export const css = `
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const rupee = "&#8377;";
@@ -145,9 +151,14 @@ export function html(ctx) {
         <div class="cp-words">In words: INR ${esc(t.amountInWords)}</div>
         <div style="color:#6a7686;margin-top:2px;">${t.rows.length} item${t.rows.length === 1 ? "" : "s"} &middot; ${fmt(t.totalQty)} qty</div>
         <div class="cp-bank">
-          <div class="cp-k">Bank Details</div>
-          <div>${esc(bank.bank || "—")}</div>
-          <div style="color:#6a7686;">A/c ${esc(bank.accountNumber || "—")} &middot; IFSC ${esc(bank.ifscCode || "—")}${bank.branch ? " &middot; " + esc(bank.branch) : ""}</div>
+          <div class="cp-bank-row">
+            <div>
+              <div class="cp-k">Bank Details</div>
+              <div>${esc(bank.bank || "—")}</div>
+              <div style="color:#6a7686;">A/c ${esc(bank.accountNumber || "—")} &middot; IFSC ${esc(bank.ifscCode || "—")}${bank.branch ? " &middot; " + esc(bank.branch) : ""}</div>
+            </div>
+            <div class="cp-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
+          </div>
         </div>
       </div>
       <div>
@@ -178,5 +189,6 @@ export function html(ctx) {
       </div>
     </div>
   </div>
+
   `;
 }

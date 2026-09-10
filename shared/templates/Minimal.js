@@ -38,8 +38,12 @@ export const css = `
 .dcsheet.t-Minimal .mn-lower { display: flex; gap: 40px; margin-top: 26px; }
 .dcsheet.t-Minimal .mn-lower > div { flex: 1; }
 .dcsheet.t-Minimal .mn-lower .mn-r { text-align: right; }
+/* Bank lines and the QR sit side by side, close together, above notes/terms. */
+.dcsheet.t-Minimal .mn-bank-row { display: flex; align-items: center; gap: 16px; }
+.dcsheet.t-Minimal .mn-pay-qr { flex-shrink: 0; text-align: center; margin-top: 14px; }
+.dcsheet.t-Minimal .mn-pay-qr svg { width: 58px; height: 58px; display: block; }
 .dcsheet.t-Minimal .mn-sign-img { max-height: 44px; margin-left: auto; display: block; object-fit: contain; margin-bottom: 4px; }
-.dcsheet.t-Minimal .mn-sign-line { display: inline-block; border-top: 1px solid var(--rule); padding-top: 4px; min-width: 150px; }
+.dcsheet.t-Minimal .mn-sign-line { display: inline-block; border-top: 1px solid var(--rule); padding-top: 4px; min-width: 115px; }
 .dcsheet.t-Minimal table.mn-hsn { width: 100%; border-collapse: collapse; margin-top: 24px; }
 .dcsheet.t-Minimal .mn-hsn th { text-align: left; font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); padding: 0 8px 6px 0; border-bottom: 1px solid var(--rule); }
 .dcsheet.t-Minimal .mn-hsn td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hair); }
@@ -51,7 +55,7 @@ export const css = `
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const rupee = "&#8377;";
@@ -158,18 +162,25 @@ export function html(ctx) {
 
   <div class="mn-lower">
     <div>
-      <div class="mn-k">Bank details</div>
-      <div>${esc(bank.bank || "—")}</div>
-      <div style="color:#555;">A/c ${esc(bank.accountNumber || "—")} &middot; IFSC ${esc(bank.ifscCode || "—")}</div>
-      ${bank.branch ? `<div style="color:#555;">${esc(bank.branch)}</div>` : ""}
+      <div class="mn-bank-row">
+        <div>
+          <div class="mn-k">Bank details</div>
+          <div>${esc(bank.bank || "—")}</div>
+          <div style="color:#555;">A/c No.: ${esc(bank.accountNumber || "—")}</div>
+          <div style="color:#555;">IFSC: ${esc(bank.ifscCode || "—")}</div>
+          ${bank.branch ? `<div style="color:#555;">Branch: ${esc(bank.branch)}</div>` : ""}
+        </div>
+        <div class="mn-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
+      </div>
       ${notes ? `<div class="mn-k" style="margin-top:14px;">Notes</div><div style="color:#555;">${esc(notes)}</div>` : ""}
       ${terms ? `<div class="mn-k" style="margin-top:14px;">Terms</div><div style="color:#555;white-space:pre-line;">${esc(terms)}</div>` : ""}
     </div>
     <div class="mn-r">
-      <div style="margin-bottom:34px;">For ${esc(org.companyName || "Your Company")}</div>
+      <div style="margin-bottom:10px;">For ${esc(org.companyName || "Your Company")}</div>
       ${sigImg ? `<img class="mn-sign-img" src="${esc(sigImg)}" />` : ""}
       <div class="mn-sign-line">Authorised Signatory</div>
     </div>
   </div>
+
   `;
 }

@@ -6,7 +6,12 @@ export const css = `
   font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; color: var(--ink);
   padding: 0;
 }
-.dcsheet.t-Classic .cl-page { border: 1.5px solid var(--line); }
+/* Small inset on the ruled frame itself (not the sheet padding, which the print
+   stylesheet forces to 0) so the border and table never sit against the paper
+   edge and get clipped when printed. */
+.dcsheet.t-Classic .cl-page { border: 1.5px solid var(--line); margin: 8px; }
+/* Keep the "Page 1 / 1 …" line aligned with the inset frame above it. */
+.dcsheet.t-Classic .dc-page-footer { padding-left: 8px; padding-right: 8px; padding-bottom: 8px; }
 .dcsheet.t-Classic .cl-band { text-align: center; padding: 6px; border-bottom: 1.5px solid var(--line); font-weight: bold; letter-spacing: 3px; font-size: 12px; text-transform: uppercase; }
 .dcsheet.t-Classic .cl-band .cl-copy { display: block; font-weight: normal; letter-spacing: 1px; font-size: 7.5px; color: var(--muted); margin-top: 1px; }
 .dcsheet.t-Classic .cl-head { display: flex; border-bottom: 1.5px solid var(--line); }
@@ -46,15 +51,15 @@ export const css = `
 .dcsheet.t-Classic .cl-notes { flex: 1; padding: 10px 12px; border-right: 1px solid var(--line); font-size: 9px; }
 .dcsheet.t-Classic .cl-notes .cl-plabel { margin-top: 6px; }
 .dcsheet.t-Classic .cl-notes .cl-plabel:first-child { margin-top: 0; }
-.dcsheet.t-Classic .cl-sign { width: 210px; padding: 10px 12px; text-align: right; display: flex; flex-direction: column; justify-content: space-between; }
-.dcsheet.t-Classic .cl-sign img { max-height: 44px; margin-left: auto; object-fit: contain; }
-.dcsheet.t-Classic .cl-sign-line { border-top: 1px solid var(--line); padding-top: 3px; margin-top: 30px; font-size: 9px; }
+.dcsheet.t-Classic .cl-sign { width: 210px; padding: 10px 12px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+.dcsheet.t-Classic .cl-sign img { max-height: 44px; margin: 2px auto 0; object-fit: contain; }
+.dcsheet.t-Classic .cl-sign-line { display: inline-block; border-top: 1px solid var(--line); padding-top: 3px; margin-top: 6px; font-size: 9px; min-width: 130px; }
 `;
 
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const rupee = "&#8377;";
@@ -148,6 +153,7 @@ export function html(ctx) {
         <div>Total items / qty: <b>${t.rows.length} / ${fmt(t.totalQty)}</b></div>
         <div class="cl-words"><span class="cl-tl">Amount in words:</span> INR ${esc(t.amountInWords)}</div>
         <div class="cl-bank">
+          <div class="dc-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
           <div class="cl-plabel">Bank Details</div>
           <div>Bank: ${esc(bank.bank || "—")}</div>
           <div>A/c No.: ${esc(bank.accountNumber || "—")}</div>
@@ -184,5 +190,6 @@ export function html(ctx) {
       </div>
     </div>
   </div>
+
   `;
 }

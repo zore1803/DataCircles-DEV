@@ -19,6 +19,7 @@ import {
 import API from "../../services/api";
 import QuickItemDrawer from "../item/QuickItemDrawer";
 import TemplateDrawer from "./TemplateDrawer";
+import BankSelect from "./BankSelect";
 import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 import QuickDealForm from "../deal/QuickDealForm";
 import SearchableDropdown from "../contact/SearchableDropdown";
@@ -706,6 +707,32 @@ const InvoiceFormFull = ({
     loadSignatures();
   }, []);
 
+  // Bank accounts saved under Settings → Bank Details. A brand-new invoice
+  // adopts the org's default; an edit keeps whatever account it was saved
+  // with. The chosen id rides on the payload as `bankDetails`.
+  const [banks, setBanks] = useState([]);
+  useEffect(() => {
+    const loadBanks = async () => {
+      try {
+        const res = await API.get("/bank-details/all");
+        const list = Array.isArray(res.data) ? res.data : [];
+        setBanks(list);
+        if (!editingInvoice) {
+          const fallback = list.find((b) => b.isDefault) || list[0];
+          if (fallback) {
+            setForm((prev) =>
+              prev.bankDetails ? prev : { ...prev, bankDetails: fallback._id }
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load bank accounts", error);
+        setBanks([]);
+      }
+    };
+    loadBanks();
+  }, [editingInvoice]);
+
   // Live preview of the number this invoice will actually get on save (from
   // the same persistent per-org counter resolveDocumentNumber uses) — shown
   // as the number box's placeholder instead of a static "1" so it stays in
@@ -1120,6 +1147,7 @@ const InvoiceFormFull = ({
         receiverGSTIN: form.receiverGSTIN,
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
+        bankDetails: form.bankDetails || null,
         signature: form.signature,
         amount: (() => {
           let t = form.isTaxInvoice
@@ -2074,9 +2102,19 @@ const InvoiceFormFull = ({
                     <label className="text-sm font-semibold text-gray-700">Select Bank</label>
                     <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                   </div>
-                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-lg text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
-                    <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
-                  </button>
+                  <BankSelect
+                    banks={banks}
+                    value={form.bankDetails || ""}
+                    onChange={(id) => {
+                      setForm((prev) => ({ ...prev, bankDetails: id }));
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p className="text-xs text-gray-400">
+                    {banks.length === 0
+                      ? "No bank accounts yet — add them in Settings → Bank Details."
+                      : "The default is applied to every invoice unless you pick another here."}
+                  </p>
                 </div>
 
                 {/* Signature — same functional select + preview + default-

@@ -302,6 +302,25 @@ export function computeDocument(doc, type = "tax") {
   };
 }
 
+/*
+ * Placeholder "scan to pay" QR. Decorative only — it does NOT encode a real
+ * payment string yet. The real QR should be generated from the invoice's bank
+ * account (UPI VPA / account + IFSC) and its payable amount; until that's wired
+ * up every template shows this dummy so the payment corner is never empty.
+ */
+export const DUMMY_QR_SVG = `<svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="Scan to pay (placeholder)">
+  <rect width="25" height="25" fill="#fff"/>
+  <path fill="#111" d="M0 0h7v7H0zM2 2h3v3H2zM18 0h7v7h-7zM20 2h3v3h-3zM0 18h7v7H0zM2 20h3v3H2z
+    M9 0h1v1H9zM11 0h1v2h-1zM13 1h1v1h-1zM9 2h1v1H9zM15 0h1v3h-1zM9 4h3v1H9zM13 3h1v2h-1z
+    M9 6h1v3H9zM11 6h1v1h-1zM13 6h1v1h-1zM15 5h1v2h-1zM17 6h1v1h-1zM19 8h1v1h-1zM21 8h1v2h-1z
+    M23 8h1v1h-1zM0 9h1v1H0zM2 9h2v1H2zM5 9h1v2H5zM7 10h1v1H7zM3 11h1v2H3zM0 12h2v1H0z
+    M9 10h1v1H9zM11 9h1v3h-1zM13 10h2v1h-2zM16 9h1v2h-1zM9 12h1v1H9zM12 13h1v1h-1zM14 12h1v2h-1z
+    M17 12h1v1h-1zM19 11h1v2h-1zM22 12h1v1h-1zM24 11h1v3h-1zM9 14h2v1H9zM13 15h1v1h-1zM11 16h1v2h-1z
+    M15 15h2v1h-2zM18 15h1v1h-1zM20 15h1v3h-1zM23 15h1v2h-1zM9 17h1v1H9zM9 19h3v1H9zM13 18h1v3h-1z
+    M15 18h1v1h-1zM17 18h1v2h-1zM19 19h1v1h-1zM21 19h2v1h-2zM24 18h1v1h-1zM10 21h1v1h-1zM12 22h2v1h-2z
+    M15 21h1v3h-1zM17 22h1v1h-1zM19 21h1v3h-1zM22 21h1v1h-1zM24 21h1v3h-1zM11 24h3v1h-3zM17 24h1v1h-1z"/>
+</svg>`;
+
 export function buildUpiUri(doc, options = {}) {
   const { type = "tax", orgDetails, upiId = DEFAULT_UPI_ID, amount } = options;
   const vpa = (upiId || "").trim();
@@ -353,18 +372,16 @@ const BASE_CSS = `
   max-width: 297mm;
   min-height: 210mm;
 }
-.dcsheet .dc-page-number {
-  margin-top: auto;
-  padding-top: 10px;
-  text-align: right;
-  font-size: 9px;
-  color: var(--muted, #666);
-  font-family: inherit;
-  width: 100%;
-  border-top: 1px dashed #d1d5db;
-}
-.is-pdf .dc-page-number {
-  display: none !important;
+/* Shared "Page 1 / 1  This is a digitally signed document." strip. It's a
+   sibling of .dcsheet-body inside the sheet wrapper (see buildDocumentHtml),
+   and .dcsheet-body { flex: 1 } already pushes it to the bottom of the sheet —
+   no flex tricks on the body itself, so template content is untouched. */
+.dcsheet .dc-page-footer {
+  padding-top: 6px;
+  font-size: 8.5px;
+  color: var(--muted);
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 .dcsheet .dc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 12px; }
 .dcsheet .dc-org { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
@@ -407,6 +424,11 @@ const BASE_CSS = `
 .dcsheet .dc-qr { flex-shrink: 0; text-align: center; width: 104px; }
 .dcsheet .dc-qr-img svg { width: 104px; height: 104px; display: block; }
 .dcsheet .dc-qr-cap { font-size: 9px; font-weight: bold; margin-top: 2px; }
+/* Compact "scan to pay" QR that templates without a dedicated QR slot drop in
+   right before their bank block — it floats to the right of the bank lines. */
+.dcsheet .dc-pay-qr { float: right; text-align: center; margin: 0 0 4px 14px; }
+.dcsheet .dc-pay-qr svg { width: 58px; height: 58px; display: block; }
+.dcsheet .dc-pay-qr-cap { font-size: 6.5px; color: var(--muted); margin-top: 1px; letter-spacing: .3px; }
 .dcsheet .dc-totals-right { padding: var(--pad); }
 .dcsheet .dc-trow { display: flex; justify-content: space-between; }
 .dcsheet .dc-trow.sep { border-bottom: var(--line-w) solid var(--line); padding-bottom: 4px; }
@@ -465,11 +487,15 @@ export function buildDocumentHtml(doc, options = {}) {
 
   const t = computeDocument(doc, type);
 
+  // The party the document is billed to: the deal's customer (company, else
+  // contact) takes precedence; the deal's own title is only a fallback for
+  // deals that have neither. An explicit override from the caller still wins.
   const dealName =
     dealNameOverride ||
-    doc.deal?.title ||
     doc.deal?.company?.name ||
     doc.deal?.contact?.name ||
+    doc.customerName ||
+    doc.deal?.title ||
     "Customer Name";
 
   const docNumber = documentNumber ?? doc[numberKey];
@@ -484,12 +510,14 @@ export function buildDocumentHtml(doc, options = {}) {
       }</span><span>- &#8377;${fmt(t.documentDiscount)}</span></div>`
     : "";
 
-  const qrBlock = upiQrSvg && t.grandTotal > 0
-    ? `<div class="dc-qr">
-        <div class="dc-qr-img">${upiQrSvg}</div>
+  // Real UPI QR when we can build one, otherwise the decorative placeholder —
+  // always non-empty so every template can show a "scan to pay" block.
+  const payQrSvg = (upiQrSvg && t.grandTotal > 0) ? upiQrSvg : DUMMY_QR_SVG;
+
+  const qrBlock = `<div class="dc-qr">
+        <div class="dc-qr-img">${payQrSvg}</div>
         <div class="dc-qr-cap">Scan to pay</div>
-      </div>`
-    : "";
+      </div>`;
 
   // Standard item rows (used by most templates; unique-layout templates build
   // their own rows inline).
@@ -538,7 +566,8 @@ export function buildDocumentHtml(doc, options = {}) {
     notes, terms,
     discountRow, hsnRows, itemRows, qrBlock,
     // Raw SVGs for templates that place the QR themselves (Landscape, Detailed).
-    upiQrSvg, eInvoiceQrSvg,
+    // payQrSvg is the real UPI QR when available, else the dummy placeholder.
+    upiQrSvg, payQrSvg, eInvoiceQrSvg,
   };
 
   const css = BASE_CSS + (tpl.css || "");
@@ -548,7 +577,7 @@ export function buildDocumentHtml(doc, options = {}) {
   <div class="dcsheet-body" style="flex:1;">
     ${tpl.html(ctx)}
   </div>
-  <div class="dc-page-number">Page 1/1</div>
+  <div class="dc-page-footer">Page 1 / 1&nbsp;&nbsp;This is a digitally signed document.</div>
 </div>`;
 }
 

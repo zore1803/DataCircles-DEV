@@ -10,7 +10,10 @@ export const css = `
 .dcsheet.t-Landscape .ls-title { color: var(--accent); font-weight: bold; font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; }
 .dcsheet.t-Landscape .ls-copy { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 8.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-.dcsheet.t-Landscape .ls-meta-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; border-bottom: 1px solid var(--line); }
+/* Right meta column width = the combined width of the items table's
+   Rate/Item..Amount columns, so the divider before it lines up with the
+   "HSN/SAC | Rate/Item" rule. */
+.dcsheet.t-Landscape .ls-meta-row { display: grid; grid-template-columns: 1.3fr 1fr var(--ls-rcol, 380px); border-bottom: 1px solid var(--line); }
 .dcsheet.t-Landscape .ls-meta-col { padding: 10px 12px; border-right: 1px solid var(--line); }
 .dcsheet.t-Landscape .ls-meta-col:last-child { border-right: 0; }
 .dcsheet.t-Landscape .ls-comp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
@@ -23,16 +26,25 @@ export const css = `
 .dcsheet.t-Landscape .ls-meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; font-size: 9.5px; }
 
 .dcsheet.t-Landscape .ls-items-wrap { border-bottom: 1px solid var(--line); min-height: 220px; display: flex; flex-direction: column; }
-.dcsheet.t-Landscape .ls-items { width: 100%; flex: 1; border-collapse: collapse; }
-.dcsheet.t-Landscape .ls-items th { border: 1px solid var(--line); padding: 6px 8px; font-size: 9px; background: #f8f9fa; text-transform: uppercase; font-weight: bold; }
-.dcsheet.t-Landscape .ls-items td { border-left: 1px solid var(--line); border-right: 1px solid var(--line); border-top: 0; border-bottom: 0; padding: 6px 8px; font-size: 9.5px; }
-.dcsheet.t-Landscape .ls-filler-row td { border-top: 0; border-bottom: 0; }
+/* Separate borders painted on each cell's right EDGE (not collapsed / straddling
+   the grid line) so every rule is 1px and the column dividers line up exactly
+   with the meta-row's box-edge dividers. The .ls-page frame and .ls-meta-row
+   rule already draw the table's outer top/left/right edges. */
+.dcsheet.t-Landscape .ls-items { width: 100%; flex: 1; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.dcsheet.t-Landscape .ls-items th { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 8px; font-size: 9px; background: #f8f9fa; text-transform: uppercase; font-weight: bold; }
+.dcsheet.t-Landscape .ls-items td { border: 0; border-right: 1px solid var(--line); padding: 6px 8px; font-size: 9.5px; }
+.dcsheet.t-Landscape .ls-items th:last-child, .dcsheet.t-Landscape .ls-items td:last-child { border-right: 0; }
+.dcsheet.t-Landscape .ls-filler-row td { border-bottom: 0; }
 
 .dcsheet.t-Landscape .ls-totals-row { display: grid; grid-template-columns: 1fr 280px; border-bottom: 1px solid var(--line); }
 .dcsheet.t-Landscape .ls-totals-left { padding: 10px 12px; border-right: 1px solid var(--line); font-size: 9.5px; display: flex; justify-content: space-between; gap: 12px; }
 .dcsheet.t-Landscape .ls-totals-left-text { flex: 1; min-width: 0; }
 .dcsheet.t-Landscape .ls-qr-block { flex-shrink: 0; text-align: center; }
 .dcsheet.t-Landscape .ls-qr-block img, .dcsheet.t-Landscape .ls-qr-block svg { width: 74px; height: 74px; display: block; }
+/* "Scan to pay" QR dropped into the otherwise-empty invoice-meta column. */
+.dcsheet.t-Landscape .ls-meta-qr { margin-top: 12px; text-align: center; }
+.dcsheet.t-Landscape .ls-meta-qr svg { width: 82px; height: 82px; display: block; margin: 0 auto; }
+.dcsheet.t-Landscape .ls-qr-cap { font-size: 7.5px; color: var(--muted); margin-top: 2px; }
 .dcsheet.t-Landscape .ls-totals-right { display: flex; flex-direction: column; }
 .dcsheet.t-Landscape .ls-trow { display: flex; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 9.5px; }
 .dcsheet.t-Landscape .ls-trow:last-child { border-bottom: 0; }
@@ -50,14 +62,13 @@ export const css = `
 .dcsheet.t-Landscape .ls-sign-block { text-align: right; }
 .dcsheet.t-Landscape .ls-sign-img { max-height: 45px; margin-left: auto; object-fit: contain; }
 
-.dcsheet.t-Landscape .ls-page-footer { padding: 6px 12px 0; font-size: 8.5px; color: var(--muted); }
 `;
 
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow, hsnRows,
-    upiQrSvg, upiId,
+    payQrSvg, upiId,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -97,13 +108,9 @@ export function html(ctx) {
       </tr>`).join("")
     : `<tr><td colspan="8">&nbsp;</td></tr>`;
 
-  const qrBlock =
-    upiQrSvg && t.grandTotal > 0
-      ? `<div class="ls-qr-block">${upiQrSvg}</div>`
-      : "";
 
   return `
-  <div class="ls-page">
+  <div class="ls-page" style="--ls-rcol:${t.isTax ? "410px" : "310px"};">
     <div class="ls-header-row">
       <div class="ls-title">${t.isTax ? "TAX " + esc(docLabel) : esc(docLabel)}</div>
       <div class="ls-copy">${copySubtitle}</div>
@@ -134,6 +141,7 @@ export function html(ctx) {
           <div><b>Invoice Date:</b></div><div style="text-align:right;font-weight:bold;">${esc(formatDate(doc.date) || "—")}</div>
           <div><b>Due Date:</b></div><div style="text-align:right;font-weight:bold;">${esc(formatDate(doc.dueDate) || "—")}</div>
         </div>
+        <div class="ls-meta-qr">${payQrSvg}<div class="ls-qr-cap">Scan to pay</div></div>
       </div>
     </div>
     <div class="ls-items-wrap">
@@ -174,7 +182,6 @@ export function html(ctx) {
           </div>
           ${upiId ? `<div style="margin-top:6px;font-size:9px;">UPI ID: ${esc(upiId)}</div>` : ""}
         </div>
-        ${qrBlock}
       </div>
       <div class="ls-totals-right">
         <div class="ls-trow"><span>Taxable Amount</span><span>&#8377;${fmt(t.grossTaxable)}</span></div>
@@ -221,6 +228,5 @@ export function html(ctx) {
       </div>
     </div>
   </div>
-  <div class="ls-page-footer">Page 1 / 1&nbsp;&nbsp;This is a digitally signed document.</div>
   `;
 }

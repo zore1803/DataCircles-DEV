@@ -24,10 +24,15 @@ export const css = `
 
 /* ── meta box: customer | invoice/date pairs | dispatch ── */
 .dcsheet.t-Detailed .dt-meta-row { display: grid; grid-template-columns: 1.3fr 1fr; border-bottom: 1px solid var(--line); }
-.dcsheet.t-Detailed .dt-meta-cust { padding: 10px 12px; border-right: 1px solid var(--line); font-size: 9.5px; }
+.dcsheet.t-Detailed .dt-meta-cust { padding: 10px 0 0; border-right: 1px solid var(--line); font-size: 9.5px; display: flex; flex-direction: column; }
 .dcsheet.t-Detailed .dt-meta-cust .dc-label { font-weight: bold; }
-.dcsheet.t-Detailed .dt-meta-cust > div { margin-bottom: 2px; }
-.dcsheet.t-Detailed .dt-sub-label { font-weight: bold; margin-top: 6px; }
+.dcsheet.t-Detailed .dt-meta-cust > div { margin-bottom: 2px; padding-left: 12px; padding-right: 12px; }
+.dcsheet.t-Detailed .dt-sub-label { font-weight: bold; margin-top: 0; }
+/* Address pair: the top rule butts against the customer block above and the
+   column divider runs the full height of the cell down to the meta-row border. */
+.dcsheet.t-Detailed .dt-addr-cols { display: grid; grid-template-columns: 1fr 1fr; margin: 6px 0 0 !important; border-top: 1px solid var(--line); flex: 1; padding-left: 0 !important; padding-right: 0 !important; }
+.dcsheet.t-Detailed .dt-addr-cols > div { min-width: 0; padding: 6px 12px 8px; }
+.dcsheet.t-Detailed .dt-addr-cols > div:first-child { border-right: 1px solid var(--line); }
 .dcsheet.t-Detailed .dt-meta-right { display: grid; grid-template-columns: 1fr 1fr; }
 .dcsheet.t-Detailed .dt-mcell { padding: 8px 10px; font-size: 9px; border-bottom: 1px solid var(--line); }
 .dcsheet.t-Detailed .dt-mcell:nth-child(odd) { border-right: 1px solid var(--line); }
@@ -37,45 +42,58 @@ export const css = `
 .dcsheet.t-Detailed .dt-dispatch span { display: block; color: var(--muted); font-size: 8px; margin-bottom: 2px; font-weight: bold; }
 
 /* ── items table ── */
-.dcsheet.t-Detailed .dc-items { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-.dcsheet.t-Detailed .dc-items th { background: #f5f5f5; border: 1px solid var(--line); border-left: 0; padding: 6px 8px; font-size: 9px; }
-.dcsheet.t-Detailed .dc-items th:first-child { border-left: 0; }
-.dcsheet.t-Detailed .dc-items td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+/* No border on the table itself and none on the outer edges of the edge cells:
+   the .dt-page frame and the meta-row / totals-row rules already draw those, so
+   adding table borders on top produced a visible 2px double line. Cells only
+   carry the *internal* 1px grid (right + bottom), pinned to 1px so the print
+   stylesheet's --line-w bump can't thicken them. */
+.dcsheet.t-Detailed .dc-items { width: 100%; border-collapse: collapse; border: 0; font-size: 9.5px; }
+.dcsheet.t-Detailed .dc-items th { background: #f5f5f5; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 8px; font-size: 9px; }
+.dcsheet.t-Detailed .dc-items td { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+.dcsheet.t-Detailed .dc-items th:last-child, .dcsheet.t-Detailed .dc-items td:last-child { border-right: 0; }
 .dcsheet.t-Detailed .dc-item-name { font-weight: bold; }
 
 /* ── totals row: left (words/bank/qr) | right (per-rate totals) ── */
 .dcsheet.t-Detailed .dt-totals-row { display: flex; border-bottom: 1px solid var(--line); }
 .dcsheet.t-Detailed .dt-totals-left { flex: 1; padding: 10px 12px; border-right: 1px solid var(--line); font-size: 9.5px; display: flex; justify-content: space-between; gap: 12px; }
 .dcsheet.t-Detailed .dt-totals-left-text { flex: 1; min-width: 0; }
-.dcsheet.t-Detailed .dt-qr-block { flex-shrink: 0; }
+.dcsheet.t-Detailed .dt-qr-block { flex-shrink: 0; text-align: center; margin-top: 34px; }
 .dcsheet.t-Detailed .dt-qr-block svg { width: 66px; height: 66px; display: block; }
+.dcsheet.t-Detailed .dt-qr-cap { font-size: 7.5px; color: var(--muted); margin-top: 2px; }
 .dcsheet.t-Detailed .dt-totals-right { width: 260px; flex-shrink: 0; }
 .dcsheet.t-Detailed .dc-trow { display: flex; justify-content: space-between; padding: 5px 12px; border-bottom: 1px solid var(--line); font-size: 9.5px; }
 .dcsheet.t-Detailed .dc-grand { display: flex; justify-content: space-between; padding: 6px 12px; font-size: 13px; font-weight: bold; border-bottom: 1px solid var(--line); background: #fafafa; }
 .dcsheet.t-Detailed .dt-paid-row { display: flex; justify-content: flex-end; align-items: center; gap: 4px; color: green; font-size: 10px; font-weight: bold; padding: 6px 12px; }
 
 /* ── HSN summary ── */
-.dcsheet.t-Detailed .dc-hsn { width: 100%; border-collapse: collapse; border-bottom: 1px solid var(--line); font-size: 9px; }
-.dcsheet.t-Detailed .dc-hsn th, .dcsheet.t-Detailed .dc-hsn td { border: 1px solid var(--line); padding: 5px 8px; }
+.dcsheet.t-Detailed .dc-hsn { width: 100%; border-collapse: collapse; border: 0; font-size: 9px; }
+.dcsheet.t-Detailed .dc-hsn th, .dcsheet.t-Detailed .dc-hsn td { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 5px 8px; }
+.dcsheet.t-Detailed .dc-hsn th:last-child, .dcsheet.t-Detailed .dc-hsn td:last-child { border-right: 0; }
+.dcsheet.t-Detailed .dc-hsn thead tr:first-child th { border-top: 0; }
 .dcsheet.t-Detailed .dc-hsn th { background: #f5f5f5; font-weight: bold; }
 .dcsheet.t-Detailed .dc-hsn tr.tot td { font-weight: bold; background: #fafafa; }
 
 /* ── footer: notes/terms | signature ── */
-.dcsheet.t-Detailed .dt-footer { display: grid; grid-template-columns: 1fr 220px; padding: 10px 12px; gap: 12px; }
+/* Footer cells stretch to the same height and every column is fenced off with a
+   full-height rule that meets the totals border above and the page border
+   below — no floating part-height dividers. */
+.dcsheet.t-Detailed .dt-footer { display: grid; grid-template-columns: 1fr 1fr 220px; align-items: stretch; }
+.dcsheet.t-Detailed .dt-footer > div { padding: 10px 12px; }
+.dcsheet.t-Detailed .dt-footer > div + div { border-left: 1px solid var(--line); }
 .dcsheet.t-Detailed .dt-footer .dc-label { font-weight: bold; margin-bottom: 3px; }
-.dcsheet.t-Detailed .dt-terms-body { white-space: pre-line; font-size: 9px; margin-top: 8px; }
+.dcsheet.t-Detailed .dt-terms-body { white-space: pre-line; font-size: 9px; margin-top: 4px; }
+.dcsheet.t-Detailed .dt-notes-body { font-size: 9px; margin-top: 4px; }
 .dcsheet.t-Detailed .dt-sign { text-align: right; }
 .dcsheet.t-Detailed .dt-sign-img { max-height: 46px; margin-left: auto; object-fit: contain; display: block; }
 .dcsheet.t-Detailed .dt-sign-line { margin-top: 4px; font-size: 9px; }
 
-.dcsheet.t-Detailed .dt-page-footer { padding: 8px 4px 0; font-size: 8.5px; color: var(--muted); }
 `;
 
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle,
-    upiQrSvg, upiId, eInvoiceQrSvg,
+    payQrSvg, upiId, eInvoiceQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -178,10 +196,16 @@ export function html(ctx) {
         <div class="dc-label">Customer Details:</div>
         <div style="font-weight:bold;font-size:10.5px;">${esc(dealName)}</div>
         ${doc.receiverGSTIN ? `<div>GSTIN: ${esc(doc.receiverGSTIN)}</div>` : ""}
-        <div class="dt-sub-label">Billing address:</div>
-        <div style="white-space:pre-line;">${esc(addrLines(doc.billingAddress))}</div>
-        <div class="dt-sub-label">Shipping address:</div>
-        <div style="white-space:pre-line;">${esc(addrLines(doc.shippingAddress || doc.billingAddress))}</div>
+        <div class="dt-addr-cols">
+          <div>
+            <div class="dt-sub-label">Billing address:</div>
+            <div style="white-space:pre-line;">${esc(addrLines(doc.billingAddress))}</div>
+          </div>
+          <div>
+            <div class="dt-sub-label">Shipping address:</div>
+            <div style="white-space:pre-line;">${esc(addrLines(doc.shippingAddress || doc.billingAddress))}</div>
+          </div>
+        </div>
         ${doc.receiverPhone ? `<div style="margin-top:4px;">Ph: ${esc(doc.receiverPhone)}</div>` : ""}
       </div>
       <div class="dt-meta-right">
@@ -229,7 +253,10 @@ export function html(ctx) {
           </div>
           ${upiId ? `<div style="margin-top:6px;font-size:9px;">UPI ID: ${esc(upiId)}</div>` : ""}
         </div>
-        ${upiQrSvg && t.grandTotal > 0 ? `<div class="dt-qr-block">${upiQrSvg}</div>` : ""}
+        <div class="dt-qr-block">
+          ${payQrSvg}
+          <div class="dt-qr-cap">Scan to pay</div>
+        </div>
       </div>
       <div class="dt-totals-right">
         <div class="dc-trow"><span>Taxable Amount</span><span>&#8377;${fmt(t.grossTaxable)}</span></div>
@@ -262,8 +289,12 @@ export function html(ctx) {
 
     <div class="dt-footer">
       <div>
-        ${notes ? `<div class="dc-label">Notes:</div><div>${esc(notes)}</div>` : ""}
-        ${terms ? `<div class="dc-label" style="margin-top:8px;">Terms and Conditions:</div><div class="dt-terms-body">${esc(terms)}</div>` : ""}
+        <div class="dc-label">Notes:</div>
+        <div class="dt-notes-body">${notes ? esc(notes) : "&mdash;"}</div>
+      </div>
+      <div>
+        <div class="dc-label">Terms and Conditions:</div>
+        <div class="dt-terms-body">${terms ? esc(terms) : "&mdash;"}</div>
       </div>
       <div class="dt-sign">
         <div style="font-weight:bold;margin-bottom:4px;">For ${esc(org.companyName || "Your Company")}</div>
@@ -272,6 +303,5 @@ export function html(ctx) {
       </div>
     </div>
   </div>
-  <div class="dt-page-footer">Page 1 / 1&nbsp;&nbsp;This is a digitally signed document.</div>
   `;
 }

@@ -1,4 +1,4 @@
-export const blurb = "Monospace ledger style, pure black and white, dashed rules.";
+export const blurb = "Monospace ledger style, pure black and white, hairline rules.";
 
 export const css = `
 .dcsheet.t-Mono {
@@ -7,7 +7,7 @@ export const css = `
   padding: 30px 34px; line-height: 1.45;
 }
 .dcsheet.t-Mono .mo-rule { border-top: 1px solid var(--line); margin: 10px 0; }
-.dcsheet.t-Mono .mo-rule.dash { border-top: 1px dashed var(--line); }
+.dcsheet.t-Mono .mo-rule.dash { border-top: 1px solid var(--line); }
 .dcsheet.t-Mono .mo-rule.thick { border-top: 2px solid var(--line); }
 .dcsheet.t-Mono .mo-title { text-align: center; font-weight: bold; font-size: 13px; letter-spacing: 4px; }
 .dcsheet.t-Mono .mo-copy { text-align: center; font-size: 8px; letter-spacing: 2px; color: var(--muted); }
@@ -19,7 +19,7 @@ export const css = `
 .dcsheet.t-Mono .mo-addr { white-space: pre-line; }
 .dcsheet.t-Mono table.mo-items { width: 100%; border-collapse: collapse; }
 .dcsheet.t-Mono .mo-items th { text-align: left; border-bottom: 1px solid var(--line); padding: 4px 6px; font-weight: bold; text-transform: uppercase; font-size: 9px; }
-.dcsheet.t-Mono .mo-items td { padding: 4px 6px; border-bottom: 1px dashed #999; vertical-align: top; }
+.dcsheet.t-Mono .mo-items td { padding: 4px 6px; border-bottom: 1px solid #999; vertical-align: top; }
 .dcsheet.t-Mono .mo-idesc { color: var(--muted); font-size: 9px; }
 .dcsheet.t-Mono .mo-sum { display: flex; justify-content: flex-end; }
 .dcsheet.t-Mono .mo-sum-in { width: 280px; }
@@ -32,8 +32,9 @@ export const css = `
 .dcsheet.t-Mono .mo-hsn .mo-hsn-tot td { font-weight: bold; }
 .dcsheet.t-Mono .mo-foot { display: flex; justify-content: space-between; gap: 24px; }
 .dcsheet.t-Mono .mo-sign { text-align: right; min-width: 180px; }
-.dcsheet.t-Mono .mo-sign img { max-height: 40px; margin-left: auto; display: block; object-fit: contain; }
-.dcsheet.t-Mono .mo-sign-line { border-top: 1px solid var(--line); padding-top: 3px; margin-top: 26px; }
+.dcsheet.t-Mono .mo-sign img { max-height: 40px; margin: 2px 0 0 auto; display: block; object-fit: contain; }
+.dcsheet.t-Mono .mo-sign-line { display: inline-block; min-width: 120px; border-top: 1px solid var(--line); padding-top: 3px; margin-top: 6px; }
+.dcsheet.t-Mono .dc-pay-qr svg { width: 88px; height: 88px; }
 .dcsheet.t-Mono .r { text-align: right; }
 .dcsheet.t-Mono .c { text-align: center; }
 `;
@@ -41,7 +42,7 @@ export const css = `
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const R = "Rs.";
@@ -152,6 +153,7 @@ export function html(ctx) {
   <div class="mo-rule"></div>
   <div class="mo-two">
     <div>
+      <div class="dc-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
       <div class="mo-lbl">Bank Details</div>
       <div class="mo-kv"><span class="k">Bank</span><span>${esc(bank.bank || "-")}</span></div>
       <div class="mo-kv"><span class="k">A/c No.</span><span>${esc(bank.accountNumber || "-")}</span></div>
@@ -166,5 +168,6 @@ export function html(ctx) {
       <div class="mo-sign-line">Authorised Signatory</div>
     </div>
   </div>
+
   `;
 }

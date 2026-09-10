@@ -2,6 +2,7 @@ const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
 const htmlDocumentPdf = require("../utils/htmlDocumentPdf");
 const getDefaultBankDetails = require("../utils/getDefaultBankDetails");
+const resolveBankDetails = require("../utils/resolveBankDetails");
 const Branding = require("../models/Branding");
 const mongoose = require("mongoose");
 const Deal = require("../models/Deal");
@@ -67,6 +68,7 @@ const createInvoice = async (req, res) => {
       style,
       notes,
       terms,
+      bankDetails,
       isTaxInvoice,
       signature,
       signatureType,
@@ -235,6 +237,7 @@ const createInvoice = async (req, res) => {
       style,
       notes,
       terms,
+      bankDetails: bankDetails || null,
       isTaxInvoice,
       signature,
       signatureType,
@@ -649,7 +652,7 @@ const downloadInvoice = async (req, res) => {
     if (!invoice) {
       return res.status(404).json({ error: "Invoice not found" });
     }
-    const bankDetails = await getDefaultBankDetails(req.user.organization);
+    const bankDetails = await resolveBankDetails(invoice, req.user.organization);
     const OrgDetails = await Branding.findOne({
       organization: req.user.organization,
     }).sort({ updatedAt: -1 });
@@ -744,6 +747,7 @@ const updateInvoice = async (req, res) => {
       style,
       notes,
       terms,
+      bankDetails,
       isTaxInvoice,
       signature,
       signatureType,
@@ -874,6 +878,7 @@ const updateInvoice = async (req, res) => {
     invoice.style = style;
     invoice.notes = notes;
     invoice.terms = terms;
+    invoice.bankDetails = bankDetails || null;
     invoice.isTaxInvoice = isTaxInvoice;
     invoice.signature = signature;
     invoice.signatureType = signatureType;
@@ -1173,8 +1178,7 @@ const bulkEmailGrouped = async (req, res) => {
       emailMap[email].invoices.push(inv);
     }
 
-    // Fetch org/bank details once and reuse across all groups
-    const bankDetails = await getDefaultBankDetails(req.user.organization);
+    // Org details once; the bank account is resolved per invoice below.
     const Branding = require("../models/Branding");
     const orgDetails = await Branding.findOne({
       organization: req.user.organization,
@@ -1190,6 +1194,7 @@ const bulkEmailGrouped = async (req, res) => {
 
       for (const inv of group.invoices) {
         try {
+          const bankDetails = await resolveBankDetails(inv, req.user.organization);
           const pdfBuffer = await htmlDocumentPdf(inv, bankDetails, orgDetails, "tax");
           attachments.push({
             filename: `Invoice-${inv.invoiceNumber}.pdf`,

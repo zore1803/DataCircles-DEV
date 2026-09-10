@@ -29,6 +29,10 @@ export const css = `
 .dcsheet.t-Elegant .eg-tsub { color: var(--muted); font-size: 8px; }
 .dcsheet.t-Elegant .eg-close { display: flex; gap: 30px; margin-top: 16px; }
 .dcsheet.t-Elegant .eg-close-l { flex: 1; }
+/* Remittance lines and the QR sit side by side, close together. */
+.dcsheet.t-Elegant .eg-bank-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.dcsheet.t-Elegant .eg-pay-qr { flex-shrink: 0; text-align: center; }
+.dcsheet.t-Elegant .eg-pay-qr svg { width: 58px; height: 58px; display: block; }
 .dcsheet.t-Elegant .eg-close-r { width: 250px; }
 .dcsheet.t-Elegant .eg-srow { display: flex; justify-content: space-between; padding: 4px 0; }
 .dcsheet.t-Elegant .eg-srow span:first-child { color: var(--muted); }
@@ -41,7 +45,7 @@ export const css = `
 .dcsheet.t-Elegant .eg-hsn .eg-hsn-tot td { font-weight: bold; }
 .dcsheet.t-Elegant .eg-sign { text-align: center; margin-top: 34px; }
 .dcsheet.t-Elegant .eg-sign img { max-height: 46px; object-fit: contain; display: block; margin: 0 auto 4px; }
-.dcsheet.t-Elegant .eg-sign-line { display: inline-block; border-top: 1px solid var(--ink); padding-top: 4px; min-width: 220px; }
+.dcsheet.t-Elegant .eg-sign-line { display: inline-block; border-top: 1px solid var(--ink); padding-top: 4px; min-width: 150px; }
 .dcsheet.t-Elegant .r { text-align: right; }
 .dcsheet.t-Elegant .c { text-align: center; }
 `;
@@ -49,7 +53,7 @@ export const css = `
 export function html(ctx) {
   const {
     t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
   const rupee = "&#8377;";
@@ -132,10 +136,16 @@ export function html(ctx) {
   <div class="eg-close">
     <div class="eg-close-l">
       <div class="eg-words">In words &mdash; INR ${esc(t.amountInWords)}</div>
-      <div class="eg-k" style="margin-top:12px;">Remittance</div>
-      <div>${esc(bank.bank || "—")}</div>
-      <div style="color:#6b6355;">A/c ${esc(bank.accountNumber || "—")} &nbsp;&middot;&nbsp; IFSC ${esc(bank.ifscCode || "—")}</div>
-      ${bank.branch ? `<div style="color:#6b6355;">${esc(bank.branch)}</div>` : ""}
+      <div class="eg-bank-row">
+        <div>
+          <div class="eg-k">Remittance</div>
+          <div>${esc(bank.bank || "—")}</div>
+          <div style="color:#6b6355;">A/c No.: ${esc(bank.accountNumber || "—")}</div>
+          <div style="color:#6b6355;">IFSC: ${esc(bank.ifscCode || "—")}</div>
+          ${bank.branch ? `<div style="color:#6b6355;">Branch: ${esc(bank.branch)}</div>` : ""}
+        </div>
+        <div class="eg-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
+      </div>
     </div>
     <div class="eg-close-r">
       <div class="eg-srow"><span>Taxable amount</span><span>${rupee}${fmt(t.grossTaxable)}</span></div>
@@ -159,9 +169,10 @@ export function html(ctx) {
   </div>` : ""}
 
   <div class="eg-sign">
-    <div style="margin-bottom:30px;">For ${esc(org.companyName || "Your Company")}</div>
+    <div style="margin-bottom:10px;">For ${esc(org.companyName || "Your Company")}</div>
     ${sigImg ? `<img src="${esc(sigImg)}" />` : ""}
     <div class="eg-sign-line">Authorised Signatory</div>
   </div>
+
   `;
 }
