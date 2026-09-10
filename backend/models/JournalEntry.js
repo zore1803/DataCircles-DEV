@@ -45,6 +45,9 @@ const journalEntrySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-journalEntrySchema.index({ organization: 1, journal: 1, date: 1 });
+// The ledger and every balance replay read entries chronologically by `date`
+// (the user-chosen transaction date, which may be any past or future day),
+// with createdAt breaking same-day ties.
+journalEntrySchema.index({ organization: 1, journal: 1, date: 1, createdAt: 1 });
 
 module.exports = mongoose.model("JournalEntry", journalEntrySchema);

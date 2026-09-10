@@ -28,6 +28,24 @@ const formatDateTime = (d) => {
   return dt.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
+// The ledger orders by the transaction `date`, which now carries the exact
+// day + time the user chose on the Pay In/Pay Out form (blank time = the
+// moment it was recorded). Older entries were stored date-only (UTC midnight);
+// for those, keep the day from `date` but borrow the clock time from `createdAt`.
+const formatLedgerWhen = (row) => {
+  const d = row?.date ? new Date(row.date) : null;
+  if (!d || Number.isNaN(d.getTime())) return formatDateTime(row?.createdAt);
+  const isDateOnly = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+  if (isDateOnly && row?.createdAt) {
+    const c = new Date(row.createdAt);
+    const day = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return Number.isNaN(c.getTime())
+      ? day
+      : `${day}, ${c.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  return formatDateTime(d);
+};
+
 // Same dc-panel-card quick-drawer chrome as QuickJournalForm/CallLogForm —
 // shows the transaction history (Date / Description / Pay In / Pay Out /
 // Balance) for one Journal, and lets the user record a new Pay In/Pay Out
@@ -146,13 +164,13 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
   const filteredRows = useMemo(() => {
     return sortedRows.filter(row => {
       if (startDate) {
-        const rowDate = new Date(row.createdAt || row.date);
+        const rowDate = new Date(row.date || row.createdAt);
         const start = new Date(startDate);
         start.setHours(0,0,0,0);
         if (rowDate < start) return false;
       }
       if (endDate) {
-        const rowDate = new Date(row.createdAt || row.date);
+        const rowDate = new Date(row.date || row.createdAt);
         const end = new Date(endDate);
         end.setHours(23,59,59,999);
         if (rowDate > end) return false;
@@ -193,7 +211,7 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
     const tableRows = filteredRows.map(row => {
       const isOpening = row._id === `${journal._id}-opening`;
       return [
-        formatDateTime(row.createdAt || row.date),
+        formatLedgerWhen(row),
         row.notes || row.description || "—",
         row.partyName || "—",
         row.paymentType || "—",
@@ -221,7 +239,7 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
     const tableData = filteredRows.map(row => {
       const isOpening = row._id === `${journal._id}-opening`;
       return {
-        "Date Time": formatDateTime(row.createdAt || row.date),
+        "Date Time": formatLedgerWhen(row),
         "Description": row.notes || row.description || "—",
         "Party": row.partyName || "—",
         "Mode": row.paymentType || "—",
@@ -426,7 +444,7 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
 
                         return (
                           <tr key={row._id} className={rowBgClass}>
-                            <td className="px-3 py-1.5 text-sm text-gray-600 whitespace-nowrap">{formatDateTime(row.createdAt || row.date)}</td>
+                            <td className="px-3 py-1.5 text-sm text-gray-600 whitespace-nowrap">{formatLedgerWhen(row)}</td>
                             <td className="px-3 py-1.5 text-sm text-gray-900 font-medium truncate max-w-[150px]" title={row.notes || row.description}>{row.notes || row.description}</td>
                             <td className="px-3 py-1.5 text-sm text-gray-700 whitespace-nowrap">{row.partyName || "—"}</td>
                             <td className="px-3 py-1.5 text-sm text-gray-600 text-center whitespace-nowrap">{row.paymentType || "—"}</td>

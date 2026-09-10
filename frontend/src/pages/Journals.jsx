@@ -286,7 +286,7 @@ export default function Journals() {
         const tableData = sortedRows.map(row => {
           const isOpening = row._id === `${j._id}-opening`;
           return {
-            "Date Time": formatDate(row.createdAt || row.date),
+            "Date Time": formatDate(row.date || row.createdAt),
             "Description": row.notes || row.description || "—",
             "Party": row.partyName || "—",
             "Mode": row.paymentType || "—",

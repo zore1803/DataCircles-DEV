@@ -19,6 +19,7 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
   const [form, setForm] = useState({
     name: "",
     date: "",
+    time: new Date().toTimeString().slice(0, 5),
     category: "",
     balanceType: "Debit",
     openingBalance: "",
@@ -32,9 +33,12 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
   useEffect(() => {
     setTimeout(() => setIsOpen(true), 10);
     if (editJournal) {
+      const jd = editJournal.date ? new Date(editJournal.date) : null;
+      const pad = (n) => String(n).padStart(2, "0");
       setForm({
         name: editJournal.name || "",
-        date: editJournal.date ? new Date(editJournal.date).toISOString().split("T")[0] : "",
+        date: jd ? `${jd.getFullYear()}-${pad(jd.getMonth() + 1)}-${pad(jd.getDate())}` : "",
+        time: jd ? `${pad(jd.getHours())}:${pad(jd.getMinutes())}` : "",
         category: editJournal.category || "",
         balanceType: editJournal.balanceType || "Debit",
         openingBalance: editJournal.openingBalance ?? "",
@@ -89,10 +93,22 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
     try {
       // Attachments aren't persisted yet — no upload endpoint wired for
       // Journals yet, matching the rest of this first basic pass.
+      // Combine the picked day + time into one instant. Blank date → let the
+      // server stamp "now"; date set but time blank → default to the current
+      // clock time so the journal still has a precise timestamp to order by.
+      const journalDate = (() => {
+        if (!form.date) return undefined;
+        const time = /^\d{2}:\d{2}/.test(form.time)
+          ? (form.time.length === 5 ? `${form.time}:00` : form.time)
+          : new Date().toTimeString().slice(0, 8);
+        const dt = new Date(`${form.date}T${time}`);
+        return Number.isNaN(dt.getTime()) ? undefined : dt.toISOString();
+      })();
+
       const payload = {
         name: form.name,
         category: form.category,
-        date: form.date || undefined,
+        date: journalDate,
         description: form.notes,
         openingBalance: form.openingBalance === "" ? 0 : Number(form.openingBalance),
         balanceType: form.balanceType,
@@ -171,16 +187,29 @@ const QuickJournalForm = ({ onRequestClose, onJournalCreated, onJournalUpdated, 
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Journal Date
-              </label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => handleFormChange("date", e.target.value)}
-                className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Journal Date
+                </label>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => handleFormChange("date", e.target.value)}
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Time <span className="text-[#1F2937]/40 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="time"
+                  value={form.time}
+                  onChange={(e) => handleFormChange("time", e.target.value)}
+                  className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+              </div>
             </div>
 
             <div>

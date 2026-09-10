@@ -141,6 +141,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
     partyName: "",
     amount: "",
     date: new Date().toISOString().split("T")[0],
+    time: new Date().toTimeString().slice(0, 5),
     paymentType: "Cash",
     bank: "",
     referenceId: "",
@@ -165,6 +166,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
       partyName: "",
       amount: "",
       date: new Date().toISOString().split("T")[0],
+      time: new Date().toTimeString().slice(0, 5),
       paymentType: "Cash",
       bank: "",
       referenceId: "",
@@ -244,11 +246,23 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
     }
     setCustomerEmailError("");
 
+    // Combine the picked day with the picked time; a blank time falls back to
+    // the current clock time so the entry still gets a precise instant to sort
+    // on. Sent as a full ISO timestamp.
+    const entryDate = (() => {
+      const day = form.date || new Date().toISOString().split("T")[0];
+      const time = /^\d{2}:\d{2}/.test(form.time)
+        ? (form.time.length === 5 ? `${form.time}:00` : form.time)
+        : new Date().toTimeString().slice(0, 8);
+      const dt = new Date(`${day}T${time}`);
+      return Number.isNaN(dt.getTime()) ? new Date().toISOString() : dt.toISOString();
+    })();
+
     setLoading(true);
     try {
       const res = await API.post(`/journals/${journal._id}/entries`, {
         type,
-        date: form.date,
+        date: entryDate,
         partyType: isIn ? "Customer" : "Vendor",
         partyName: form.partyName,
         amount: amt,
@@ -356,17 +370,30 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                 </div>
               </div>
 
-              {/* Date */}
-              <div>
-                <label className={labelClass}>Date</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={form.date}
-                  onChange={handleChange}
-                  required
-                  className={fieldClass}
-                />
+              {/* Date + Time — time is optional; left blank it defaults to the
+                  current time when the entry is recorded. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={form.date}
+                    onChange={handleChange}
+                    required
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Time <span className="text-[#99A0AE] font-normal">(optional)</span></label>
+                  <input
+                    type="time"
+                    name="time"
+                    value={form.time}
+                    onChange={handleChange}
+                    className={fieldClass}
+                  />
+                </div>
               </div>
 
               {/* Payment Type pills */}
