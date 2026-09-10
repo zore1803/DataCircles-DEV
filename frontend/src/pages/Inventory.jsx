@@ -347,6 +347,16 @@ export default function Inventory() {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
+  // Close the overflow menu on scroll — it's absolutely positioned off its
+  // own button, so a scroll that moves that button would otherwise leave
+  // it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
+
   /* ── client-side advanced filters, applied on top of the server page ── */
   /* Server sorts by the parent item's own field, which is 0 for variant items —
      re-sort the current page client-side when sorting by a variant-aware column

@@ -172,20 +172,19 @@ const docNameFor = (type) =>
         ? "Quotation"
         : "Delivery Challan";
 
-// Intended accounting conversion directions — one-way only, no reverse or
-// arbitrary conversions. Same rules drive both the single-document Convert
-// menu and Bulk Convert:
-//   Quotation -> Pro Forma Invoice
-//   Quotation -> Invoice
-//   Pro Forma Invoice -> Invoice
-//   Invoice -> Delivery Challan
-//   Delivery Challan -> (nothing)
-const CONVERSION_TARGETS_BY_TYPE = {
-  quotation: ["performa", "tax"],
-  performa: ["tax"],
-  tax: ["deliveryChallan"],
-  deliveryChallan: [],
-};
+// Accounting conversion directions available from the Convert menu / Bulk
+// Convert. Every direction is really the same "duplicate as draft"
+// mechanism (conversionData): it copies the source document's line items,
+// customer, and terms into a brand-new target document — always a fresh
+// auto-generated number and Draft status, never the source's own number —
+// without touching or removing the source document itself. The natural
+// forward order (Quotation -> Pro Forma -> Invoice -> Delivery Challan) is
+// just the common case; every type can duplicate into every other type.
+const ALL_DOC_TYPES = ["quotation", "performa", "tax", "deliveryChallan"];
+const CONVERSION_TARGETS_BY_TYPE = ALL_DOC_TYPES.reduce((acc, type) => {
+  acc[type] = ALL_DOC_TYPES.filter((t) => t !== type);
+  return acc;
+}, {});
 const getConversionTargets = (type) => CONVERSION_TARGETS_BY_TYPE[type] || [];
 
 // Plain-text template bodies (saved templates, built-in fallbacks) use \n for
@@ -820,42 +819,10 @@ const Accounting = () => {
   // or null to show the main WhatsApp/Email/SMS/Copy-Link list.
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
   const [shareMenu, setShareMenu] = useState(null); // { doc, type, x, y }
-  // Hover-open/close for the Share flyout, tracked with a reference count
-  // rather than a plain cancel/schedule pair. The menu box and the flyout
-  // are two separate portaled subtrees, so React doesn't guarantee which
-  // one's enter/leave synthetic event fires first when the cursor crosses
-  // from one to the other — a plain "leave schedules, enter cancels" pair
-  // can have the leave's schedule land AFTER the enter's cancel, arming a
-  // close timer nothing then cancels. Counting concurrent hovers across
-  // both regions and only closing when it reaches zero is immune to that
-  // ordering.
-  const shareHoverCountRef = useRef(0);
-  const shareHoverTimeoutRef = useRef(null);
-  const clearShareCloseTimer = () => {
-    if (shareHoverTimeoutRef.current) {
-      clearTimeout(shareHoverTimeoutRef.current);
-      shareHoverTimeoutRef.current = null;
-    }
-  };
-  const cancelShareFlyoutClose = () => {
-    shareHoverCountRef.current += 1;
-    clearShareCloseTimer();
-  };
-  const scheduleShareFlyoutClose = () => {
-    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
-    if (shareHoverCountRef.current > 0) return;
-    clearShareCloseTimer();
-    shareHoverTimeoutRef.current = setTimeout(() => {
-      setShareMenu(null);
-      setShareMenuChannel(null);
-    }, 150);
-  };
-  // Immediate, unconditional close — used by closeRowMenu, the scroll
-  // handler, and Convert's mutual-exclusion kill, none of which are hover
-  // transitions the reference count needs to arbitrate.
+  // Share is click-to-open/pinned (its button toggles shareMenu directly) —
+  // this is just the unconditional close used by closeRowMenu, the scroll
+  // handler, the outside-click handler, and Convert's mutual-exclusion kill.
   const forceCloseShareFlyout = () => {
-    shareHoverCountRef.current = 0;
-    clearShareCloseTimer();
     setShareMenu(null);
     setShareMenuChannel(null);
   };
@@ -1232,69 +1199,14 @@ const Accounting = () => {
   const [viewerDoc, setViewerDoc] = useState(null);
   const [openConvertMenu, setOpenConvertMenu] = useState(null); // doc._id
   const [convertMenuPos, setConvertMenuPos] = useState(null); // { doc, type, targets, x, y }
-  // Hover-open/close for the Convert flyout — same reference-count pattern
-  // as the Share flyout above (see its comment for why a plain cancel/
-  // schedule pair isn't safe across two separate portaled subtrees).
-  const convertHoverCountRef = useRef(0);
-  const convertHoverTimeoutRef = useRef(null);
-  const clearConvertCloseTimer = () => {
-    if (convertHoverTimeoutRef.current) {
-      clearTimeout(convertHoverTimeoutRef.current);
-      convertHoverTimeoutRef.current = null;
-    }
-  };
-  const cancelConvertFlyoutClose = () => {
-    convertHoverCountRef.current += 1;
-    clearConvertCloseTimer();
-  };
-  const scheduleConvertFlyoutClose = () => {
-    convertHoverCountRef.current = Math.max(0, convertHoverCountRef.current - 1);
-    if (convertHoverCountRef.current > 0) return;
-    clearConvertCloseTimer();
-    convertHoverTimeoutRef.current = setTimeout(() => {
-      setOpenConvertMenu(null);
-      setConvertMenuPos(null);
-    }, 150);
-  };
-  // Immediate, unconditional close — see forceCloseShareFlyout's comment.
+  // Convert is click-to-open/pinned (its button toggles openConvertMenu
+  // directly, same as Share) — this is just the unconditional close used by
+  // closeRowMenu, the scroll handler, the outside-click handler, and
+  // Share's mutual-exclusion kill.
   const forceCloseConvertFlyout = () => {
-    convertHoverCountRef.current = 0;
-    clearConvertCloseTimer();
     setOpenConvertMenu(null);
     setConvertMenuPos(null);
   };
-  // Native addEventListener via ref, NOT React's onMouseEnter/onMouseLeave
-  // props — confirmed by direct testing that React's synthetic mouseleave
-  // does not reliably fire when the pointer moves from one createPortal
-  // tree into another (the menu box and the flyout are separate portals),
-  // so the reference count above never balances and the flyout gets stuck
-  // either open forever or closes immediately depending on which side
-  // silently drops its event. Native listeners don't have this gap.
-  // useRef(...).current freezes the callback identity so React attaches it
-  // once per portal-element mount rather than on every render; it's safe
-  // to use the first render's cancel/schedule closures since they only
-  // ever touch stable refs and setState setters.
-  const menuBoxHoverRefCb = useRef((el) => {
-    if (!el) return;
-    el.addEventListener("mouseenter", () => {
-      cancelShareFlyoutClose();
-      cancelConvertFlyoutClose();
-    });
-    el.addEventListener("mouseleave", () => {
-      scheduleShareFlyoutClose();
-      scheduleConvertFlyoutClose();
-    });
-  }).current;
-  const shareFlyoutHoverRefCb = useRef((el) => {
-    if (!el) return;
-    el.addEventListener("mouseenter", cancelShareFlyoutClose);
-    el.addEventListener("mouseleave", scheduleShareFlyoutClose);
-  }).current;
-  const convertFlyoutHoverRefCb = useRef((el) => {
-    if (!el) return;
-    el.addEventListener("mouseenter", cancelConvertFlyoutClose);
-    el.addEventListener("mouseleave", scheduleConvertFlyoutClose);
-  }).current;
   // Single "⋮" menu per row, replacing the old strip of individual icon
   // buttons — every row action lives here now. Convert and Share both open
   // as hover flyouts beside the row (see openConvertMenu/shareMenu) rather
@@ -2182,9 +2094,6 @@ const Accounting = () => {
               key={doc._id}
               style={{ position: "fixed", top: rowMenuPos.top, left: rowMenuPos.left }}
               className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
-              // Native listeners (menuBoxHoverRefCb), not onMouseEnter/
-              // onMouseLeave — see that ref's comment for why.
-              ref={menuBoxHoverRefCb}
             >
               <>
                   {activeTab === "tax" && doc.status !== "Paid" && (
@@ -2231,25 +2140,19 @@ const Accounting = () => {
                     Download
                   </button>
                   <button
-                    onMouseEnter={(e) => {
-                      // Hover is counted at the menu-box level (above), not
-                      // here — this only opens the flyout the first time.
-                      // Kill Convert's flyout outright rather than letting
-                      // its own grace-period timeout run — otherwise moving
-                      // straight from Share to Convert (or back) briefly
-                      // shows both stacked on top of each other.
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Click-to-open and pinned — the flyout used to open
+                      // on hover, but the gap between the button and the
+                      // flyout (two separate portaled subtrees) made it too
+                      // easy to lose hover and have it close mid-move.
+                      // Clicking again on an already-open flyout for this
+                      // row closes it.
+                      if (shareMenu?.doc?._id === doc._id) {
+                        forceCloseShareFlyout();
+                        return;
+                      }
                       forceCloseConvertFlyout();
-                      // Already open for this row — skip recomputing/
-                      // resetting state. Calling setShareMenu with a fresh
-                      // object on every mouseenter (even a no-op reposition)
-                      // re-renders the row, which can nudge layout by a
-                      // sub-pixel under a stationary cursor and refire
-                      // mouseenter — a self-sustaining blink.
-                      if (shareMenu?.doc?._id === doc._id) return;
-                      // Flyout opens beside this row, to the left of the
-                      // menu — the main menu stays open behind it, so it
-                      // anchors off the row's own rect rather than the
-                      // menu's (which closeRowMenu used to be needed for).
                       const zMenu = getAncestorZoom(document.body);
                       const DROPDOWN_W = 160;
                       const GAP = 0;
@@ -2262,7 +2165,6 @@ const Accounting = () => {
                       });
                       setShareMenuChannel(null);
                     }}
-                    onClick={(e) => e.stopPropagation()}
                     className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
                     <span className="flex items-center gap-2">
@@ -2273,16 +2175,16 @@ const Accounting = () => {
                   </button>
                   {conversionTargets.length > 0 && (
                     <button
-                      onMouseEnter={(e) => {
-                        // Hover is counted at the menu-box level (above),
-                        // not here — this only opens the flyout the first
-                        // time.
-                        // Same instant-kill of the other flyout as Share's
-                        // onMouseEnter above.
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Click-to-open and pinned — same as Share. Clicking
+                        // again on an already-open flyout for this row
+                        // closes it.
+                        if (openConvertMenu === doc._id) {
+                          forceCloseConvertFlyout();
+                          return;
+                        }
                         forceCloseShareFlyout();
-                        // Same already-open guard as Share's onMouseEnter —
-                        // see comment there.
-                        if (openConvertMenu === doc._id) return;
                         const zMenu = getAncestorZoom(document.body);
                         const DROPDOWN_W = 210; // matches the flyout's own w-[210px]
                         const GAP = 0;
@@ -2296,7 +2198,6 @@ const Accounting = () => {
                         });
                         setOpenConvertMenu(doc._id);
                       }}
-                      onClick={(e) => e.stopPropagation()}
                       className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                     >
                       <span className="flex items-center gap-2">
@@ -2334,14 +2235,17 @@ const Accounting = () => {
         )}
         {openConvertMenu === doc._id && convertMenuPos && createPortal(
           <>
+            {/* Above the row menu's own backdrop (z-[100050]/[100051]) — the
+                row menu stays open behind this flyout, so its full-screen
+                backdrop would otherwise sit on top and swallow every click
+                meant for a conversion target. */}
             <div
-              className="fixed inset-0 z-[100009]"
+              className="fixed inset-0 z-[100060]"
               onClick={() => { setOpenConvertMenu(null); setConvertMenuPos(null); }}
             />
             <div
-              className="fixed z-[100010] w-[210px] overflow-hidden bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+              className="fixed z-[100061] w-[210px] overflow-hidden bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
               style={{ top: convertMenuPos.y, left: convertMenuPos.x }}
-              ref={convertFlyoutHoverRefCb}
             >
               {convertMenuPos.targets.map((targetType) => (
                 <button
@@ -4002,11 +3906,12 @@ const Accounting = () => {
         />
         {shareMenu && createPortal(
           <>
-            <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+            {/* Above the row menu's own backdrop (z-[100050]/[100051]) — see
+                the Convert flyout's identical comment above. */}
+            <div className="fixed inset-0 z-[100060]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
             <div
-              className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+              className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
               style={{ top: shareMenu.y, left: shareMenu.x }}
-              ref={shareFlyoutHoverRefCb}
             >
               {(() => {
                 const link = `${window.location.origin}/view/${apiPathFor(shareMenu.type)}/${shareMenu.doc._id}`;

@@ -137,62 +137,13 @@ const SalesReturn = () => {
   // consistent across modules.
   const [shareMenu, setShareMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
-  // Hover-open/close for the Share flyout, tracked with a reference count
-  // rather than a plain cancel/schedule pair. The menu box and the flyout
-  // are two separate portaled subtrees, so React doesn't guarantee which
-  // one's enter/leave synthetic event fires first when the cursor crosses
-  // from one to the other — a plain "leave schedules, enter cancels" pair
-  // can have the leave's schedule land AFTER the enter's cancel, arming a
-  // close timer nothing then cancels. Counting concurrent hovers across
-  // both regions and only closing when it reaches zero is immune to that
-  // ordering.
-  const shareHoverCountRef = useRef(0);
-  const shareHoverTimeoutRef = useRef(null);
-  const clearShareCloseTimer = () => {
-    if (shareHoverTimeoutRef.current) {
-      clearTimeout(shareHoverTimeoutRef.current);
-      shareHoverTimeoutRef.current = null;
-    }
-  };
-  const cancelShareFlyoutClose = () => {
-    shareHoverCountRef.current += 1;
-    clearShareCloseTimer();
-  };
-  const scheduleShareFlyoutClose = () => {
-    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
-    if (shareHoverCountRef.current > 0) return;
-    clearShareCloseTimer();
-    shareHoverTimeoutRef.current = setTimeout(() => {
-      setShareMenu(null);
-      setShareMenuChannel(null);
-    }, 150);
-  };
-  // Immediate, unconditional close — used by closeRowMenu/scroll-close,
-  // which aren't hover transitions the reference count needs to arbitrate.
+  // Share is click-to-open/pinned (its button toggles shareMenu directly)
+  // — this is just the unconditional close used by closeRowMenu and the
+  // scroll handler.
   const forceCloseShareFlyout = () => {
-    shareHoverCountRef.current = 0;
-    clearShareCloseTimer();
     setShareMenu(null);
     setShareMenuChannel(null);
   };
-  // Native addEventListener via ref, NOT React's onMouseEnter/onMouseLeave
-  // props — confirmed by direct testing that React's synthetic mouseleave
-  // does not reliably fire when the pointer moves from one createPortal
-  // tree into another (the menu box and the flyout are separate portals),
-  // so the reference count above never balances. Native listeners don't
-  // have this gap. useRef(...).current freezes the callback identity so
-  // React attaches it once per portal-element mount rather than on every
-  // render.
-  const menuBoxHoverRefCb = useRef((el) => {
-    if (!el) return;
-    el.addEventListener("mouseenter", cancelShareFlyoutClose);
-    el.addEventListener("mouseleave", scheduleShareFlyoutClose);
-  }).current;
-  const shareFlyoutHoverRefCb = useRef((el) => {
-    if (!el) return;
-    el.addEventListener("mouseenter", cancelShareFlyoutClose);
-    el.addEventListener("mouseleave", scheduleShareFlyoutClose);
-  }).current;
   const [waTemplatesList, setWaTemplatesList] = useState([]);
   const [smsTemplatesList, setSmsTemplatesList] = useState([]);
   const [emailTemplatesList, setEmailTemplatesList] = useState([]);
@@ -343,6 +294,16 @@ const SalesReturn = () => {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  // Close the overflow menu on scroll — it's absolutely positioned off its
+  // own button, so a scroll that moves that button would otherwise leave
+  // it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
 
   // Lock page scroll while a row-actions or column-options menu is open —
   // same reasoning as Companies.jsx: the menu is portaled to document.body,
@@ -722,9 +683,6 @@ const SalesReturn = () => {
             <div
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
-              // Native listeners (menuBoxHoverRefCb), not onMouseEnter/
-              // onMouseLeave — see that ref's comment for why.
-              ref={menuBoxHoverRefCb}
             >
               <button
                 onClick={() => { close(); openPreview(row); }}
@@ -748,15 +706,14 @@ const SalesReturn = () => {
                 Download PDF
               </button>
               <button
-                onMouseEnter={(e) => {
-                  // Hover is counted at the menu-box level (above), not
-                  // here — this only opens the flyout the first time.
-                  // Already open for this row — skip recomputing/resetting
-                  // state. Calling setShareMenu with a fresh object on every
-                  // mouseenter (even a no-op reposition) re-renders the row,
-                  // which can nudge layout by a sub-pixel under a stationary
-                  // cursor and refire mouseenter — a self-sustaining blink.
-                  if (shareMenu?.doc?._id === row._id) return;
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Click-to-open and pinned. Clicking again on an
+                  // already-open flyout for this row closes it.
+                  if (shareMenu?.doc?._id === row._id) {
+                    forceCloseShareFlyout();
+                    return;
+                  }
                   const zMenu = getAncestorZoom(document.body);
                   const DROPDOWN_W = 160;
                   const GAP = 0;
@@ -768,7 +725,6 @@ const SalesReturn = () => {
                   });
                   setShareMenuChannel(null);
                 }}
-                onClick={(e) => e.stopPropagation()}
                 className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
                 <span className="flex items-center gap-2">
@@ -1090,8 +1046,6 @@ const SalesReturn = () => {
           <div
             className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
-            onMouseEnter={cancelShareFlyoutClose}
-            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const link = `${window.location.origin}/view/salesReturn/${shareMenu.doc._id}`;
@@ -1281,7 +1235,10 @@ const SalesReturn = () => {
         return (
           <>
             <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100011]" onClick={() => { setEmailCompose(null); setEmailTemplateOpen(false); }} />
-            <div className="fixed dc-panel-card w-full max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
+            {/* Same inset, rounded quick-drawer chrome as CompanyForm/ItemForm/CallLogForm
+                (dc-panel-card) — this panel just keeps its own wider, taller compose width
+                instead of the standard dc-panel-w. */}
+            <div className="fixed dc-panel-card w-[calc(100%-3rem)] max-w-[580px] bg-white shadow-2xl z-[100012] flex flex-col overflow-hidden animate-slideInRight" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 rounded-t-2xl flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <button onClick={() => setEmailCompose(null)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">

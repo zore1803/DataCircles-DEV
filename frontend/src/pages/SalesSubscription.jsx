@@ -143,10 +143,6 @@ const SalesSubscription = () => {
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
-  // "main" or "status" — Change Status swaps the whole popover to a status
-  // list (with a Back button) instead of listing every status inline, same
-  // pattern as PurchasePage's renderRowActionsMenu.
-  const [activeRowMenuState, setActiveRowMenuState] = useState("main");
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
   const columnMenuRef = useRef(null);
@@ -236,6 +232,16 @@ const SalesSubscription = () => {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // Close the overflow menu on scroll — it's absolutely positioned off its
+  // own button, so a scroll that moves that button would otherwise leave
+  // it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
+
   useEffect(() => {
     if (!openRowActionsId && !openColumnMenuKey) return;
     const prevOverflow = document.body.style.overflow;
@@ -299,6 +305,7 @@ const SalesSubscription = () => {
   };
 
   const openCreate = () => { setEditingSubscription(null); setShowForm(true); };
+  const openEdit = (row) => { setEditingSubscription(row); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setEditingSubscription(null); };
 
   const exitSelectionMode = () => {
@@ -379,17 +386,6 @@ const SalesSubscription = () => {
 
   const subFieldConfig = {
     fields: [{ key: "status", label: "Status", type: "select", options: STATUS_OPTIONS }],
-  };
-
-  const handleStatusChange = async (row, next) => {
-    try {
-      await API.put(`/sales-subscriptions/${row._id}/status`, { status: next });
-      toast.success("Status updated");
-      fetchRows();
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to update status");
-    }
-    setOpenRowActionsId(null);
   };
 
   const handleGenerateInvoice = async (row) => {
@@ -538,9 +534,8 @@ const SalesSubscription = () => {
 
   const renderRowActionsMenu = (row) => {
     const isOpen = openRowActionsId === row._id;
-    const close = () => { setOpenRowActionsId(null); setRowActionsPos(null); setActiveRowMenuState("main"); };
+    const close = () => { setOpenRowActionsId(null); setRowActionsPos(null); };
     const canGenerate = row.status !== "Cancelled" && row.status !== "Expired";
-    const statusChoices = STATUS_OPTIONS.filter((s) => s !== row.status);
     return (
       <div
         className="relative flex-shrink-0"
@@ -568,7 +563,6 @@ const SalesSubscription = () => {
             calcLeft = Math.max(calcLeft, MARGIN);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(row._id);
-            setActiveRowMenuState("main");
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
@@ -582,62 +576,32 @@ const SalesSubscription = () => {
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
-              {activeRowMenuState === "status" ? (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    Back
-                  </button>
-                  {statusChoices.map((s) => (
-                    <button
-                      key={s}
-                      onClick={(e) => { e.stopPropagation(); close(); handleStatusChange(row, s); }}
-                      className={`w-full text-left px-2 py-1.5 text-xs rounded-md hover:bg-gray-50 ${s === "Cancelled" ? "text-orange-600" : "text-[#161618]"}`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </>
-              ) : (
-                <>
-                  {canGenerate && (
-                    <button
-                      onClick={() => handleGenerateInvoice(row)}
-                      disabled={generatingId === row._id}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      {generatingId === row._id ? "Generating…" : "Generate Invoice Now"}
-                    </button>
-                  )}
-                  {statusChoices.length > 0 && (
-                    <>
-                      {canGenerate && <div className="w-full border-t border-[#F1F1F5] my-0.5" />}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Repeat className="w-3.5 h-3.5 text-orange-600" />
-                          Change Status
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
-                      </button>
-                    </>
-                  )}
-                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
-                  <button
-                    onClick={() => { close(); handleDelete(row._id); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50"
-                  >
-                    <DeleteIcon className="w-4 h-4 text-[#CD3636]" />
-                    Delete
-                  </button>
-                </>
+              {canGenerate && (
+                <button
+                  onClick={() => handleGenerateInvoice(row)}
+                  disabled={generatingId === row._id}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  {generatingId === row._id ? "Generating…" : "Generate Invoice Now"}
+                </button>
               )}
+              {canGenerate && <div className="w-full border-t border-[#F1F1F5] my-0.5" />}
+              <button
+                onClick={() => { close(); openEdit(row); }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+              >
+                <EditIcon className="w-3.5 h-3.5 text-blue-600" />
+                Edit
+              </button>
+              <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+              <button
+                onClick={() => { close(); handleDelete(row._id); }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#CD3636] hover:bg-red-50"
+              >
+                <DeleteIcon className="w-4 h-4 text-[#CD3636]" />
+                Delete
+              </button>
             </div>
           </>,
           document.body

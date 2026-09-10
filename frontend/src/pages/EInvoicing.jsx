@@ -130,37 +130,13 @@ export default function EInvoicing() {
 
   const [openRowActionsId, setOpenRowActionsId] = useState(null);
   const [rowActionsPos, setRowActionsPos] = useState(null);
-  const rowActionsRef = useRef(null);
 
   const [shareMenu, setShareMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
-  // Reference-counted hover tracking across the menu box and the flyout —
-  // see SalesReturn.jsx's fuller comment for why a plain cancel/schedule
-  // pair isn't safe across two separate portaled subtrees.
-  const shareHoverCountRef = useRef(0);
-  const shareHoverTimeoutRef = useRef(null);
-  const clearShareCloseTimer = () => {
-    if (shareHoverTimeoutRef.current) {
-      clearTimeout(shareHoverTimeoutRef.current);
-      shareHoverTimeoutRef.current = null;
-    }
-  };
-  const cancelShareFlyoutClose = () => {
-    shareHoverCountRef.current += 1;
-    clearShareCloseTimer();
-  };
-  const scheduleShareFlyoutClose = () => {
-    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
-    if (shareHoverCountRef.current > 0) return;
-    clearShareCloseTimer();
-    shareHoverTimeoutRef.current = setTimeout(() => {
-      setShareMenu(null);
-      setShareMenuChannel(null);
-    }, 150);
-  };
+  // Share is click-to-open/pinned (its button toggles shareMenu directly)
+  // — this is just the unconditional close used by closeRowMenu and the
+  // scroll handler.
   const forceCloseShareFlyout = () => {
-    shareHoverCountRef.current = 0;
-    clearShareCloseTimer();
     setShareMenu(null);
     setShareMenuChannel(null);
   };
@@ -263,6 +239,16 @@ export default function EInvoicing() {
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, []);
+
+  // Close the overflow menu on scroll — it's absolutely positioned off its
+  // own button, so a scroll that moves that button would otherwise leave
+  // it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
 
   // Close menus on scroll/click-outside
   useEffect(() => {
@@ -819,11 +805,8 @@ export default function EInvoicing() {
           <>
             <div className="fixed inset-0 z-[9998]" onClick={closeRowActions} />
             <div
-              ref={rowActionsRef}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
-              onMouseEnter={cancelShareFlyoutClose}
-              onMouseLeave={scheduleShareFlyoutClose}
             >
               <button onClick={() => handleView(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
                 <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
@@ -832,17 +815,18 @@ export default function EInvoicing() {
                 <DownloadIcon className="w-4 h-4 text-[#1C1B1F]" /> Download
               </button>
               <button
-                onMouseEnter={(e) => {
-                  // Hover is counted at the menu-box level (above), not
-                  // here — this only opens the flyout the first time.
-                  if (shareMenu?.row?._id === r._id) return;
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (shareMenu?.row?._id === r._id) {
+                    forceCloseShareFlyout();
+                    return;
+                  }
                   const zMenu = getAncestorZoom(document.body);
-                  const DROPDOWN_W = 208;
+                  const DROPDOWN_W = 160;
                   const rect = e.currentTarget.getBoundingClientRect();
                   setShareMenu({ row: r, x: Math.max(4, rect.left / zMenu - DROPDOWN_W), y: rect.top / zMenu });
                   setShareMenuChannel(null);
                 }}
-                onClick={(e) => e.stopPropagation()}
                 className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
                 <span className="flex items-center gap-2">
@@ -1453,10 +1437,8 @@ export default function EInvoicing() {
         <>
           <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
-            onMouseEnter={cancelShareFlyoutClose}
-            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const r = shareMenu.row;
@@ -1478,22 +1460,22 @@ export default function EInvoicing() {
               const items = [
                 {
                   label: "WhatsApp",
-                  icon: <MessageCircle className="w-4 h-4 text-green-600" />,
+                  icon: <MessageCircle className="w-3.5 h-3.5 text-green-600" />,
                   onClick: () => { window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, "_blank"); closeMenu(); },
                 },
                 {
                   label: "Email",
-                  icon: <Mail className="w-4 h-4 text-blue-600" />,
+                  icon: <Mail className="w-3.5 h-3.5 text-blue-600" />,
                   onClick: () => { window.open(`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${emailBody}`, "_blank"); closeMenu(); },
                 },
                 {
                   label: "SMS",
-                  icon: <MessageSquare className="w-4 h-4 text-purple-600" />,
+                  icon: <MessageSquare className="w-3.5 h-3.5 text-purple-600" />,
                   onClick: () => { window.open(`sms:?body=${encodeURIComponent(smsMsg)}`, "_blank"); closeMenu(); },
                 },
                 {
                   label: "Copy Link",
-                  icon: <Copy className="w-4 h-4 text-gray-500" />,
+                  icon: <Copy className="w-3.5 h-3.5 text-gray-500" />,
                   onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); },
                 },
               ];
@@ -1501,7 +1483,7 @@ export default function EInvoicing() {
                 <button
                   key={label}
                   onClick={(e) => { e.stopPropagation(); onClick(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                 >
                   {icon}
                   {label}

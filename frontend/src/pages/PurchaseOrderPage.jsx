@@ -44,7 +44,7 @@ import {
   Strikethrough as StrikethroughIcon,
   ListOrdered,
   List as ListIcon,
-  Link as LinkIcon, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
+  Link as LinkIcon, ArrowUp, ArrowDown, RefreshCw, Repeat } from "lucide-react";
 import toast from "react-hot-toast";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
@@ -206,6 +206,16 @@ const PurchaseOrderPage = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close the overflow menu on scroll — it's absolutely positioned off its
+  // own button, so a scroll that moves that button would otherwise leave
+  // it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
+
   // First-load skeleton only, same reasoning as Companies.jsx: once the page
   // has loaded once, a search/filter that narrows results to zero must NOT
   // re-skeleton the toolbar.
@@ -259,39 +269,12 @@ const PurchaseOrderPage = () => {
   const [rowActionsPos, setRowActionsPos] = useState(null);
   const rowActionsRef = useRef(null);
 
-  // Share via WhatsApp/Email/SMS + Copy Link — opens as a hover flyout
-  // beside the row menu (same pattern as Accounting.jsx), so the main menu
-  // stays open behind it and a short grace period keeps it open while the
-  // cursor crosses the gap to the flyout itself.
+  // Share via WhatsApp/Email/SMS + Copy Link — click-to-open and pinned
+  // (same pattern as Accounting.jsx).
   const [shareMenu, setShareMenu] = useState(null); // { x, y, doc }
+  const [statusMenu, setStatusMenu] = useState(null); // { x, y, doc }
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
-  // Reference-counted hover tracking across the menu box and the flyout —
-  // see SalesReturn.jsx's fuller comment for why a plain cancel/schedule
-  // pair isn't safe across two separate portaled subtrees.
-  const shareHoverCountRef = useRef(0);
-  const shareHoverTimeoutRef = useRef(null);
-  const clearShareCloseTimer = () => {
-    if (shareHoverTimeoutRef.current) {
-      clearTimeout(shareHoverTimeoutRef.current);
-      shareHoverTimeoutRef.current = null;
-    }
-  };
-  const cancelShareFlyoutClose = () => {
-    shareHoverCountRef.current += 1;
-    clearShareCloseTimer();
-  };
-  const scheduleShareFlyoutClose = () => {
-    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
-    if (shareHoverCountRef.current > 0) return;
-    clearShareCloseTimer();
-    shareHoverTimeoutRef.current = setTimeout(() => {
-      setShareMenu(null);
-      setShareMenuChannel(null);
-    }, 150);
-  };
   const forceCloseShareFlyout = () => {
-    shareHoverCountRef.current = 0;
-    clearShareCloseTimer();
     setShareMenu(null);
     setShareMenuChannel(null);
   };
@@ -360,10 +343,10 @@ const PurchaseOrderPage = () => {
   });
 
   const statusOptions = [
-    { value: "Pending", label: "Pending", icon: Clock, className: "bg-[#FDF3E6] text-[#EA9927] border-[#F7DDB8]" },
-    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-[#E6F7EF] text-[#1FA971] border-[#B9E7D3]" },
-    { value: "Rejected", label: "Rejected", icon: X, className: "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]" },
-    { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-[#E6F8FD] text-[#27B4EA] border-[#B8E9F7]" },
+    { value: "Pending", label: "Pending", icon: Clock, className: "bg-[#FDF3E6] text-[#EA9927]" },
+    { value: "Approved", label: "Approved", icon: CheckCircle2, className: "bg-[#E6F7EF] text-[#1FA971]" },
+    { value: "Rejected", label: "Rejected", icon: X, className: "bg-[#FCEAEA] text-[#EA4B4B]" },
+    { value: "Delivered", label: "Delivered", icon: Truck, className: "bg-[#E6F8FD] text-[#27B4EA]" },
   ];
 
   // Columns available in the rule-builder filter panel (mirrors Companies.jsx pattern).
@@ -927,6 +910,7 @@ const PurchaseOrderPage = () => {
       setRowActionsPos(null);
       setActiveRowMenuState("main");
       forceCloseShareFlyout();
+      setStatusMenu(null);
     };
     return (
       <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
@@ -959,6 +943,7 @@ const PurchaseOrderPage = () => {
 
             setShareMenu(null);
             setShareMenuChannel(null);
+            setStatusMenu(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(po._id);
             setActiveRowMenuState("main");
@@ -974,38 +959,8 @@ const PurchaseOrderPage = () => {
               key={po._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
-              // Share's flyout hover is tracked at this menu-box level, not
-              // the narrow Share row alone — see SalesReturn.jsx's comment
-              // for why per-button mouseleave flickers against the flyout
-              // beside it.
-              onMouseEnter={cancelShareFlyoutClose}
-              onMouseLeave={scheduleShareFlyoutClose}
             >
-              {activeRowMenuState === "status" ? (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    Back
-                  </button>
-                  {statusOptions.map(st => {
-                    const optVal = st.value;
-                    const optLabel = st.label;
-                    return (
-                      <button
-                        key={optVal}
-                        onClick={(e) => { e.stopPropagation(); updateSingleStatus(po._id, optVal); }}
-                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${po.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-[#161618] hover:bg-gray-50'}`}
-                      >
-                        {optLabel}
-                      </button>
-                    )
-                  })}
-                </>
-              ) : (
-                <>
+              <>
                   <button
                     onClick={() => { closeRowMenu(); handleView(po); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
@@ -1028,15 +983,15 @@ const PurchaseOrderPage = () => {
                     Download
                   </button>
                   <button
-                    onMouseEnter={(e) => {
-                      // Hover is counted at the menu-box level (above), not
-                      // here — this only opens the flyout the first time.
-                      // Already open for this row — skip recomputing/
-                      // resetting state (see SalesReturn.jsx's comment for
-                      // why a no-op reposition on every mouseenter blinks).
-                      if (shareMenu?.doc?._id === po._id) return;
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (shareMenu?.doc?._id === po._id) {
+                        forceCloseShareFlyout();
+                        return;
+                      }
+                      setStatusMenu(null);
                       const zMenu = getAncestorZoom(document.body);
-                      const DROPDOWN_W = 208;
+                      const DROPDOWN_W = 160;
                       const GAP = 0;
                       const rect = e.currentTarget.getBoundingClientRect();
                       setShareMenu({
@@ -1046,7 +1001,6 @@ const PurchaseOrderPage = () => {
                       });
                       setShareMenuChannel(null);
                     }}
-                    onClick={(e) => e.stopPropagation()}
                     className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
                     <span className="flex items-center gap-2">
@@ -1057,7 +1011,23 @@ const PurchaseOrderPage = () => {
                   </button>
                   {po.status !== "Delivered" && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (statusMenu?.doc?._id === po._id) {
+                          setStatusMenu(null);
+                          return;
+                        }
+                        forceCloseShareFlyout();
+                        const zMenu = getAncestorZoom(document.body);
+                        const DROPDOWN_W = 160;
+                        const GAP = 0;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setStatusMenu({
+                          doc: po,
+                          x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                          y: rect.top / zMenu,
+                        });
+                      }}
                       className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                     >
                       <span className="flex items-center gap-2">
@@ -1087,7 +1057,6 @@ const PurchaseOrderPage = () => {
                     Delete
                   </button>
                 </>
-              )}
             </div>
           </>,
           document.body,
@@ -1311,7 +1280,7 @@ const PurchaseOrderPage = () => {
               const statusObj = statusOptions.find(opt => opt.value === po.status) || statusOptions[0];
               baseContent = (
                 <div className="flex items-center justify-start">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${statusObj.className || "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${statusObj.className || "bg-gray-50 text-gray-700"}`}>
                     {statusObj.label || po.status}
                   </span>
                 </div>
@@ -2160,12 +2129,10 @@ const PurchaseOrderPage = () => {
 
       {shareMenu && createPortal(
         <>
-          <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+          <div className="fixed inset-0 z-[100060]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
-            onMouseEnter={cancelShareFlyoutClose}
-            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const link = `${window.location.origin}/view/purchaseOrder/${shareMenu.doc._id}`;
@@ -2230,7 +2197,7 @@ const PurchaseOrderPage = () => {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                     >
                       ← Back
                     </button>
@@ -2238,10 +2205,10 @@ const PurchaseOrderPage = () => {
                       <button
                         key={tpl.id}
                         onClick={(e) => { e.stopPropagation(); send(tpl); }}
-                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                       >
                         <span className="truncate">{tpl.name}</span>
-                        {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                        {tpl.isDefault && <span className="text-[9px] text-green-600 font-semibold flex-shrink-0">Default</span>}
                       </button>
                     ))}
                   </>
@@ -2249,22 +2216,48 @@ const PurchaseOrderPage = () => {
               }
 
               const items = [
-                { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
-                { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
-                { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
-                { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+                { label: "WhatsApp", icon: <MessageCircle className="w-3.5 h-3.5 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                { label: "Email", icon: <Mail className="w-3.5 h-3.5 text-blue-600" />, onClick: () => openChannel("email") },
+                { label: "SMS", icon: <MessageSquare className="w-3.5 h-3.5 text-purple-600" />, onClick: () => openChannel("sms") },
+                { label: "Copy Link", icon: <Copy className="w-3.5 h-3.5 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
               ];
               return items.map(({ label, icon, onClick }) => (
                 <button
                   key={label}
                   onClick={(e) => { e.stopPropagation(); onClick(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                 >
                   {icon}
                   {label}
                 </button>
               ));
             })()}
+          </div>
+        </>,
+        document.body
+      )}
+      {statusMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-[100060]" onClick={() => setStatusMenu(null)} />
+          <div
+            className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+            style={{ top: statusMenu.y, left: statusMenu.x }}
+          >
+            {statusOptions.map((st) => (
+              <button
+                key={st.value}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateSingleStatus(statusMenu.doc._id, st.value);
+                  setStatusMenu(null);
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                }}
+                className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${statusMenu.doc.status === st.value ? "bg-blue-50 text-blue-600 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {st.label}
+              </button>
+            ))}
           </div>
         </>,
         document.body

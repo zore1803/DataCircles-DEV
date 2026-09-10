@@ -144,6 +144,17 @@ const PurchasePage = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close the Import/Export/Columns overflow menu on scroll — it's
+  // absolutely positioned off its own button, so a scroll that moves that
+  // button (e.g. the page itself scrolling, not just the table body) would
+  // otherwise leave it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
+
   // First-load skeleton only, same reasoning as Companies.jsx / PurchaseOrderPage.jsx:
   // once the page has loaded once, a search/filter that narrows results to zero must
   // NOT re-skeleton the toolbar.
@@ -202,34 +213,12 @@ const PurchasePage = () => {
   const rowActionsRef = useRef(null);
 
   const [shareMenu, setShareMenu] = useState(null);
+  const [statusMenu, setStatusMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
-  // Reference-counted hover tracking across the menu box and the flyout —
-  // see SalesReturn.jsx's fuller comment for why a plain cancel/schedule
-  // pair isn't safe across two separate portaled subtrees.
-  const shareHoverCountRef = useRef(0);
-  const shareHoverTimeoutRef = useRef(null);
-  const clearShareCloseTimer = () => {
-    if (shareHoverTimeoutRef.current) {
-      clearTimeout(shareHoverTimeoutRef.current);
-      shareHoverTimeoutRef.current = null;
-    }
-  };
-  const cancelShareFlyoutClose = () => {
-    shareHoverCountRef.current += 1;
-    clearShareCloseTimer();
-  };
-  const scheduleShareFlyoutClose = () => {
-    shareHoverCountRef.current = Math.max(0, shareHoverCountRef.current - 1);
-    if (shareHoverCountRef.current > 0) return;
-    clearShareCloseTimer();
-    shareHoverTimeoutRef.current = setTimeout(() => {
-      setShareMenu(null);
-      setShareMenuChannel(null);
-    }, 150);
-  };
+  // Share is click-to-open/pinned (its button toggles shareMenu directly)
+  // — this is just the unconditional close used by closeRowMenu and the
+  // scroll handler.
   const forceCloseShareFlyout = () => {
-    shareHoverCountRef.current = 0;
-    clearShareCloseTimer();
     setShareMenu(null);
     setShareMenuChannel(null);
   };
@@ -840,6 +829,7 @@ const PurchasePage = () => {
       setRowActionsPos(null);
       setActiveRowMenuState("main");
       forceCloseShareFlyout();
+      setStatusMenu(null);
     };
     return (
       <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
@@ -871,6 +861,7 @@ const PurchasePage = () => {
             calcLeft = Math.max(calcLeft, MARGIN);
 
             forceCloseShareFlyout();
+            setStatusMenu(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(p._id);
             setActiveRowMenuState("main");
@@ -886,34 +877,8 @@ const PurchasePage = () => {
               key={p._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
               className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
-              onMouseEnter={cancelShareFlyoutClose}
-              onMouseLeave={scheduleShareFlyoutClose}
             >
-              {activeRowMenuState === "status" ? (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    Back
-                  </button>
-                  {statusOptions.map(st => {
-                    const optVal = typeof st === 'string' ? st : st.value;
-                    const optLabel = typeof st === 'string' ? st : st.label;
-                    return (
-                      <button
-                        key={optVal}
-                        onClick={(e) => { e.stopPropagation(); updateSingleStatus(p._id, optVal); }}
-                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${p.status === optVal ? 'bg-blue-50 text-blue-600' : 'text-[#161618] hover:bg-gray-50'}`}
-                      >
-                        {optLabel}
-                      </button>
-                    )
-                  })}
-                </>
-              ) : (
-                <>
+              <>
                   <button
                     onClick={() => { closeRowMenu(); handleView(p); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
@@ -936,10 +901,13 @@ const PurchasePage = () => {
                     Download
                   </button>
                   <button
-                    onMouseEnter={(e) => {
-                      // Hover is counted at the menu-box level (above), not
-                      // here — this only opens the flyout the first time.
-                      if (shareMenu?.doc?._id === p._id) return;
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (shareMenu?.doc?._id === p._id) {
+                        forceCloseShareFlyout();
+                        return;
+                      }
+                      setStatusMenu(null);
                       const zMenu = getAncestorZoom(document.body);
                       const DROPDOWN_W = 160;
                       const GAP = 0;
@@ -951,7 +919,6 @@ const PurchasePage = () => {
                       });
                       setShareMenuChannel(null);
                     }}
-                    onClick={(e) => e.stopPropagation()}
                     className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
                     <span className="flex items-center gap-2">
@@ -962,7 +929,23 @@ const PurchasePage = () => {
                   </button>
                   {p.status !== "Paid" && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (statusMenu?.doc?._id === p._id) {
+                          setStatusMenu(null);
+                          return;
+                        }
+                        forceCloseShareFlyout();
+                        const zMenu = getAncestorZoom(document.body);
+                        const DROPDOWN_W = 160;
+                        const GAP = 0;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setStatusMenu({
+                          doc: p,
+                          x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                          y: rect.top / zMenu,
+                        });
+                      }}
                       className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                     >
                       <span className="flex items-center gap-2">
@@ -990,7 +973,6 @@ const PurchasePage = () => {
                     Delete
                   </button>
                 </>
-              )}
             </div>
           </>,
           document.body,
@@ -2083,12 +2065,10 @@ const PurchasePage = () => {
 
       {shareMenu && createPortal(
         <>
-          <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+          <div className="fixed inset-0 z-[100060]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            className="fixed z-[100010] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+            className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
-            onMouseEnter={cancelShareFlyoutClose}
-            onMouseLeave={scheduleShareFlyoutClose}
           >
             {(() => {
               const link = `${window.location.origin}/view/purchase/${shareMenu.doc._id}`;
@@ -2187,6 +2167,32 @@ const PurchasePage = () => {
                 </button>
               ));
             })()}
+          </div>
+        </>,
+        document.body
+      )}
+      {statusMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-[100060]" onClick={() => setStatusMenu(null)} />
+          <div
+            className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+            style={{ top: statusMenu.y, left: statusMenu.x }}
+          >
+            {statusOptions.map((st) => (
+              <button
+                key={st}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateSingleStatus(statusMenu.doc._id, st);
+                  setStatusMenu(null);
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                }}
+                className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${statusMenu.doc.status === st ? "bg-blue-50 text-blue-600 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {st}
+              </button>
+            ))}
           </div>
         </>,
         document.body

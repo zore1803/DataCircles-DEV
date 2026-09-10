@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Repeat,
   RotateCcw,
   CheckSquare,
   X,
@@ -129,6 +130,16 @@ const PurchaseReturn = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close the overflow menu on scroll — it's absolutely positioned off its
+  // own button, so a scroll that moves that button would otherwise leave
+  // it floating detached from its anchor.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleScroll = () => setIsMoreMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [isMoreMenuOpen]);
+
   useEffect(() => {
     fetchShareSettings();
   }, []);
@@ -176,6 +187,7 @@ const PurchaseReturn = () => {
 
   const [shareMenu, setShareMenu] = useState(null);
   const [shareMenuChannel, setShareMenuChannel] = useState(null);
+  const [statusMenu, setStatusMenu] = useState(null); // { doc, x, y }
   const [waTemplatesList, setWaTemplatesList] = useState([]);
   const [smsTemplatesList, setSmsTemplatesList] = useState([]);
   const [emailTemplatesList, setEmailTemplatesList] = useState([]);
@@ -654,6 +666,7 @@ const PurchaseReturn = () => {
       setOpenRowActionsId(null);
       setRowActionsPos(null);
       setActiveRowMenuState("main");
+      setStatusMenu(null);
     };
     return (
       <div className="relative flex items-center justify-center flex-shrink-0" ref={isOpen ? rowActionsRef : null} onClick={(e) => e.stopPropagation()}>
@@ -666,9 +679,9 @@ const PurchaseReturn = () => {
               return;
             }
             const zMenu = getAncestorZoom(document.body);
-            const MENU_W = 224;
+            const MENU_W = 160;
             const MARGIN = 8;
-            const MENU_H = 300;
+            const MENU_H = 260;
 
             const rect = e.currentTarget.getBoundingClientRect();
             const viewportH = window.innerHeight / zMenu;
@@ -686,11 +699,12 @@ const PurchaseReturn = () => {
 
             setShareMenu(null);
             setShareMenuChannel(null);
+            setStatusMenu(null);
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(p._id);
             setActiveRowMenuState("main");
           }}
-          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <MoreIcon className="w-4 h-4" />
         </button>
@@ -700,89 +714,101 @@ const PurchaseReturn = () => {
             <div
               key={p._id}
               style={{ position: "fixed", top: rowActionsPos.top, left: rowActionsPos.left }}
-              className="w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[100051] py-1 max-h-[70vh] overflow-y-auto"
+              className="w-[160px] z-[100051] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto"
             >
-              {activeRowMenuState === "status" ? (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("main"); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 border-b border-gray-100"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Back
-                  </button>
-                  {(p.status === "Confirmed" ? ["Confirmed", "Paid"] : p.status === "Paid" ? ["Paid"] : statusOptions).map((st) => (
-                    <button
-                      key={st}
-                      onClick={(e) => { e.stopPropagation(); updateSingleStatus(p._id, st); }}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${p.status === st ? "bg-blue-50 text-blue-600" : "text-gray-700"}`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </>
-              ) : (
-                <>
+              <>
                   <button
                     onClick={() => { closeRowMenu(); handleView(p); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EyeIcon className="w-4 h-4 text-blue-600" />
+                    <EyeIcon className="w-3.5 h-3.5 text-blue-600" />
                     View
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleEdit(p); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <EditIcon className="w-4 h-4 text-blue-600" />
+                    <EditIcon className="w-3.5 h-3.5 text-blue-600" />
                     Edit
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleDownload(p); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <DownloadIcon className="w-4 h-4 text-green-600" />
+                    <DownloadIcon className="w-3.5 h-3.5 text-green-600" />
                     Download
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const DROPDOWN_W = 208;
-                      const anchorRight = rowActionsPos.left + 224;
-                      closeRowMenu();
+                      // Click-to-open and pinned — the row menu stays open
+                      // behind this flyout, same pattern as Accounting.jsx.
+                      // Clicking again on an already-open flyout for this
+                      // row closes it.
+                      if (shareMenu?.doc?._id === p._id) {
+                        setShareMenu(null);
+                        setShareMenuChannel(null);
+                        return;
+                      }
+                      setStatusMenu(null);
+                      const zMenu = getAncestorZoom(document.body);
+                      const DROPDOWN_W = 160;
+                      const GAP = 0;
+                      const rect = e.currentTarget.getBoundingClientRect();
                       setShareMenu({
                         doc: p,
-                        x: Math.max(4, anchorRight - DROPDOWN_W),
-                        y: rowActionsPos.top,
+                        x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                        y: rect.top / zMenu,
                       });
                       setShareMenuChannel(null);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Share2 className="w-4 h-4 text-blue-600" />
-                    Share via WhatsApp/Email/SMS
-                  </button>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={() => { closeRowMenu(); handleDelete(p._id); }}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  >
-                    <DeleteIcon className="w-4 h-4" />
-                    Delete
+                    <span className="flex items-center gap-2">
+                      <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                      Share
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                   </button>
                   {p.status !== "Paid" && (
-                    <>
-                      <div className="border-t border-gray-100 my-1" />
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setActiveRowMenuState("status"); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Click-to-open and pinned — same pattern as Share.
+                        if (statusMenu?.doc?._id === p._id) {
+                          setStatusMenu(null);
+                          return;
+                        }
+                        setShareMenu(null);
+                        setShareMenuChannel(null);
+                        const zMenu = getAncestorZoom(document.body);
+                        const DROPDOWN_W = 160;
+                        const GAP = 0;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setStatusMenu({
+                          doc: p,
+                          x: Math.max(4, rect.left / zMenu - DROPDOWN_W - GAP),
+                          y: rect.top / zMenu,
+                        });
+                      }}
+                      className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Repeat className="w-3.5 h-3.5 text-orange-600" />
                         Change Status
-                      </button>
-                    </>
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
                   )}
+                  <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                  <button
+                    onClick={() => { closeRowMenu(); handleDelete(p._id); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
+                  >
+                    <DeleteIcon className="w-3.5 h-3.5" />
+                    Delete
+                  </button>
                 </>
-              )}
             </div>
           </>,
           document.body
@@ -1243,9 +1269,9 @@ const PurchaseReturn = () => {
 
       {shareMenu && createPortal(
         <>
-          <div className="fixed inset-0 z-[100009]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
+          <div className="fixed inset-0 z-[100060]" onClick={() => { setShareMenu(null); setShareMenuChannel(null); }} />
           <div
-            className="fixed z-[100010] bg-white rounded-xl shadow-xl border border-gray-100 py-1 w-52"
+            className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
             style={{ top: shareMenu.y, left: shareMenu.x }}
           >
             {(() => {
@@ -1310,7 +1336,7 @@ const PurchaseReturn = () => {
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShareMenuChannel(null); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-600 border-b border-gray-100"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:bg-gray-50 border-b border-[#F1F1F5] mb-0.5 whitespace-nowrap"
                     >
                       ← Back
                     </button>
@@ -1318,10 +1344,10 @@ const PurchaseReturn = () => {
                       <button
                         key={tpl.id}
                         onClick={(e) => { e.stopPropagation(); send(tpl); }}
-                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                       >
                         <span className="truncate">{tpl.name}</span>
-                        {tpl.isDefault && <span className="text-[10px] text-green-600 font-semibold flex-shrink-0">Default</span>}
+                        {tpl.isDefault && <span className="text-[9px] text-green-600 font-semibold flex-shrink-0">Default</span>}
                       </button>
                     ))}
                   </>
@@ -1329,22 +1355,48 @@ const PurchaseReturn = () => {
               }
 
               const items = [
-                { label: "WhatsApp", icon: <MessageCircle className="w-4 h-4 text-green-600" />, onClick: () => openChannel("whatsapp") },
-                { label: "Email", icon: <Mail className="w-4 h-4 text-blue-600" />, onClick: () => openChannel("email") },
-                { label: "SMS", icon: <MessageSquare className="w-4 h-4 text-purple-600" />, onClick: () => openChannel("sms") },
-                { label: "Copy Link", icon: <Copy className="w-4 h-4 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
+                { label: "WhatsApp", icon: <MessageCircle className="w-3.5 h-3.5 text-green-600" />, onClick: () => openChannel("whatsapp") },
+                { label: "Email", icon: <Mail className="w-3.5 h-3.5 text-blue-600" />, onClick: () => openChannel("email") },
+                { label: "SMS", icon: <MessageSquare className="w-3.5 h-3.5 text-purple-600" />, onClick: () => openChannel("sms") },
+                { label: "Copy Link", icon: <Copy className="w-3.5 h-3.5 text-gray-500" />, onClick: () => { navigator.clipboard.writeText(link).catch(() => {}); toast.success("Link copied"); closeMenu(); } },
               ];
               return items.map(({ label, icon, onClick }) => (
                 <button
                   key={label}
                   onClick={(e) => { e.stopPropagation(); onClick(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                 >
                   {icon}
                   {label}
                 </button>
               ));
             })()}
+          </div>
+        </>,
+        document.body
+      )}
+      {statusMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-[100060]" onClick={() => setStatusMenu(null)} />
+          <div
+            className="fixed z-[100061] w-[160px] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+            style={{ top: statusMenu.y, left: statusMenu.x }}
+          >
+            {(statusMenu.doc.status === "Confirmed" ? ["Confirmed", "Paid"] : statusMenu.doc.status === "Paid" ? ["Paid"] : statusOptions).map((st) => (
+              <button
+                key={st}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateSingleStatus(statusMenu.doc._id, st);
+                  setStatusMenu(null);
+                  setOpenRowActionsId(null);
+                  setRowActionsPos(null);
+                }}
+                className={`w-full text-left px-2 py-1.5 rounded-md text-xs whitespace-nowrap ${statusMenu.doc.status === st ? "bg-blue-50 text-blue-600 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+              >
+                {st}
+              </button>
+            ))}
           </div>
         </>,
         document.body
