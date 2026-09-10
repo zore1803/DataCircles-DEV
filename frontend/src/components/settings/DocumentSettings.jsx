@@ -4,11 +4,13 @@ import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import { Save, PenSquare, Eye, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
+import { Save, PenSquare, CheckCircle, ShieldCheck, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
 import SignatureModal from "./SignatureModal";
 import PdfFileNameSettings from "./PdfFileNameSettings";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import { DEFAULT_FORMATS } from "../../utils/pdfFilename";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 // Dynamic values Email/SMS templates can reference — shown to the user as
 // plain labels they click to insert, never as raw {placeholder} syntax they
@@ -727,7 +729,7 @@ function DocumentSettings() {
 
           <div className="rounded-2xl border border-gray-200 bg-slate-50 p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Eye className="w-4 h-4" />
+              <EyeIcon className="w-4 h-4" />
               Preview
             </div>
 
@@ -850,7 +852,7 @@ function DocumentSettings() {
                       className="p-1.5 rounded-lg text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition"
                       title="Edit signature"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <EditIcon className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
@@ -959,7 +961,7 @@ function DocumentSettings() {
                     className="p-1.5 rounded-lg text-gray-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
                     title="Edit"
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <EditIcon className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => deleteTemplate(templateTab, tpl.id)}

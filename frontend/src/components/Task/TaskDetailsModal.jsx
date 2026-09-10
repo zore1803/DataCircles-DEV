@@ -1,7 +1,8 @@
 import DeleteIcon from "../common/DeleteIcon";
 import React from "react";
-import { X, Loader2, Edit3 } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import EditIcon from "../common/EditIcon";
 
 const DealIcon = (props) => (
   <svg width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -124,7 +125,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                 className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
                 title="Edit"
               >
-                <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+                <EditIcon className="w-5 h-5" style={{ color: "#0085FF" }} />
               </button>
             )}
             <button
@@ -324,7 +325,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
                 style={{ width: 20, height: 20 }}
                 title="Edit description"
               >
-                <Edit3 className="w-4 h-4" style={{ color: "#0085FF" }} />
+                <EditIcon className="w-4 h-4" style={{ color: "#0085FF" }} />
               </button>
             )}
           </div>

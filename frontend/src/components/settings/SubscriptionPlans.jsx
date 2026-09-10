@@ -2,7 +2,8 @@ import CalendarIcon from "../common/CalendarIcon";
 // components/settings/SubscriptionPlans.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, ShieldCheck, RotateCcw, ReceiptText } from "lucide-react";
+import { Gift, Building2, Crown, CheckCircle, AlertCircle, X, Users, ShieldCheck, RotateCcw, ReceiptText } from "lucide-react";
+import StarIcon from "../common/StarIcon";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 import PlanCard from "../subscription/PlanCard";
 import CurrentSubscriptionInfo from "../subscription/CurrentSubscriptionInfo";
@@ -27,7 +28,7 @@ import { isCouponStillRecurring } from "../../utils/couponHelpers";
 const PLAN_ICONS = {
   trial:    <Gift className="w-6 h-6" />,
   starter:  <Building2 className="w-6 h-6" />,
-  growth:   <Star className="w-6 h-6" />,
+  growth:   <StarIcon className="w-6 h-6" />,
   business: <Crown className="w-6 h-6" />,
 };
 

@@ -10,8 +10,9 @@ import toast from "react-hot-toast";
 import {
   X, Clock, Users, MapPin,
   AlertTriangle, CheckCircle2, Building, Lightbulb,
-  Timer, Flag, Pencil, Truck
+  Timer, Flag, Truck
 } from "lucide-react";
+import EditIcon from "../common/EditIcon";
 
 const initialState = {
   title: "",
@@ -624,7 +625,7 @@ const VendorMeetingForm = ({
                   onClick={() => setIsEditMode(true)}
                   className="flex-1 px-6 py-3 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
                 >
-                  <Edit3 className="w-4 h-4" />
+                  <EditIcon className="w-4 h-4" />
                   Edit
                 </button>
                 {onDelete && (

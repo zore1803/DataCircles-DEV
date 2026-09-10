@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import SearchIcon from "../common/SearchIcon";
 import {
-  Edit3,
   X,
   Building2,
   MapPin,
@@ -15,9 +14,10 @@ import {
   Check,
   Menu,
   ArrowLeft,
-  List,
   LayoutGrid,
 } from "lucide-react";
+import ListIcon from "../common/ListIcon";
+import EditIcon from "../common/EditIcon";
 
 const FolderIcon = ({ className = "h-8 w-8" }) => (
   <svg viewBox="0 0 40 34" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -92,7 +92,7 @@ const FolderCompanyCard = ({ company, query, onOpen, onEdit, onRemove }) => (
           className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
           title="Open company to edit"
         >
-          <Edit3 className="h-3.5 w-3.5" />
+          <EditIcon className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => onRemove(company)}
@@ -155,7 +155,7 @@ const FolderCompanyRow = ({ company, query, onOpen, onEdit, onRemove }) => (
         className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
         title="Open company to edit"
       >
-        <Edit3 className="h-3.5 w-3.5" />
+        <EditIcon className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={() => onRemove(company)}
@@ -645,7 +645,7 @@ const Hotlist = () => {
                 className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${folderViewMode === "list" ? "text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
                 title="List View"
               >
-                <List className="w-4 h-4" />
+                <ListIcon className="w-4 h-4" />
               </button>
             </div>
 
@@ -809,7 +809,7 @@ const Hotlist = () => {
                   onClick={() => startEdit(folder)}
                   className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
                 >
-                  <Edit3 className="h-3.5 w-3.5" />
+                  <EditIcon className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => deleteFolder(folder._id)}

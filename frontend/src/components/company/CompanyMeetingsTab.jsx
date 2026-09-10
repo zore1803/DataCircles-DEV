@@ -9,7 +9,6 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
-  Users,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -18,9 +17,7 @@ import {
   PinOff,
   AlarmClock,
   EyeOff,
-  X,
-  Eye,
-  Edit3, ArrowUp, ArrowDown } from "lucide-react";
+  X, ArrowUp, ArrowDown } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
 import API from "../../services/api";
@@ -41,6 +38,9 @@ import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
 
 import SearchIcon from "../common/SearchIcon";
+import TeamIcon from "../common/TeamIcon";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 const MEETING_TYPE_LABELS = { "in-person": "In-person", "video-call": "Video Call", "phone-call": "Phone Call" };
 const MEETING_STATUS_LABELS = { scheduled: "Scheduled", completed: "Completed", cancelled: "Cancelled", "no-show": "No-show" };
 const MEETING_FILTER_COLUMNS = [
@@ -68,8 +68,8 @@ const UpcomingMeetingsIcon = ({ size = 20, ...props }) => (
 );
 
 const ListViewIcon = ({ size = 20, ...props }) => (
-  <svg width={size} height={size} viewBox="56.5 16.9167 15 14.167" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M60.6667 17.3334H71.5V19.0001H60.6667V17.3334ZM56.5 16.9167H59V19.4167H56.5V16.9167ZM56.5 22.7501H59V25.2501H56.5V22.7501ZM56.5 28.5834H59V31.0834H56.5V28.5834ZM60.6667 23.1667H71.5V24.8334H60.6667V23.1667ZM60.6667 29.0001H71.5V30.6667H60.6667V29.0001Z" fill="currentColor" />
+  <svg width={size} height={size * (18 / 21)} viewBox="0 0 21 18" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M6.13333 13.1C5.58333 13.1 5.1125 12.9042 4.72083 12.5125C4.32917 12.1208 4.13333 11.65 4.13333 11.1V2C4.13333 1.45 4.32917 0.979167 4.72083 0.5875C5.1125 0.195833 5.58333 0 6.13333 0H18.1333C18.6833 0 19.1542 0.195833 19.5458 0.5875C19.9375 0.979167 20.1333 1.45 20.1333 2V11.1C20.1333 11.65 19.9375 12.1208 19.5458 12.5125C19.1542 12.9042 18.6833 13.1 18.1333 13.1H6.13333ZM6.13333 11.1H18.1333V2H6.13333V11.1ZM15.1333 6C15.4167 6 15.6542 5.90417 15.8458 5.7125C16.0375 5.52083 16.1333 5.28333 16.1333 5C16.1333 4.71667 16.0375 4.47917 15.8458 4.2875C15.6542 4.09583 15.4167 4 15.1333 4H9.10833C8.825 4 8.59167 4.09583 8.40833 4.2875C8.225 4.47917 8.13333 4.71667 8.13333 5C8.13333 5.28333 8.22917 5.52083 8.42083 5.7125C8.6125 5.90417 8.85 6 9.13333 6H15.1333ZM12.1333 9C12.4167 9 12.6542 8.90417 12.8458 8.7125C13.0375 8.52083 13.1333 8.28333 13.1333 8C13.1333 7.71667 13.0375 7.47917 12.8458 7.2875C12.6542 7.09583 12.4167 7 12.1333 7H9.10833C8.825 7 8.59167 7.09583 8.40833 7.2875C8.225 7.47917 8.13333 7.71667 8.13333 8C8.13333 8.28333 8.22917 8.52083 8.42083 8.7125C8.6125 8.90417 8.85 9 9.13333 9H12.1333ZM3.58333 17.975C3.03333 18.0583 2.54167 17.9333 2.10833 17.6C1.675 17.2667 1.41667 16.825 1.33333 16.275L0.00833333 6.375C-0.025 6.09167 0.0416667 5.84167 0.208333 5.625C0.375 5.40833 0.6 5.28333 0.883333 5.25C1.15 5.21667 1.39167 5.27917 1.60833 5.4375C1.825 5.59583 1.95 5.81667 1.98333 6.1L3.38333 16L10.2333 15.05L14.3333 14.475C14.6333 14.425 14.9 14.5 15.1333 14.7C15.3667 14.9 15.4833 15.1583 15.4833 15.475C15.4833 15.725 15.4 15.9458 15.2333 16.1375C15.0667 16.3292 14.8583 16.4417 14.6083 16.475L3.58333 17.975Z" fill="currentColor" />
   </svg>
 );
 
@@ -877,7 +877,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
       {/* Meeting list or empty state */}
       {!isLoading && meetings.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Users size={28} className="mb-3 text-gray-400" />
+          <TeamIcon className="w-7 h-7 mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualMeetingFormOpen(true)}
@@ -1154,7 +1154,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                               }}
                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                             >
-                              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               View Meeting
                             </button>
                             <button
@@ -1165,7 +1165,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                               }}
                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                             >
-                              <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Edit Meeting
                             </button>
                             <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -1733,7 +1733,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                               style={{ marginLeft: 12, padding: 4 }}
                               title="View meeting"
                             >
-                              <Eye size={16} style={{ color: "#78788D" }} />
+                              <EyeIcon size={16} style={{ color: "#78788D" }} />
                             </button>
                           </div>
                         </div>
@@ -1978,7 +1978,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                               style={{ marginLeft: 12, padding: 4 }}
                               title="View meeting"
                             >
-                              <Eye size={16} style={{ color: "#78788D" }} />
+                              <EyeIcon size={16} style={{ color: "#78788D" }} />
                             </button>
                           </div>
                         </div>

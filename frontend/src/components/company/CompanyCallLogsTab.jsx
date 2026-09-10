@@ -16,8 +16,6 @@ import {
   Pin,
   PinOff,
   EyeOff,
-  Eye,
-  Edit3,
   X,
   Clock,
   Table2,
@@ -43,6 +41,8 @@ import { bulkDelete } from "../../utils/bulkOperations";
 import useFillToBottom from "../../hooks/useFillToBottom";
 import AppToaster from "../AppToaster";
 import SearchIcon from "../common/SearchIcon";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 const CALL_TYPE_LABELS = { Outbound: "Outbound", Inbound: "Inbound" };
 const CALL_STATUS_LABELS = {
@@ -784,7 +784,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         title="Edit call"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <EditIcon className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setLogToDelete(log)}
@@ -1066,7 +1066,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                               }}
                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                             >
-                              <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               View Call
                             </button>
                             <button
@@ -1077,7 +1077,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                               }}
                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                             >
-                              <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                              <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                               Edit Call
                             </button>
                             <div className="w-full border-t border-[#F1F1F5] my-0.5" />

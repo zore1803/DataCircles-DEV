@@ -9,14 +9,12 @@ import { createPortal } from "react-dom";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
-  Edit2,
   Tag,
   IndianRupee,
   Building2,
   ChevronsUpDown,
   ChevronUp,
   ChevronDown,
-  Eye,
   Pin,
   PinOff,
   EyeOff,
@@ -31,6 +29,8 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 // The app scales its desktop layout via a dynamic CSS `zoom` on <html> (App.jsx).
 // getBoundingClientRect() returns UNSCALED layout coordinates while portal overlays on
@@ -795,7 +795,7 @@ export default function DealsTable({
                         }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                       >
-                        <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                        <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                         Quick View
                       </button>
                       {permission === "read-write" && (
@@ -809,7 +809,7 @@ export default function DealsTable({
                             }}
                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Edit Deal
                           </button>
                           <div className="w-full border-t border-[#F1F1F5] my-0.5" />

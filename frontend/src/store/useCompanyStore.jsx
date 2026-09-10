@@ -6,7 +6,7 @@ const useCompanyStore = create((set, get) => ({
   searchTerm: "",
   filterIndustry: "",
   activeFilters: [],
-  sortConfig: { key: "name", direction: "asc" },
+  sortConfig: { key: null, direction: null },
   pagination: {
     currentPage: 1,
     totalPages: 0,

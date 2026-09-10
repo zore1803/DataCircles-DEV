@@ -1,7 +1,8 @@
 import DeleteIcon from "../common/DeleteIcon";
 import React, { useEffect, useState } from "react";
-import { Pencil, Printer, X } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import API from "../../services/api";
+import EditIcon from "../common/EditIcon";
 
 // Same server-rendered-PDF approach as Accounting.jsx's InvoiceViewer: fetch
 // the actual PDF (backend/utils/purchaseDocumentPdf.js) and show it in an
@@ -104,7 +105,7 @@ const PurchaseOrderPreview = ({ purchaseOrder, isOpen, onClose, onEdit, onDelete
                 title="Edit"
                 className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
               >
-                <Pencil className="w-4 h-4" />
+                <EditIcon className="w-4 h-4" />
               </button>
             )}
             <button

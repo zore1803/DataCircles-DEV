@@ -17,12 +17,10 @@ import toast from 'react-hot-toast';
 import HighlightText from "../common/HighlightText";
 import { 
   StickyNote,
-  Edit3,
   Clock,
   User,
   Save,
   X,
-  Eye,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 import DataTable from "../common/DataTable";
@@ -36,6 +34,8 @@ import SearchIcon from "../common/SearchIcon";
 import { useRef } from "react";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 const NOTE_FILTER_COLUMNS = [{ key: "author", label: "Author" }];
 
@@ -79,14 +79,14 @@ const NoteGridSkeleton = () => {
 };
 
 const GridViewIcon = ({ size = 20, ...props }) => (
-  <svg width={size} height={size} viewBox="12 12 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M17.8331 28.6669V19.4794C17.8331 19.021 17.9997 18.6322 18.3331 18.3127C18.6664 17.9933 19.0622 17.8335 19.5206 17.8335H28.6664C29.1247 17.8335 29.5171 17.9967 29.8435 18.3231C30.1699 18.6495 30.3331 19.0419 30.3331 19.5002V26.1669L26.1664 30.3335H19.4997C19.0414 30.3335 18.649 30.1704 18.3226 29.844C17.9963 29.5176 17.8331 29.1252 17.8331 28.6669ZM13.6872 17.2085C13.6039 16.7502 13.6942 16.337 13.9581 15.969C14.2219 15.6009 14.5831 15.3752 15.0414 15.2919L24.0831 13.6877C24.5414 13.6044 24.9546 13.6947 25.3226 13.9585C25.6907 14.2224 25.9164 14.5835 25.9997 15.0419L26.2081 16.1669H24.4997L24.3539 15.3335L15.3331 16.9377L16.1664 21.646V27.4585C15.9442 27.3335 15.7532 27.1669 15.5935 26.9585C15.4338 26.7502 15.3331 26.5141 15.2914 26.2502L13.6872 17.2085ZM19.4997 19.5002V28.6669H25.3331V25.3335H28.6664V19.5002H19.4997Z" fill="currentColor" />
+  <svg width={size} height={size} viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M7.011 7.01029V18.0103H14.011V15.0103C14.011 14.727 14.1068 14.4895 14.2985 14.2978C14.4902 14.1061 14.7277 14.0103 15.011 14.0103H18.011V7.01029H7.011ZM5.011 18.0103V6.98529C5.011 6.43529 5.211 5.96863 5.611 5.58529C6.011 5.20196 6.486 5.01029 7.036 5.01029H18.011C18.561 5.01029 19.0318 5.20613 19.4235 5.59779C19.8152 5.98946 20.011 6.46029 20.011 7.01029V14.1853C20.011 14.452 19.961 14.7061 19.861 14.9478C19.761 15.1895 19.6193 15.402 19.436 15.5853L15.586 19.4353C15.4027 19.6186 15.1902 19.7603 14.9485 19.8603C14.7068 19.9603 14.4527 20.0103 14.186 20.0103H7.011C6.461 20.0103 5.99017 19.8145 5.5985 19.4228C5.20683 19.0311 5.011 18.5603 5.011 18.0103ZM0.036 4.26029C-0.064 3.71029 0.0443333 3.21446 0.361 2.77279C0.677667 2.33113 1.111 2.06029 1.661 1.96029L12.511 0.0352941C13.0443 -0.0647059 13.5277 0.0477941 13.961 0.372794C14.3943 0.697794 14.6777 1.12696 14.811 1.66029L14.986 2.43529C15.0693 2.76863 15.0193 3.03529 14.836 3.23529C14.6527 3.43529 14.436 3.55196 14.186 3.58529C13.936 3.61863 13.6985 3.57279 13.4735 3.44779C13.2485 3.32279 13.0943 3.09363 13.011 2.76029L12.836 2.01029L2.011 3.93529L3.511 12.5353C3.561 12.8186 3.511 13.0728 3.361 13.2978C3.211 13.5228 2.99433 13.6603 2.711 13.7103C2.42767 13.7603 2.17767 13.7061 1.961 13.5478C1.74433 13.3895 1.611 13.1686 1.561 12.8853L0.036 4.26029Z" fill="currentColor" />
   </svg>
 );
 
 const ListViewIcon = ({ size = 20, ...props }) => (
-  <svg width={size} height={size} viewBox="56.5 14.9165 15 14.167" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M60.6667 15.3332H71.5V16.9998H60.6667V15.3332ZM56.5 14.9165H59V17.4165H56.5V14.9165ZM56.5 20.7498H59V23.2498H56.5V20.7498ZM56.5 26.5832H59V29.0832H56.5V26.5832ZM60.6667 21.1665H71.5V22.8332H60.6667V21.1665ZM60.6667 26.9998H71.5V28.6665H60.6667V26.9998Z" fill="currentColor" />
+  <svg width={size} height={size * (18 / 21)} viewBox="0 0 21 18" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M6.13333 13.1C5.58333 13.1 5.1125 12.9042 4.72083 12.5125C4.32917 12.1208 4.13333 11.65 4.13333 11.1V2C4.13333 1.45 4.32917 0.979167 4.72083 0.5875C5.1125 0.195833 5.58333 0 6.13333 0H18.1333C18.6833 0 19.1542 0.195833 19.5458 0.5875C19.9375 0.979167 20.1333 1.45 20.1333 2V11.1C20.1333 11.65 19.9375 12.1208 19.5458 12.5125C19.1542 12.9042 18.6833 13.1 18.1333 13.1H6.13333ZM6.13333 11.1H18.1333V2H6.13333V11.1ZM15.1333 6C15.4167 6 15.6542 5.90417 15.8458 5.7125C16.0375 5.52083 16.1333 5.28333 16.1333 5C16.1333 4.71667 16.0375 4.47917 15.8458 4.2875C15.6542 4.09583 15.4167 4 15.1333 4H9.10833C8.825 4 8.59167 4.09583 8.40833 4.2875C8.225 4.47917 8.13333 4.71667 8.13333 5C8.13333 5.28333 8.22917 5.52083 8.42083 5.7125C8.6125 5.90417 8.85 6 9.13333 6H15.1333ZM12.1333 9C12.4167 9 12.6542 8.90417 12.8458 8.7125C13.0375 8.52083 13.1333 8.28333 13.1333 8C13.1333 7.71667 13.0375 7.47917 12.8458 7.2875C12.6542 7.09583 12.4167 7 12.1333 7H9.10833C8.825 7 8.59167 7.09583 8.40833 7.2875C8.225 7.47917 8.13333 7.71667 8.13333 8C8.13333 8.28333 8.22917 8.52083 8.42083 8.7125C8.6125 8.90417 8.85 9 9.13333 9H12.1333ZM3.58333 17.975C3.03333 18.0583 2.54167 17.9333 2.10833 17.6C1.675 17.2667 1.41667 16.825 1.33333 16.275L0.00833333 6.375C-0.025 6.09167 0.0416667 5.84167 0.208333 5.625C0.375 5.40833 0.6 5.28333 0.883333 5.25C1.15 5.21667 1.39167 5.27917 1.60833 5.4375C1.825 5.59583 1.95 5.81667 1.98333 6.1L3.38333 16L10.2333 15.05L14.3333 14.475C14.6333 14.425 14.9 14.5 15.1333 14.7C15.3667 14.9 15.4833 15.1583 15.4833 15.475C15.4833 15.725 15.4 15.9458 15.2333 16.1375C15.0667 16.3292 14.8583 16.4417 14.6083 16.475L3.58333 17.975Z" fill="currentColor" />
   </svg>
 );
 const getNoteFieldValue = (note, key) => {
@@ -369,14 +369,14 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
                     onClick={() => { setMenuOpen(false); setMenuPos(null); onView(note); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     View Note
                   </button>
                   <button
                     onClick={() => { setMenuOpen(false); setMenuPos(null); onEdit(note); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Edit Note
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -904,8 +904,8 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
   const noteActionButtons = (note) => (
     <RowActionsMenu
       actions={[
-        { label: "View", icon: Eye, onClick: () => handleView(note) },
-        { label: "Edit", icon: Edit3, onClick: () => handleEdit(note) },
+        { label: "View", icon: EyeIcon, onClick: () => handleView(note) },
+        { label: "Edit", icon: EditIcon, onClick: () => handleEdit(note) },
         { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => handleDelete(note._id) },
       ]}
     />
@@ -1067,7 +1067,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              <GridViewIcon size={20} />
+              <GridViewIcon size={18} />
             </button>
             <button
               onClick={() => setViewMode("list")}
@@ -1078,7 +1078,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              <ListViewIcon size={15} />
+              <ListViewIcon size={18} />
             </button>
           </div>
           <button

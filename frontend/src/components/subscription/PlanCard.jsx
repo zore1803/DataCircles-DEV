@@ -1,11 +1,12 @@
 import PlusIcon from "../common/PlusIcon";
 ﻿import React, { useState } from "react";
-import { Check, ArrowUp, ArrowDown, CreditCard, Gift, Sparkles, Eye, ChevronDown, ChevronUp, Minus, X } from "lucide-react";
+import { Check, ArrowUp, ArrowDown, CreditCard, Gift, Sparkles, ChevronDown, ChevronUp, Minus, X } from "lucide-react";
 import FeaturesModal from "./FeaturesModal";
 import RewardAvailabilityBadge from "./RewardAvailabilityBadge";
 import { ruleForProduct, discountForItem, isCouponStillRecurring } from "../../utils/couponHelpers";
 import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES, resolveBaseCardAction } from "../../utils/subscriptionHelpers";
 import { useSubscription } from "../../contexts/SubscriptionContext";
+import EyeIcon from "../common/EyeIcon";
 
 const PlanCard = ({
   plan,
@@ -411,7 +412,7 @@ const PlanCard = ({
               onClick={() => setShowFeaturesModal(true)}
               className={`flex items-center gap-1.5 text-xs font-medium ${styles.viewMoreButton} pl-6 py-2 rounded-md transition-colors`}
             >
-              <Eye className="w-3.5 h-3.5" />
+              <EyeIcon className="w-3.5 h-3.5" />
               View all {plan.features.length} features
             </button>
           )}

@@ -22,12 +22,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Clock,
-  Edit,
   CheckCircle,
   AlertCircle,
   User,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import EditIcon from "../common/EditIcon";
 
 // ============================================================================
 // 1. PIXEL-PERFECT CARD COMPONENT FOR TASKS
@@ -110,7 +110,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete, selected = false, 
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors text-left"
                 >
-                  <Edit className="w-3 h-3" /> Edit
+                  <EditIcon className="w-3 h-3" /> Edit
                 </button>
                 <button
                   onClick={(e) => {

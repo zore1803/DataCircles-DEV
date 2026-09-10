@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Edit3,
   Save,
   Building,
   ChevronDown,
@@ -22,6 +21,7 @@ import {
   Flag,
   User as UserIcon,
 } from "lucide-react";
+import EditIcon from "../common/EditIcon";
 
 // Compact searchable picker for Contact/Deal — a plain <select> with 15+
 // options has no search and pops open as a tall, unstyled native list (see
@@ -823,7 +823,7 @@ const CompanyTaskForm = ({
                 className="w-8 h-8 flex items-center justify-center text-[#1F2937] hover:bg-gray-100 rounded-full transition-colors"
                 title="Edit Task"
               >
-                <Edit3 className="w-4 h-4" />
+                <EditIcon className="w-4 h-4" />
               </button>
             )}
 

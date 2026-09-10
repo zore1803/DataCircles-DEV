@@ -1,8 +1,9 @@
 import DeleteIcon from "../common/DeleteIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import React, { useEffect, useState } from "react";
-import { Pencil, Printer, X } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import API from "../../services/api";
+import EditIcon from "../common/EditIcon";
 
 // Server-rendered-PDF preview, same approach as PurchaseReturnPreview.jsx:
 // fetch the actual PDF (backend/utils/htmlDocumentPdf.js, type "salesReturn")
@@ -84,7 +85,7 @@ const SalesReturnPreview = ({ salesReturn, isOpen, onClose, onEdit, onDelete }) 
             <div className="flex items-center gap-1">
               {onEdit && (
                 <button onClick={onEdit} title="Edit" className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors">
-                  <Pencil className="w-4 h-4" />
+                  <EditIcon className="w-4 h-4" />
                 </button>
               )}
               <button

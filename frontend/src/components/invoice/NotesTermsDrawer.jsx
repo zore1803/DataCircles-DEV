@@ -3,9 +3,10 @@ import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronDown, Check, Pencil, ArrowLeft } from "lucide-react";
+import { X, ChevronDown, Check, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
+import EditIcon from "../common/EditIcon";
 
 /*
  * Right-hand drawer for the saved Notes / Terms blocks that print in a
@@ -389,7 +390,7 @@ const NotesTermsDrawer = ({
                           title="Edit"
                           className="p-1.5 rounded-lg text-[#525866] hover:bg-gray-100 transition-colors"
                         >
-                          <Pencil className="w-4 h-4" />
+                          <EditIcon className="w-4 h-4" />
                         </button>
                         <button
                           type="button"

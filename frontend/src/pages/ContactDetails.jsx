@@ -21,12 +21,10 @@ import {
   Twitter,
   Linkedin,
   Instagram,
-  Edit2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   BriefcaseBusiness,
-  Eye,
   CheckSquare,
   StickyNote,
   CopyPlus,
@@ -42,6 +40,8 @@ import StatTile from "../components/common/StatTile";
 import StatTileSkeleton from "../components/common/StatTileSkeleton";
 import Skeleton from "../components/common/Skeleton";
 import PageSkeleton from "../components/common/PageSkeleton";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 // The contact page mirrors CompanyProfilePage's shape (header strip, one pill
 // tab bar, KPI row, full-width tab bodies) so moving between a company and one
@@ -556,8 +556,8 @@ const ContactDetailsPage = () => {
                     }}
                     className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Eye size={12} className="text-gray-400 lg:hidden" />
-                    <Eye size={14} className="text-gray-400 hidden lg:block" />
+                    <EyeIcon size={12} className="text-gray-400 lg:hidden" />
+                    <EyeIcon size={14} className="text-gray-400 hidden lg:block" />
                     {showStats ? "Hide KPIs" : "Unhide KPIs"}
                   </button>
                   {/* Edit: mobile-only entry, folded in here instead of its own button */}
@@ -568,7 +568,7 @@ const ContactDetailsPage = () => {
                     }}
                     className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Edit2 size={12} className="text-gray-400" />
+                    <EditIcon size={12} className="text-gray-400" />
                     Edit
                   </button>
                   <button
@@ -640,7 +640,7 @@ const ContactDetailsPage = () => {
               onClick={handleEdit}
               className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors"
             >
-              <Edit2 size={13} />
+              <EditIcon size={13} />
               Edit
             </button>
           </div>

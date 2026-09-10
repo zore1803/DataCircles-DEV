@@ -34,7 +34,6 @@ import {
 import {
   TrendingUp,
   TrendingDown,
-  Users,
   Building,
   Briefcase,
   Target,
@@ -396,7 +395,7 @@ const Insights = () => {
     {
       id: "contacts",
       label: "Contacts",
-      icon: <Users className="w-4 h-4" />,
+      icon: <TeamIcon className="w-4 h-4" />,
       color: "text-green-600",
       bgColor: "bg-green-50",
     },
@@ -1328,7 +1327,7 @@ const Insights = () => {
           <StatCard
             title="Total Contacts"
             value={filteredData.filteredContacts.length}
-            icon={<Users className="w-6 h-6" />}
+            icon={<TeamIcon className="w-6 h-6" />}
             color="text-blue-600"
             bgColor="bg-blue-50"
             change={monthOverMonthChange(filteredData.filteredContacts, "createdAt")}
@@ -2036,7 +2035,7 @@ const Insights = () => {
           <StatCard
             title="Total Contacts"
             value={totalContacts}
-            icon={<Users className="w-6 h-6" />}
+            icon={<TeamIcon className="w-6 h-6" />}
             color="text-blue-600"
             bgColor="bg-blue-50"
             change={totalContactsChange}
@@ -2502,7 +2501,7 @@ const Insights = () => {
               onClick: () => reviewContacts(followUpContacts.map((c) => c._id)),
             },
             {
-              icon: <Users className="w-4 h-4" />,
+              icon: <TeamIcon className="w-4 h-4" />,
               iconBg: "rgba(0, 133, 255, 0.1)",
               iconColor: "#0085FF",
               title: `${noOwnerContacts.length} Contacts with no owner`,
@@ -4358,7 +4357,7 @@ const Insights = () => {
           <StatCard
             title="Active Vendors"
             value={activeVendors}
-            icon={<Users className="w-6 h-6" />}
+            icon={<TeamIcon className="w-6 h-6" />}
             color="text-purple-600"
             change={activeVendorsChange}
             changeLabel="vs last month"
@@ -5690,7 +5689,7 @@ const Insights = () => {
           <StatCard
             title="Active Vendors"
             value={activeVendorsCount}
-            icon={<Users className="w-6 h-6" />}
+            icon={<TeamIcon className="w-6 h-6" />}
             color="text-orange-600"
             change={activeVendorsChangePurch}
             changeLabel="vs last month"
@@ -7112,3 +7111,4 @@ const Insights = () => {
 
 export default Insights;
 import PageSkeleton from "../components/common/PageSkeleton";
+import TeamIcon from "../components/common/TeamIcon";

@@ -8,17 +8,17 @@ import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
 import { 
   StickyNote,
-  Edit3,
   Clock,
   User,
   Save,
-  X,
-  Eye
+  X
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
 
 import SearchIcon from "../common/SearchIcon";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 // Custom Quill modules and formats configuration
 const quillModules = {
   toolbar: [
@@ -128,14 +128,14 @@ const NoteCard = ({ note, onEdit, onDelete, onView, contactName }) => {
             className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
             title="View"
           >
-            <Eye className="w-4 h-4" />
+            <EyeIcon className="w-4 h-4" />
           </button>
           <button
             onClick={() => onEdit(note)}
             className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
             title="Edit"
           >
-            <Edit3 className="w-4 h-4" />
+            <EditIcon className="w-4 h-4" />
           </button>
           <button
             onClick={() => onDelete(note._id)}

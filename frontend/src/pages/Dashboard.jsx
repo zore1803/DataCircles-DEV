@@ -8,7 +8,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid, Tooltip } from "recharts";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import CrmHealthGauge from "../components/dashboard/CrmHealthGauge";
-import { TrendingUp, TrendingDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Pin, PinOff, EyeOff, X, CheckSquare, Building2, Users, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Pin, PinOff, EyeOff, X, CheckSquare, Building2, Users, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
 import VideoIcon from "../components/common/VideoIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
@@ -108,6 +108,8 @@ import MeetingsInformation from "../components/dashboard/MeetingsInformation";
 import logo from "/DataCircles.png";
 
 import SearchIcon from "../components/common/SearchIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 // The four KPI icons below are each authored at a different native aspect
 // ratio (22x18, 19x18, 22x19, 18x17). They used to render at `width={size}`
 // with a height computed from that ratio, so the "size" prop only ever
@@ -706,7 +708,7 @@ function Dashboard() {
                             }}
                             className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <Eye className="w-4 h-4 text-[#1C1B1F]" />
+                            <EyeIcon className="w-4 h-4 text-[#1C1B1F]" />
                             View Invoice
                           </button>
                           <button
@@ -718,7 +720,7 @@ function Dashboard() {
                             }}
                             className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <Edit2 className="w-4 h-4 text-[#1C1B1F]" />
+                            <EditIcon className="w-4 h-4 text-[#1C1B1F]" />
                             Edit Invoice
                           </button>
                           <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -2045,7 +2047,7 @@ function Dashboard() {
                 onClick={() => setShowBulkInvoiceStatusModal(true)}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button

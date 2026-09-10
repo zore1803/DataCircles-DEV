@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import {
   X,
   GripVertical,
-  Eye,
   EyeOff,
   RotateCcw,
 } from "lucide-react";
@@ -27,6 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import SearchIcon from "./common/SearchIcon";
 import SettingsIcon from "./common/SettingsIcon";
+import EyeIcon from "./common/EyeIcon";
 // Sortable Column Item Component
 const SortableColumnItem = ({ column, onToggleVisibility }) => {
   const {
@@ -106,7 +106,7 @@ const SortableColumnItem = ({ column, onToggleVisibility }) => {
         }`}
       >
         {column.visible ? (
-          <Eye className="w-4 h-4" />
+          <EyeIcon className="w-4 h-4" />
         ) : (
           <EyeOff className="w-4 h-4" />
         )}

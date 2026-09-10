@@ -2,9 +2,10 @@ import DeleteIcon from "../common/DeleteIcon";
 import PdfIcon from "../common/PdfIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
-import { Lock, Loader2, Timer, Settings2, Edit3, X, Check, CalendarDays } from "lucide-react";
+import { Lock, Loader2, Timer, Settings2, X, Check, CalendarDays } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import EditIcon from "../common/EditIcon";
 
 const DEFAULT_TASK_STATUSES = ["Pending", "In Progress", "Completed"];
 const DEFAULT_NOTE_TYPES = ["General Note", "Meeting Note", "Call Note", "Follow-up Note"];
@@ -299,7 +300,7 @@ function SystemDefaultsSettings() {
                           disabled={isSaving}
                           className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-xs border border-blue-200 transition-colors disabled:opacity-50"
                         >
-                          <Edit3 className="w-3 h-3" /> Edit
+                          <EditIcon className="w-3 h-3" /> Edit
                         </button>
                         <button
                           type="button"
@@ -403,7 +404,7 @@ function SystemDefaultsSettings() {
                           disabled={isSaving}
                           className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-xs border border-blue-200 transition-colors disabled:opacity-50"
                         >
-                          <Edit3 className="w-3 h-3" /> Edit
+                          <EditIcon className="w-3 h-3" /> Edit
                         </button>
                         <button
                           type="button"
@@ -507,7 +508,7 @@ function SystemDefaultsSettings() {
                             disabled={isSaving}
                             className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-xs border border-blue-200 transition-colors disabled:opacity-50"
                           >
-                            <Edit3 className="w-3 h-3" /> Edit
+                            <EditIcon className="w-3 h-3" /> Edit
                           </button>
                           <button
                             type="button"

@@ -2,9 +2,10 @@ import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { X, Edit3, Type, Check, RefreshCw, Palette, Eraser, PenTool } from "lucide-react";
+import { X, Type, Check, RefreshCw, Palette, Eraser, PenTool } from "lucide-react";
 import toast from "react-hot-toast";
 import UploadIcon from "../common/UploadIcon";
+import EditIcon from "../common/EditIcon";
 
 const FONT_FAMILIES = [
   { id: "dancing", name: "Dancing Script", fontName: "Dancing Script", className: "font-signature-dancing" },
@@ -556,7 +557,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
               activeTab === "draw" ? "bg-white text-sky-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            <Edit3 className="h-4 w-4" />
+            <EditIcon className="h-4 w-4" />
             Draw Signature
           </button>
 

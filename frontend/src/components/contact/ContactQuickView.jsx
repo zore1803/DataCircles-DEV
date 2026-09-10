@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Maximize2,
   Minimize2,
-  Edit2,
   Mail,
   Building2,
 } from "lucide-react";
@@ -24,6 +23,7 @@ import ProfilePicture from "./ProfilePicture";
 import QuickContactForm from "./QuickContactForm";
 import useContactStore from "../../store/useContactStore";
 import { Link } from "react-router-dom";
+import EditIcon from "../common/EditIcon";
 
 const tabsLeft = ["Details", "Call Logs"];
 const tabsRight = ["Notes", "Tasks", "Meetings", "Calendar"];
@@ -182,7 +182,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
               onClick={() => onEdit(contact)}
               className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap"
             >
-              <Edit2 size={16} />
+              <EditIcon size={16} />
               <span className="hidden sm:inline">Edit</span>
             </button>
           </div>

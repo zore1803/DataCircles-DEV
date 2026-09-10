@@ -14,7 +14,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Edit2,
   EyeOff,
   Pin,
   PinOff,
@@ -45,6 +44,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
+import EditIcon from "../components/common/EditIcon";
 
 /*
  * Sales Subscriptions — recurring billing agreements with a customer (NOT
@@ -160,7 +160,7 @@ const SalesSubscription = () => {
     hasNextPage: false,
     hasPrevPage: false,
   });
-  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
 
@@ -199,9 +199,14 @@ const SalesSubscription = () => {
       const params = new URLSearchParams({
         page: pagination.currentPage,
         limit: pagination.limit,
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
       if (debouncedSearch) params.append("search", debouncedSearch);
       if (statusFilter) params.append("status", statusFilter);
       const res = await API.get(`/sales-subscriptions/pagination?${params.toString()}`);
@@ -756,7 +761,8 @@ const SalesSubscription = () => {
                           <button
                             onClick={() => {
                               setOpenColumnMenuKey(null); setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "asc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "asc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "asc" });
                               setPagination((p) => ({ ...p, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal ${sortConfig.key === vc.key && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -767,7 +773,8 @@ const SalesSubscription = () => {
                           <button
                             onClick={() => {
                               setOpenColumnMenuKey(null); setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "desc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "desc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "desc" });
                               setPagination((p) => ({ ...p, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal ${sortConfig.key === vc.key && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -998,7 +1005,7 @@ const SalesSubscription = () => {
                   onClick={() => setShowBulkActions(true)}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
                 >
-                  <Edit2 className="w-4 h-4 text-blue-600" />
+                  <EditIcon className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button

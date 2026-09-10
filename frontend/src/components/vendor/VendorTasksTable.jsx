@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import StatTile from "../common/StatTile";
-import { Eye, Edit3, ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
+import { ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
@@ -23,6 +23,8 @@ import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import { useRef } from "react";
 import { exportToCSV } from "../../utils/exportToCSV";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 /* Columns offered in the filter panel. `options` seeds the dropdown with the
    schema's full enum so a value is still filterable when no row currently uses
@@ -449,8 +451,8 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
   const taskActionButtons = (task) => (
     <RowActionsMenu
       actions={[
-        { label: "View", icon: Eye, onClick: () => { setSelectedTask(task); setIsTaskModalOpen(true); } },
-        { label: "Edit", icon: Edit3, onClick: () => handleEditTask(task) },
+        { label: "View", icon: EyeIcon, onClick: () => { setSelectedTask(task); setIsTaskModalOpen(true); } },
+        { label: "Edit", icon: EditIcon, onClick: () => handleEditTask(task) },
         { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => { if (window.confirm("Delete this task?")) handleTaskDelete(task._id); } },
       ]}
     />

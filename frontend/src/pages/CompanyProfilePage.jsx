@@ -26,15 +26,12 @@ import {
   Twitter,
   Linkedin,
   Instagram,
-  Edit2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Building2,
   CopyPlus,
   BriefcaseBusiness,
-  Users,
-  Eye,
   Receipt,
   CheckSquare,
   Mail,
@@ -77,7 +74,7 @@ const tabs = [
 
 const newEntryOptions = [
   { label: "New Deal", icon: BriefcaseBusiness, tab: "Deals", create: "deal" },
-  { label: "New Contact", icon: Users, tab: "Contacts", create: "contact" },
+  { label: "New Contact", icon: TeamIcon, tab: "Contacts", create: "contact" },
   { label: "New Invoice", icon: PdfIcon, tab: "Invoices", create: "invoice" },
   { label: "New Notes", icon: StickyNote, tab: "Notes", create: "note" },
   { label: "New Meetings", icon: CalendarIcon, tab: "Meetings", create: "meeting" },
@@ -530,7 +527,7 @@ const CompanyProfilePage = () => {
       const isPast = meeting.scheduledAt && new Date(meeting.scheduledAt) < new Date();
       items.push({
         type: "Meetings",
-        icon: Users,
+        icon: TeamIcon,
         iconClass: isPast
           ? "bg-green-50 text-green-600"
           : "bg-blue-50 text-blue-600",
@@ -1018,8 +1015,8 @@ const CompanyProfilePage = () => {
                     }}
                     className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Eye size={12} className="text-gray-400 lg:hidden" />
-                    <Eye size={14} className="text-gray-400 hidden lg:block" />
+                    <EyeIcon size={12} className="text-gray-400 lg:hidden" />
+                    <EyeIcon size={14} className="text-gray-400 hidden lg:block" />
                     {showStats ? "Hide KPIs" : "Unhide KPIs"}
                   </button>
                   {activeTab === "Deals" && (
@@ -1043,7 +1040,7 @@ const CompanyProfilePage = () => {
                     }}
                     className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Edit2 size={12} className="text-gray-400" />
+                    <EditIcon size={12} className="text-gray-400" />
                     Edit
                   </button>
                   {canManageChildCompany && !parentCompany && (
@@ -1114,7 +1111,7 @@ const CompanyProfilePage = () => {
               onClick={handleEdit}
               className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors"
             >
-              <Edit2 size={13} />
+              <EditIcon size={13} />
               Edit
             </button>
           </div>
@@ -1241,7 +1238,7 @@ const CompanyProfilePage = () => {
                             title="View Deals"
                             className="p-1.5 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
                           >
-                            <Eye size={14} />
+                            <EyeIcon size={14} />
                           </button>
                           <button
                             onClick={() => setActiveTab("Deals")}
@@ -1803,7 +1800,7 @@ const CompanyProfilePage = () => {
                     ) : (
                       upcomingMeetingsList.map((meeting) => (
                         <div key={meeting._id} className="flex items-start gap-2">
-                          <Users size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                          <TeamIcon className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-gray-900 truncate">
                               {meeting.title}
@@ -2060,3 +2057,6 @@ const CompanyProfilePage = () => {
 
 export default CompanyProfilePage;
 import Skeleton from "../components/common/Skeleton";
+import TeamIcon from "../components/common/TeamIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";

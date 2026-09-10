@@ -8,7 +8,6 @@ import {
   LayoutTemplate,
   Hash,
   PenLine,
-  Edit3,
   CheckCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -20,6 +19,7 @@ import {
   buildDocumentHtml,
 } from "../../../../shared/documentTemplates.js";
 import SignatureModal from "../settings/SignatureModal";
+import EditIcon from "../common/EditIcon";
 
 /*
  * Right-hand drawer that gathers everything that governs how a document type
@@ -661,7 +661,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                             className="p-1.5 rounded-lg text-gray-400 hover:bg-sky-50 hover:text-[#0085FF] transition-colors"
                             title="Edit signature"
                           >
-                            <Edit3 className="w-4 h-4" />
+                            <EditIcon className="w-4 h-4" />
                           </button>
                           <button
                             type="button"

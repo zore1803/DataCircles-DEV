@@ -13,7 +13,6 @@ import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X,
   Clock,
-  Users,
   MapPin,
   AlertTriangle,
   CheckCircle2,
@@ -22,9 +21,10 @@ import {
   Lightbulb,
   Timer,
   Flag,
-  Pencil,
   ChevronDown
 } from "lucide-react";
+import TeamIcon from "../common/TeamIcon";
+import EditIcon from "../common/EditIcon";
 
 const initialState = {
   title: "",
@@ -177,7 +177,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
               {selectedUsers.length === 0 ? placeholder : `${selectedUsers.length} participant(s) selected`}
             </span>
           </div>
-          <Users className="w-4 h-4 text-gray-400" />
+          <TeamIcon className="w-4 h-4 text-gray-400" />
         </button>
         {isOpen && (
           <div className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-xl shadow-xl max-h-64 overflow-hidden">
@@ -196,7 +196,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
             <div className="max-h-48 overflow-y-auto">
               {filteredUsers.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
-                  <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <TeamIcon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                   <p className="text-sm">No users found</p>
                 </div>
               ) : (
@@ -861,7 +861,7 @@ const CompanyMeetingForm = ({
                       lumping everyone under one bucket. */}
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Users className="w-3.5 h-3.5" />
+                      <TeamIcon className="w-3.5 h-3.5" />
                       <span>Internal Team</span>
                     </div>
                     <MultiSelectDropdown
@@ -875,7 +875,7 @@ const CompanyMeetingForm = ({
                   {/* Client Contacts */}
                   <div className="space-y-3 pt-2">
                     <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <Users className="w-3.5 h-3.5" />
+                      <TeamIcon className="w-3.5 h-3.5" />
                       <span>Client Contacts</span>
                     </div>
                     <MultiSelectDropdown
@@ -931,7 +931,7 @@ const CompanyMeetingForm = ({
                   onClick={() => setIsEditMode(true)}
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <EditIcon className="w-4 h-4" />
                   Edit Meeting
                 </button>
               ) : (

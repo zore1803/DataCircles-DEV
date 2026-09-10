@@ -13,7 +13,7 @@ import PlusIcon from "../components/common/PlusIcon";
 // edits only affect rewards created AFTER the change (Reward is immutable).
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Gift, Save, Ban, Users, Tag, Clock, Building2, X,
+  Gift, Save, Ban, Tag, Clock, Building2, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { configureAxios } from "../services/api";
@@ -21,6 +21,7 @@ import { referralAdminAPI } from "../services/referralAdminApi";
 import { couponAPI } from "../services/couponApi";
 
 import SearchIcon from "../components/common/SearchIcon";
+import TeamIcon from "../components/common/TeamIcon";
 const REFERRAL_STATUS_BADGE = {
   pending: "bg-[#FDF3E6] text-[#EA9927]",
   qualified: "bg-[#E6F7EF] text-[#1FA971]",
@@ -362,7 +363,7 @@ const ReferralProgramAdmin = () => {
               guessing which table to check. */}
           {overview?.referredBy && (
             <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-2"><Users className="w-4 h-4 text-purple-600" /> Referred by</h3>
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-2"><TeamIcon className="w-4 h-4 text-purple-600" /> Referred by</h3>
               <p className="text-sm text-gray-700">
                 <span className="font-semibold">{overview.referredBy.referrerOrganization?.name || "Another organization"}</span>
                 {" · "}
@@ -378,7 +379,7 @@ const ReferralProgramAdmin = () => {
           {/* Referrals */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100">
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2"><Users className="w-4 h-4 text-purple-600" /> Referrals made</h3>
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2"><TeamIcon className="w-4 h-4 text-purple-600" /> Referrals made</h3>
             </div>
             {(overview?.referralsSent || overview?.referrals || []).length === 0 ? (
               <p className="px-5 py-6 text-sm text-gray-400">This organization hasn't referred anyone yet.</p>

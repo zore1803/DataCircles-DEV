@@ -23,7 +23,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Edit2,
   Truck,
   CheckSquare,
   Pin,
@@ -57,6 +56,7 @@ import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 import UploadIcon from "../components/common/UploadIcon";
+import EditIcon from "../components/common/EditIcon";
 function useOutsideClick(ref, callback) {
   useEffect(() => {
     function handleClickOutside(event) {
@@ -207,8 +207,8 @@ function Vendors() {
   });
 
   const [sortConfig, setSortConfig] = useState({
-    key: "name",
-    direction: "asc",
+    key: null,
+    direction: null,
   });
 
   // Toolbar UI state — same shape as Accounting.jsx's action row.
@@ -711,7 +711,7 @@ function Vendors() {
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
               >
-                <Edit2 className="w-4 h-4 text-gray-400" /> Edit
+                <EditIcon className="w-4 h-4 text-gray-400" /> Edit
               </button>
               <button
                 onClick={() => {
@@ -828,9 +828,14 @@ function Vendors() {
       const params = new URLSearchParams({
         page: pagination.currentPage.toString(),
         limit: pagination.limit.toString(),
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
 
       if (debouncedSearchTerm.trim()) {
         params.append("search", debouncedSearchTerm.trim());
@@ -1224,7 +1229,7 @@ function Vendors() {
                 onClick={() => setShowBulkActions(true)}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
@@ -1760,7 +1765,8 @@ function Vendors() {
                         <button
                           onClick={() => {
                             closeColumnMenu();
-                            setSortConfig({ key: col.id, direction: "asc" });
+                            const isActive = sortConfig.key === col.id && sortConfig.direction === "asc";
+                            setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "asc" });
                             setPagination((prev) => ({ ...prev, currentPage: 1 }));
                           }}
                           className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1771,7 +1777,8 @@ function Vendors() {
                         <button
                           onClick={() => {
                             closeColumnMenu();
-                            setSortConfig({ key: col.id, direction: "desc" });
+                            const isActive = sortConfig.key === col.id && sortConfig.direction === "desc";
+                            setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "desc" });
                             setPagination((prev) => ({ ...prev, currentPage: 1 }));
                           }}
                           className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}

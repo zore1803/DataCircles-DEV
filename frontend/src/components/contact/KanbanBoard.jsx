@@ -376,7 +376,8 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Mail, Edit } from "lucide-react";
+import { Mail } from "lucide-react";
+import EditIcon from "../common/EditIcon";
 
 // ============================================================================
 // 1. PIXEL-PERFECT CARD COMPONENT
@@ -445,7 +446,7 @@ const KanbanCard = ({ contact, isDragging, onEdit, onDelete }) => {
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors text-left"
                 >
-                  <Edit className="w-3 h-3" /> Edit
+                  <EditIcon className="w-3 h-3" /> Edit
                 </button>
                 <button
                   onClick={(e) => {

@@ -3,18 +3,18 @@ import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
-  Edit3,
   Save,
   X,
   Database,
   AlertCircle,
   CheckCircle2,
   Tag,
-  List,
   Info,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
+import ListIcon from "../common/ListIcon";
+import EditIcon from "../common/EditIcon";
 
 const CompanyIndustrySettings = () => {
   const [industries, setIndustries] = useState([]);
@@ -192,7 +192,7 @@ const CompanyIndustrySettings = () => {
       <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="bg-blue-100 p-2 rounded-lg">
-            <List className="w-5 h-5 text-blue-600" />
+            <ListIcon className="w-5 h-5 text-blue-600" />
           </div>
           <h3 className="text-xl font-bold text-gray-900">Custom Industries</h3>
         </div>
@@ -262,7 +262,7 @@ const CompanyIndustrySettings = () => {
                         onClick={() => handleEdit(index)}
                         className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold transition-colors text-sm border border-blue-200"
                       >
-                        <Edit3 className="w-4 h-4" />
+                        <EditIcon className="w-4 h-4" />
                         Edit
                       </button>
                       <button

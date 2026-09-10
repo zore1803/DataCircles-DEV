@@ -13,10 +13,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Edit2,
   Boxes,
   CheckSquare,
-  Eye,
   EyeOff,
   Package,
   Pin,
@@ -54,6 +52,8 @@ import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
@@ -131,7 +131,7 @@ const ViewDetails = ({ item, onRequestClose, onEdit, onDelete }) => {
               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
               title="Edit"
             >
-              <Edit2 className="w-4 h-4" />
+              <EditIcon className="w-4 h-4" />
             </button>
             <button
               type="button"
@@ -495,8 +495,8 @@ function ProductsServices() {
 
   // Sorting state
   const [sortConfig, setSortConfig] = useState({
-    key: "createdAt",
-    direction: "desc",
+    key: null,
+    direction: null,
   });
 
   // Distinct categories across the whole organization. The filter panel's fallback scans
@@ -636,9 +636,14 @@ function ProductsServices() {
       const params = new URLSearchParams({
         page: pagination.currentPage.toString(),
         limit: pagination.limit.toString(),
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
 
       if (debouncedSearchTerm.trim()) {
         params.append("search", debouncedSearchTerm.trim());
@@ -1039,7 +1044,7 @@ function ProductsServices() {
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 160;
             const MARGIN = 8;
-            // 3 items (View, Edit, Delete) + one divider + container padding.
+            // 3 items (View, Delete) + one divider + container padding.
             const MENU_H = 148;
 
             const rect = e.currentTarget.getBoundingClientRect();
@@ -1084,7 +1089,7 @@ function ProductsServices() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 View
               </button>
               <button
@@ -1096,7 +1101,7 @@ function ProductsServices() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
               </button>
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -1243,7 +1248,9 @@ function ProductsServices() {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.sortKey || vc.key, direction: "asc" });
+                              const key = vc.sortKey || vc.key;
+                              const isActive = sortConfig.key === key && sortConfig.direction === "asc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === (vc.sortKey || vc.key) && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1255,7 +1262,9 @@ function ProductsServices() {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.sortKey || vc.key, direction: "desc" });
+                              const key = vc.sortKey || vc.key;
+                              const isActive = sortConfig.key === key && sortConfig.direction === "desc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === (vc.sortKey || vc.key) && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1723,7 +1732,7 @@ function ProductsServices() {
                   onClick={() => setShowBulkActions(true)}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Edit2 className="w-4 h-4 text-blue-600" />
+                  <EditIcon className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button

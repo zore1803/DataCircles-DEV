@@ -18,7 +18,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical,
-  Edit3,
   Save,
   X,
   Layout,
@@ -29,6 +28,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
+import EditIcon from "../common/EditIcon";
 
 const SortableItem = ({ id, children, isDragging }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
@@ -356,7 +356,7 @@ export default function KanbanSettings() {
                                 : "Edit status"
                             }
                           >
-                            <Edit3 className="w-4 h-4" />
+                            <EditIcon className="w-4 h-4" />
                             Edit
                           </button>
                           <button

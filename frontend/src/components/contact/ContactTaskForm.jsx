@@ -11,13 +11,13 @@ import {
   X,
   Clock,
   User,
-  Users,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Edit3,
   Save
 } from "lucide-react";
+import TeamIcon from "../common/TeamIcon";
+import EditIcon from "../common/EditIcon";
 
 const initialState = {
   title: "",
@@ -389,7 +389,7 @@ const handleSubmit = async (e) => {
                       <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl bg-white">
                         {users?.length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
-                            <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                            <TeamIcon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                             <p className="text-sm">No users available</p>
                           </div>
                         ) : (
@@ -494,7 +494,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-6">
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
                       <div className="flex items-center gap-2 mb-3">
-                        <Users className="w-4 h-4 text-gray-500" />
+                        <TeamIcon className="w-4 h-4 text-gray-500" />
                         <span className="text-sm font-semibold text-gray-700">
                           Assigned Users ({assignedUsers.length})
                         </span>
@@ -520,7 +520,7 @@ const handleSubmit = async (e) => {
                       onClick={() => setIsEditMode(true)}
                       className="flex items-center gap-2 px-6 py-3 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-semibold transition-colors"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <EditIcon className="w-4 h-4" />
                       Edit Task
                     </button>
                     <button

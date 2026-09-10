@@ -8,7 +8,6 @@ import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberForma
 import {
   IndianRupeeIcon,
   X,
-  Eye,
   ChevronDown,
   PenLine,
   CheckCircle2,
@@ -16,7 +15,6 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
-  Pencil,
   Maximize2,
   Minimize2,
   ChevronsLeftRight,
@@ -48,6 +46,8 @@ import {
   blankItem,
 } from "./formPrimitives.jsx";
 import FullWidthDocumentPanel from "./FullWidthDocumentPanel.jsx";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 // Function to convert number to words
 function numberToWords(num) {
   const ones = [
@@ -1322,7 +1322,7 @@ const InvoiceForm = ({
                   className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
                   aria-label="Preview invoice"
                 >
-                  <Eye className="w-3.5 h-3.5 text-[#525866]" />
+                  <EyeIcon className="w-3.5 h-3.5 text-[#525866]" />
                   Preview
                 </button>
               )}
@@ -3082,7 +3082,7 @@ const CreateInvoicePanel = ({
                         aria-label={`Rename this ${docName.toLowerCase()}`}
                         className="p-1 rounded-md text-[#99A0AE] hover:text-[#0085FF] hover:bg-[#F0F6FF] transition-colors flex-shrink-0"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <EditIcon className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
@@ -3257,7 +3257,7 @@ const CreateInvoicePanel = ({
               onClick={() => setShowTemplates(true)}
               className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-sm font-medium transition-colors"
             >
-              <Pencil className="w-3.5 h-3.5" />
+              <EditIcon className="w-3.5 h-3.5" />
               Change Template
             </button>
           </div>
@@ -4209,7 +4209,7 @@ const CreateInvoicePanel = ({
               title="Full view"
               className="absolute top-3 right-3 z-10 flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1F2937] text-white text-xs font-medium shadow-lg opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             >
-              <Eye className="w-3.5 h-3.5" />
+              <EyeIcon className="w-3.5 h-3.5" />
               Full view
             </button>
             {/* Fixed-width sheet scaled to fit — resizing zooms the invoice

@@ -13,18 +13,15 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import {
   ChevronDown,
   StickyNote,
-  Edit3,
   Users,
   X,
   Clock,
-  Eye,
   Copy,
   Type,
   Flag,
   CheckCircle,
   Link2,
   Landmark,
-  List,
   ListOrdered,
   Heading1,
   Heading2,
@@ -48,6 +45,9 @@ import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 
 import SearchIcon from "../common/SearchIcon";
+import ListIcon from "../common/ListIcon";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 // Same pill-trigger + rounded-xl checkmark-list popup used for Status/Priority
 // on the Task form, instead of CustomDropdown's plain full-bleed list.
@@ -247,7 +247,7 @@ const QuillToolbar = () => (
         <ListOrdered className="w-4 h-4" />
       </button>
       <button className="ql-list w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
-        <List className="w-4 h-4" />
+        <ListIcon className="w-4 h-4" />
       </button>
       <button className="ql-indent w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
         <AlignLeft className="w-4 h-4" />
@@ -526,7 +526,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
               className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
               title="Edit"
             >
-              <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+              <EditIcon className="w-5 h-5" style={{ color: "#0085FF" }} />
             </button>
             <button
               onClick={() => onDelete?.(note._id)}
@@ -675,7 +675,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
               style={{ width: 20, height: 20 }}
               title="Edit details"
             >
-              <Edit3 className="w-4 h-4" style={{ color: "#0085FF" }} />
+              <EditIcon className="w-4 h-4" style={{ color: "#0085FF" }} />
             </button>
           </div>
 
@@ -1117,14 +1117,14 @@ export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
                     onClick={() => { setMenuOpen(false); setMenuPos(null); onView(note); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     View Note
                   </button>
                   <button
                     onClick={() => { setMenuOpen(false); setMenuPos(null); onEdit(note); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Edit Note
                   </button>
                   {onDuplicate && (

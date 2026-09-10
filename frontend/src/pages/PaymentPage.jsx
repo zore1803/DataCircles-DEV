@@ -9,13 +9,11 @@ import { useNavigate } from "react-router-dom";
 import PaymentReceipt from "../components/vendor/PaymentReceipt";
 import BulkActions from "../components/BulkActions"; // Make sure this exists
 import {
-  Eye,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   IndianRupee,
-  Edit2,
   Truck,
   CheckSquare,
   X,
@@ -35,6 +33,8 @@ import AppToaster from "../components/AppToaster";
 
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 const PaymentPage = () => {
   const [vendors, setVendors] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -75,8 +75,8 @@ const PaymentPage = () => {
 
   // Sorting
   const [sortConfig, setSortConfig] = useState({
-    key: "createdAt",
-    direction: "desc",
+    key: null,
+    direction: null,
   });
 
   const directionOptions = ["IN", "OUT"];
@@ -176,9 +176,14 @@ const PaymentPage = () => {
       const params = new URLSearchParams({
         page: pagination.currentPage,
         limit: pagination.limit,
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
       if (filterDirection) params.append("direction", filterDirection);
 
@@ -308,11 +313,13 @@ const PaymentPage = () => {
       : "bg-[#FCEAEA] text-[#EA4B4B] border-[#F5C7C7]";
   };
 
+  // Cycles asc -> desc -> off
   const handleSort = (key) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-    }));
+    setSortConfig((prev) => {
+      if (prev.key === key && prev.direction === "asc") return { key, direction: "desc" };
+      if (prev.key === key && prev.direction === "desc") return { key: null, direction: null };
+      return { key, direction: "asc" };
+    });
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
   };
 
@@ -711,14 +718,14 @@ const PaymentPage = () => {
                             className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                             title="Preview"
                           >
-                            <Eye className="w-4 h-4" />
+                            <EyeIcon className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleEdit(p)}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Edit"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <EditIcon className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(p?._id)}

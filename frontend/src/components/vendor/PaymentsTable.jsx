@@ -9,8 +9,6 @@ import API from "../../services/api";
 import { useParams } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
 import {
-  Edit,
-  Eye,
   ArrowUpCircle,
   ArrowDownCircle,
   X,
@@ -39,6 +37,8 @@ import { exportToCSV } from "../../utils/exportToCSV";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
 import HighlightText from "../common/HighlightText";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 /* `options` seeds each dropdown with the schema's full enum (models/Payment.js)
    so a value stays filterable even when no current row uses it. */
@@ -572,8 +572,8 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
   const paymentActionButtons = (payment) => (
     <RowActionsMenu
       actions={[
-        { label: "Edit", icon: Edit, onClick: () => handleEditPayment(payment) },
-        { label: "View Receipt", icon: Eye, onClick: () => handleViewReceipt(payment) },
+        { label: "Edit", icon: EditIcon, onClick: () => handleEditPayment(payment) },
+        { label: "View Receipt", icon: EyeIcon, onClick: () => handleViewReceipt(payment) },
         { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => handleQuickDeletePayment(payment) },
       ]}
     />

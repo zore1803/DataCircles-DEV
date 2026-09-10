@@ -11,8 +11,8 @@ import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X, Clock, Users, MapPin,
   AlertTriangle, CheckCircle2, Search, User,
-  Building, Lightbulb, Timer, Flag, Pencil
-} from "lucide-react";
+  Building, Lightbulb, Timer, Flag } from "lucide-react";
+import EditIcon from "../common/EditIcon";
 
 const initialState = {
   title: "",
@@ -503,7 +503,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                     onClick={handleEdit}
                     className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-semibold transition-colors"
                   >
-                    <Pencil className="w-4 h-4" />
+                    <EditIcon className="w-4 h-4" />
                     Edit Meeting
                   </button>
                   {onDelete && (

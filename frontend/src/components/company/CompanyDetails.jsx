@@ -5,7 +5,6 @@ import {
   DollarSign,
   AlertCircle,
   IndianRupee,
-  Eye,
   EyeOff,
   ChevronDown,
   Clock,
@@ -17,6 +16,7 @@ import {
 import API from "../../services/api";
 import { toast } from "react-hot-toast";
 import AppToaster from "../AppToaster";
+import EyeIcon from "../common/EyeIcon";
 
 const CompanyDetails = ({
   data,
@@ -436,7 +436,7 @@ const handleOwnerChange = async (newOwnerId) => {
             {showEmptyFields ? (
               <><EyeOff className="w-3.5 h-3.5" /> Hide Empty Fields</>
             ) : (
-              <><Eye className="w-3.5 h-3.5" /> Show All Fields</>
+              <><EyeIcon className="w-3.5 h-3.5" /> Show All Fields</>
             )}
           </button>
         </div>

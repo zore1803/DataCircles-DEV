@@ -24,11 +24,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Edit2,
   Truck,
   X,
   CheckSquare,
-  Eye,
   EyeOff,
   Share2,
   Clock,
@@ -70,6 +68,8 @@ import SettingsIcon from "../components/common/SettingsIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
@@ -322,8 +322,8 @@ const PurchaseOrderPage = () => {
 
   // Sorting
   const [sortConfig, setSortConfig] = useState({
-    key: "createdAt",
-    direction: "desc",
+    key: null,
+    direction: null,
   });
 
   const statusOptions = [
@@ -464,9 +464,14 @@ const PurchaseOrderPage = () => {
       const params = new URLSearchParams({
         page: pagination.currentPage,
         limit: pagination.limit,
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
 
       const res = await API.get(
@@ -965,14 +970,14 @@ const PurchaseOrderPage = () => {
                     onClick={() => { closeRowMenu(); handleView(po); }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Eye className="w-4 h-4 text-blue-600" />
+                    <EyeIcon className="w-4 h-4 text-blue-600" />
                     View
                   </button>
                   <button
                     onClick={() => { closeRowMenu(); handleEdit(po); }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Edit2 className="w-4 h-4 text-blue-600" />
+                    <EditIcon className="w-4 h-4 text-blue-600" />
                     Edit
                   </button>
                   <button
@@ -1163,7 +1168,9 @@ const PurchaseOrderPage = () => {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.sortKey || vc.key, direction: "asc" });
+                              const key = vc.sortKey || vc.key;
+                              const isActive = sortConfig.key === key && sortConfig.direction === "asc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === (vc.sortKey || vc.key) && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1175,7 +1182,9 @@ const PurchaseOrderPage = () => {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.sortKey || vc.key, direction: "desc" });
+                              const key = vc.sortKey || vc.key;
+                              const isActive = sortConfig.key === key && sortConfig.direction === "desc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === (vc.sortKey || vc.key) && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1613,7 +1622,7 @@ const PurchaseOrderPage = () => {
                   onClick={() => setShowBulkActions(true)}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Edit2 className="w-4 h-4 text-blue-600" />
+                  <EditIcon className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button

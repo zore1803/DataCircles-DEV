@@ -5,7 +5,7 @@ import MoreIcon from "../components/common/MoreIcon";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, ChevronDown, ChevronUp, Eye, EyeOff, Minus,
+  X, ChevronDown, ChevronUp, EyeOff, Minus,
   ChevronLeft, ChevronRight, Pin, PinOff, Package,
   TrendingDown, Boxes, IndianRupee, Wallet, ArrowRight, Check, ArrowUp, ArrowDown } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -28,6 +28,7 @@ import StockMovementModal from "../components/inventory/StockMovementModal";
 import BulkActions from "../components/BulkActions";
 import HighlightText from "../components/common/HighlightText";
 import StatTile from "../components/common/StatTile";
+import EyeIcon from "../components/common/EyeIcon";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -185,7 +186,7 @@ export default function Inventory() {
   const { columns, saveColumns, getVisibleColumns } = useColumnSettings("inventory", defaultColumns);
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
   const [pinnedCols, setPinnedCols] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: "name", direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const [showColumnSettings, setShowColumnSettings] = useState(false);
 
   /* column header menu */
@@ -300,8 +301,13 @@ export default function Inventory() {
       const params = new URLSearchParams();
       params.append("page", pagination.currentPage);
       params.append("limit", pagination.limit);
-      params.append("sortBy", sortConfig.key);
-      params.append("sortOrder", sortConfig.direction);
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
       if (debouncedSearch) params.append("search", debouncedSearch);
       if (stockStatusFilter) params.append("stockStatus", stockStatusFilter);
 
@@ -963,7 +969,7 @@ export default function Inventory() {
                   onClick={() => { setShowStats((p) => !p); setIsMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Eye className="w-4 h-4 text-gray-400" /> {showStats ? "Hide KPIs" : "Unhide KPIs"}
+                  <EyeIcon className="w-4 h-4 text-gray-400" /> {showStats ? "Hide KPIs" : "Unhide KPIs"}
                 </button>
 
                 {/* Stock-status filter — moved in here off the toolbar, where its pill-shaped
@@ -1195,13 +1201,21 @@ export default function Inventory() {
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
-                    onClick={() => { closeColumnMenu(); setSortConfig({ key: col.id, direction: "asc" }); }}
+                    onClick={() => {
+                      closeColumnMenu();
+                      const isActive = sortConfig.key === col.id && sortConfig.direction === "asc";
+                      setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "asc" });
+                    }}
                     className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
                     <ChevronUp className="w-3.5 h-3.5" /> Sort Ascending
                   </button>
                   <button
-                    onClick={() => { closeColumnMenu(); setSortConfig({ key: col.id, direction: "desc" }); }}
+                    onClick={() => {
+                      closeColumnMenu();
+                      const isActive = sortConfig.key === col.id && sortConfig.direction === "desc";
+                      setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "desc" });
+                    }}
                     className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
                     <ChevronDown className="w-3.5 h-3.5" /> Sort Descending

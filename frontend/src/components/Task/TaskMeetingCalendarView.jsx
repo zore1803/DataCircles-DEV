@@ -5,13 +5,13 @@ import React, { useState, useRef, useLayoutEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Users,
   CheckSquare,
   X,
   Loader2,
 } from "lucide-react";
 import SearchIcon from "../common/SearchIcon";
 import HighlightText from "../common/HighlightText";
+import TeamIcon from "../common/TeamIcon";
 
 // Same visual language as CompanyProfilePage's Calendar tab (CompanyCalendar.jsx),
 // but scoped to the whole org instead of one company, and driven by
@@ -71,7 +71,7 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
             onClick={onAddMeeting}
             className="w-full flex items-center gap-2 p-2 text-left hover:bg-gray-50 rounded-lg transition-colors border border-gray-200"
           >
-            <Users className="w-4 h-4 text-gray-600" />
+            <TeamIcon className="w-4 h-4 text-gray-600" />
             <div>
               <div className="text-sm font-medium text-gray-900">Meeting</div>
               <div className="text-xs text-gray-600">Schedule with contacts</div>
@@ -139,7 +139,7 @@ const ActivityListPopup = ({
                   className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
                   onClick={() => onMeetingClick(meeting)}
                 >
-                  <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                  <TeamIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
                   <span className="truncate">
                     <HighlightText text={meeting.title} query={searchTerm} />
                   </span>
@@ -634,7 +634,7 @@ const TaskMeetingCalendarView = ({
                     className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <Users className="w-4 h-4 flex-shrink-0" />
+                      <TeamIcon className="w-4 h-4 flex-shrink-0" />
                       <span className="text-sm font-medium truncate">
                         <HighlightText text={meeting.title} query={searchTerm} />
                       </span>

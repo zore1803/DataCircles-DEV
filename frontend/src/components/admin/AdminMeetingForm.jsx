@@ -14,7 +14,6 @@ import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X,
   Clock,
-  Users,
   AlertTriangle,
   CheckCircle2,
   User,
@@ -25,7 +24,6 @@ import {
   Timer,
   Flag,
   Briefcase,
-  Pencil,
   ChevronDown,
   Heading1,
   Heading2,
@@ -36,7 +34,6 @@ import {
   Underline,
   Strikethrough,
   ListOrdered,
-  List,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -46,6 +43,9 @@ import {
   Code,
   Type,
 } from "lucide-react";
+import TeamIcon from "../common/TeamIcon";
+import ListIcon from "../common/ListIcon";
+import EditIcon from "../common/EditIcon";
 
 // Same toolbar/editor system used by the Notes feature (NoteSection.jsx),
 // reused here so the meeting Description field gets the same rich-text
@@ -87,7 +87,7 @@ const MeetingQuillToolbar = () => (
         <ListOrdered className="w-3.5 h-3.5" />
       </button>
       <button type="button" className="ql-list w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="bullet">
-        <List className="w-3.5 h-3.5" />
+        <ListIcon className="w-3.5 h-3.5" />
       </button>
       <button type="button" className="ql-indent w-6 h-6 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" value="-1">
         <AlignLeft className="w-3.5 h-3.5" />
@@ -475,7 +475,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
             <div className="max-h-48 overflow-y-auto">
               {filteredUsers.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
-                  <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <TeamIcon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                   <p className="text-sm">No users found</p>
                 </div>
               ) : (
@@ -1474,7 +1474,7 @@ const AdminMeetingForm = ({
                   onClick={() => setIsEditMode(true)}
                   className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 transition-colors font-inter flex items-center gap-2"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <EditIcon className="w-4 h-4" />
                   Edit Meeting
                 </button>
               ) : (

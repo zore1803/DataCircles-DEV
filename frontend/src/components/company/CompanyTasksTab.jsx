@@ -19,8 +19,6 @@ import {
   List,
   LayoutGrid,
   X,
-  Eye,
-  Edit3,
   CheckCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -43,6 +41,8 @@ import useFillToBottom from "../../hooks/useFillToBottom";
 import { applyColumnFilters } from "../../utils/advancedFilters";
 
 import SearchIcon from "../common/SearchIcon";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 const TASK_STATUS_OPTIONS = ["Completed", "In-Progress"];
 const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High"];
 const TASK_FILTER_COLUMNS = [
@@ -1178,7 +1178,7 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
                             }}
                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             View Task
                           </button>
                           <button
@@ -1189,7 +1189,7 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
                             }}
                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                           >
-                            <Edit3 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                            <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                             Edit Task
                           </button>
                           <div className="w-full border-t border-[#F1F1F5] my-0.5" />

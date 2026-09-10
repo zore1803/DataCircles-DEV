@@ -21,7 +21,8 @@ import Deals from "./pages/Deals";
 import Invoices from "./pages/Invoices";
 import Proforma from "./pages/PerformaInvoice";
 import Tasks from "./pages/Tasks";
-import Login from "./pages/Login";
+import Login from "./pages/UserLogin";
+import Register from "./pages/UserRegister";
 import UserManagement from "./pages/UserManagement";
 import PrivateRoute from "./components/PrivateRoute";
 import SuperAdminPrivateRoute from "./components/SuperAdminPrivateRoute";
@@ -71,6 +72,7 @@ import PaymentsTimeline from "./pages/PaymentsTimeline";
 import Journals from "./pages/Journals";
 import Expenses from "./pages/Expenses";
 import IndirectIncome from "./pages/IndirectIncome";
+import TeamIcon from "./components/common/TeamIcon";
 
 function ChecklistModal({ showChecklist, setShowChecklist }) {
   const location = useLocation();
@@ -416,6 +418,7 @@ function App() {
         >
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/super-admin/login" element={<SuperAdminLogin />} />
@@ -720,7 +723,7 @@ function App() {
               path="/super-admin/users"
               element={
                 <SuperAdminPrivateRoute>
-                  <Users />
+                  <TeamIcon />
                 </SuperAdminPrivateRoute>
               }
             />

@@ -14,7 +14,6 @@ import {
   ChevronUp,
   Clock,
   Copy,
-  Eye,
   EyeOff,
   Mail,
   MessageCircle,
@@ -48,6 +47,7 @@ import HighlightText from "../components/common/HighlightText";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
 
 const getAncestorZoom = (el) => {
   let z = 1;
@@ -140,7 +140,7 @@ export default function EInvoicing() {
 
   const { columns, saveColumns, getVisibleColumns } = useColumnSettings("e-invoicing", DEFAULT_COLUMNS);
 
-  const [sortConfig, setSortConfig] = useState({ key: "date", direction: "desc" });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const [pinnedColumns, setPinnedColumns] = useState([]);
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
@@ -188,9 +188,11 @@ export default function EInvoicing() {
       const params = new URLSearchParams({
         page: pagination.currentPage,
         limit: pagination.limit,
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      }
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
       const res = await API.get(`/e-invoices/pagination?${params.toString()}`);
       setEInvoices(res.data.eInvoices || EMPTY_LIST);
@@ -432,7 +434,8 @@ export default function EInvoicing() {
                           <button
                             onClick={() => {
                               setOpenColumnMenuKey(null); setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "asc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "asc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "asc" });
                               setPagination((p) => ({ ...p, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -443,7 +446,8 @@ export default function EInvoicing() {
                           <button
                             onClick={() => {
                               setOpenColumnMenuKey(null); setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "desc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "desc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "desc" });
                               setPagination((p) => ({ ...p, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -789,7 +793,7 @@ export default function EInvoicing() {
               className="w-[200px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               <button onClick={() => handleView(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
+                <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
               </button>
               <button onClick={() => handleDownload(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
                 <DownloadIcon className="w-4 h-4 text-[#1C1B1F]" /> Download
@@ -1506,7 +1510,7 @@ function EmptyState({ hasSearch, onClear, onConnect, portalConnected }) {
     return (
       <div className="flex flex-col items-center text-center py-8">
         <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-4">
-          <Eye className="w-6 h-6 text-gray-300" />
+          <EyeIcon className="w-6 h-6 text-gray-300" />
         </div>
         <p className="text-sm font-semibold text-gray-800">No e-invoices match your filters</p>
         <p className="text-xs text-gray-500 mt-1 max-w-sm">

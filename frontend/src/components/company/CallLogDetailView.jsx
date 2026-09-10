@@ -1,9 +1,10 @@
 import CalendarIcon from "../common/CalendarIcon";
 import DeleteIcon from "../common/DeleteIcon";
 import React, { useEffect, useState } from "react";
-import { X, Edit3, Clock, User } from "lucide-react";
+import { X, Clock, User } from "lucide-react";
 import IncomingCallIcon from "../common/IncomingCallIcon";
 import OutgoingCallIcon from "../common/OutgoingCallIcon";
+import EditIcon from "../common/EditIcon";
 
 // Matches the "View Task" quick-drawer style (TaskDetailsModal): a
 // right-anchored slide-in panel with a compact ID-style header, info card,
@@ -70,7 +71,7 @@ const CallLogDetailView = ({ open, log, onClose, onEdit, onDelete }) => {
                 className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
                 title="Edit"
               >
-                <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+                <EditIcon className="w-5 h-5" style={{ color: "#0085FF" }} />
               </button>
             )}
             {onDelete && (
@@ -223,7 +224,7 @@ const CallLogDetailView = ({ open, log, onClose, onEdit, onDelete }) => {
                 style={{ width: 20, height: 20 }}
                 title="Edit notes"
               >
-                <Edit3 className="w-4 h-4" style={{ color: "#0085FF" }} />
+                <EditIcon className="w-4 h-4" style={{ color: "#0085FF" }} />
               </button>
             )}
           </div>

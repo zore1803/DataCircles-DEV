@@ -13,7 +13,6 @@ import {
   Phone,
   TrendingUp,
   ArrowRight,
-  Edit3,
   CheckCircle2,
   XCircle,
   Target,
@@ -23,7 +22,6 @@ import {
   FolderOpen,
   LayoutGrid,
   Info,
-  Eye,
   EyeOff
 } from "lucide-react";
 import AppToaster from "../AppToaster";
@@ -33,6 +31,8 @@ import {
   defaultStatusForStage,
   getLifecycleStageForStatus,
 } from "../../utils/contactConstants";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 // Lifecycle Stage Modal Component  
 const LifecycleStageModal = ({ isOpen, onClose, contact, onUpdate }) => {
@@ -332,7 +332,7 @@ const LifecycleStages = ({ contact, onContactUpdate }) => {
           onClick={() => setShowLifecycleModal(true)}
           className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors text-sm"
         >
-          <Edit3 className="w-3 h-3" />
+          <EditIcon className="w-3 h-3" />
           <span>Edit</span>
         </button>
       </div>
@@ -861,7 +861,7 @@ const BasicDetails = ({ contact, company, deals, contactFieldList = [], onContac
             {showEmptyFields ? (
               <><EyeOff className="w-3.5 h-3.5" /> Hide Empty Fields</>
             ) : (
-              <><Eye className="w-3.5 h-3.5" /> Show All Fields</>
+              <><EyeIcon className="w-3.5 h-3.5" /> Show All Fields</>
             )}
           </button>
         </div>

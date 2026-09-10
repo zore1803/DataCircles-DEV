@@ -8,7 +8,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffe
 import { createPortal } from "react-dom";
 import {
   BookOpen, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pin, PinOff,
-  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Eye, CheckSquare, Loader2, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
+  EyeOff, ArrowDownCircle, ArrowUpCircle, CheckSquare, Loader2, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
@@ -22,6 +22,8 @@ import BulkJournalUpdateModal from "../components/journal/BulkJournalUpdateModal
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import API from "../services/api";
 import * as XLSX from "xlsx";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 /*
  * Table UI parity pass — same pin/drag/search/row-menu infrastructure
@@ -732,7 +734,7 @@ export default function Journals() {
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 onClick={() => { closeMenu(); setEditingJournal(j); setShowQuickAdd(true); }}
               >
-                <Pencil className="w-4 h-4 text-blue-600" /> Edit
+                <EditIcon className="w-4 h-4 text-blue-600" /> Edit
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onClick={() => openPay("payin")}>
                 <ArrowDownCircle className="w-4 h-4 text-green-600" /> You Received
@@ -744,7 +746,7 @@ export default function Journals() {
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 onClick={() => { closeMenu(); setLedgerJournalId(j._id); }}
               >
-                <Eye className="w-4 h-4 text-gray-400" /> Ledger
+                <EyeIcon className="w-4 h-4 text-gray-400" /> Ledger
               </button>
               <div className="h-px bg-gray-100 my-1" />
               {j.status === "active" && (
@@ -1090,7 +1092,7 @@ export default function Journals() {
                 onClick={() => setIsBulkUpdateModalOpen(true)}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Pencil className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
@@ -1446,13 +1448,21 @@ export default function Journals() {
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
                   <button
-                    onClick={() => { closeColumnMenu(); setSortConfig({ key: col.id, direction: "asc" }); }}
+                    onClick={() => {
+                      closeColumnMenu();
+                      const isActive = sortConfig.key === col.id && sortConfig.direction === "asc";
+                      setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "asc" });
+                    }}
                     className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
                     <ChevronUp className="w-3.5 h-3.5" /> Sort Ascending
                   </button>
                   <button
-                    onClick={() => { closeColumnMenu(); setSortConfig({ key: col.id, direction: "desc" }); }}
+                    onClick={() => {
+                      closeColumnMenu();
+                      const isActive = sortConfig.key === col.id && sortConfig.direction === "desc";
+                      setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "desc" });
+                    }}
                     className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
                     <ChevronDown className="w-3.5 h-3.5" /> Sort Descending

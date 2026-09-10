@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Users, ArrowRight, Shield, UserPlus } from "lucide-react";
+import { ArrowRight, Shield, UserPlus } from "lucide-react";
 import SettingsIcon from "../common/SettingsIcon";
+import TeamIcon from "../common/TeamIcon";
 
 const AddUser = () => {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ const AddUser = () => {
           {/* Header Section */}
           <div className="flex items-start gap-4 mb-6">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
-              <Users className="w-7 h-7 text-white" />
+              <TeamIcon className="w-7 h-7 text-white" />
             </div>
             <div className="flex-1">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -75,7 +76,7 @@ const AddUser = () => {
               onClick={handleManageUsers}
               className="group flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
             >
-              <Users className="w-5 h-5" />
+              <TeamIcon className="w-5 h-5" />
               Manage Users
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>

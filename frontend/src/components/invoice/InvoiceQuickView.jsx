@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { X, Edit2, Eye } from "lucide-react";
+import { X } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 const STATUS_OPTIONS = ["Pending", "Sent", "Paid", "Overdue", "Cancelled"];
 
@@ -92,7 +94,7 @@ export default function InvoiceQuickView({ invoice, mode = "view", onClose, onUp
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Edit"
               >
-                <Edit2 className="w-4 h-4" />
+                <EditIcon className="w-4 h-4" />
               </button>
             ) : (
               <button
@@ -103,7 +105,7 @@ export default function InvoiceQuickView({ invoice, mode = "view", onClose, onUp
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                 title="View"
               >
-                <Eye className="w-4 h-4" />
+                <EyeIcon className="w-4 h-4" />
               </button>
             )}
             <button

@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Maximize2,
   Minimize2,
-  Edit2,
   MapPin,
 } from "lucide-react";
 import CompanyDetails from "./CompanyDetails";
@@ -20,6 +19,7 @@ import CompanyCalendar from "./CompanyCalendar";
 import ProfilePicture from "../contact/ProfilePicture";
 import QuickCompanyForm from "./QuickCompanyForm";
 import useCompanyStore from "../../store/useCompanyStore";
+import EditIcon from "../common/EditIcon";
 
 const tabs = ["Notes", "Tasks", "Meetings", "Folder", "Calendar"];
 
@@ -195,7 +195,7 @@ const CompanyQuickView = ({ companyId, onClose, onEdit }) => {
               onClick={() => onEdit(company)}
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
             >
-              <Edit2 size={16} />
+              <EditIcon size={16} />
               Edit
             </button>
           </div>

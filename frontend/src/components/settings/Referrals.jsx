@@ -11,7 +11,6 @@ import {
   Gift,
   Copy,
   Check,
-  Users,
   Send as SendIcon,
   Tag,
   Share2,
@@ -24,6 +23,7 @@ import toast from "react-hot-toast";
 import { subscriptionAPI } from "../../services/subscriptionApi";
 import { formatPrice } from "../../utils/pricingSnapshot";
 import StatTile from "../common/StatTile";
+import TeamIcon from "../common/TeamIcon";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -226,7 +226,7 @@ const Referrals = () => {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-purple-50 text-purple-600">
-              <Users className="w-4 h-4" />
+              <TeamIcon className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900">Invite a friend</h2>
@@ -322,7 +322,7 @@ const Referrals = () => {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 pt-5 pb-3 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-50 text-purple-600">
-              <Users className="w-4 h-4" />
+              <TeamIcon className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-gray-900">People you've referred</h2>
           </div>

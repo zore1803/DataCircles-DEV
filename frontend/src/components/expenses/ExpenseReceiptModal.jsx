@@ -2,10 +2,11 @@ import DownloadIcon from "../common/DownloadIcon";
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, Printer, Share2, Pencil, Mail, MessageCircle, MessageSquare, Copy, Repeat,
+  X, Printer, Share2, Mail, MessageCircle, MessageSquare, Copy, Repeat,
 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import EditIcon from "../common/EditIcon";
 
 /*
  * Receipt viewer for one Expense / Indirect Income entry.
@@ -129,7 +130,7 @@ export default function ExpenseReceiptModal({
                 onClick={() => onEdit(record)}
                 className="h-9 px-3 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium rounded-lg hover:bg-amber-100 transition-colors"
               >
-                <Pencil className="w-3.5 h-3.5" />
+                <EditIcon className="w-3.5 h-3.5" />
                 Edit
               </button>
             )}

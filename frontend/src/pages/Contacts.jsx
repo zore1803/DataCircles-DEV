@@ -15,7 +15,6 @@ import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import {
-  Edit,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -25,7 +24,6 @@ import {
   Mail,
   User,
   RefreshCw,
-  Edit2,
   CheckSquare,
   X,
   Target,
@@ -36,13 +34,12 @@ import {
   Briefcase,
   FolderPlus,
   StickyNote,
-  Eye,
   EyeOff,
   Pin,
   PinOff,
-  Star,
   List,
   ArrowUp, ArrowDown } from "lucide-react";
+import StarIcon from "../components/common/StarIcon";
 import API from "../services/api";
 import ContactFolder from "../components/contact/ContactFolder";
 import ProfilePicture from "../components/contact/ProfilePicture";
@@ -91,6 +88,8 @@ import SettingsIcon from "../components/common/SettingsIcon";
 import TableViewIcon from "../components/common/TableViewIcon";
 import KanbanViewIcon from "../components/common/KanbanViewIcon";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -868,7 +867,7 @@ function Contacts() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Quick View
               </button>
               <button
@@ -879,7 +878,7 @@ function Contacts() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
               </button>
               <button
@@ -911,7 +910,7 @@ function Contacts() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Star className={`w-3.5 h-3.5 ${contact.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                <StarIcon className={`w-3.5 h-3.5 ${contact.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
                 {contact.isStarred ? "Unstar Contact" : "Star Contact"}
               </button>
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -1079,7 +1078,8 @@ function Contacts() {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "asc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "asc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1091,7 +1091,8 @@ function Contacts() {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "desc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "desc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -1147,7 +1148,7 @@ function Contacts() {
                     <HighlightText text={contact.name} query={searchTerm} />
                   </Link>
                   {contact.isStarred && (
-                    <Star className="flex-shrink-0 w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                    <StarIcon className="flex-shrink-0 w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
                   )}
                 </div>
               );
@@ -1990,9 +1991,16 @@ function Contacts() {
       const params = new URLSearchParams({
         page: pagination.currentPage.toString(),
         limit: pagination.limit.toString(),
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        // No column sort applied — show newest-added first, without
+        // marking any header as actively sorted.
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
 
       if (searchTerm.trim()) {
         params.append("search", searchTerm.trim());
@@ -2331,7 +2339,7 @@ function Contacts() {
                 onClick={() => setShowBulkActions(true)}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
@@ -2710,7 +2718,7 @@ function Contacts() {
               onClick={() => setShowBulkActions(true)}
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none transition-colors flex items-center gap-2"
             >
-              <Edit2 className="w-4 h-4" />
+              <EditIcon className="w-4 h-4" />
               Bulk Update
             </button>
 

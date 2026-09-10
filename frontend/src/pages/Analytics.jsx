@@ -21,7 +21,6 @@ import {
   TrendingDown,
   Target,
   CheckCircle2,
-  Users,
   Building,
   Package,
   AlertCircle,
@@ -35,6 +34,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
+import TeamIcon from "../components/common/TeamIcon";
 
 const COLORS = {
   primary: "#3B82F6",
@@ -366,7 +366,7 @@ const Analytics = () => {
           <StatCard
             label="Total Contacts"
             value={summary.totalContacts}
-            icon={Users}
+            icon={TeamIcon}
             color="text-green-600"
           />
           <StatCard
@@ -1006,7 +1006,7 @@ const Analytics = () => {
               <span className="text-sm font-medium text-gray-600">
                 Contacts per Company
               </span>
-              <Users className="w-4 h-4 text-purple-600" />
+              <TeamIcon className="w-4 h-4 text-purple-600" />
             </div>
             <h6 className="text-xl font-bold text-gray-900">
               {summary.totalCompanies > 0

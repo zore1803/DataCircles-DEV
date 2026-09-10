@@ -2,8 +2,9 @@ import DeleteIcon from "../common/DeleteIcon";
 import VideoIcon from "../common/VideoIcon";
 import PlusIcon from "../common/PlusIcon";
 import React from "react";
-import { X, Loader2, Edit3, Users } from "lucide-react";
+import { X, Loader2, Users } from "lucide-react";
 import toast from "react-hot-toast";
+import EditIcon from "../common/EditIcon";
 
 const CircleCheckIcon = (props) => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -93,7 +94,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                 className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
                 title="Edit"
               >
-                <Edit3 className="w-5 h-5" style={{ color: "#0085FF" }} />
+                <EditIcon className="w-5 h-5" style={{ color: "#0085FF" }} />
               </button>
             )}
             <button

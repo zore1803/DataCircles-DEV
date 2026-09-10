@@ -5,7 +5,6 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Building,
   User,
-  Users,
   CreditCard,
   Layout,
   Briefcase,
@@ -56,6 +55,7 @@ import SystemDefaultsSettings from "../components/settings/SystemDefaultsSetting
 import CustomDomain from "../components/settings/CustomDomain";
 import GoogleIntegration, { GoogleGIcon } from "../components/settings/GoogleIntegration";
 import PageSkeleton from "../components/common/PageSkeleton";
+import TeamIcon from "../components/common/TeamIcon";
 
 // Array of cool loading messages relevant for dashboard
 const loadingMessages = [
@@ -220,7 +220,7 @@ const Settings = () => {
     },
     {
       id: "users",
-      icon: <Users className="w-5 h-5" />,
+      icon: <TeamIcon className="w-5 h-5" />,
       label: "User Management",
       description: "Manage user accounts and permissions",
       color: "text-green-600",
@@ -478,7 +478,7 @@ const Settings = () => {
   const categoryIcons = {
     Billing: <CreditCard className="w-5 h-5" />,
     General: <SettingsIcon className="w-4 h-4" />,
-    Team: <Users className="w-5 h-5" />,
+    Team: <TeamIcon className="w-5 h-5" />,
     Customization: <Zap className="w-5 h-5" />,
     Automation: <Workflow className="w-5 h-5" />,
     Support: <HelpCircle className="w-5 h-5" />,

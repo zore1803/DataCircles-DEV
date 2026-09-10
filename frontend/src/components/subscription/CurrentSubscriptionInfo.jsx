@@ -2,11 +2,12 @@ import CalendarIcon from "../common/CalendarIcon";
 // components/subscription/CurrentSubscriptionInfo.jsx
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Users, CreditCard, Clock, Gift, AlertCircle } from "lucide-react";
+import { CreditCard, Clock, Gift, AlertCircle } from "lucide-react";
 import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from '../../utils/subscriptionHelpers';
 import SubscriptionPricingBreakdown from './SubscriptionPricingBreakdown';
 import { useSubscription } from '../../contexts/SubscriptionContext';
 import { subscriptionAPI } from '../../services/subscriptionApi';
+import TeamIcon from "../common/TeamIcon";
 
 const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
   // Canonical future-intent source (Ownership Law 5) — never the legacy
@@ -443,7 +444,7 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
             </span>
             <span className="text-gray-400">•</span>
             <span className="text-gray-600 flex items-center gap-1">
-              <Users className="w-3 h-3" />
+              <TeamIcon className="w-3 h-3" />
               {subscription.userCount} users
             </span>
           </div>

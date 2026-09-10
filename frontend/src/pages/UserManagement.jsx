@@ -8,11 +8,9 @@ import useRazorpay from "../hooks/useRazorpay";
 import { waitForSettlement } from "../utils/waitForSettlement";
 import toast from "react-hot-toast";
 import {
-  Users,
   UserPlus,
   Mail,
   Shield,
-  Edit,
   Copy,
   RefreshCw,
   X,
@@ -20,13 +18,15 @@ import {
   AlertCircle,
   Key,
   Settings,
-  Eye,
   EyeOff,
   Crown,
   Loader2,
   User,
 } from "lucide-react";
 import AppToaster from "../components/AppToaster";
+import TeamIcon from "../components/common/TeamIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 function ConfirmModal({
   isOpen,
@@ -474,7 +474,7 @@ function UserManagement() {
       <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-2xl p-6 mb-8 shadow-lg space-y-5">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-3 rounded-xl shadow-md">
-            <Users className="w-6 h-6 text-white" />
+            <TeamIcon className="w-6 h-6 text-white" />
           </div>
           <h3 className="text-lg font-bold text-blue-900">Seat Usage</h3>
         </div>
@@ -528,14 +528,14 @@ function UserManagement() {
       case "read-write":
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-md text-xs font-semibold">
-            <Edit className="w-3 h-3" />
+            <EditIcon className="w-3 h-3" />
             Edit
           </span>
         );
       case "readonly":
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-semibold">
-            <Eye className="w-3 h-3" />
+            <EyeIcon className="w-3 h-3" />
             View
           </span>
         );
@@ -794,7 +794,7 @@ function UserManagement() {
         <div className="px-6 py-5 border-b-2 border-gray-100 bg-gray-50">
           <div className="flex items-center gap-3">
             <div className="bg-green-100 p-2 rounded-lg">
-              <Users className="w-5 h-5 text-green-600" />
+              <TeamIcon className="w-5 h-5 text-green-600" />
             </div>
             <h3 className="text-lg font-bold text-gray-900">Active Users</h3>
             <span className="ml-auto bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">

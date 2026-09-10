@@ -6,7 +6,6 @@ import {
   Clock,
   User,
   MessageSquare,
-  Edit2,
   ChevronDown
 } from "lucide-react";
 import CellphoneIcon from "../common/CellphoneIcon";
@@ -19,6 +18,7 @@ import toast from 'react-hot-toast';
 import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
+import EditIcon from "../common/EditIcon";
 const callTypeOptions = [
   { value: "Outbound", label: "Outbound", icon: OutgoingCallIcon },
   { value: "Inbound", label: "Inbound", icon: IncomingCallIcon },
@@ -295,7 +295,7 @@ const CallLogs = ({ contactId }) => {
                       }}
                       className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                     >
-                      <Edit2 className="w-3 h-3" />
+                      <EditIcon className="w-3 h-3" />
                     </button>
                     <button
                       onClick={(e) => {

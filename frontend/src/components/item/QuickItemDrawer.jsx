@@ -7,12 +7,12 @@ import {
   X,
   ChevronRight,
   Lock,
-  Edit2,
 } from "lucide-react";
 import ReactQuill from "react-quill-new";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import CustomDropdown from "../common/CustomDropdown";
+import EditIcon from "../common/EditIcon";
 
 const UNIT_OPTIONS = [
   "OTH — OTHERS",
@@ -583,7 +583,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                           <div className="text-xs text-gray-500 mt-0.5">SKU: {v.sku || "N/A"} · ₹{v.sellingPrice} · Stock: {v.stock}</div>
                         </div>
                         <div className="flex gap-1 flex-shrink-0 ml-3">
-                          <button type="button" onClick={() => handleEditVariant(i)} className="text-blue-600 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleEditVariant(i)} className="text-blue-600 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"><EditIcon className="w-4 h-4" /></button>
                           <button type="button" onClick={() => handleRemoveVariant(i)} className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"><DeleteIcon className="w-4 h-4" /></button>
                         </div>
                       </div>

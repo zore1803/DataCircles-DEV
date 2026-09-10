@@ -8,12 +8,10 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Edit2,
   Building2,
   User,
   IndianRupee,
   Send,
-  Eye,
   ExternalLink,
   Clock,
   CheckCircle2,
@@ -22,6 +20,8 @@ import {
 } from "lucide-react";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
 import { Link } from "react-router-dom";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 // Reused from your DealDetail
 const StatusBadge = ({ status }) => {
@@ -121,7 +121,7 @@ const InvoiceMiniRow = ({ invoice, onView, onDownload }) => (
           className="p-1.5 text-gray-500 hover:text-blue-600 rounded hover:bg-white"
           title="View"
         >
-          <Eye size={14} />
+          <EyeIcon size={14} />
         </button>
         <button
           onClick={() => onDownload(invoice._id)}
@@ -259,7 +259,7 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
               onClick={() => onEdit(deal)}
               className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap"
             >
-              <Edit2 size={16} />
+              <EditIcon size={16} />
               <span className="hidden sm:inline">Edit</span>
             </button>
           </div>

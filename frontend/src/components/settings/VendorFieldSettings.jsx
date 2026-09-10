@@ -6,11 +6,9 @@ import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
-  Edit3,
   X,
   AlertCircle,
   CheckCircle2,
-  List,
   Type,
   Hash,
   ChevronDown,
@@ -29,6 +27,8 @@ import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
 import ConfirmDialog from "../common/ConfirmDialog";
 import UploadIcon from "../common/UploadIcon";
+import ListIcon from "../common/ListIcon";
+import EditIcon from "../common/EditIcon";
 
 const VendorFieldSettings = () => {
   const [fields, setFields] = useState([]);
@@ -605,7 +605,7 @@ const VendorFieldSettings = () => {
               </button>
             )}
             <button type="button" onClick={() => handleEdit(index)} className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-semibold text-xs border border-blue-200 transition-colors">
-              <Edit3 className="w-3 h-3" /> Edit
+              <EditIcon className="w-3 h-3" /> Edit
             </button>
             <button type="button" onClick={() => handleDelete(index)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors">
               <DeleteIcon className="w-4 h-4" /> Delete
@@ -1014,7 +1014,7 @@ const VendorFieldSettings = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <div className="bg-blue-100 p-2 rounded-lg">
-              <List className="w-5 h-5 text-blue-600" />
+              <ListIcon className="w-5 h-5 text-blue-600" />
             </div>
             <h3 className="text-xl font-bold text-gray-900">Custom Sections & Fields</h3>
           </div>
@@ -1085,7 +1085,7 @@ const VendorFieldSettings = () => {
                             className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-lg border border-blue-200 shadow-sm transition-colors"
                             title="Rename Section"
                           >
-                            <Edit3 className="w-3 h-3" /> Edit
+                            <EditIcon className="w-3 h-3" /> Edit
                           </button>
                           <button
                             type="button"

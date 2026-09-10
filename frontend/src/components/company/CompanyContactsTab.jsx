@@ -38,7 +38,6 @@ import {
   ChevronUp,
   ChevronDown,
   User,
-  Users,
   Building2,
   Target,
   ExternalLink,
@@ -46,6 +45,7 @@ import {
   PinOff,
   EyeOff,
   X, ArrowUp, ArrowDown } from "lucide-react";
+import TeamIcon from "../common/TeamIcon";
 
 const ContactNameIcon = ({ size = 20, ...props }) => (
   <svg width={size} height={size * (13 / 16)} viewBox="0 0 16 13" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -658,7 +658,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
 
       {!isLoading && contacts.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Users size={28} className="mb-3 text-gray-400" />
+          <TeamIcon className="w-7 h-7 mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualContactFormOpen(true)}

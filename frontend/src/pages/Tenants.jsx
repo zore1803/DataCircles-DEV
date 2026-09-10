@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Building,
-  Users,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -24,6 +23,7 @@ import API, { configureAxios } from "../services/api";
 
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
+import TeamIcon from "../components/common/TeamIcon";
 const Shimmer = () => (
   <div className="animate-pulse space-y-6">
     <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -611,7 +611,7 @@ const Tenants = () => {
           title="Total Users"
           value={summary.totalUsers}
           subtitle="Across all organizations"
-          icon={Users}
+          icon={TeamIcon}
           gradient="bg-gradient-to-br from-orange-500 to-orange-600"
         />
       </div> */}
@@ -786,7 +786,7 @@ const Tenants = () => {
                       <div className="flex flex-col space-y-1">
                         <PlanBadge plan={tenant.plan} />
                         <div className="flex items-center text-xs text-gray-500">
-                          <Users className="w-3 h-3 mr-1" />
+                          <TeamIcon className="w-3 h-3 mr-1" />
                           {tenant.users || 0} users
                         </div>
                       </div>
@@ -960,7 +960,7 @@ const Tenants = () => {
                       </span>
                     </div>
                     <div className="flex items-center text-sm text-gray-600">
-                      <Users className="w-4 h-4 text-gray-500 mr-2" />
+                      <TeamIcon className="w-4 h-4 text-gray-500 mr-2" />
                       <span>
                         {orgToDelete.users || 0} users will be deleted
                       </span>

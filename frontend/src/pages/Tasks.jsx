@@ -22,7 +22,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckSquare,
-  Edit2,
   Users,
   X,
   Clock,
@@ -32,7 +31,6 @@ import {
   Truck,
   CheckCircle,
   Layout,
-  Eye,
   Pin,
   PinOff,
   EyeOff,
@@ -451,6 +449,8 @@ const getAncestorZoom = (el) => {
 
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 function Tasks() {
   const isSearchOverlayOpen = useSearchOverlayOpen();
@@ -2097,7 +2097,7 @@ function Tasks() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 View
               </button>
               <button
@@ -2109,7 +2109,7 @@ function Tasks() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
               </button>
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -2937,7 +2937,7 @@ function Tasks() {
                 onClick={() => (activeTab === "tasks" ? setShowBulkActions(true) : setShowMeetingBulkActions(true))}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button

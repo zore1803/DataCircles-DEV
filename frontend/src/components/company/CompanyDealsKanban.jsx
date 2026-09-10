@@ -55,8 +55,6 @@ import {
   Pin,
   PinOff,
   EyeOff,
-  Eye,
-  Edit2,
   User,
   Tag,
   IndianRupee,
@@ -79,6 +77,8 @@ import { formatNumberToIndian } from "../../utils/numberFormatter";
 import SearchIcon from "../common/SearchIcon";
 import TableViewIcon from "../common/TableViewIcon";
 import KanbanViewIcon from "../common/KanbanViewIcon";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 const AMOUNT_RANGES = [
   { label: "Under ₹10,000", test: (v) => v < 10000 },
   { label: "₹10,000 – ₹50,000", test: (v) => v >= 10000 && v < 50000 },
@@ -256,14 +256,14 @@ const DealCardContent = ({ deal, selectSlot = null, setDealToDelete }) => {
                     onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); navigate(`/deals/${deal._id}`); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     View Deal
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); navigate(`/deals/${deal._id}`); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Edit Deal
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -1986,7 +1986,7 @@ export default function CompanyDealsKanban({
                                         }}
                                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                                       >
-                                        <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                         View Deal
                                       </button>
                                       <button
@@ -1998,7 +1998,7 @@ export default function CompanyDealsKanban({
                                         }}
                                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                                       >
-                                        <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                                        <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                                         Edit Deal
                                       </button>
                                       <div className="w-full border-t border-[#F1F1F5] my-0.5" />

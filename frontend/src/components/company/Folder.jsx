@@ -24,10 +24,8 @@ import {
   ChevronDown,
   Filter,
   X,
-  Edit3,
   Link as LinkIcon,
   ExternalLink,
-  List,
   LayoutGrid,
   Maximize2,
   Save,
@@ -44,6 +42,8 @@ import useFillToBottom from "../../hooks/useFillToBottom";
 
 import SearchIcon from "../common/SearchIcon";
 import UploadIcon from "../common/UploadIcon";
+import ListIcon from "../common/ListIcon";
+import EditIcon from "../common/EditIcon";
 const FOLDER_ITEM_COUNT_RANGES = [
   { label: "Empty", test: (n) => n === 0 },
   { label: "1–5 Items", test: (n) => n >= 1 && n <= 5 },
@@ -622,7 +622,7 @@ const FileCard = ({ file, fileIndex, onView, onDelete, onEditLink, onRenameFile,
                   }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Edit3 size={17} style={{ color: "#5C5D5C" }} />
+                  <EditIcon size={17} style={{ color: "#5C5D5C" }} />
                   Edit Link
                 </button>
               )}
@@ -634,7 +634,7 @@ const FileCard = ({ file, fileIndex, onView, onDelete, onEditLink, onRenameFile,
                   }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Edit3 size={17} style={{ color: "#5C5D5C" }} />
+                  <EditIcon size={17} style={{ color: "#5C5D5C" }} />
                   Rename File
                 </button>
               )}
@@ -2015,7 +2015,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                     className="relative z-10 flex items-center justify-center flex-shrink-0"
                     style={{ padding: 8, gap: 10, width: 36, height: 36, borderRadius: 107 }}
                   >
-                    <List size={20} style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
+                    <ListIcon className="w-5 h-5" style={{ color: folderViewMode === "list" ? "#0085FF" : "#404040" }} />
                   </button>
                   <button
                     onClick={() => setFolderViewMode("grid")}
@@ -2116,7 +2116,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                           className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
                           title="Edit"
                         >
-                          <Edit3 className="h-4 w-4" />
+                          <EditIcon className="h-4 w-4" />
                         </button>
                         <div className="w-px h-3 bg-gray-200" />
                         <button

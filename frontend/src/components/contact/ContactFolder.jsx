@@ -7,15 +7,15 @@ import toast from "react-hot-toast";
 import StatusDropdown from "./StatusDropdown";
 import SearchIcon from "../common/SearchIcon";
 import {
-  Edit3,
   ChevronDown,
   ChevronRight,
   X,
   Check,
   Folder as FolderIcon,
   LayoutGrid,
-  List,
 } from "lucide-react";
+import ListIcon from "../common/ListIcon";
+import EditIcon from "../common/EditIcon";
 
 const ContactFolder = () => {
   const [folders, setFolders] = useState([]);
@@ -221,7 +221,7 @@ const ContactFolder = () => {
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              <List className="w-4 h-4" />
+              <ListIcon className="w-4 h-4" />
               <span className="hidden sm:inline">List View</span>
             </button>
           </div>
@@ -322,7 +322,7 @@ const ContactFolder = () => {
                       }}
                       className="p-1.5 bg-white rounded-full shadow-sm text-gray-400 hover:text-blue-600 hover:scale-110 transition-all"
                     >
-                      <Edit3 className="w-3 h-3" />
+                      <EditIcon className="w-3 h-3" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -420,7 +420,7 @@ const ContactFolder = () => {
                       }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <EditIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => {

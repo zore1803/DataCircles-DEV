@@ -47,7 +47,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Edit2,
   X,
   Tag,
   IndianRupee,
@@ -64,7 +63,6 @@ import {
   Wallet,
   TimerReset,
   Handshake,
-  Eye,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -441,14 +439,14 @@ const ModernDealCard = React.memo(({ deal, onClick, isStale, colorTheme = "blue"
                     onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); onQuickView && onQuickView(deal._id); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Quick View
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); onEditDeal && onEditDeal(deal); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
                   >
-                    <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                     Edit Deal
                   </button>
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -1097,13 +1095,15 @@ function Deals() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Sorting function
+  // Sorting function — cycles asc -> desc -> off
   const handleSort = (key) => {
-    let direction = "asc";
     if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
+      setSortConfig({ key, direction: "desc" });
+    } else if (sortConfig.key === key && sortConfig.direction === "desc") {
+      setSortConfig({ key: null, direction: null });
+    } else {
+      setSortConfig({ key, direction: "asc" });
     }
-    setSortConfig({ key, direction });
   };
 
   // Sort deals based on sortConfig
@@ -2306,7 +2306,7 @@ function Deals() {
                 onClick={() => setShowBulkActions(true)}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Edit2 className="w-4 h-4 text-blue-600" />
+                <EditIcon className="w-4 h-4 text-blue-600" />
                 Bulk Update
               </button>
               <button
@@ -2506,7 +2506,7 @@ function Deals() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Eye className="w-4 h-4 text-gray-400" />
+                      <EyeIcon className="w-4 h-4 text-gray-400" />
                       {showStats ? "Hide KPIs" : "Unhide KPIs"}
                     </button>
                     
@@ -3056,3 +3056,5 @@ import DealCardSkeleton from "../components/common/DealCardSkeleton";
 import SearchIcon from "../components/common/SearchIcon";
 import SettingsIcon from "../components/common/SettingsIcon";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";

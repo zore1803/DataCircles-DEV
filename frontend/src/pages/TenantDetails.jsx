@@ -5,7 +5,6 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
-  Users,
   Building,
   AlertCircle,
   Package,
@@ -29,6 +28,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
+import TeamIcon from "../components/common/TeamIcon";
 
 const WALLET_TYPE_META = {
   CREDIT_PURCHASE: { label: "Purchase", style: "bg-[#E6F7EF] text-[#1FA971] ring-[#B9E7D3]" },
@@ -614,7 +614,7 @@ const TenantDetails = () => {
           <StatCard
             label="Total Users"
             value={stats.totalUsers || 0}
-            icon={Users}
+            icon={TeamIcon}
             color="text-blue-600"
           />
           <StatCard
@@ -714,7 +714,7 @@ const TenantDetails = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <Users className="w-5 h-5 text-green-600" />
+            <TeamIcon className="w-5 h-5 text-green-600" />
             <h2 className="text-lg font-semibold text-gray-900">
               Organization Users
             </h2>
@@ -762,7 +762,7 @@ const TenantDetails = () => {
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">
-            <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+            <TeamIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
             <p>No users found</p>
           </div>
         )}

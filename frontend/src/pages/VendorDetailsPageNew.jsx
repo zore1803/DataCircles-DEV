@@ -21,11 +21,9 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import toast from "react-hot-toast";
 import CallingIcon from "../components/common/CallingIcon";
 import {
-  Edit2,
   Twitter,
   Linkedin,
   Instagram,
-  Eye,
   Receipt,
   CheckSquare,
   FolderOpen,
@@ -45,6 +43,8 @@ import {
   Tooltip,
 } from "recharts";
 import { FaWhatsapp } from "react-icons/fa";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 // New Entry dropdown options — same shape/pattern as CompanyProfilePage.jsx's
 // newEntryOptions, scoped to what this page actually has tabs for. Unlike
@@ -937,8 +937,8 @@ const VendorDetailsPageNew = () => {
                         }}
                         className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                       >
-                        <Eye size={12} className="text-gray-400 lg:hidden" />
-                        <Eye size={14} className="text-gray-400 hidden lg:block" />
+                        <EyeIcon size={12} className="text-gray-400 lg:hidden" />
+                        <EyeIcon size={14} className="text-gray-400 hidden lg:block" />
                         {showKPI ? "Hide KPIs" : "Unhide KPIs"}
                       </button>
                       {/* Edit: mobile-only entry, folded in here instead of its own button */}
@@ -949,7 +949,7 @@ const VendorDetailsPageNew = () => {
                         }}
                         className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
                       >
-                        <Edit2 size={12} className="text-gray-400" />
+                        <EditIcon size={12} className="text-gray-400" />
                         Edit
                       </button>
                     </div>
@@ -994,7 +994,7 @@ const VendorDetailsPageNew = () => {
                   onClick={handleEdit}
                   className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
                 >
-                  <Edit2 size={13} />
+                  <EditIcon size={13} />
                   Edit
                 </button>
               </div>

@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import StatTile from "../common/StatTile";
-import { Eye, Edit3, CalendarCheck, Clock3 } from "lucide-react";
+import { CalendarCheck, Clock3 } from "lucide-react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
@@ -23,6 +23,8 @@ import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import { exportToCSV } from "../../utils/exportToCSV";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, "").trim();
 
@@ -434,8 +436,8 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
   const meetingActionButtons = (meeting) => (
     <RowActionsMenu
       actions={[
-        { label: "View", icon: Eye, onClick: () => { setSelectedMeeting(meeting); setIsMeetingModalOpen(true); } },
-        { label: "Edit", icon: Edit3, onClick: () => handleEditMeeting(meeting) },
+        { label: "View", icon: EyeIcon, onClick: () => { setSelectedMeeting(meeting); setIsMeetingModalOpen(true); } },
+        { label: "Edit", icon: EditIcon, onClick: () => handleEditMeeting(meeting) },
         { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => { if (window.confirm("Delete this meeting?")) handleMeetingDelete(meeting._id); } },
       ]}
     />

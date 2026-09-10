@@ -55,7 +55,6 @@ import {
   Heading as HeadingIcon,
   Minus,
   X,
-  Eye,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -1998,7 +1997,7 @@ const FormBuilderPage = () => {
             onClick={() => setShowPreview(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
           >
-            <Eye className="w-4 h-4" /> Preview
+            <EyeIcon className="w-4 h-4" /> Preview
           </button>
           <button
             onClick={() => saveDraft()}
@@ -2045,3 +2044,4 @@ const FormBuilderPage = () => {
 
 export default FormBuilderPage;
 import PageSkeleton from "../components/common/PageSkeleton";
+import EyeIcon from "../components/common/EyeIcon";

@@ -1,7 +1,8 @@
 import CalendarIcon from "../common/CalendarIcon";
 import React from "react";
-import { ListChecks, Type, AlignLeft, Link2, Users, ListTodo, Flag } from "lucide-react";
+import { ListChecks, Type, AlignLeft, Link2, ListTodo, Flag } from "lucide-react";
 import GenericFieldSettings from "./GenericFieldSettings";
+import TeamIcon from "../common/TeamIcon";
 
 // Inferred from backend/models/Task.js — the fields the Task schema already
 // defines, shown read-only above the custom-field builder (same "Built-in
@@ -18,7 +19,7 @@ const TASK_BUILT_IN_FIELDS = [
     icon: <Link2 className="w-4 h-4" />,
     note: "Company, Contact, Deal, or Vendor — at least one is required per task.",
   },
-  { name: "Assigned Users", typeLabel: "Multi-select (Users)", required: false, icon: <Users className="w-4 h-4" /> },
+  { name: "Assigned Users", typeLabel: "Multi-select (Users)", required: false, icon: <TeamIcon className="w-4 h-4" /> },
   { name: "Status", typeLabel: "Dropdown", required: true, icon: <ListTodo className="w-4 h-4" /> },
   { name: "Priority", typeLabel: "Dropdown (Low / Medium / High)", required: false, icon: <Flag className="w-4 h-4" /> },
   { name: "Due Date", typeLabel: "Date Picker", required: false, icon: <CalendarIcon className="w-4 h-4" /> },

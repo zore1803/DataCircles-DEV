@@ -1,5 +1,6 @@
 import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
+import StarIcon from "../common/StarIcon";
 import BankLogo from '../BankLogo';
 
 import { useCallback, useEffect, useState, useRef } from "react";
@@ -13,11 +14,9 @@ import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import {
-  Edit3,
   CheckCircle,
   ArrowRight,
   Landmark,
-  Star,
   ArrowLeftRight,
 } from "lucide-react";
 import { MdAccountBalance } from "react-icons/md";
@@ -30,6 +29,7 @@ import React from "react";
 
 // No custom logo helper; using generic icon from react-icons
 import BankModal from "./BankModal";
+import EditIcon from "../common/EditIcon";
 
 const maskAccountNumber = (num = "") => {
   const value = String(num);
@@ -299,7 +299,7 @@ const BankDetails = () => {
                     onClick={() => handleSetDefault(bank._id)}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:underline"
                   >
-                    <Star className="h-3.5 w-3.5 align-middle" />
+                    <StarIcon className="h-3.5 w-3.5 align-middle" />
                     Make Default
                   </button>
                 ) : (
@@ -313,7 +313,7 @@ const BankDetails = () => {
                     className="rounded-lg p-1.5 text-gray-400 transition hover:bg-sky-50 hover:text-sky-600"
                     title="Edit bank"
                   >
-                    <Edit3 className="h-4 w-4" />
+                    <EditIcon className="h-4 w-4" />
                   </button>
                   <button
                     type="button"

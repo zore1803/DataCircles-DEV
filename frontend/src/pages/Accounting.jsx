@@ -19,8 +19,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Pencil,
-  Eye,
   Send,
   Repeat,
   X,
@@ -97,6 +95,8 @@ import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import FilterIcon from "../components/common/FilterIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 /* Drops the organization's saved boilerplate (Settings → document defaults)
    into a notes/terms box, so the same footer text doesn't have to be retyped
    on every document. Disabled — with the reason in the tooltip — when there's
@@ -566,7 +566,7 @@ const InvoiceViewer = ({
                 onClick={onEdit}
                 className="h-9 px-3 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium rounded-lg hover:bg-amber-100 transition-colors"
               >
-                <Pencil className="w-3.5 h-3.5" />
+                <EditIcon className="w-3.5 h-3.5" />
                 Edit
               </button>
               <button
@@ -868,10 +868,10 @@ const Accounting = () => {
     deliveryChallan: { ...emptyPagination },
   });
   const [sortConfigs, setSortConfigs] = useState({
-    tax: { key: "invoiceNumber", direction: "desc" },
-    performa: { key: "performaInvoiceNumber", direction: "desc" },
-    quotation: { key: "quotationNumber", direction: "desc" },
-    deliveryChallan: { key: "deliveryChallanNumber", direction: "desc" },
+    tax: { key: null, direction: null },
+    performa: { key: null, direction: null },
+    quotation: { key: null, direction: null },
+    deliveryChallan: { key: null, direction: null },
   });
 
   // Column widths — drag the divider on a header's right edge to shrink/widen it.
@@ -1396,9 +1396,14 @@ const Accounting = () => {
     const params = new URLSearchParams({
       page: paginations[type].currentPage.toString(),
       limit: paginations[type].limit.toString(),
-      sortBy: sortConfigs[type].key,
-      sortOrder: sortConfigs[type].direction,
     });
+    if (sortConfigs[type].key) {
+      params.append("sortBy", sortConfigs[type].key);
+      params.append("sortOrder", sortConfigs[type].direction || "asc");
+    } else {
+      params.append("sortBy", "createdAt");
+      params.append("sortOrder", "desc");
+    }
     if (debouncedSearchTerms[type].trim()) {
       params.append("search", debouncedSearchTerms[type].trim());
     }
@@ -2092,7 +2097,7 @@ const Accounting = () => {
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Eye className="w-4 h-4 text-blue-600" />
+                    <EyeIcon className="w-4 h-4 text-blue-600" />
                     View
                   </button>
                   <button
@@ -2102,7 +2107,7 @@ const Accounting = () => {
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Pencil className="w-4 h-4 text-blue-600" />
+                    <EditIcon className="w-4 h-4 text-blue-600" />
                     Edit
                   </button>
                   <button
@@ -2366,7 +2371,7 @@ const Accounting = () => {
                   }}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Pencil className="w-4 h-4 text-blue-600" />
+                  <EditIcon className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button
@@ -2955,12 +2960,12 @@ const Accounting = () => {
                           <button
                             onClick={() => {
                               closeColumnMenu();
+                              const isActive = activeSort.key === sortKey && activeSort.direction === "asc";
                               setSortConfigs((prev) => ({
                                 ...prev,
-                                [activeTab]: {
-                                  key: sortKey,
-                                  direction: "asc",
-                                },
+                                [activeTab]: isActive
+                                  ? { key: null, direction: null }
+                                  : { key: sortKey, direction: "asc" },
                               }));
                               setPaginations((prev) => ({
                                 ...prev,
@@ -2978,12 +2983,12 @@ const Accounting = () => {
                           <button
                             onClick={() => {
                               closeColumnMenu();
+                              const isActive = activeSort.key === sortKey && activeSort.direction === "desc";
                               setSortConfigs((prev) => ({
                                 ...prev,
-                                [activeTab]: {
-                                  key: sortKey,
-                                  direction: "desc",
-                                },
+                                [activeTab]: isActive
+                                  ? { key: null, direction: null }
+                                  : { key: sortKey, direction: "desc" },
                               }));
                               setPaginations((prev) => ({
                                 ...prev,
@@ -3073,7 +3078,7 @@ const Accounting = () => {
             onClick={() => setHiddenCols([])}
             className="fixed z-[9993] bottom-[76px] right-6 h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-white border border-[#E1E4EA] shadow-sm text-xs font-medium text-[#525866] hover:bg-gray-50 transition-colors"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <EyeIcon className="w-3.5 h-3.5" />
             Show {hiddenCols.length} hidden column
             {hiddenCols.length > 1 ? "s" : ""}
           </button>
@@ -3737,7 +3742,7 @@ const Accounting = () => {
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="bg-blue-100 p-2 rounded-lg">
-                  <Pencil className="w-5 h-5 text-blue-600" />
+                  <EditIcon className="w-5 h-5 text-blue-600" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">Bulk Update</h2>
               </div>
@@ -3775,7 +3780,7 @@ const Accounting = () => {
                   disabled={bulkUpdating || !bulkUpdateStatus}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <EditIcon className="w-4 h-4" />
                   {bulkUpdating ? "Updating..." : "Update"}
                 </button>
               </div>

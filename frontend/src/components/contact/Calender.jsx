@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
-  Users,
   CheckSquare,
   X,
 } from "lucide-react";
@@ -15,6 +14,7 @@ import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
 import HighlightText from "../common/HighlightText";
+import TeamIcon from "../common/TeamIcon";
 const CompactEventCard = ({ item, type, onClick, searchTerm }) => (
   <div
     className={`
@@ -33,7 +33,7 @@ const CompactEventCard = ({ item, type, onClick, searchTerm }) => (
   >
     <div className="flex items-center gap-0.5">
       {type === "meeting" ? (
-        <Users className="w-2 h-2 flex-shrink-0" />
+        <TeamIcon className="w-2 h-2 flex-shrink-0" />
       ) : (
         <CheckSquare className="w-2 h-2 flex-shrink-0" />
       )}
@@ -76,7 +76,7 @@ const QuickAddModal = ({ isOpen, onClose, onAddMeeting, onAddTask, date }) => {
             onClick={onAddMeeting}
             className="w-full flex items-center gap-2 p-2 text-left hover:bg-gray-50 rounded-lg transition-colors border border-gray-200"
           >
-            <Users className="w-4 h-4 text-gray-600" />
+            <TeamIcon className="w-4 h-4 text-gray-600" />
             <div>
               <div className="text-sm font-medium text-gray-900">Meeting</div>
               <div className="text-xs text-gray-600">Schedule with contact</div>
@@ -144,7 +144,7 @@ const ActivityListPopup = ({
                       className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 rounded-md cursor-pointer text-sm mb-1"
                       onClick={() => onMeetingClick(meeting)}
                     >
-                      <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                      <TeamIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
                       <span className="truncate">
                         <HighlightText text={meeting.title} query={searchTerm} />
                       </span>

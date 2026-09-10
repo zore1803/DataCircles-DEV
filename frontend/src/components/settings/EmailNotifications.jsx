@@ -9,13 +9,11 @@ import {
   CheckCircle,
   Briefcase,
   PlusCircle,
-  Edit3,
   X,
   Save,
   Loader2,
   Zap,
   AlertCircle,
-  Eye,
   ArrowRight,
 } from "lucide-react";
 import API, { configureAxios } from "../../services/api";
@@ -24,6 +22,8 @@ import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import AppToaster from "../AppToaster";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 // ✅ Fixed Quill configuration
 const quillModules = {
@@ -66,7 +66,7 @@ const EmailTemplatePreview = ({ isOpen, onClose, template }) => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-100 p-2 rounded-lg">
-                    <Eye className="w-6 h-6 text-blue-600" />
+                    <EyeIcon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900">
@@ -363,7 +363,7 @@ const EmailTemplateForm = ({
           {/* Email Body */}
           <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-              <Edit3 className="w-4 h-4" />
+              <EditIcon className="w-4 h-4" />
               Email Body
             </label>
             <div className="border-2 border-gray-300 rounded-xl overflow-hidden shadow-sm">
@@ -1013,14 +1013,14 @@ const EmailNotifications = () => {
                       className="flex items-center gap-1 p-2.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors border border-purple-200"
                       title="Preview template"
                     >
-                      <Eye className="w-4 h-4" />
+                      <EyeIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleOpenModal(template)}
                       className="flex items-center gap-1 p-2.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
                       title="Edit template"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <EditIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteTemplate(template._id)}

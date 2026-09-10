@@ -11,11 +11,9 @@ import QuickDealForm from "../components/deal/QuickDealForm";
 import toast from "react-hot-toast";
 import {
   Building2,
-  Edit2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Eye,
   CheckSquare,
   StickyNote,
   Receipt,
@@ -38,6 +36,8 @@ import StatTileSkeleton from "../components/common/StatTileSkeleton";
 import Skeleton from "../components/common/Skeleton";
 import PageSkeleton from "../components/common/PageSkeleton";
 import AppToaster from "../components/AppToaster";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 // Mirrors CompanyProfilePage's shape (header strip, one pill tab bar, KPI row,
 // full-width tab bodies) so a company, one of its contacts and one of its
@@ -477,8 +477,8 @@ function DealDetail() {
                     }}
                     className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Eye size={12} className="text-gray-400 lg:hidden" />
-                    <Eye size={14} className="text-gray-400 hidden lg:block" />
+                    <EyeIcon size={12} className="text-gray-400 lg:hidden" />
+                    <EyeIcon size={14} className="text-gray-400 hidden lg:block" />
                     {showStats ? "Hide KPIs" : "Unhide KPIs"}
                   </button>
                   {/* Edit: mobile-only entry, folded in here instead of its own button */}
@@ -489,7 +489,7 @@ function DealDetail() {
                     }}
                     className="lg:hidden flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-normal text-gray-700 hover:bg-gray-50 text-left"
                   >
-                    <Edit2 size={12} className="text-gray-400" />
+                    <EditIcon size={12} className="text-gray-400" />
                     Edit
                   </button>
                   {deal.company && (
@@ -555,7 +555,7 @@ function DealDetail() {
               onClick={handleEdit}
               className="hidden lg:flex items-center gap-1.5 px-4 h-8 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
             >
-              <Edit2 size={13} />
+              <EditIcon size={13} />
               Edit
             </button>
           </div>

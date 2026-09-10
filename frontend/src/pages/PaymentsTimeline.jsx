@@ -8,8 +8,8 @@ import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, ChevronDown, ChevronUp, Pencil, Eye, EyeOff,
-  SlidersHorizontal, Share2, Edit2,
+  X, ChevronDown, ChevronUp, EyeOff,
+  SlidersHorizontal, Share2,
   ChevronLeft, ChevronRight, Pin, PinOff,
   TrendingUp, TrendingDown, Wallet, ListChecks,
   ArrowLeftRight, ArrowUp, ArrowDown } from "lucide-react";
@@ -41,6 +41,8 @@ import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import StatTile from "../components/common/StatTile";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -1134,7 +1136,7 @@ export default function PaymentsTimeline() {
             >
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); handleViewReceipt(doc); }}>
-                <Eye className="w-4 h-4 text-gray-400" /> View
+                <EyeIcon className="w-4 h-4 text-gray-400" /> View
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
                 onClick={() => {
@@ -1143,7 +1145,7 @@ export default function PaymentsTimeline() {
                   setEditingPaymentItem(doc);
                   setIsPaymentModalOpen(true);
                 }}>
-                <Pencil className="w-4 h-4 text-gray-400" /> Edit
+                <EditIcon className="w-4 h-4 text-gray-400" /> Edit
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
                 onClick={() => {
@@ -1606,7 +1608,7 @@ export default function PaymentsTimeline() {
                   onClick={() => { setShowStats((prev) => !prev); setIsMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Eye className="w-4 h-4 text-gray-400" />
+                  <EyeIcon className="w-4 h-4 text-gray-400" />
                   {showStats ? "Hide KPIs" : "Unhide KPIs"}
                 </button>
                 <button
@@ -2048,7 +2050,8 @@ export default function PaymentsTimeline() {
                     <button
                       onClick={() => {
                         closeColumnMenu();
-                        setSortConfig({ key: col.id, direction: "asc" });
+                        const isActive = sortConfig.key === col.id && sortConfig.direction === "asc";
+                        setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "asc" });
                       }}
                       className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                     >
@@ -2058,7 +2061,8 @@ export default function PaymentsTimeline() {
                     <button
                       onClick={() => {
                         closeColumnMenu();
-                        setSortConfig({ key: col.id, direction: "desc" });
+                        const isActive = sortConfig.key === col.id && sortConfig.direction === "desc";
+                        setSortConfig(isActive ? { key: null, direction: null } : { key: col.id, direction: "desc" });
                       }}
                       className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                     >

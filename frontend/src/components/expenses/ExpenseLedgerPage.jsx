@@ -6,8 +6,8 @@ import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import SettingsIcon from "../common/SettingsIcon";
 import {
-  Search as SearchIcon, X, Pencil, ChevronDown,
-  Pin, PinOff, ArrowUp, ArrowDown, EyeOff, ChevronLeft, ChevronRight, Eye,
+  Search as SearchIcon, X, ChevronDown,
+  Pin, PinOff, ArrowUp, ArrowDown, EyeOff, ChevronLeft, ChevronRight,
   Share2, Repeat, Copy, MessageCircle, Mail, MessageSquare,
 } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -24,6 +24,8 @@ import BulkActions from "../BulkActions";
 import { useBulkStrip } from "../../hooks/useBulkSelection";
 import useSearchOverlayOpen from "../../hooks/useSearchOverlayOpen";
 import * as XLSX from "xlsx";
+import EyeIcon from "../common/EyeIcon";
+import EditIcon from "../common/EditIcon";
 
 /*
  * Ledger page for Expenses and Indirect Income.
@@ -775,7 +777,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                   onClick={() => { handleExport(); setMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#161618] hover:bg-gray-50 transition-colors"
                 >
-                  <Eye className="w-4 h-4 text-gray-400" />
+                  <EyeIcon className="w-4 h-4 text-gray-400" />
                   Export all
                 </button>
               </div>
@@ -1089,7 +1091,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                                             onClick={() => { closeRowMenu(); setViewRow(r); }}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                           >
-                                            <Eye className="w-4 h-4 text-blue-600" />
+                                            <EyeIcon className="w-4 h-4 text-blue-600" />
                                             View
                                           </button>
                                           <button
@@ -1097,7 +1099,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                                             onClick={() => { closeRowMenu(); openEdit(r); }}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                           >
-                                            <Pencil className="w-4 h-4 text-blue-600" />
+                                            <EditIcon className="w-4 h-4 text-blue-600" />
                                             Edit
                                           </button>
                                           <button

@@ -12,12 +12,12 @@ import {
   Check,
   ChevronDown,
   LayoutGrid,
-  Eye,
   EyeOff,
   FolderOpen,
   Activity
 } from "lucide-react";
 import AppToaster from "../AppToaster";
+import EyeIcon from "../common/EyeIcon";
 
 // --- Info Card Component ---
 const InfoCard = ({ title, value, icon: Icon, action, description }) => (
@@ -308,7 +308,7 @@ const BasicDetails = ({ deal, dealFieldList = [], onDealUpdate }) => {
             {showEmptyFields ? (
               <><EyeOff className="w-3.5 h-3.5" /> Hide Empty Fields</>
             ) : (
-              <><Eye className="w-3.5 h-3.5" /> Show All Fields</>
+              <><EyeIcon className="w-3.5 h-3.5" /> Show All Fields</>
             )}
           </button>
         </div>

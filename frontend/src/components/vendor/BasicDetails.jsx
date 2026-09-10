@@ -11,9 +11,9 @@ import {
   Wallet,
   LayoutGrid,
   FolderOpen,
-  Eye,
   EyeOff
 } from 'lucide-react';
+import EyeIcon from "../common/EyeIcon";
 
 const BasicDetails = ({ vendor, payments, vendorFieldList = [] }) => {
   const addressString = [
@@ -270,7 +270,7 @@ const BasicDetails = ({ vendor, payments, vendorFieldList = [] }) => {
             {showEmptyFields ? (
               <><EyeOff className="w-3.5 h-3.5" /> Hide Empty Fields</>
             ) : (
-              <><Eye className="w-3.5 h-3.5" /> Show All Fields</>
+              <><EyeIcon className="w-3.5 h-3.5" /> Show All Fields</>
             )}
           </button>
         </div>

@@ -27,17 +27,15 @@ import {
   MapPin,
   Briefcase,
   Globe,
-  Edit2,
   CheckSquare,
   FolderPlus,
   StickyNote,
   SlidersHorizontal,
-  Eye,
   EyeOff,
   Pin,
   PinOff,
-  Star,
   User, ArrowUp, ArrowDown } from "lucide-react";
+import StarIcon from "../components/common/StarIcon";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
 import BulkActions from "../components/BulkActions";
@@ -109,6 +107,8 @@ import SearchIcon from "../components/common/SearchIcon";
 import SettingsIcon from "../components/common/SettingsIcon";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import UploadIcon from "../components/common/UploadIcon";
+import EyeIcon from "../components/common/EyeIcon";
+import EditIcon from "../components/common/EditIcon";
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
 // mounted on document.body render in visual (un-zoomed) space and mouse clientX/Y are
@@ -568,7 +568,7 @@ function Companies() {
             const zMenu = getAncestorZoom(document.body);
             const MENU_W = 160;
             const MARGIN = 8;
-            // 6 items (View Company, Edit, Add to Hotlist, Star/Unstar,
+            // 6 items (View Company, Add to Hotlist, Star/Unstar,
             // Set/Change Owner, Delete) + one divider + container padding.
             const MENU_H = 214;
 
@@ -588,6 +588,7 @@ function Companies() {
 
             setRowActionsPos({ top: calcTop, left: calcLeft });
             setOpenRowActionsId(company._id);
+            setIsMoreMenuOpen(false);
           }}
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
@@ -610,7 +611,7 @@ function Companies() {
                 onClick={() => { setOpenRowActionsId(null); setRowActionsPos(null); }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EyeIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 View Company
               </Link>
               <button
@@ -622,7 +623,7 @@ function Companies() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Edit2 className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                <EditIcon className="w-3.5 h-3.5 text-[#1C1B1F]" />
                 Edit
               </button>
               <button
@@ -644,7 +645,7 @@ function Companies() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap"
               >
-                <Star className={`w-3.5 h-3.5 ${company.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
+                <StarIcon className={`w-3.5 h-3.5 ${company.isStarred ? "text-yellow-400 fill-yellow-400" : "text-[#1C1B1F]"}`} />
                 {company.isStarred ? "Unstar Company" : "Star Company"}
               </button>
               {isAdmin && (
@@ -826,7 +827,8 @@ function Companies() {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "asc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "asc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "asc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -838,7 +840,8 @@ function Companies() {
                             onClick={() => {
                               setOpenColumnMenuKey(null);
                               setColumnMenuPos(null);
-                              setSortConfig({ key: vc.key, direction: "desc" });
+                              const isActive = sortConfig.key === vc.key && sortConfig.direction === "desc";
+                              setSortConfig(isActive ? { key: null, direction: null } : { key: vc.key, direction: "desc" });
                               setPagination((prev) => ({ ...prev, currentPage: 1 }));
                             }}
                             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap ${sortConfig.key === vc.key && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
@@ -896,7 +899,7 @@ function Companies() {
                       <HighlightText text={company.name} query={searchTerm} />
                     </Link>
                     {company.isStarred && (
-                      <Star className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
+                      <StarIcon className="flex-shrink-0 w-3.5 h-3.5 ml-1.5 text-yellow-400 fill-yellow-400" />
                     )}
                   </div>
                   <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-150 ease-out pointer-events-none group-hover:pointer-events-auto bg-white/80 backdrop-blur-[2px] border border-gray-200 rounded-full">
@@ -909,7 +912,7 @@ function Companies() {
                       className="p-1.5 rounded-full hover:bg-blue-50 text-blue-600 transition-colors"
                       title="Quick view"
                     >
-                      <Eye size={15} />
+                      <EyeIcon size={15} />
                     </button>
                     <button
                       onClick={(e) => {
@@ -919,7 +922,7 @@ function Companies() {
                       className="p-1.5 rounded-full hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-colors duration-150"
                       title="Edit Company"
                     >
-                      <Edit2 className="w-4 h-4" />
+                      <EditIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -1222,9 +1225,16 @@ function Companies() {
       const params = new URLSearchParams({
         page: pagination.currentPage.toString(),
         limit: pagination.limit.toString(),
-        sortBy: sortConfig.key,
-        sortOrder: sortConfig.direction,
       });
+      if (sortConfig.key) {
+        params.append("sortBy", sortConfig.key);
+        params.append("sortOrder", sortConfig.direction || "asc");
+      } else {
+        // No column sort applied — show newest-added first, without
+        // marking any header as actively sorted.
+        params.append("sortBy", "createdAt");
+        params.append("sortOrder", "desc");
+      }
 
       if (searchTerm.trim()) {
         params.append("search", searchTerm.trim());
@@ -1861,7 +1871,7 @@ function Companies() {
                   onClick={() => setShowBulkActions(true)}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Edit2 className="w-4 h-4 text-blue-600" />
+                  <EditIcon className="w-4 h-4 text-blue-600" />
                   Bulk Update
                 </button>
                 <button
@@ -2013,7 +2023,11 @@ function Companies() {
                     {/* Overflow menu: Industry filter, Columns, Import, Video Tutorial */}
                     <div className="relative" ref={moreMenuRef}>
                       <button
-                        onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                        onClick={() => {
+                          setIsMoreMenuOpen((prev) => !prev);
+                          setOpenRowActionsId(null);
+                          setRowActionsPos(null);
+                        }}
                         className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
                         title="More options"
                       >
