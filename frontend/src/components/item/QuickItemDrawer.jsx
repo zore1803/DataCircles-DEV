@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
@@ -6,7 +7,6 @@ import {
   X,
   ChevronRight,
   Lock,
-  Trash2,
   Edit2,
 } from "lucide-react";
 import ReactQuill from "react-quill-new";
@@ -527,7 +527,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                               <div key={idx} className="flex gap-2 items-center">
                                 <input type="text" value={key} onChange={(e) => { const nk = e.target.value; setCurrentVariant((p) => { const a = { ...p.attributes }; const v = a[key]; delete a[key]; a[nk] = v; return { ...p, attributes: a }; }); }} placeholder="Name (e.g. color)" className="flex-1 border border-[#1F2937]/10 rounded-full px-3 h-11 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter" />
                                 <input type="text" value={val} onChange={(e) => setCurrentVariant((p) => ({ ...p, attributes: { ...p.attributes, [key]: e.target.value } }))} placeholder="Value (e.g. Red)" className="flex-1 border border-[#1F2937]/10 rounded-full px-3 h-11 text-sm text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter" />
-                                <button type="button" onClick={() => setCurrentVariant((p) => { const a = { ...p.attributes }; delete a[key]; return { ...p, attributes: a }; })} className="text-red-500 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
+                                <button type="button" onClick={() => setCurrentVariant((p) => { const a = { ...p.attributes }; delete a[key]; return { ...p, attributes: a }; })} className="text-red-500 hover:text-red-600 p-1"><DeleteIcon className="w-4 h-4" /></button>
                               </div>
                             ))}
                           </div>
@@ -584,7 +584,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                         </div>
                         <div className="flex gap-1 flex-shrink-0 ml-3">
                           <button type="button" onClick={() => handleEditVariant(i)} className="text-blue-600 hover:text-blue-700 p-1.5 rounded hover:bg-blue-50 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                          <button type="button" onClick={() => handleRemoveVariant(i)} className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleRemoveVariant(i)} className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"><DeleteIcon className="w-4 h-4" /></button>
                         </div>
                       </div>
                     ))}

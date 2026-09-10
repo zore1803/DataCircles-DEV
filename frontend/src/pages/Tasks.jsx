@@ -1,3 +1,5 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -21,8 +23,6 @@ import {
   ChevronRight,
   CheckSquare,
   Edit2,
-  Trash2,
-  Calendar,
   Users,
   X,
   Clock,
@@ -33,7 +33,6 @@ import {
   CheckCircle,
   Layout,
   Eye,
-  FileText,
   Pin,
   PinOff,
   EyeOff,
@@ -2123,7 +2122,7 @@ function Tasks() {
                 }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <DeleteIcon className="w-3.5 h-3.5" />
                 Delete
               </button>
             </div>
@@ -2946,7 +2945,7 @@ function Tasks() {
                 disabled={bulkLoading}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
@@ -3162,7 +3161,7 @@ function Tasks() {
                     borderRadius: 96,
                   }}
                 >
-                  <Calendar className="w-4 h-4" style={{ color: showMeetingCalendar ? "#0085FF" : "#525252" }} />
+                  <CalendarIcon className="w-4 h-4" style={{ color: showMeetingCalendar ? "#0085FF" : "#525252" }} />
                   <span
                     className="whitespace-nowrap"
                     style={{
@@ -3252,7 +3251,7 @@ function Tasks() {
                       onClick={() => { setShowMeetingCalendar(true); setIsMoreMenuOpen(false); }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                      <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
                       View in Calendar
                       {showMeetingCalendar && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
@@ -3388,7 +3387,7 @@ function Tasks() {
                           right: isRightSticky ? taskPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-bold text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
@@ -3552,7 +3551,7 @@ function Tasks() {
                           right: isRightSticky ? meetingPinnedRightOffsets[colId] ?? 0 : "auto",
                           zIndex: isLeftSticky ? 20 : isRightSticky ? 20 : 15,
                         }}
-                        className={`px-3 py-3 text-sm font-medium text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                        className={`px-3 py-3 text-sm font-bold text-[#525866] transition-colors bg-[#F5F7FA] border-r border-[#E1E4EA] last:border-r-0 ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""} ${isDragOver ? "bg-blue-100" : "hover:bg-gray-100"}`}
                       >
                         <div className="flex items-center gap-1.5 w-full min-w-0" style={{ opacity: isDragging ? 0.35 : 1 }}>
                           <div className="truncate flex-1 min-w-0">
@@ -3806,7 +3805,7 @@ function Tasks() {
             {/* Same content as before */}
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-100 p-2 rounded-lg">
-                <Trash2 className="w-5 h-5 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
               </div>
               <h2 className="text-xl font-semibold text-gray-800 font-sf">
                 Delete {deleteType === "task" ? "Task" : "Meeting"}
@@ -3863,7 +3862,7 @@ function Tasks() {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
                 Confirm Bulk Delete

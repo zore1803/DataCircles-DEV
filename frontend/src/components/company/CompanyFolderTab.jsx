@@ -1,5 +1,7 @@
+import HistoryIcon from "../common/HistoryIcon";
+import CloudStorageIcon from "../common/CloudStorageIcon";
+import FilesIcon from "../common/FilesIcon";
 import React, { useState } from "react";
-import { Files, Cloud, History } from "lucide-react";
 import UploadIcon from "../common/UploadIcon";
 import Folder from "./Folder";
 import StatTile from "../common/StatTile";
@@ -56,11 +58,11 @@ export default function CompanyFolderTab({ showStats = true, isLoading = false, 
     : null;
 
   const kpiTiles = [
-    { label: "Total Files", value: totalFiles, icon: Files },
+    { label: "Total Files", value: totalFiles, icon: FilesIcon },
     {
       label: "Storage Used",
       value: storageLabel,
-      icon: Cloud,
+      icon: CloudStorageIcon,
       subtitle: `Of ${STORAGE_ALLOCATION_GB} GB allocated`,
       subtitleClass: "text-gray-400",
     },
@@ -74,7 +76,7 @@ export default function CompanyFolderTab({ showStats = true, isLoading = false, 
     {
       label: "Last Updated",
       value: latestUpdatedLabel,
-      icon: History,
+      icon: HistoryIcon,
       subtitle: latestSubtitle,
       subtitleClass: "text-gray-400",
     },

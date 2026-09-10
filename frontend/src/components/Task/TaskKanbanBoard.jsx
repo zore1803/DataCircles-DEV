@@ -1,3 +1,5 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useRef } from "react";
@@ -19,10 +21,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Calendar,
   Clock,
   Edit,
-  Trash2,
   CheckCircle,
   AlertCircle,
   User,
@@ -120,7 +120,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete, selected = false, 
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors text-left"
                 >
-                  <Trash2 className="w-3 h-3" /> Delete
+                  <DeleteIcon className="w-4 h-4" /> Delete
                 </button>
               </div>
             </>
@@ -154,7 +154,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete, selected = false, 
         <div className="flex items-center gap-2 text-xs text-gray-500">
           {task.dueDate && (
             <div className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
               <span
                 className={
                   new Date(task.dueDate) < new Date()

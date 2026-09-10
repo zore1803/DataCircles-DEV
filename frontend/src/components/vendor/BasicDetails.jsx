@@ -1,10 +1,10 @@
+import PdfIcon from "../common/PdfIcon";
 import CellphoneIcon from "../common/CellphoneIcon";
 import React, {useState} from "react";
 import {
   User,
   Mail,
   Building2,
-  FileText,
   MapPin,
   TrendingUp,
   TrendingDown,
@@ -194,7 +194,7 @@ const BasicDetails = ({ vendor, payments, vendorFieldList = [] }) => {
           {/* GSTIN */}
           <div className="p-3 border border-gray-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-4 h-4 text-gray-600" />
+              <PdfIcon className="w-4 h-4 text-gray-600" />
               <p className="text-xs text-gray-600">GSTIN</p>
             </div>
             <p className="text-sm font-medium text-gray-900">{vendor.gstin || "—"}</p>

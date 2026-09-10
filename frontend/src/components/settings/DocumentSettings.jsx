@@ -1,8 +1,10 @@
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import { Save, FileText, PenSquare, Eye, Trash2, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
+import { Save, PenSquare, Eye, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
 import SignatureModal from "./SignatureModal";
 import PdfFileNameSettings from "./PdfFileNameSettings";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
@@ -480,7 +482,7 @@ function DocumentSettings() {
       <div className="p-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 rounded-xl bg-sky-50 text-sky-600">
-            <FileText className="w-5 h-5" />
+            <PdfIcon className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Document Settings</h3>
@@ -856,7 +858,7 @@ function DocumentSettings() {
                       className="p-1.5 rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition"
                       title="Delete signature"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -964,7 +966,7 @@ function DocumentSettings() {
                     className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                     title="Delete"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <DeleteIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>

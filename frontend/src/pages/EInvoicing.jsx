@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -22,7 +23,6 @@ import {
   PinOff,
   Plug,
   Share2,
-  Trash2,
   X,
   XCircle, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
@@ -819,7 +819,7 @@ export default function EInvoicing() {
 
               <div className="w-full border-t border-[#F1F1F5] my-0.5" />
               <button onClick={() => handleDelete(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap">
-                <Trash2 className="w-3.5 h-3.5" /> Delete
+                <DeleteIcon className="w-4 h-4" /> Delete
               </button>
             </div>
           </>,
@@ -1008,7 +1008,7 @@ export default function EInvoicing() {
                 onClick={handleBulkDelete}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button

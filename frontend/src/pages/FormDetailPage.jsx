@@ -1,3 +1,4 @@
+import PdfIcon from "../components/common/PdfIcon";
 // pages/FormDetailPage.jsx
 // Form Detail — Build order step 2, per FORMS_FRONTEND_ARCHITECTURE.md §1.2/§3. New top-level
 // route (/forms/:id), mirroring /companies/:id -> CompanyProfilePage.jsx's structure exactly:
@@ -12,7 +13,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
-import { ArrowLeft, FileText, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import PublicLinkCard from "../components/forms/PublicLinkCard";
 
 // Second independent copy of this exact pattern within Forms (FormsList.jsx has the first) — per
@@ -105,7 +106,7 @@ function OverviewTab({ form, activeVersion, submissionCount, pendingReviewCount,
     return (
       <div className="flex flex-col items-center text-center gap-4 max-w-lg mx-auto py-6">
         <div className="p-3 bg-blue-50 rounded-xl">
-          <FileText className="w-6 h-6 text-blue-600" />
+          <PdfIcon className="w-4 h-4 text-blue-600" />
         </div>
         <div>
           <h3 className="text-lg font-bold text-gray-900">Your form is empty.</h3>

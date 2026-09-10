@@ -1,8 +1,8 @@
+import CalendarIcon from "../common/CalendarIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
 import {
   ChevronDown,
-  Calendar,
   Clock,
   CheckCircle2,
   Circle,
@@ -235,7 +235,7 @@ const CompanyMeetingsTable = ({ companyId, setMeetings }) => {
       {/* Header and Controls */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
+          <CalendarIcon className="w-4 h-4" />
           <span>{filteredMeetings.length} meetings</span>
         </div>
         <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ const CompanyMeetingsTable = ({ companyId, setMeetings }) => {
       {/* Meetings List */}
       {filteredMeetings.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+          <CalendarIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm text-gray-600 mb-1">
             {statusFilter ? `No ${statusFilter} meetings` : "No meetings yet"}
           </p>
@@ -302,7 +302,7 @@ const CompanyMeetingsTable = ({ companyId, setMeetings }) => {
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
+                      <CalendarIcon className="w-3 h-3" />
                       <span>{date}</span>
                     </div>
                     <div className="flex items-center gap-1">

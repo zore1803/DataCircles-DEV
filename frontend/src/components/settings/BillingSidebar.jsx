@@ -1,3 +1,4 @@
+import CalendarIcon from "../common/CalendarIcon";
 // components/settings/BillingSidebar.jsx
 //
 // The left column: "what do I have, right now." Sticky on desktop so it
@@ -7,7 +8,7 @@
 // use — rather than an isolated color scheme that only exists here.
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Tag, ArrowRight, Clock, CreditCard, Calendar } from "lucide-react";
+import { Tag, ArrowRight, Clock, CreditCard } from "lucide-react";
 import { formatPrice, computeGST } from "../../utils/pricingSnapshot";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from "../../utils/subscriptionHelpers";
@@ -124,7 +125,7 @@ const BillingSidebar = ({ subscription }) => {
             onClick={() => setShowBillingCalendar(true)}
             className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline flex-shrink-0 pb-1"
           >
-            <Calendar className="w-3.5 h-3.5" /> Calendar
+            <CalendarIcon className="w-3.5 h-3.5" /> Calendar
           </button>
         </div>
         {/* Found via dashboard polish pass: effectiveRecurringTotal (from

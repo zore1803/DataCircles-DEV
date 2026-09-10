@@ -1,3 +1,5 @@
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -5,9 +7,6 @@ import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberForma
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 import {
   IndianRupeeIcon,
-  Trash2,
-  Calendar,
-  FileText,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
@@ -1096,7 +1095,7 @@ const DeliveryChallanForm = ({
                 disabled={isSubmitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-full bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
-                <FileText className="w-3.5 h-3.5" />
+                <PdfIcon className="w-4 h-4" />
                 {isSubmitting ? "Saving..." : "Save as Draft"}
               </button>
             </div>
@@ -1447,7 +1446,7 @@ const DeliveryChallanForm = ({
                                 className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                                 aria-label="Remove item"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <DeleteIcon className="w-4 h-4" />
                               </button>
                             </div>
                           </div>

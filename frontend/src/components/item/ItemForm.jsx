@@ -1,10 +1,10 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import {
   X,
-  Trash2,
   Type,
   FolderOpen,
   ChevronDown,
@@ -779,7 +779,7 @@ const ItemForm = ({
                               }}
                               className="text-red-500 hover:text-red-600 p-1"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <DeleteIcon className="w-4 h-4" />
                             </button>
                           </div>
                         ))}
@@ -920,7 +920,7 @@ const ItemForm = ({
                         onClick={() => handleRemoveVariant(i)}
                         className="text-red-600 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <DeleteIcon className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1324,7 +1324,7 @@ const ItemForm = ({
                         onClick={() => handleRemoveVariant(i)}
                         className="text-red-600 hover:text-red-700 p-1"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <DeleteIcon className="w-4 h-4" />
                       </button>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
+import ExcelIcon from "../common/ExcelIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect } from "react";
 import {
-  FileSpreadsheet,
   AlertCircle,
   X,
   Copy,
@@ -454,7 +454,7 @@ HealthCare Solutions,Healthcare,"789 Health Blvd, Med City",www.healthcaresoluti
             <div className="flex flex-col items-center">
               {file ? (
                 <>
-                  <FileSpreadsheet className="w-12 h-12 text-green-500 mb-3" />
+                  <ExcelIcon className="w-12 h-12 text-green-500 mb-3" />
                   <p className="text-sm text-gray-700 mb-2">
                     <span className="font-medium">{file.name}</span>
                   </p>

@@ -1,5 +1,8 @@
+import DeleteIcon from "../common/DeleteIcon";
+import ExcelIcon from "../common/ExcelIcon";
+import PdfIcon from "../common/PdfIcon";
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { X, BookText, ArrowDownCircle, ArrowUpCircle, Trash2, FileSpreadsheet, FileText, Lock, Unlock } from "lucide-react";
+import { X, BookText, ArrowDownCircle, ArrowUpCircle, Lock, Unlock } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import API from "../../services/api";
@@ -266,13 +269,13 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
               onClick={handleDownloadExcel}
               className="flex items-center gap-1.5 px-3 h-8 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold transition-colors"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" /> Download Excel
+              <ExcelIcon className="w-4 h-4" /> Download Excel
             </button>
             <button 
               onClick={handleDownloadPDF}
               className="flex items-center gap-1.5 px-3 h-8 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold transition-colors"
             >
-              <FileText className="w-3.5 h-3.5" /> Download PDF
+              <PdfIcon className="w-4 h-4" /> Download PDF
             </button>
             {journal?.status === "active" && (
               <button 
@@ -457,7 +460,7 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                                   {deletingId === row._id ? (
                                     <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
                                   ) : (
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <DeleteIcon className="w-4 h-4" />
                                   )}
                                 </button>
                               )}

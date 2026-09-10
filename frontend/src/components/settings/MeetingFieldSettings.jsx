@@ -1,6 +1,7 @@
+import CalendarClockIcon from "../common/CalendarClockIcon";
 import VideoIcon from "../common/VideoIcon";
 import React from "react";
-import { CalendarClock, Type, AlignLeft, Clock, Timer, ListTodo, MapPin, Link2 } from "lucide-react";
+import { Type, AlignLeft, Clock, Timer, ListTodo, MapPin, Link2 } from "lucide-react";
 import GenericFieldSettings from "./GenericFieldSettings";
 
 // Inferred from backend/models/Meeting.js — the fields the Meeting schema
@@ -28,7 +29,7 @@ const MeetingFieldSettings = () => (
   <GenericFieldSettings
     apiBase="/meeting-fields"
     moduleLabel="Meeting"
-    icon={<CalendarClock className="w-5 h-5 text-amber-600" />}
+    icon={<CalendarClockIcon className="w-5 h-5 text-amber-600" />}
     builtInFields={MEETING_BUILT_IN_FIELDS}
   />
 );

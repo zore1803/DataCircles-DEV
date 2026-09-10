@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import { useEffect, useState } from "react";
 import API, { configureAxios } from "../services/api";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +12,6 @@ import {
   UserPlus,
   Mail,
   Shield,
-  Trash2,
   Edit,
   Copy,
   RefreshCw,
@@ -896,7 +896,7 @@ function UserManagement() {
                               disabled={isSelf}
                               onClick={() => !isSelf && deleteUser(u._id)}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <DeleteIcon className="w-4 h-4" />
                               Delete
                             </button>
                           </div>

@@ -1,3 +1,4 @@
+import CalendarIcon from "../components/common/CalendarIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -8,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Calendar as CalendarIcon,
   Clock,
   MapPin,
   AlignLeft,
@@ -56,12 +56,11 @@ const CustomWeekIcon = (props) => (
 );
 
 const CustomDayIcon = (props) => (
-  <svg viewBox="210.5 14.667 17 18.666" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M218.167 25.667H219V29.0003" />
-    <path d="M222.333 15.667V19.0003" />
-    <path d="M211.5 22.333H226.5" />
-    <path d="M215.667 15.667V19.0003" />
-    <path d="M224.833 17.333H213.167C212.246 17.333 211.5 18.0792 211.5 18.9997V30.6663C211.5 31.5868 212.246 32.333 213.167 32.333H224.833C225.754 32.333 226.5 31.5868 226.5 30.6663V18.9997C226.5 18.0792 225.754 17.333 224.833 17.333Z" />
+  <svg viewBox="0 0 18 18" width={20} height={20} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path
+      d="M2 14C1.45 14 0.979167 13.8042 0.5875 13.4125C0.195833 13.0208 0 12.55 0 12V6C0 5.45 0.195833 4.97917 0.5875 4.5875C0.979167 4.19583 1.45 4 2 4H16C16.55 4 17.0208 4.19583 17.4125 4.5875C17.8042 4.97917 18 5.45 18 6V12C18 12.55 17.8042 13.0208 17.4125 13.4125C17.0208 13.8042 16.55 14 16 14H2ZM2 12H16V6H2V12ZM0.975 2C0.691667 2 0.458333 1.90417 0.275 1.7125C0.0916667 1.52083 0 1.28333 0 1C0 0.716667 0.0958333 0.479167 0.2875 0.2875C0.479167 0.0958333 0.716667 0 1 0H17.025C17.3083 0 17.5417 0.0958333 17.725 0.2875C17.9083 0.479167 18 0.716667 18 1C18 1.28333 17.9042 1.52083 17.7125 1.7125C17.5208 1.90417 17.2833 2 17 2H0.975ZM0.975 18C0.691667 18 0.458333 17.9042 0.275 17.7125C0.0916667 17.5208 0 17.2833 0 17C0 16.7167 0.0958333 16.4792 0.2875 16.2875C0.479167 16.0958 0.716667 16 1 16H17.025C17.3083 16 17.5417 16.0958 17.725 16.2875C17.9083 16.4792 18 16.7167 18 17C18 17.2833 17.9042 17.5208 17.7125 17.7125C17.5208 17.9042 17.2833 18 17 18H0.975Z"
+      fill="currentColor"
+    />
   </svg>
 );
 
@@ -862,32 +861,35 @@ const AdminCalendar = () => {
             >
               <ChevronRight size={20} style={{ color: "#111216" }} />
             </button>
-          </div>
 
-          {/* Jump back to the current period. Sits outside the prev/next
-              group as its own pill, and lights up while the view already
-              shows today so it reads as where-you-are, not just a control. */}
-          <button
-            onClick={() => setCurrentDate(new Date())}
-            disabled={loading || isViewingToday}
-            className="box-border flex flex-row justify-center items-center flex-shrink-0 transition-colors"
-            style={{
-              padding: "0px 16px",
-              height: 32,
-              marginLeft: 12,
-              fontFamily: "'SF Pro Display', Inter, sans-serif",
-              fontWeight: 500,
-              fontSize: 14,
-              lineHeight: "17px",
-              border: `1px solid ${isViewingToday ? "#0085FF" : "#E0E0E1"}`,
-              background: isViewingToday ? "#EFF6FF" : "#FFFFFF",
-              color: isViewingToday ? "#0085FF" : "#111216",
-              borderRadius: 95,
-              cursor: isViewingToday ? "default" : "pointer",
-            }}
-          >
-            Today
-          </button>
+            {/* Jump back to the current period. Kept inside the prev/next
+                group (not a standalone flex item on the bar) so the
+                filter bar's justify-between doesn't strand it out near the
+                horizontal center, colliding with the absolutely-positioned
+                Meetings/Tasks legend. Lights up while the view already
+                shows today so it reads as where-you-are, not just a control. */}
+            <button
+              onClick={() => setCurrentDate(new Date())}
+              disabled={loading || isViewingToday}
+              className="box-border flex flex-row justify-center items-center flex-shrink-0 transition-colors"
+              style={{
+                padding: "0px 16px",
+                height: 32,
+                marginLeft: 12,
+                fontFamily: "'SF Pro Display', Inter, sans-serif",
+                fontWeight: 500,
+                fontSize: 14,
+                lineHeight: "17px",
+                border: `1px solid ${isViewingToday ? "#0085FF" : "#E0E0E1"}`,
+                background: isViewingToday ? "#EFF6FF" : "#FFFFFF",
+                color: isViewingToday ? "#0085FF" : "#111216",
+                borderRadius: 95,
+                cursor: isViewingToday ? "default" : "pointer",
+              }}
+            >
+              Today
+            </button>
+          </div>
 
           {/* View switcher */}
           <div

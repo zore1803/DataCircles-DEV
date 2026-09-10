@@ -1,6 +1,7 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import React from "react";
-import { Search, Trash2, Info } from "lucide-react";
+import { Search, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   SectionHeader,
@@ -529,7 +530,7 @@ const FullWidthDocumentPanel = ({
                         disabled={form.items.length === 1}
                         className="w-7 h-7 inline-flex items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <DeleteIcon className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>

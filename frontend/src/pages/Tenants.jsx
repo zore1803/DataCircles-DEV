@@ -1,3 +1,5 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import DeleteIcon from "../components/common/DeleteIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -13,9 +15,7 @@ import {
   Shield,
   Package,
   X,
-  Calendar,
   IndianRupeeIcon,
-  Trash2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -810,7 +810,7 @@ const Tenants = () => {
                     {/* Joined */}
                     <td className="px-6 py-4">
                       <div className="flex items-center text-sm text-gray-900">
-                        <Calendar className="w-3 h-3 mr-1 text-gray-400" />
+                        <CalendarIcon className="w-3 h-3 mr-1 text-gray-400" />
                         {new Date(tenant.createdAt).toLocaleDateString(
                           "en-US",
                           {
@@ -839,7 +839,7 @@ const Tenants = () => {
                           className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-white hover:bg-red-600 border border-red-300 rounded-lg transition-all duration-200"
                           title="Delete organization"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <DeleteIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

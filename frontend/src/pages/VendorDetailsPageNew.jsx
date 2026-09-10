@@ -1,3 +1,4 @@
+import CalendarIcon from "../components/common/CalendarIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -27,7 +28,6 @@ import {
   Eye,
   Receipt,
   CheckSquare,
-  Calendar,
   FolderOpen,
   FilePlus,
   ChevronDown,
@@ -58,7 +58,7 @@ const vendorNewEntryOptions = [
   { label: "New Payment", icon: Receipt, tab: "Payments", create: "payment" },
   { label: "New Note", icon: StickyNote, tab: "Notes", create: "note" },
   { label: "New Task", icon: CheckSquare, tab: "Tasks", create: "task" },
-  { label: "New Meeting", icon: Calendar, tab: "Meetings", create: "meeting" },
+  { label: "New Meeting", icon: CalendarIcon, tab: "Meetings", create: "meeting" },
 ];
 
 /* ─── Tab Configuration ─── */

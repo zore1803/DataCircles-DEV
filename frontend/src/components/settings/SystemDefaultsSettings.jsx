@@ -1,6 +1,8 @@
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
-import { Trash2, Lock, Loader2, Timer, FileText, Settings2, Edit3, X, Check, CalendarDays } from "lucide-react";
+import { Lock, Loader2, Timer, Settings2, Edit3, X, Check, CalendarDays } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -305,7 +307,7 @@ function SystemDefaultsSettings() {
                           disabled={isSaving}
                           className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors disabled:opacity-50"
                         >
-                          <Trash2 className="w-3 h-3" /> Delete
+                          <DeleteIcon className="w-4 h-4" /> Delete
                         </button>
                       </div>
                     )}
@@ -321,7 +323,7 @@ function SystemDefaultsSettings() {
         <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-4 sm:p-6 h-fit">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
             <div className="bg-purple-100 p-2 rounded-lg">
-              <FileText className="w-5 h-5 text-purple-600" />
+              <PdfIcon className="w-4 h-4 text-purple-600" />
             </div>
             <div className="flex-1">
               <h3 className="text-xl font-bold text-gray-900">Note Types</h3>
@@ -409,7 +411,7 @@ function SystemDefaultsSettings() {
                           disabled={isSaving}
                           className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors disabled:opacity-50"
                         >
-                          <Trash2 className="w-3 h-3" /> Delete
+                          <DeleteIcon className="w-4 h-4" /> Delete
                         </button>
                       </div>
                     )}
@@ -513,7 +515,7 @@ function SystemDefaultsSettings() {
                             disabled={isSaving}
                             className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors disabled:opacity-50"
                           >
-                            <Trash2 className="w-3 h-3" /> Delete
+                            <DeleteIcon className="w-4 h-4" /> Delete
                           </button>
                         </div>
                       )}

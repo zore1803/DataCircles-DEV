@@ -1,9 +1,9 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
   Edit3,
-  Trash2,
   Save,
   X,
   Database,
@@ -269,7 +269,7 @@ const CompanyIndustrySettings = () => {
                         onClick={() => handleDelete(index)}
                         className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold transition-colors text-sm border border-red-200"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <DeleteIcon className="w-4 h-4" />
                         Delete
                       </button>
                     </div>

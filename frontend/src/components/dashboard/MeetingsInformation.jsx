@@ -1,6 +1,6 @@
 import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState } from "react";
-import { ArrowUpRight, ChevronDown, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Clock } from "lucide-react";
 import FilterIcon from "../common/FilterIcon";
 
 // Helper for 12th Nov style dates

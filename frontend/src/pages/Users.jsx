@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import CellphoneIcon from "../components/common/CellphoneIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
@@ -14,7 +15,6 @@ import {
   User,
   X,
   AlertCircle,
-  Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
@@ -923,7 +923,7 @@ const Users = () => {
                         className="text-red-600 hover:text-red-900 transition-colors cursor-pointer"
                         title="Delete user"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <DeleteIcon className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>

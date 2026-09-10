@@ -1,3 +1,6 @@
+import HistoryIcon from "../components/common/HistoryIcon";
+import DeleteIcon from "../components/common/DeleteIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
@@ -21,11 +24,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit2,
-  Trash2,
   Truck,
   CheckSquare,
-  History,
-  FileText,
   Pin,
   PinOff,
   EyeOff,
@@ -720,7 +720,7 @@ function Vendors() {
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors"
               >
-                <History className="w-4 h-4" /> Credited
+                <HistoryIcon className="w-4 h-4" /> Credited
               </button>
               <button
                 onClick={() => {
@@ -729,7 +729,7 @@ function Vendors() {
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
               >
-                <History className="w-4 h-4" /> Debited
+                <HistoryIcon className="w-4 h-4" /> Debited
               </button>
               <button
                 onClick={() => {
@@ -738,7 +738,7 @@ function Vendors() {
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors border-t border-gray-100"
               >
-                <Trash2 className="w-4 h-4" /> Delete
+                <DeleteIcon className="w-4 h-4" /> Delete
               </button>
             </div>
           </>,
@@ -1232,7 +1232,7 @@ function Vendors() {
                 disabled={bulkDeleting}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
@@ -1419,7 +1419,7 @@ function Vendors() {
                   onClick={() => setShowMoreMenu(false)}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
-                  <FileText className="w-4 h-4 text-gray-400" />
+                  <PdfIcon className="w-4 h-4 text-gray-400" />
                   Forms
                 </Link>
               </div>
@@ -1541,7 +1541,7 @@ function Vendors() {
                         opacity: isDragging ? 0.35 : 1,
                         ...stickyStyleFor(col.id),
                       }}
-                      className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
+                      className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${
                         isDragOver
                           ? "bg-blue-100"
                           : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
@@ -1854,7 +1854,7 @@ function Vendors() {
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-red-100 p-2 rounded-lg">
-                <Trash2 className="w-5 h-5 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
               </div>
               <h2 className="text-xl font-semibold text-gray-800 font-sf">
                 Delete Vendor
@@ -1879,7 +1879,7 @@ function Vendors() {
                 disabled={loading}
                 className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium font-inter flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Trash2 className="w-4 h-4" />
+                <DeleteIcon className="w-4 h-4" />
                 Delete
               </button>
             </div>
@@ -1893,7 +1893,7 @@ function Vendors() {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
                 Confirm Bulk Delete

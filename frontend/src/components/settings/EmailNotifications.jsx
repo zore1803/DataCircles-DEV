@@ -1,14 +1,14 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import React, { useState, useEffect } from "react";
 import {
   Mail,
   Bell,
   CheckCircle,
-  Calendar,
   Briefcase,
-  FileText,
   PlusCircle,
-  Trash2,
   Edit3,
   X,
   Save,
@@ -306,7 +306,7 @@ const EmailTemplateForm = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 p-2.5 rounded-xl">
-                <FileText className="w-6 h-6 text-blue-600" />
+                <PdfIcon className="w-4 h-4 text-blue-600" />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-900">
@@ -333,7 +333,7 @@ const EmailTemplateForm = ({
           {/* Template Name */}
           <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-              <FileText className="w-4 h-4" />
+              <PdfIcon className="w-4 h-4" />
               Template Name
             </label>
             <input
@@ -695,7 +695,7 @@ const EmailNotifications = () => {
       label: "Meeting Notifications",
       description:
         "Get notified about meeting invitations, updates, and reminders",
-      icon: <Calendar className="w-5 h-5" />,
+      icon: <CalendarIcon className="w-5 h-5" />,
       color: "text-blue-600",
       bgColor: "bg-blue-50",
       borderColor: "border-blue-200",
@@ -938,7 +938,7 @@ const EmailNotifications = () => {
         <div className="p-6 border-b-2 border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="bg-amber-100 p-2 rounded-lg">
-              <FileText className="w-5 h-5 text-amber-600" />
+              <PdfIcon className="w-4 h-4 text-amber-600" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">
@@ -962,7 +962,7 @@ const EmailNotifications = () => {
           {templates.length === 0 ? (
             <div className="p-12 text-center">
               <div className="bg-gray-100 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-8 h-8 text-gray-400" />
+                <PdfIcon className="w-8 h-8 text-gray-400" />
               </div>
               <p className="text-gray-500 font-medium mb-2">
                 No templates found
@@ -1027,7 +1027,7 @@ const EmailNotifications = () => {
                       className="flex items-center gap-1 p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                       title="Delete template"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

@@ -1,3 +1,5 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import SearchIcon from "../common/SearchIcon";
@@ -5,7 +7,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import StatTile from "../common/StatTile";
-import { Calendar, Trash2, Eye, Edit3, ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
+import { Eye, Edit3, ListChecks, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import API from "../../services/api";
 import VendorTaskForm from "./VendorTaskForm";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
@@ -449,7 +451,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
       actions={[
         { label: "View", icon: Eye, onClick: () => { setSelectedTask(task); setIsTaskModalOpen(true); } },
         { label: "Edit", icon: Edit3, onClick: () => handleEditTask(task) },
-        { label: "Delete", icon: Trash2, danger: true, onClick: () => { if (window.confirm("Delete this task?")) handleTaskDelete(task._id); } },
+        { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => { if (window.confirm("Delete this task?")) handleTaskDelete(task._id); } },
       ]}
     />
   );
@@ -659,7 +661,7 @@ const VendorTasksTable = ({ vendorId, showKPIs = true, autoOpenCreate = false, o
           }
           emptyContent={
             <div className="flex flex-col items-center gap-2">
-              <Calendar className="w-10 h-10 text-gray-400" />
+              <CalendarIcon className="w-10 h-10 text-gray-400" />
               <p className="text-sm text-gray-600">
                 {search || activeFilterCount ? "No tasks match your filters" : "No tasks yet"}
               </p>

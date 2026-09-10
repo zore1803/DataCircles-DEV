@@ -1,3 +1,4 @@
+import CalendarIcon from "../common/CalendarIcon";
 import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import ContactMeetingForm from "./ContactMeetingForm";
@@ -9,7 +10,6 @@ import {
   Users,
   CheckSquare,
   X,
-  Calendar,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 
@@ -422,7 +422,7 @@ const ContactCalendar = ({ contactId }) => {
             onClick={goToToday}
             className="p-1 hover:bg-blue-100 rounded transition-colors"
           >
-            <Calendar className="w-4 h-4 text-gray-600" />
+            <CalendarIcon className="w-4 h-4 text-gray-600" />
           </button>
           <button
             onClick={() => goToMonth(1)}

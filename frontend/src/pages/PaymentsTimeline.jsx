@@ -1,3 +1,5 @@
+import DeleteIcon from "../components/common/DeleteIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
@@ -6,9 +8,9 @@ import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, ChevronDown, ChevronUp, Pencil, Trash2, Eye, EyeOff,
+  X, ChevronDown, ChevronUp, Pencil, Eye, EyeOff,
   SlidersHorizontal, Share2, Edit2,
-  ChevronLeft, ChevronRight, Pin, PinOff, FileText,
+  ChevronLeft, ChevronRight, Pin, PinOff,
   TrendingUp, TrendingDown, Wallet, ListChecks,
   ArrowLeftRight, ArrowUp, ArrowDown } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
@@ -1162,7 +1164,7 @@ export default function PaymentsTimeline() {
                   setActionMenuPos(null);
                   setDeleteConfirmState({ isOpen: true, type: "single", target: doc });
                 }}>
-                <Trash2 className="w-4 h-4 text-red-500" /> Delete
+                <DeleteIcon className="w-4 h-4 text-red-500" /> Delete
               </button>
             </div>
           </>,
@@ -1812,7 +1814,7 @@ export default function PaymentsTimeline() {
             ) : filteredDocs.length === 0 ? (
               <tr>
                 <td colSpan={orderedColumns.length + 1} className="px-6 py-20 text-center">
-                  <FileText className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                  <PdfIcon className="w-10 h-10 mx-auto text-gray-300 mb-3" />
                   <p className="text-sm font-medium text-gray-500">No transactions found.</p>
                 </td>
               </tr>
@@ -2191,7 +2193,7 @@ export default function PaymentsTimeline() {
                           }}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors cursor-pointer font-medium"
                         >
-                          <FileText size={14} className="text-gray-400" />
+                          <PdfIcon className="w-4 h-4 text-gray-400" />
                           Download PDF
                         </button>
                         <button
@@ -2599,7 +2601,7 @@ export default function PaymentsTimeline() {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3 text-red-600 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">

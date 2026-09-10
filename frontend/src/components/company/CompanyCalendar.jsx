@@ -1,3 +1,5 @@
+import CalendarAddIcon from "../common/CalendarAddIcon";
+import CalendarIcon from "../common/CalendarIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import API from "../../services/api";
@@ -12,7 +14,6 @@ import {
   Users,
   CheckSquare,
   X,
-  Calendar,
   Loader2,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
@@ -697,7 +698,7 @@ const CompanyCalendar = ({ companyId, contactId, dealId }) => {
           className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
           title="Add Event"
         >
-          <PlusIcon className="w-4 h-4" />
+          <CalendarAddIcon className="w-4 h-4" />
         </button>
       </div>
 
@@ -895,7 +896,7 @@ const CompanyCalendar = ({ companyId, contactId, dealId }) => {
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden min-h-[740px] p-4">
             {!hasEvents ? (
               <div className="flex flex-col items-center justify-center h-full py-16 text-gray-400">
-                <Calendar className="w-8 h-8 mb-2" />
+                <CalendarIcon className="w-8 h-8 mb-2" />
                 <p className="text-sm">No events on this day</p>
                 {isFuture && (
                   <button

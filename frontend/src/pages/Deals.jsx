@@ -1,3 +1,7 @@
+import DeleteIcon from "../components/common/DeleteIcon";
+import AvgDealSizeIcon from "../components/common/AvgDealSizeIcon";
+import WonDealIcon from "../components/common/WonDealIcon";
+import LostDealIcon from "../components/common/LostDealIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
@@ -45,11 +49,8 @@ import {
   ChevronRight,
   Edit2,
   X,
-  Trash2,
-  FileText,
   Tag,
   IndianRupee,
-  Calendar,
   Building2,
   CheckSquare,
   Filter,
@@ -63,7 +64,6 @@ import {
   Wallet,
   TimerReset,
   Handshake,
-  ClipboardList,
   Eye,
 } from "lucide-react";
 
@@ -456,7 +456,7 @@ const ModernDealCard = React.memo(({ deal, onClick, isStale, colorTheme = "blue"
                     onClick={(e) => { e.stopPropagation(); setIsActionsOpen(false); onDeleteDeal && onDeleteDeal(deal._id); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <DeleteIcon className="w-3.5 h-3.5" />
                     Delete Deal
                   </button>
                 </div>
@@ -700,21 +700,9 @@ const ModernKanbanColumn = React.memo(({
   );
 });
 
-const WonDealsIcon = (props) => (
-  <svg viewBox="0 0 18 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M3.3365 20V12.4098L0 7L4.31725 0H12.9713L17.2885 7L13.952 12.4098V20L8.64425 18.202L3.3365 20ZM4.8365 17.8788L8.64425 16.6115L12.452 17.8788V14H4.8365V17.8788ZM5.15375 1.5L1.75375 7L5.15375 12.5H12.1348L15.5348 7L12.1348 1.5H5.15375ZM7.59425 10.7192L4.4 7.55L5.46925 6.48075L7.59425 8.60575L11.8193 4.35575L12.8885 5.4L7.59425 10.7192Z" fill="#0085FF" />
-  </svg>
-);
-
 const PipelineSummaryIcon = (props) => (
   <svg width="19" height="16" viewBox="0 0 19 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
     <path d="M17.1923 16H1.80775C1.30258 16 0.875 15.825 0.525 15.475C0.175 15.125 0 14.6974 0 14.1923V2.80775C0 2.30258 0.175 1.875 0.525 1.525C0.875 1.175 1.30258 1 1.80775 1H11.327V2.5H1.80775C1.73075 2.5 1.66025 2.53208 1.59625 2.59625C1.53208 2.66025 1.5 2.73075 1.5 2.80775V14.1923C1.5 14.2692 1.53208 14.3398 1.59625 14.4038C1.66025 14.4679 1.73075 14.5 1.80775 14.5H17.1923C17.2693 14.5 17.3398 14.4679 17.4038 14.4038C17.4679 14.3398 17.5 14.2692 17.5 14.1923V7.577H19V14.1923C19 14.6974 18.825 15.125 18.475 15.475C18.125 15.825 17.6974 16 17.1923 16ZM3.88475 12.173H10.25V9.69225H3.88475V12.173ZM3.88475 7.30775H10.25V4.827H3.88475V7.30775ZM12.6348 12.173H15.1152V7.577H12.6348V12.173ZM15.5 5.5V3.5H13.5V2H15.5V0H17V2H19V3.5H17V5.5H15.5Z" fill="#0085FF" />
-  </svg>
-);
-
-const DealsLostIcon = (props) => (
-  <svg width="21" height="21" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <path d="M19.0305 20.0845L16.769 17.823H2.6845C2.17933 17.823 1.75175 17.648 1.40175 17.298C1.05175 16.948 0.87675 16.5204 0.87675 16.0153V5.63075C0.87675 5.12558 1.05175 4.698 1.40175 4.348C1.75175 3.998 2.17933 3.823 2.6845 3.823H4.87675L6.37675 5.323H2.6845C2.6075 5.323 2.537 5.35508 2.473 5.41925C2.40883 5.48325 2.37675 5.55375 2.37675 5.63075V16.0153C2.37675 16.0923 2.40883 16.1628 2.473 16.2267C2.537 16.2909 2.6075 16.323 2.6845 16.323H15.2538L0 1.05375L1.05375 0L20.0845 19.0308L19.0305 20.0845ZM19.8768 16.0308L18.3768 14.5308V5.63075C18.3768 5.55375 18.3447 5.48325 18.2805 5.41925C18.2165 5.35508 18.146 5.323 18.069 5.323H9.169L6.87675 3.03075V2.13075C6.87675 1.62558 7.05175 1.198 7.40175 0.848C7.75175 0.498 8.17933 0.323 8.6845 0.323H12.069C12.5742 0.323 13.0018 0.498 13.3518 0.848C13.7018 1.198 13.8768 1.62558 13.8768 2.13075V3.823H18.069C18.5742 3.823 19.0018 3.998 19.3518 4.348C19.7018 4.698 19.8768 5.12558 19.8768 5.63075V16.0308ZM8.37675 3.823H12.3768V2.13075C12.3768 2.05375 12.3447 1.98325 12.2805 1.91925C12.2165 1.85508 12.146 1.823 12.069 1.823H8.6845C8.6075 1.823 8.537 1.85508 8.473 1.91925C8.40883 1.98325 8.37675 2.05375 8.37675 2.13075V3.823Z" fill="#0085FF" />
   </svg>
 );
 
@@ -2326,7 +2314,7 @@ function Deals() {
                 disabled={loading}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
@@ -2619,9 +2607,9 @@ function Deals() {
           <div className="grid grid-cols-2 gap-3 lg:flex lg:flex-row lg:items-center lg:gap-6 self-stretch">
             {[
               { label: "Pipeline Summary", value: `₹${formatNumberToIndian(dealStatistics.totalPipeline)}`, icon: PipelineSummaryIcon, trend: `${Math.abs(dealStatistics.trends.pipeline)}% this week`, trendUp: dealStatistics.trends.pipeline >= 0 },
-              { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealsIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
-              { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: ClipboardList, iconClassName: "w-7 h-7", trend: `${Math.abs(dealStatistics.trends.avgSize)}% this week`, trendUp: dealStatistics.trends.avgSize >= 0 },
-              { label: "Deals Lost", value: dealStatistics.lostCount, icon: DealsLostIcon, trend: `${Math.abs(dealStatistics.trends.lost)}% this week`, trendUp: dealStatistics.trends.lost >= 0 },
+              { label: "Deals Won", value: dealStatistics.wonCount, icon: WonDealIcon, trend: `${Math.abs(dealStatistics.trends.won)}% this week`, trendUp: dealStatistics.trends.won >= 0 },
+              { label: "Avg. Deal Size", value: `₹${formatNumberToIndian(dealStatistics.averageDealSize)}`, icon: AvgDealSizeIcon, trend: `${Math.abs(dealStatistics.trends.avgSize)}% this week`, trendUp: dealStatistics.trends.avgSize >= 0 },
+              { label: "Deals Lost", value: dealStatistics.lostCount, icon: LostDealIcon, trend: `${Math.abs(dealStatistics.trends.lost)}% this week`, trendUp: dealStatistics.trends.lost >= 0 },
             ].map((kpi) => (
               <StatTile
                 key={kpi.label}
@@ -2697,7 +2685,7 @@ function Deals() {
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
                 Delete Deal?
@@ -3014,7 +3002,7 @@ function Deals() {
                 <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-6 text-center">
                     <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Trash2 className="w-6 h-6 text-red-600" />
+                      <DeleteIcon className="w-6 h-6 text-red-600" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
                       Confirm Bulk Delete

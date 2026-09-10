@@ -1,11 +1,9 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
-import {
-  Trash2,
-  X,
+import {  X,
   ChevronDown,
-  Calendar,
 } from "lucide-react";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "../vendor/QuickVendorForm";
@@ -480,7 +478,7 @@ const PurchaseForm = ({
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                 </button>
                 <button type="button" className="text-red-500 hover:text-red-600 transition-colors">
-                  <Trash2 className="w-[18px] h-[18px]" />
+                  <DeleteIcon className="w-4 h-4" />
                 </button>
                 <div className="w-px h-4 bg-gray-300"></div>
               </>
@@ -578,7 +576,7 @@ const PurchaseForm = ({
                       onClick={() => removeItem(index)}
                       className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   )}
 

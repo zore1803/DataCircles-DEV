@@ -1,5 +1,6 @@
+import DeleteIcon from "../common/DeleteIcon";
 import React, { useState, useEffect } from "react";
-import { X, CheckCircle2, Clock, ChevronDown, Trash2 } from "lucide-react";
+import { X, CheckCircle2, Clock, ChevronDown } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import { formatNumberToIndian } from "../../utils/numberFormatter";
@@ -435,7 +436,7 @@ const RecordPurchasePaymentModal = ({ isOpen, onClose, purchase, onSuccess }) =>
                         {deletingId === payment._id ? (
                           <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <DeleteIcon className="w-4 h-4" />
                         )}
                       </button>
                     </div>

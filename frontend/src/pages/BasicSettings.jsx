@@ -1,3 +1,4 @@
+import CalendarClockIcon from "../components/common/CalendarClockIcon";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -19,7 +20,6 @@ import {
   Globe,
   ExternalLink,
   ListChecks,
-  CalendarClock,
 } from "lucide-react";
 import SettingsIcon from "../components/common/SettingsIcon";
 import KanbanSettings from "../components/settings/KanbanSettings";
@@ -168,7 +168,7 @@ const BasicSettings = () => {
     },
     {
       id: "meeting-fields",
-      icon: <CalendarClock className="w-5 h-5" />,
+      icon: <CalendarClockIcon className="w-5 h-5" />,
       label: "Meeting Fields",
       description: "Customize meeting data fields",
       color: "text-violet-600",

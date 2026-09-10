@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
@@ -18,7 +19,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical,
   Edit3,
-  Trash2,
   Save,
   X,
   Layout,
@@ -373,7 +373,7 @@ export default function KanbanSettings() {
                                 : "Delete status"
                             }
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <DeleteIcon className="w-4 h-4" />
                             Delete
                           </button>
                         </div>

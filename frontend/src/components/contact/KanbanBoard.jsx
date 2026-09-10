@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import CellphoneIcon from "../common/CellphoneIcon";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
@@ -375,7 +376,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Mail, Edit, Trash2 } from "lucide-react";
+import { Mail, Edit } from "lucide-react";
 
 // ============================================================================
 // 1. PIXEL-PERFECT CARD COMPONENT
@@ -454,7 +455,7 @@ const KanbanCard = ({ contact, isDragging, onEdit, onDelete }) => {
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors text-left"
                 >
-                  <Trash2 className="w-3 h-3" /> Delete
+                  <DeleteIcon className="w-4 h-4" /> Delete
                 </button>
               </div>
             </>

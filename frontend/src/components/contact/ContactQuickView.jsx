@@ -1,3 +1,4 @@
+import CalendarIcon from "../common/CalendarIcon";
 import CellphoneIcon from "../common/CellphoneIcon";
 // src/components/contact/ContactQuickView.jsx
 import React, { useEffect, useState } from "react";
@@ -341,7 +342,7 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
                     )}
                     {activeTabRight === "Calendar" && (
                       <div className="overflow-x-auto">
-                        <Calendar contactId={contactId} />
+                        <CalendarIcon contactId={contactId} />
                       </div>
                     )}
                   </div>

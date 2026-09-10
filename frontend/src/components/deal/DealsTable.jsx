@@ -1,3 +1,6 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import MoreIcon from "../common/MoreIcon";
 import React, { useState, useMemo, useRef, useEffect } from "react";
@@ -7,11 +10,8 @@ import { formatNumberToIndian } from "../../utils/numberFormatter";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Edit2,
-  Trash2,
-  FileText,
   Tag,
   IndianRupee,
-  Calendar,
   Building2,
   ChevronsUpDown,
   ChevronUp,
@@ -514,7 +514,7 @@ export default function DealsTable({
       columnHelper.accessor("title", {
         id: "title",
         size: 185,
-        header: () => renderHeaderMenu("title", "Deal Name", FileText),
+        header: () => renderHeaderMenu("title", "Deal Name", PdfIcon),
         cell: ({ row, getValue }) => {
           const deal = row.original;
           return (
@@ -622,7 +622,7 @@ export default function DealsTable({
       columnHelper.display({
         id: "dueDate",
         size: 171,
-        header: () => renderHeaderMenu("dueDate", "Due Date", Calendar, { sortable: false }),
+        header: () => renderHeaderMenu("dueDate", "Due Date", CalendarIcon, { sortable: false }),
         cell: ({ row }) => {
           const dueDateField = row.original.additionalFields?.find(
             (f) => f.key === "Expected Close Date"
@@ -822,7 +822,7 @@ export default function DealsTable({
                             }}
                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <DeleteIcon className="w-3.5 h-3.5" />
                             Delete Deal
                           </button>
                         </>

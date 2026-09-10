@@ -1,3 +1,6 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import DeleteIcon from "../components/common/DeleteIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
@@ -12,7 +15,6 @@ import React, {
   useCallback,
 } from "react";
 import {
-  FileText,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -20,11 +22,9 @@ import {
   Pencil,
   Eye,
   Send,
-  Trash2,
   Repeat,
   X,
   AlertCircle,
-  Calendar,
   Briefcase,
   Clock,
   CheckCircle2,
@@ -230,11 +230,11 @@ const COLUMN_DEFS = [
   {
     id: "number",
     label: (tab) => (tab === "tax" ? "Invoice ID" : "Document ID"),
-    icon: FileText,
+    icon: PdfIcon,
     field: (tab) => numberKeyFor(tab),
   },
   { id: "deal", label: "Deal", icon: Briefcase, field: "deal.title" },
-  { id: "date", label: "Issue Date", icon: Calendar, field: "date" },
+  { id: "date", label: "Issue Date", icon: CalendarIcon, field: "date" },
   { id: "dueDate", label: "Due Date", icon: Clock, field: "dueDate" },
   { id: "amount", label: "Amount", icon: IndianRupee, field: "amount" },
   { id: "status", label: "Status", icon: CheckCircle2, field: "status" },
@@ -327,7 +327,7 @@ const DeleteConfirmModal = ({ isOpen, onClose, onConfirm, docType }) => {
             onClick={onConfirm}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2"
           >
-            <Trash2 className="w-4 h-4" />
+            <DeleteIcon className="w-4 h-4" />
             Delete
           </button>
         </div>
@@ -2170,7 +2170,7 @@ const Accounting = () => {
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <DeleteIcon className="w-4 h-4" />
                     Delete
                   </button>
                 </>
@@ -2216,7 +2216,7 @@ const Accounting = () => {
       case "number":
         return (
           <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <PdfIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
             <span
               onClick={() => {
                 // All document types open the same full two-pane edit screen;
@@ -2426,7 +2426,7 @@ const Accounting = () => {
                   disabled={bulkDeleting}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <DeleteIcon className="w-4 h-4 text-red-600" />
                   Delete
                 </button>
                 <button
@@ -2776,7 +2776,7 @@ const Accounting = () => {
                         opacity: isDragging ? 0.35 : 1,
                         ...stickyStyleFor(col.id),
                       }}
-                      className={`relative px-4 py-3 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
+                      className={`relative px-4 py-3 text-left text-sm font-bold text-[#525866] whitespace-nowrap border-b border-r border-[#E1E4EA] transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
                         } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"
                         } active:cursor-grabbing`}
                     >
@@ -2827,7 +2827,7 @@ const Accounting = () => {
               {!showLoadingSkeleton && !currentLoading && currentDocuments.length === 0 && (
                 <tr>
                   <td colSpan={orderedColumns.length + 1} className="px-6 py-20 text-center">
-                    <FileText className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                    <PdfIcon className="w-10 h-10 mx-auto text-gray-300 mb-3" />
                     <p className="text-sm font-medium text-gray-500">
                       Create New {docNameFor(activeTab)}
                     </p>
@@ -3725,7 +3725,7 @@ const Accounting = () => {
                   disabled={bulkDeleting}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <DeleteIcon className="w-4 h-4" />
                   {bulkDeleting ? "Deleting..." : "Delete"}
                 </button>
               </div>

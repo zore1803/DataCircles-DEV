@@ -1,3 +1,5 @@
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
@@ -5,8 +7,6 @@ import { createPortal } from "react-dom";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   IndianRupeeIcon,
-  Trash2,
-  FileText,
   X,
   Eye,
   ChevronDown,
@@ -1335,7 +1335,7 @@ const InvoiceForm = ({
                 {isSubmitting ? (
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <FileText className="w-3.5 h-3.5" />
+                  <PdfIcon className="w-4 h-4" />
                 )}
                 Save as Draft
               </button>
@@ -1764,7 +1764,7 @@ const InvoiceForm = ({
                                 className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                                 aria-label="Remove item"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <DeleteIcon className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
@@ -3222,7 +3222,7 @@ const CreateInvoicePanel = ({
                 disabled={submitting}
                 className="h-8 px-4 flex items-center gap-1.5 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
               >
-                <FileText className="w-3.5 h-3.5" />
+                <PdfIcon className="w-4 h-4" />
                 <span className="lg:hidden">Draft</span>
                 <span className="hidden lg:inline">Save as Draft</span>
               </button>
@@ -3805,7 +3805,7 @@ const CreateInvoicePanel = ({
                               onClick={() => removeItem(realIndex)}
                               className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[#C1C9D2] hover:text-red-500 transition-colors"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <DeleteIcon className="w-4 h-4" />
                             </button>
                           </div>
                         </div>

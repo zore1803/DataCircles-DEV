@@ -1,10 +1,11 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 // pages/CouponManagement.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Tag, X, Save, Trash2, ToggleLeft, ToggleRight,
-  Percent, IndianRupee, Calendar, BarChart3, Shuffle,
+  Tag, X, Save, ToggleLeft, ToggleRight,
+  Percent, IndianRupee, BarChart3, Shuffle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import API, { configureAxios } from "../services/api";
@@ -362,7 +363,7 @@ const CouponManagement = () => {
                       {c.isActive ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5" />}
                     </button>
                     <button onClick={() => handleDelete(c)} className="text-red-500 hover:text-red-700">
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>

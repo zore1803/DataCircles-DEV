@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../services/api";
@@ -7,7 +8,6 @@ import StatusDropdown from "./StatusDropdown";
 import SearchIcon from "../common/SearchIcon";
 import {
   Edit3,
-  Trash2,
   ChevronDown,
   ChevronRight,
   X,
@@ -331,7 +331,7 @@ const ContactFolder = () => {
                       }}
                       className="p-1.5 bg-white rounded-full shadow-sm text-gray-400 hover:text-red-600 hover:scale-110 transition-all"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -429,7 +429,7 @@ const ContactFolder = () => {
                       }}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

@@ -1,3 +1,4 @@
+import CalendarIcon from "../components/common/CalendarIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
 import { formatNumberToIndian } from "../utils/numberFormatter";
@@ -12,7 +13,6 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Calendar,
   TrendingUp,
   IndianRupee,
   X,
@@ -861,7 +861,7 @@ const Billing = () => {
                       {sub.nextBillingDate ? (
                         <>
                           <span className="text-sm text-gray-900 flex items-center">
-                            <Calendar className="w-3 h-3 mr-1 text-gray-400" />
+                            <CalendarIcon className="w-3 h-3 mr-1 text-gray-400" />
                             {new Date(sub.nextBillingDate).toLocaleDateString(
                               "en-US",
                               {

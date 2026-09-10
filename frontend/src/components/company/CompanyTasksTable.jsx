@@ -1,8 +1,8 @@
+import CalendarIcon from "../common/CalendarIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
 import {
   ChevronDown,
-  Calendar,
   Clock,
   CheckCircle,
   CheckCircle2,
@@ -251,7 +251,7 @@ const CompanyTasksTable = ({ companyId, setTasks }) => {
       {/* Header and Controls */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
+          <CalendarIcon className="w-4 h-4" />
           <span>{filteredTasks.length} tasks</span>
         </div>
         <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ const CompanyTasksTable = ({ companyId, setTasks }) => {
       {/* Tasks List */}
       {filteredTasks.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+          <CalendarIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm text-gray-600 mb-1">
             {statusFilter ? `No ${statusFilter.toLowerCase()} tasks` : "No tasks yet"}
           </p>

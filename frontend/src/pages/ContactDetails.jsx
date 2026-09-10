@@ -1,3 +1,5 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import DeleteIcon from "../components/common/DeleteIcon";
 import AddCallIcon from "../components/common/AddCallIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -27,9 +29,7 @@ import {
   Eye,
   CheckSquare,
   StickyNote,
-  Calendar,
   CopyPlus,
-  Trash2,
   Clock,
   Target,
 } from "lucide-react";
@@ -54,7 +54,7 @@ const newEntryOptions = [
   { label: "New Deal", icon: BriefcaseBusiness, create: "deal" },
   { label: "New Notes", icon: StickyNote, tab: "Notes" },
   { label: "New Task", icon: CheckSquare, tab: "Tasks" },
-  { label: "New Meetings", icon: Calendar, create: "meeting" },
+  { label: "New Meetings", icon: CalendarIcon, create: "meeting" },
   { label: "New Call Log", icon: AddCallIcon, tab: "Call Logs" },
 ];
 
@@ -346,7 +346,7 @@ const ContactDetailsPage = () => {
     { label: "Open Deals", value: openDealsCount, icon: BriefcaseBusiness },
     { label: "Closed Deals", value: closedDealsCount, icon: CheckSquare },
     { label: "Upcoming Tasks", value: upcomingTasksCount, icon: CheckSquare },
-    { label: "Upcoming Meetings", value: upcomingMeetingsCount, icon: Calendar },
+    { label: "Upcoming Meetings", value: upcomingMeetingsCount, icon: CalendarIcon },
     {
       label: "Lifecycle Stage",
       value: contact?.lifecycleStage || "—",
@@ -589,8 +589,8 @@ const ContactDetailsPage = () => {
                     }}
                     className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-red-600 hover:bg-red-50 text-left"
                   >
-                    <Trash2 size={12} className="text-red-400 lg:hidden" />
-                    <Trash2 size={14} className="text-red-400 hidden lg:block" />
+                    <DeleteIcon style={{ width: 12, height: 12 }} className="text-red-400 lg:hidden" />
+                    <DeleteIcon style={{ width: 14, height: 14 }} className="text-red-400 hidden lg:block" />
                     Delete Contact
                   </button>
                 </div>

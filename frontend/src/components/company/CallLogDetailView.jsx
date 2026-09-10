@@ -1,5 +1,7 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import React, { useEffect, useState } from "react";
-import { X, Trash2, Edit3, Clock, User, Calendar } from "lucide-react";
+import { X, Edit3, Clock, User } from "lucide-react";
 import IncomingCallIcon from "../common/IncomingCallIcon";
 import OutgoingCallIcon from "../common/OutgoingCallIcon";
 
@@ -77,7 +79,7 @@ const CallLogDetailView = ({ open, log, onClose, onEdit, onDelete }) => {
                 className="p-1 rounded-lg hover:bg-red-50 transition-colors"
                 title="Delete"
               >
-                <Trash2 className="w-5 h-5" style={{ color: "#F60000" }} />
+                <DeleteIcon className="w-4 h-4" style={{ color: "#F60000" }} />
               </button>
             )}
             <div style={{ width: 1, height: 18, backgroundColor: "rgba(28, 27, 31, 0.3)" }} />
@@ -198,7 +200,7 @@ const CallLogDetailView = ({ open, log, onClose, onEdit, onDelete }) => {
                     className="flex items-center gap-1.5"
                     style={{ fontFamily: "Inter", fontWeight: 600, fontSize: 14, lineHeight: "120%", color: "#1F2937" }}
                   >
-                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
                     {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : "—"}
                   </span>
                 </div>

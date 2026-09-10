@@ -1,10 +1,11 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import { useState, useEffect } from "react";
 import API from "../../services/api";
 import {
   Edit3,
-  Trash2,
   X,
   AlertCircle,
   CheckCircle2,
@@ -13,7 +14,6 @@ import {
   Hash,
   ChevronDown,
   Info,
-  Calendar,
   CheckSquare,
   Link,
   FolderPlus,
@@ -31,7 +31,7 @@ const FIELD_TYPES = [
   { value: "dropdown", label: "Dropdown", icon: <ChevronDown className="w-4 h-4" /> },
   { value: "multiselect", label: "Multi-select", icon: <CheckSquare className="w-4 h-4" /> },
   { value: "url", label: "URL", icon: <Link className="w-4 h-4" /> },
-  { value: "date", label: "Date Picker", icon: <Calendar className="w-4 h-4" /> },
+  { value: "date", label: "Date Picker", icon: <CalendarIcon className="w-4 h-4" /> },
 ];
 
 const emptyField = () => ({ name: "", type: "text", options: [], required: false, category: "Uncategorized" });
@@ -414,7 +414,7 @@ const GenericFieldSettings = ({ apiBase, moduleLabel, icon, builtInFields = [] }
               <Edit3 className="w-3 h-3" /> Edit
             </button>
             <button type="button" onClick={() => handleDelete(index)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors">
-              <Trash2 className="w-3 h-3" /> Delete
+              <DeleteIcon className="w-4 h-4" /> Delete
             </button>
           </div>
         </div>
@@ -668,7 +668,7 @@ const GenericFieldSettings = ({ apiBase, moduleLabel, icon, builtInFields = [] }
                             <Edit3 className="w-3 h-3" /> Edit
                           </button>
                           <button type="button" onClick={() => handleDeleteCategory(categoryName)} className="text-xs font-semibold text-red-600 hover:text-red-800 hover:bg-red-50 flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-lg border border-red-200 shadow-sm transition-colors" title="Delete Section">
-                            <Trash2 className="w-3 h-3" /> Delete
+                            <DeleteIcon className="w-4 h-4" /> Delete
                           </button>
                         </div>
                       </>

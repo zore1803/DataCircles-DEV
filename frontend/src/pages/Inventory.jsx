@@ -1,3 +1,4 @@
+import HistoryIcon from "../components/common/HistoryIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -6,7 +7,7 @@ import { createPortal } from "react-dom";
 import {
   X, ChevronDown, ChevronUp, Eye, EyeOff, Minus,
   ChevronLeft, ChevronRight, Pin, PinOff, Package,
-  TrendingDown, Boxes, IndianRupee, Wallet, History, ArrowRight, Check, ArrowUp, ArrowDown } from "lucide-react";
+  TrendingDown, Boxes, IndianRupee, Wallet, ArrowRight, Check, ArrowUp, ArrowDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { formatINR } from "../utils/clientExport";
 import BulkActionBar from "../components/common/BulkActionBar";
@@ -721,7 +722,7 @@ export default function Inventory() {
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); openHistory(item); }}
               >
-                <History className="w-4 h-4 text-gray-400" /> Stock History
+                <HistoryIcon className="w-4 h-4 text-gray-400" /> Stock History
               </button>
             </div>
           </>,
@@ -1058,7 +1059,7 @@ export default function Inventory() {
                       boxShadow: "inset -1px 0 0 0 #E1E4EA",
                       ...stickyStyleFor(col.id),
                     }}
-                    className={`relative px-4 py-2 text-left text-xs font-bold text-[#525866] uppercase tracking-wider whitespace-nowrap overflow-hidden transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"} ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
+                    className={`relative px-4 py-2 text-left text-sm font-bold text-[#525866] whitespace-nowrap overflow-hidden transition-colors ${isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"} ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="truncate flex-1">{col.label}</span>
@@ -1362,7 +1363,7 @@ export default function Inventory() {
             <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/50">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <History className="w-5 h-5 text-blue-600" />
+                  <HistoryIcon className="w-4 h-4 text-blue-600" />
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-lg font-bold text-gray-900 truncate">Stock History</h2>
@@ -1381,7 +1382,7 @@ export default function Inventory() {
                 </div>
               ) : movements.length === 0 ? (
                 <div className="text-center py-16">
-                  <History className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                  <HistoryIcon className="w-10 h-10 mx-auto text-gray-300 mb-3" />
                   <p className="text-sm font-medium text-gray-500">No stock movements yet.</p>
                 </div>
               ) : (

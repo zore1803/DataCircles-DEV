@@ -1,11 +1,11 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   IndianRupeeIcon,
-  Trash2,
-  Calendar,
-  FileText,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
@@ -1173,7 +1173,7 @@ const PerformaInvoiceForm = ({
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
+                <PdfIcon className="w-4 h-4 text-blue-600" />
                 {editingPerformaInvoice
                   ? "Edit Pro Forma Invoice"
                   : "Create Pro Forma Invoice"}
@@ -1189,7 +1189,7 @@ const PerformaInvoiceForm = ({
                 {isSubmitting ? (
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <FileText className="w-3.5 h-3.5" />
+                  <PdfIcon className="w-4 h-4" />
                 )}
                 Save as Draft
               </button>
@@ -1258,7 +1258,7 @@ const PerformaInvoiceForm = ({
                     Pro Forma Invoice Date *
                   </label>
                   <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="date"
                       className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -1287,7 +1287,7 @@ const PerformaInvoiceForm = ({
                     Due Date
                   </label>
                   <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="date"
                       className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -1682,7 +1682,7 @@ const PerformaInvoiceForm = ({
                           className="flex items-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
                           aria-label="Remove item"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <DeleteIcon className="w-4 h-4" />
                           Remove Item
                         </button>
                       </div>

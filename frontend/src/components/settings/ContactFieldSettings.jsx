@@ -1,3 +1,5 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import CellphoneIcon from "../common/CellphoneIcon";
 import PlusIcon from "../common/PlusIcon";
@@ -5,7 +7,6 @@ import { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
   Edit3,
-  Trash2,
   Save,
   X,
   Contact,
@@ -18,7 +19,6 @@ import {
   ChevronDown,
   Info,
   User,
-  Calendar,
   CheckSquare,
   Link,
   FolderOpen,
@@ -91,7 +91,7 @@ const ContactFieldSettings = () => {
     {
       value: "date",
       label: "Date Picker",
-      icon: <Calendar className="w-4 h-4" />,
+      icon: <CalendarIcon className="w-4 h-4" />,
     },
     {
       value: "multiselect",
@@ -538,7 +538,7 @@ const ContactFieldSettings = () => {
               <Edit3 className="w-3 h-3" /> Edit
             </button>
             <button type="button" onClick={() => handleDelete(index)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-xs border border-red-200 transition-colors">
-              <Trash2 className="w-3 h-3" /> Delete
+              <DeleteIcon className="w-4 h-4" /> Delete
             </button>
           </div>
         </div>
@@ -982,7 +982,7 @@ const ContactFieldSettings = () => {
                             className="text-xs font-semibold text-red-600 hover:text-red-800 hover:bg-red-50 flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-lg border border-red-200 shadow-sm transition-colors"
                             title="Delete Section"
                           >
-                            <Trash2 className="w-3 h-3" /> Delete
+                            <DeleteIcon className="w-4 h-4" /> Delete
                           </button>
                         </div>
                       </>

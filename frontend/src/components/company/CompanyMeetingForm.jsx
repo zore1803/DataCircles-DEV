@@ -1,3 +1,6 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import VideoIcon from "../common/VideoIcon";
 import Checkbox from "../common/Checkbox";
 import CellphoneIcon from "../common/CellphoneIcon";
@@ -9,14 +12,11 @@ import SearchIcon from "../common/SearchIcon";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X,
-  Calendar,
   Clock,
   Users,
   MapPin,
-  FileText,
   AlertTriangle,
   CheckCircle2,
-  Trash2,
   User,
   Building,
   Lightbulb,
@@ -756,7 +756,7 @@ const CompanyMeetingForm = ({
                   <div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-gray-600 text-xs">
-                        <Calendar className="w-3.5 h-3.5" />
+                        <CalendarIcon className="w-3.5 h-3.5" />
                         <span>Date</span>
                       </div>
                       <input
@@ -823,7 +823,7 @@ const CompanyMeetingForm = ({
                   {/* Meeting Category */}
                   <div className="flex items-center justify-between group">
                     <div className="flex items-center gap-2 text-gray-600 text-xs">
-                      <FileText className="w-3.5 h-3.5" />
+                      <PdfIcon className="w-4 h-4" />
                       <span>Category</span>
                     </div>
                     <select
@@ -912,7 +912,7 @@ const CompanyMeetingForm = ({
                   className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white"
                   title="Delete Meeting"
                 >
-                  <Trash2 className="w-5 h-5" />
+                  <DeleteIcon className="w-4 h-4" />
                 </button>
               )}
             </div>

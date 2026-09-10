@@ -1,3 +1,4 @@
+import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import DownloadIcon from "../common/DownloadIcon";
@@ -34,7 +35,6 @@ import {
   ChevronUp,
   ChevronDown,
   EyeOff,
-  FileText,
   X,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
@@ -755,7 +755,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
 
       {!loading && invoices.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <FileText size={28} className="mb-3 text-gray-400" />
+          <PdfIcon className="w-7 h-7 mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setManualInvoiceFormOpen(true)}

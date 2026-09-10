@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 // pages/FormBuilderPage.jsx
 // Form Builder — dedicated full-width route, /forms/:id/builder (see FORMS_FRONTEND_ARCHITECTURE.md
@@ -50,7 +51,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   GripVertical,
-  Trash2,
   Type,
   Heading as HeadingIcon,
   Minus,
@@ -798,7 +798,7 @@ function CanvasItem({ element, fieldMetaById, isSelected, onSelect, onDelete, is
             isLocked ? "text-gray-300 cursor-not-allowed" : "text-gray-300 hover:text-red-500"
           }`}
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <DeleteIcon className="w-4 h-4" />
         </button>
       )}
     </div>

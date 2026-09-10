@@ -1,7 +1,8 @@
+import CalendarIcon from "../common/CalendarIcon";
 // components/settings/SubscriptionPlans.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, Calendar, ShieldCheck, RotateCcw, ReceiptText } from "lucide-react";
+import { Gift, Building2, Star, Crown, CheckCircle, AlertCircle, X, Users, ShieldCheck, RotateCcw, ReceiptText } from "lucide-react";
 import { useSubscription } from "../../contexts/SubscriptionContext";
 import PlanCard from "../subscription/PlanCard";
 import CurrentSubscriptionInfo from "../subscription/CurrentSubscriptionInfo";
@@ -2150,7 +2151,7 @@ const SubscriptionPlans = () => {
               onClick={() => setShowBillingCalendar(true)}
               className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-full bg-[#0085FF] text-xs font-semibold text-white hover:bg-blue-600 transition-colors whitespace-nowrap"
             >
-              <Calendar className="w-3.5 h-3.5" /> View Billing Calendar
+              <CalendarIcon className="w-3.5 h-3.5" /> View Billing Calendar
             </button>,
             document.getElementById('settings-header-actions')
           )}

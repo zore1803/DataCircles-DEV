@@ -1,3 +1,6 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import AvgDealSizeIcon from "../components/common/AvgDealSizeIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import CellphoneIcon from "../components/common/CellphoneIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -29,13 +32,11 @@ import {
   LabelList,
 } from "recharts";
 import {
-  Calendar,
   TrendingUp,
   TrendingDown,
   Users,
   Building,
   Briefcase,
-  FileText,
   Target,
   Mail,
   ShoppingCart,
@@ -437,7 +438,7 @@ const Insights = () => {
     {
       id: "invoices",
       label: "Invoices",
-      icon: <FileText className="w-4 h-4" />,
+      icon: <PdfIcon className="w-4 h-4" />,
       color: "text-teal-600",
       bgColor: "bg-teal-50",
     },
@@ -1124,7 +1125,7 @@ const Insights = () => {
       Draft: {
         bg: "bg-gray-100",
         text: "text-gray-800",
-        icon: <FileText className="w-3 h-3" />,
+        icon: <PdfIcon className="w-4 h-4" />,
       },
       Paid: {
         bg: "bg-green-100",
@@ -1226,7 +1227,7 @@ const Insights = () => {
       items.push({
         id: `invoice-${invoice._id}`,
         type: "invoices",
-        icon: <FileText className="w-4 h-4" />,
+        icon: <PdfIcon className="w-4 h-4" />,
         iconBg: isOverdue ? "bg-red-100 text-red-600" : "bg-teal-100 text-teal-600",
         title: isOverdue
           ? `Invoice #${invoice.invoiceNumber} is overdue`
@@ -1385,7 +1386,7 @@ const Insights = () => {
           <StatCard
             title="Total Invoices"
             value={filteredData.filteredInvoices.length}
-            icon={<FileText className="w-6 h-6" />}
+            icon={<PdfIcon className="w-4 h-4" />}
             color="text-teal-600"
             bgColor="bg-teal-50"
             change={monthOverMonthChange(filteredData.filteredInvoices, "createdAt")}
@@ -2509,7 +2510,7 @@ const Insights = () => {
               onClick: () => reviewContacts(noOwnerContacts.map((c) => c._id)),
             },
             {
-              icon: <FileText className="w-4 h-4" />,
+              icon: <PdfIcon className="w-4 h-4" />,
               iconBg: "#FCCCCD",
               iconColor: "#DF120B",
               title: `${overdueContacts.length} Contacts with overdue invoices`,
@@ -2561,7 +2562,7 @@ const Insights = () => {
               if (!at) return;
               contactActivity.push({
                 id: `invoice-${inv._id}`,
-                icon: <FileText className="w-4 h-4" />,
+                icon: <PdfIcon className="w-4 h-4" />,
                 iconBg: "#FCCCCD",
                 iconColor: "#EF0004",
                 title: `Invoice #${inv.invoiceNumber}`,
@@ -3093,7 +3094,7 @@ const Insights = () => {
           <StatCard
             title="Avg. Deal Size"
             value={`₹${formatNumberToIndian(Math.round(avgDealSizeCompanies))}`}
-            icon={<IndianRupee className="w-6 h-6" />}
+            icon={<AvgDealSizeIcon className="w-6 h-6" />}
             color="text-emerald-600"
             change={avgDealSizeChange}
             changeLabel="vs last month"
@@ -3813,7 +3814,7 @@ const Insights = () => {
           <StatCard
             title="Avg. Deal Size"
             value={`₹${formatNumberToIndian(Math.round(averageDealValue))}`}
-            icon={<Briefcase className="w-6 h-6" />}
+            icon={<AvgDealSizeIcon className="w-6 h-6" />}
             color="text-emerald-600"
             change={avgDealSizeChangeDeals}
             changeLabel="vs last month"
@@ -5370,7 +5371,7 @@ const Insights = () => {
                 {upcomingDeliveries.slice(0, 6).map((po) => (
                   <div key={po._id} className="relative z-10 flex items-center gap-3">
                     <div className="w-7 h-7 rounded-full bg-[#CCE7FF] flex items-center justify-center shrink-0">
-                      <Calendar className="w-4 h-4 text-[#0085FF]" />
+                      <CalendarIcon className="w-4 h-4 text-[#0085FF]" />
                     </div>
                     <div className="flex items-center justify-between flex-1 min-w-0 gap-2">
                       <p className="text-xs font-semibold text-[#1C1C1D] truncate">
@@ -5647,7 +5648,7 @@ const Insights = () => {
         subtitle: `${dueSoonPurchases.length} bills, ₹${formatNumberToIndian(Math.round(sumGrandTotal(dueSoonPurchases)))} due soon`,
         bg: "#FCCCCD",
         color: "#F60000",
-        Icon: Calendar,
+        Icon: CalendarIcon,
       },
     ];
 
@@ -6464,7 +6465,7 @@ const Insights = () => {
           <StatCard
             title="Total Invoiced"
             value={`₹${formatNumberToIndian(Math.round(totalAmount))}`}
-            icon={<FileText className="w-6 h-6" />}
+            icon={<PdfIcon className="w-4 h-4" />}
             color="text-blue-600"
             change={totalInvoicedChange}
             changeLabel="vs last month"
@@ -6989,7 +6990,7 @@ const Insights = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="w-4 h-4 inline mr-1" />
+              <CalendarIcon className="w-4 h-4 inline mr-1" />
               From Date
             </label>
             <input
@@ -7003,7 +7004,7 @@ const Insights = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="w-4 h-4 inline mr-1" />
+              <CalendarIcon className="w-4 h-4 inline mr-1" />
               To Date
             </label>
             <input

@@ -1,11 +1,10 @@
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
   IndianRupeeIcon,
-  Trash2,
-  Calendar,
-  FileText,
   X,
   Eye,
   ChevronLeft,
@@ -1304,7 +1303,7 @@ const DeliveryChallanFormFull = ({
                 {isSubmitting ? (
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <FileText className="w-3.5 h-3.5" />
+                  <PdfIcon className="w-4 h-4" />
                 )}
                 Save as Draft
               </button>
@@ -1713,7 +1712,7 @@ const DeliveryChallanFormFull = ({
                             className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                             aria-label="Remove item"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <DeleteIcon className="w-4 h-4" />
                           </button>
                         </div>
                       </div>

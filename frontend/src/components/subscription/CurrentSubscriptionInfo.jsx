@@ -1,7 +1,8 @@
+import CalendarIcon from "../common/CalendarIcon";
 // components/subscription/CurrentSubscriptionInfo.jsx
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Calendar, Users, CreditCard, Clock, Gift, AlertCircle } from 'lucide-react';
+import { Users, CreditCard, Clock, Gift, AlertCircle } from "lucide-react";
 import { deriveSubscriptionUIState, SUBSCRIPTION_UI_STATES } from '../../utils/subscriptionHelpers';
 import SubscriptionPricingBreakdown from './SubscriptionPricingBreakdown';
 import { useSubscription } from '../../contexts/SubscriptionContext';
@@ -252,7 +253,7 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
                 <span className="text-gray-600">{subscription.userCount} users</span>
               </div>
               <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                <Calendar className="w-3 h-3" />
+                <CalendarIcon className="w-3 h-3" />
                 Next billing: {formatDate(subscription.nextBillingDate)}
               </div>
 
@@ -360,7 +361,7 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
                     </span>
                   </div>
                   <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                    <Calendar className="w-3 h-3" />
+                    <CalendarIcon className="w-3 h-3" />
                     Effective: {formatDate(pendingPlanOrCycleChange.effectiveAt)}
                   </div>
 
@@ -453,7 +454,7 @@ const CurrentSubscriptionInfo = ({ subscription, allPlanAddons }) => {
               surfaces can never show different numbers for one subscription. */}
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1 text-xs text-gray-500">
-              <Calendar className="w-3 h-3" />
+              <CalendarIcon className="w-3 h-3" />
               Next billing: {formatDate(subscription.nextBillingDate)}
             </div>
             <SubscriptionPricingBreakdown subscription={subscription} />

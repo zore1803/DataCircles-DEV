@@ -1,3 +1,5 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
@@ -16,13 +18,11 @@ import HighlightText from "../common/HighlightText";
 import { 
   StickyNote,
   Edit3,
-  Trash2,
   Clock,
   User,
   Save,
   X,
   Eye,
-  Calendar,
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 import DataTable from "../common/DataTable";
@@ -255,7 +255,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
                 <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
                   Document Note
                 </span>
-                <Calendar style={{ width: 12, height: 12, color: "#868C98" }} />
+                <CalendarIcon style={{ width: 12, height: 12, color: "#868C98" }} />
               </div>
               <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}>
                 {formatFullDate(note.createdAt)}
@@ -384,7 +384,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
                     onClick={() => { setMenuOpen(false); setMenuPos(null); onDelete(note._id); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <DeleteIcon className="w-4 h-4" />
                     Delete Note
                   </button>
                 </div>
@@ -906,7 +906,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
       actions={[
         { label: "View", icon: Eye, onClick: () => handleView(note) },
         { label: "Edit", icon: Edit3, onClick: () => handleEdit(note) },
-        { label: "Delete", icon: Trash2, danger: true, onClick: () => handleDelete(note._id) },
+        { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => handleDelete(note._id) },
       ]}
     />
   );
@@ -998,7 +998,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
     { label: "Total Notes", value: notes.length, icon: StickyNote, subtitle: "All time" },
     { label: "Recent Notes", value: recentNotesCount, icon: Clock, subtitle: latestNote ? `Latest update ${relativeDaysForKpi(latestNote.createdAt)}` : "Last 7 days", subtitleClass: "text-blue-500" },
     { label: "Team Contributors", value: noteContributors.size, icon: User, subtitle: "Unique authors" },
-    { label: "Last Updated", value: latestUpdatedKpiLabel, icon: Calendar, subtitle: latestNote ? (typeof latestNote.user === "object" ? latestNote.user?.name || "Unknown" : "Unknown") : null },
+    { label: "Last Updated", value: latestUpdatedKpiLabel, icon: CalendarIcon, subtitle: latestNote ? (typeof latestNote.user === "object" ? latestNote.user?.name || "Unknown" : "Unknown") : null },
   ];
 
   return (

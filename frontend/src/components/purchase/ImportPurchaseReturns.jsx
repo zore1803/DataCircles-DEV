@@ -1,6 +1,7 @@
+import PdfIcon from "../common/PdfIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useRef } from "react";
-import { X, FileText, CheckCircle2 } from "lucide-react";
+import { X, CheckCircle2 } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -190,7 +191,7 @@ const ImportPurchaseReturns = ({ isOpen, onClose, onImportSuccess }) => {
           ) : (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-gray-400" />
+                <PdfIcon className="w-4 h-4 text-gray-400" />
                 <span className="text-sm font-medium text-gray-700 truncate">{fileName}</span>
                 <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-emerald-600">
                   <CheckCircle2 className="w-3.5 h-3.5" /> {rows.length} row{rows.length !== 1 ? "s" : ""} ready

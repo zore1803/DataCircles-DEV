@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
@@ -21,7 +22,6 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  Trash2,
   Filter,
   X,
   Edit3,
@@ -976,7 +976,7 @@ const CreateFolderModal = ({ isOpen, onClose, onSubmit, onDelete, initialName = 
                 className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-gray-100 bg-white mr-auto"
                 title="Delete Folder"
               >
-                <Trash2 className="w-5 h-5" />
+                <DeleteIcon className="w-4 h-4" />
               </button>
             )}
             <button
@@ -2131,7 +2131,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                           className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Delete"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <DeleteIcon className="w-4 h-4" />
                         </button>
                       </div>
                       <GridFolderIcon size={100} />

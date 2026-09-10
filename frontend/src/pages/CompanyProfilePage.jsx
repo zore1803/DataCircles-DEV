@@ -1,3 +1,5 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import AddCallIcon from "../components/common/AddCallIcon";
 import CellphoneIcon from "../components/common/CellphoneIcon";
 import PlusIcon from "../components/common/PlusIcon";
@@ -32,14 +34,12 @@ import {
   CopyPlus,
   BriefcaseBusiness,
   Users,
-  FileText,
   Eye,
   Receipt,
   CheckSquare,
   Mail,
   File,
   StickyNote,
-  Calendar,
   FolderOpen,
   LayoutGrid,
   X,
@@ -78,9 +78,9 @@ const tabs = [
 const newEntryOptions = [
   { label: "New Deal", icon: BriefcaseBusiness, tab: "Deals", create: "deal" },
   { label: "New Contact", icon: Users, tab: "Contacts", create: "contact" },
-  { label: "New Invoice", icon: FileText, tab: "Invoices", create: "invoice" },
+  { label: "New Invoice", icon: PdfIcon, tab: "Invoices", create: "invoice" },
   { label: "New Notes", icon: StickyNote, tab: "Notes", create: "note" },
-  { label: "New Meetings", icon: Calendar, tab: "Meetings", create: "meeting" },
+  { label: "New Meetings", icon: CalendarIcon, tab: "Meetings", create: "meeting" },
   { label: "New Call Log", icon: AddCallIcon, tab: "Call Logs", create: "call" },
   { label: "New Folders", icon: FolderOpen, tab: "Folders", create: "folder" },
 ];

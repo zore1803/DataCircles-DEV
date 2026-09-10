@@ -1,6 +1,7 @@
+import CalendarIcon from "../common/CalendarIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
-import { ChevronDown, Calendar, Clock, Users } from "lucide-react";
+import { ChevronDown, Clock, Users } from "lucide-react";
 import API from "../../services/api";
 import ContactMeetingForm from "./ContactMeetingForm";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
@@ -173,7 +174,7 @@ const MeetingsTable = ({ contactId }) => {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
+          <CalendarIcon className="w-4 h-4" />
           <span>{filteredMeetings.length} meetings</span>
         </div>
         <div className="flex items-center gap-2">
@@ -204,7 +205,7 @@ const MeetingsTable = ({ contactId }) => {
       {/* Meetings List */}
       {filteredMeetings.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+          <CalendarIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm text-gray-600 mb-1">
             {statusFilter ? `No ${statusFilter} meetings` : "No meetings yet"}
           </p>
@@ -250,7 +251,7 @@ const MeetingsTable = ({ contactId }) => {
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
+                      <CalendarIcon className="w-3 h-3" />
                       <span>{date}</span>
                     </div>
                     <div className="flex items-center gap-1">

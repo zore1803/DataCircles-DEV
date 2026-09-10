@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../services/api";
@@ -7,7 +8,6 @@ import HighlightText from "../common/HighlightText";
 import SearchIcon from "../common/SearchIcon";
 import {
   Edit3,
-  Trash2,
   X,
   Building2,
   MapPin,
@@ -99,7 +99,7 @@ const FolderCompanyCard = ({ company, query, onOpen, onEdit, onRemove }) => (
           className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
           title="Remove from this hotlist"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <DeleteIcon className="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -162,7 +162,7 @@ const FolderCompanyRow = ({ company, query, onOpen, onEdit, onRemove }) => (
         className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
         title="Remove from this hotlist"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <DeleteIcon className="w-4 h-4" />
       </button>
     </div>
   </div>
@@ -815,7 +815,7 @@ const Hotlist = () => {
                   onClick={() => deleteFolder(folder._id)}
                   className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <DeleteIcon className="w-4 h-4" />
                 </button>
               </div>
 

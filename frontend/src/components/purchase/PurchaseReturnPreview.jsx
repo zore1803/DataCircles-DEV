@@ -1,5 +1,6 @@
+import DeleteIcon from "../common/DeleteIcon";
 import React, { useEffect, useState } from "react";
-import { Pencil, Printer, Trash2, X } from "lucide-react";
+import { Pencil, Printer, X } from "lucide-react";
 import API from "../../services/api";
 
 // Same server-rendered-PDF approach as PurchasePreview.tsx/PurchaseOrderPreview.jsx:
@@ -119,7 +120,7 @@ const PurchaseReturnPreview = ({ purchaseReturn, isOpen, onClose, onEdit, onDele
                 title="Delete"
                 className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
               >
-                <Trash2 className="w-4 h-4" />
+                <DeleteIcon className="w-4 h-4" />
               </button>
             )}
             <div className="w-px h-5 bg-gray-200 mx-1" />

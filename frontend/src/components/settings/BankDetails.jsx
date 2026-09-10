@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import BankLogo from '../BankLogo';
 
@@ -13,7 +14,6 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import {
   Edit3,
-  Trash2,
   CheckCircle,
   ArrowRight,
   Landmark,
@@ -321,7 +321,7 @@ const BankDetails = () => {
                     className="rounded-lg p-1.5 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
                     title="Delete bank"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <DeleteIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>

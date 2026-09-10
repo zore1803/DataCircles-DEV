@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -16,7 +17,6 @@ import {
   ChevronRight,
   RotateCcw,
   Edit2,
-  Trash2,
   CheckSquare,
   X,
   Eye,
@@ -762,7 +762,7 @@ const PurchaseReturn = () => {
                     onClick={() => { closeRowMenu(); handleDelete(p._id); }}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <DeleteIcon className="w-4 h-4" />
                     Delete
                   </button>
                   {p.status !== "Paid" && (
@@ -1680,7 +1680,7 @@ const PurchaseReturn = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">Delete Purchase Return</h3>
               <p className="text-sm text-gray-500 font-inter mb-6">
@@ -1732,7 +1732,7 @@ const PurchaseReturn = () => {
                   disabled={bulkLoading}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <DeleteIcon className="w-4 h-4 text-red-600" />
                   Delete
                 </button>
                 <button

@@ -1,10 +1,10 @@
+import CalendarIcon from "../common/CalendarIcon";
 import React from "react";
 import {
   X,
   Clock,
   User,
   MessageSquare,
-  Calendar,
 } from "lucide-react";
 import CellphoneIcon from "../common/CellphoneIcon";
 import IncomingCallIcon from "../common/IncomingCallIcon";
@@ -154,7 +154,7 @@ const CallLogDetailView = ({ log, onClose }) => {
                 {/* Date/Time */}
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <CalendarIcon className="w-4 h-4 text-gray-500" />
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Date & Time
                     </span>

@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
@@ -6,7 +7,6 @@ import {
   User,
   MessageSquare,
   Edit2,
-  Trash2,
   ChevronDown
 } from "lucide-react";
 import CellphoneIcon from "../common/CellphoneIcon";
@@ -304,7 +304,7 @@ const CallLogs = ({ contactId }) => {
                       }}
                       className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

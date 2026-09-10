@@ -1,6 +1,7 @@
+import ExcelIcon from "../common/ExcelIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect } from "react";
-import { FileSpreadsheet, AlertCircle, X } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
 import UploadIcon from "../common/UploadIcon";
@@ -214,7 +215,7 @@ Global Traders,8500,2026-01-18,Credit,UPI,SBI Savings,Advance received`;
             <div className="flex flex-col items-center">
               {file ? (
                 <>
-                  <FileSpreadsheet className="w-12 h-12 text-green-500 mb-3" />
+                  <ExcelIcon className="w-12 h-12 text-green-500 mb-3" />
                   <p className="text-sm text-gray-700 mb-2"><span className="font-medium">{file.name}</span></p>
                   <p className="text-xs text-gray-500 mb-4">{csvHeaders.length > 0 && `${csvHeaders.length} columns, ${csvRows.length} rows detected`}</p>
                 </>

@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import {
   X,
-  Calendar,
   Clock,
   Users,
   Building,

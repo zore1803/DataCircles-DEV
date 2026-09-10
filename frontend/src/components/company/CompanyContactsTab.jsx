@@ -1,3 +1,4 @@
+import CalendarClockIcon from "../common/CalendarClockIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useMemo, useState, useRef, useEffect } from "react";
@@ -31,7 +32,6 @@ import {
   Contact as ContactIcon,
   BadgeCheck,
   Activity,
-  CalendarClock,
   Phone,
   ChevronLeft,
   ChevronRight,
@@ -535,7 +535,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
     { label: "Total Contacts", value: contacts.length, icon: ContactIcon },
     { label: "Decision Makers", value: decisionMakers, icon: DecisionMakersIcon },
     { label: "Recent Interactions", value: meetings.length, icon: RecentInteractionsIcon },
-    { label: "Upcoming Follow-ups", value: upcomingFollowUps, icon: CalendarClock },
+    { label: "Upcoming Follow-ups", value: upcomingFollowUps, icon: CalendarClockIcon },
   ];
 
   return (

@@ -1,3 +1,4 @@
+import DeleteIcon from "./DeleteIcon";
 import DownloadIcon from "./DownloadIcon";
 import SelectAllIcon from "./SelectAllIcon";
 import React from 'react';
@@ -5,9 +6,8 @@ import {
   Edit2,
   ListChecks,
   StickyNote,
-  Trash2,
   X,
-} from 'lucide-react';
+} from "lucide-react";
 
 /**
  * Bulk-selection action strip, shared by every list that supports multi-select.
@@ -52,7 +52,7 @@ const BulkActionBar = ({
     onAddNote && { key: 'note', label: 'Add Note', Icon: StickyNote, iconClass: 'text-emerald-600', onClick: onAddNote },
     onAddTask && { key: 'task', label: 'Add Task', Icon: ListChecks, iconClass: 'text-indigo-600', onClick: onAddTask },
     onUpdateStatus && { key: 'update', label: 'Bulk Update', Icon: Edit2, iconClass: 'text-blue-600', onClick: onUpdateStatus },
-    onDelete && { key: 'delete', label: 'Delete', Icon: Trash2, iconClass: 'text-red-600', onClick: onDelete, disabled: isDeleting },
+    onDelete && { key: 'delete', label: 'Delete', Icon: DeleteIcon, iconClass: 'text-red-600', onClick: onDelete, disabled: isDeleting },
     onCancel && { key: 'cancel', label: 'Cancel', Icon: X, iconClass: 'text-gray-500', onClick: onCancel },
   ].filter(Boolean);
 

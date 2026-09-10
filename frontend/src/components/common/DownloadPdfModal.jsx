@@ -1,6 +1,7 @@
+import PdfIcon from "./PdfIcon";
 import DownloadIcon from "./DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
-import { X, FileText } from "lucide-react";
+import { X } from "lucide-react";
 
 // Sanitize characters illegal in most OS file systems
 const sanitize = (name) =>
@@ -147,7 +148,7 @@ const DownloadPdfModal = ({ isOpen, documentData, onConfirm, onCancel }) => {
                 Preview
               </p>
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                <FileText className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <PdfIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <span className="text-sm text-gray-900 truncate font-medium">
                   {preview}.pdf
                 </span>

@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import VideoIcon from "../common/VideoIcon";
 import Checkbox from "../common/Checkbox";
 import CellphoneIcon from "../common/CellphoneIcon";
@@ -12,12 +13,10 @@ import SearchIcon from "../common/SearchIcon";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X,
-  Calendar,
   Clock,
   Users,
   AlertTriangle,
   CheckCircle2,
-  Trash2,
   User,
   Building,
   Building2,
@@ -25,7 +24,6 @@ import {
   Lightbulb,
   Timer,
   Flag,
-  FileText,
   Briefcase,
   Pencil,
   ChevronDown,
@@ -1458,7 +1456,7 @@ const AdminMeetingForm = ({
                   className="w-8 h-8 flex items-center justify-center rounded-full text-red-500 hover:bg-red-50 border border-[#1F2937]/10 transition-colors"
                   title="Delete Meeting"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <DeleteIcon className="w-4 h-4" />
                 </button>
               )}
             </div>

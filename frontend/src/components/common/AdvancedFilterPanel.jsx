@@ -1,6 +1,7 @@
+import DeleteIcon from "./DeleteIcon";
 import PlusIcon from "./PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
-import { X, Trash2, ChevronDown } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import FilterIcon from "./FilterIcon";
 
 import SearchIcon from "./SearchIcon";
@@ -384,7 +385,7 @@ export default function AdvancedFilterPanel({
                     className="absolute -top-2 -right-2 bg-white border border-gray-200 p-1.5 rounded-full text-red-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all shadow-sm z-10"
                     title="Remove filter"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <DeleteIcon className="w-4 h-4" />
                   </button>
 
                   <div className="space-y-3">

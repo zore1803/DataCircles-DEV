@@ -1,5 +1,6 @@
+import PdfIcon from "../common/PdfIcon";
 import React, { useState } from 'react';
-import { FileText } from 'lucide-react';
+
 
 const InvoiceStylePreview = ({ style: initialStyle, isOpen, onClose }) => {
   if (!isOpen) return null;
@@ -17,7 +18,7 @@ const InvoiceStylePreview = ({ style: initialStyle, isOpen, onClose }) => {
       <div className="bg-white rounded-xl p-6 w-full max-w-5xl shadow-2xl max-h-[85vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-600" />
+            <PdfIcon className="w-4 h-4 text-blue-600" />
             {selectedStyle} Invoice Preview
           </h3>
           <button

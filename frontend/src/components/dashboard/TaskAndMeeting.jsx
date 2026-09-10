@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import API from "../../services/api";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
-import { Calendar, Clock, Users, FileText, ChevronDown, ArrowUpRight, Layout } from "lucide-react";
+import { Clock, Users, ChevronDown, ArrowUpRight, Layout } from "lucide-react";
 
 // NEW: Exported TasksCard to be used in Dashboard side-by-side
 export const TasksCard = ({ tasks, totalTasks }) => {

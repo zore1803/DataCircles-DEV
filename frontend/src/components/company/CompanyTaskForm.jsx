@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import SearchIcon from "../common/SearchIcon";
@@ -6,14 +7,11 @@ import API from "../../services/api";
 import toast from "react-hot-toast";
 import {
   X,
-  Calendar,
   Clock,
   User,
   Users,
-  FileText,
   CheckCircle2,
   AlertCircle,
-  Trash2,
   Loader2,
   Edit3,
   Save,
@@ -814,7 +812,7 @@ const CompanyTaskForm = ({
                 className="mr-auto w-8 h-8 flex items-center justify-center text-[#DF120B] hover:bg-red-50 rounded-full transition-colors disabled:opacity-50"
                 title="Delete Task"
               >
-                <Trash2 className="w-4 h-4" />
+                <DeleteIcon className="w-4 h-4" />
               </button>
             )}
 

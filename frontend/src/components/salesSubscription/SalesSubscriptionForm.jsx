@@ -1,6 +1,7 @@
+import DeleteIcon from "../common/DeleteIcon";
 import SearchIcon from "../common/SearchIcon";
 import React, { useEffect, useMemo, useState } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchableDropdown from "../contact/SearchableDropdown";
@@ -409,7 +410,7 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
                           <td className="px-3 py-2 text-right font-medium">{money(calcItemAmount(l))}</td>
                           <td className="px-3 py-2">
                             <button type="button" onClick={() => removeLine(l._key)} className="p-1 text-red-500 hover:bg-red-50 rounded">
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <DeleteIcon className="w-4 h-4" />
                             </button>
                           </td>
                         </tr>

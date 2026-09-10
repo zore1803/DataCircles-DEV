@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import SearchIcon from "../common/SearchIcon";
 import DownloadIcon from "../common/DownloadIcon";
@@ -9,9 +10,7 @@ import { useParams } from "react-router-dom";
 import { autoTable } from "jspdf-autotable";
 import {
   Edit,
-  Trash2,
   Eye,
-  Calendar,
   ArrowUpCircle,
   ArrowDownCircle,
   X,
@@ -575,7 +574,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       actions={[
         { label: "Edit", icon: Edit, onClick: () => handleEditPayment(payment) },
         { label: "View Receipt", icon: Eye, onClick: () => handleViewReceipt(payment) },
-        { label: "Delete", icon: Trash2, danger: true, onClick: () => handleQuickDeletePayment(payment) },
+        { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => handleQuickDeletePayment(payment) },
       ]}
     />
   );

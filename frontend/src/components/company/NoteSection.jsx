@@ -1,3 +1,5 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -12,13 +14,11 @@ import {
   ChevronDown,
   StickyNote,
   Edit3,
-  Trash2,
   Users,
   X,
   Clock,
   Eye,
   Copy,
-  Calendar,
   Type,
   Flag,
   CheckCircle,
@@ -533,7 +533,7 @@ export const NoteViewer = ({ isOpen, onClose, note, onEdit, onDelete }) => {
               className="p-1 rounded-lg hover:bg-red-50 transition-colors"
               title="Delete"
             >
-              <Trash2 className="w-5 h-5" style={{ color: "#F60000" }} />
+              <DeleteIcon className="w-4 h-4" style={{ color: "#F60000" }} />
             </button>
             <div style={{ width: 1, height: 18, backgroundColor: "rgba(28, 27, 31, 0.3)" }} />
             <button
@@ -1003,7 +1003,7 @@ export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
                 <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}>
                   Document Note
                 </span>
-                <Calendar style={{ width: 12, height: 12, color: "#868C98" }} />
+                <CalendarIcon style={{ width: 12, height: 12, color: "#868C98" }} />
               </div>
               <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: "120%", color: "#525866" }}>
                 {formatFullDate(note.createdAt)}
@@ -1141,7 +1141,7 @@ export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
                     onClick={() => { setMenuOpen(false); setMenuPos(null); onDelete(note._id); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <DeleteIcon className="w-4 h-4" />
                     Delete Note
                   </button>
                 </div>
@@ -1513,7 +1513,7 @@ export const NoteEditor = ({
                 className="mr-auto w-8 h-8 flex items-center justify-center text-[#DF120B] hover:bg-red-50 rounded-full transition-colors"
                 title="Delete Note"
               >
-                <Trash2 className="w-4 h-4" />
+                <DeleteIcon className="w-4 h-4" />
               </button>
             )}
 

@@ -1,3 +1,6 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import VideoIcon from "../common/VideoIcon";
 import CellphoneIcon from "../common/CellphoneIcon";
 // components/vendor/VendorMeetingForm.jsx
@@ -5,8 +8,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import {
-  X, Calendar, Clock, Users, MapPin, FileText,
-  AlertTriangle, CheckCircle2, Trash2, Building, Lightbulb,
+  X, Clock, Users, MapPin,
+  AlertTriangle, CheckCircle2, Building, Lightbulb,
   Timer, Flag, Pencil, Truck
 } from "lucide-react";
 
@@ -403,7 +406,7 @@ const VendorMeetingForm = ({
                   {form.description && (
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                       <div className="flex items-start gap-2 mb-2">
-                        <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
+                        <PdfIcon className="w-4 h-4 text-gray-500 mt-0.5" />
                         <span className="text-sm font-semibold text-gray-700">Description</span>
                       </div>
                       <p className="text-gray-700 whitespace-pre-line leading-relaxed">{form.description}</p>
@@ -414,7 +417,7 @@ const VendorMeetingForm = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="w-4 h-4 text-purple-600" />
+                      <CalendarIcon className="w-4 h-4 text-purple-600" />
                       <span className="text-sm font-semibold text-gray-700">Date & Time</span>
                     </div>
                     <p className="font-bold text-gray-900 text-lg">
@@ -450,7 +453,7 @@ const VendorMeetingForm = ({
             ) : (
               /* EDIT/CREATE MODE - Form */
               <form id="vendor-meeting-form" onSubmit={handleSubmit} className="p-6 space-y-6">
-                <FormField label="Meeting Title" required error={errors.title} icon={FileText}>
+                <FormField label="Meeting Title" required error={errors.title} icon={PdfIcon}>
                   <input
                     type="text"
                     value={form.title}
@@ -464,7 +467,7 @@ const VendorMeetingForm = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {!calendarDate ? (
-                    <FormField label="Date" required error={errors.date} icon={Calendar}>
+                    <FormField label="Date" required error={errors.date} icon={CalendarIcon}>
                       <input
                         type="date"
                         value={form.date}
@@ -477,9 +480,9 @@ const VendorMeetingForm = ({
                       />
                     </FormField>
                   ) : (
-                    <FormField label="Date" icon={Calendar} description="Selected from calendar">
+                    <FormField label="Date" icon={CalendarIcon} description="Selected from calendar">
                       <div className="flex items-center gap-2 py-3 px-4 bg-purple-50 text-purple-800 rounded-xl border border-purple-200">
-                        <Calendar className="w-4 h-4" />
+                        <CalendarIcon className="w-4 h-4" />
                         <span className="font-medium">{calendarDate}</span>
                       </div>
                     </FormField>
@@ -569,7 +572,7 @@ const VendorMeetingForm = ({
 
                 <FormField
                   label="Description"
-                  icon={FileText}
+                  icon={PdfIcon}
                   description="Meeting agenda, topics, or notes"
                 >
                   <textarea
@@ -584,7 +587,7 @@ const VendorMeetingForm = ({
                 {existingMeetings.length > 0 && (
                   <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
                     <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                      <Calendar className="w-4 h-4" />
+                      <CalendarIcon className="w-4 h-4" />
                       Other meetings on this date
                     </h4>
                     <div className="space-y-2">
@@ -630,7 +633,7 @@ const VendorMeetingForm = ({
                     onClick={handleDelete}
                     className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl font-semibold transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <DeleteIcon className="w-4 h-4" />
                     Delete
                   </button>
                 )}

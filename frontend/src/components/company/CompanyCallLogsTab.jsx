@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import AddCallIcon from "../common/AddCallIcon";
@@ -17,7 +18,6 @@ import {
   EyeOff,
   Eye,
   Edit3,
-  Trash2,
   X,
   Clock,
   Table2,
@@ -791,7 +791,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                         title="Delete call"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <DeleteIcon className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1089,7 +1089,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                               }}
                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <DeleteIcon className="w-4 h-4" />
                               Delete Call
                             </button>
                           </div>
@@ -1304,7 +1304,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Delete</h3>
               <p className="text-sm text-gray-500 mb-6">

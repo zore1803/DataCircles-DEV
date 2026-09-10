@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useMemo, useState, useRef } from "react";
@@ -20,7 +21,6 @@ import {
   X,
   Eye,
   Edit3,
-  Trash2,
   CheckCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import toast from "react-hot-toast";
@@ -1201,7 +1201,7 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
                             }}
                             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-red-600 hover:bg-red-50 whitespace-nowrap"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <DeleteIcon className="w-4 h-4" />
                             Delete Task
                           </button>
                         </div>
@@ -1540,7 +1540,7 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
                 Confirm Delete

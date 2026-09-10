@@ -1,9 +1,10 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import CellphoneIcon from "../components/common/CellphoneIcon";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import { User, Mail, Camera, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
+import { User, Mail, Camera, LogOut, X, Monitor, ShieldCheck } from "lucide-react";
 import logo from "/DataCircles.png";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
@@ -329,7 +330,7 @@ const Profile = () => {
                   className="absolute bottom-2 right-2 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-red-50 transition-colors"
                   title="Remove Photo"
                 >
-                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <DeleteIcon className="w-4 h-4 text-red-600" />
                 </button>
               )}
             </div>
@@ -595,7 +596,7 @@ const Profile = () => {
           <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
             <div className="p-6">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
                 Remove Photo

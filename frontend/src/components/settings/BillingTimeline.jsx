@@ -1,3 +1,4 @@
+import CalendarClockIcon from "../common/CalendarClockIcon";
 // components/settings/BillingTimeline.jsx
 //
 // Pure visualization layer over BillingEvent. Renders `event.summary`
@@ -9,7 +10,7 @@
 // events our own backend already decided to record.
 import React, { useEffect, useState } from "react";
 import {
-  Clock, CheckCircle2, XCircle, CalendarClock, ChevronDown, ChevronUp,
+  Clock, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Rocket, ArrowUp, ArrowDown, Tag, Gift, Ban, RefreshCw, CreditCard,
 } from "lucide-react";
 import { subscriptionAPI } from "../../services/subscriptionApi";
@@ -25,10 +26,10 @@ const EVENT_ICONS = {
   TRIAL_ENDED: Gift,
   PLAN_UPGRADE: ArrowUp,
   PLAN_DOWNGRADE: ArrowDown,
-  DOWNGRADE_SCHEDULED: CalendarClock,
-  BILLING_CYCLE_CHANGE_SCHEDULED: CalendarClock,
+  DOWNGRADE_SCHEDULED: CalendarClockIcon,
+  BILLING_CYCLE_CHANGE_SCHEDULED: CalendarClockIcon,
   ADDON_ADDED: ArrowUp,
-  ADDON_REMOVAL_SCHEDULED: CalendarClock,
+  ADDON_REMOVAL_SCHEDULED: CalendarClockIcon,
   ADDON_REMOVED: ArrowDown,
   COUPON_APPLIED: Tag,
   COUPON_CHANGED: Tag,

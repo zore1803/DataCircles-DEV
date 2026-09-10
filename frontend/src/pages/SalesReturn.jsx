@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import VideoIcon from "../components/common/VideoIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
@@ -14,7 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit2,
-  Trash2,
   Eye,
   EyeOff,
   Pin,
@@ -726,7 +726,7 @@ const SalesReturn = () => {
                 onClick={() => { close(); handleDelete(row._id); }}
                 className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
               >
-                <Trash2 className="w-4 h-4" />
+                <DeleteIcon className="w-4 h-4" />
                 Delete
               </button>
             </div>
@@ -1411,7 +1411,7 @@ const SalesReturn = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Sales Return?</h3>
               <p className="text-sm text-gray-500 mb-6">
@@ -1441,7 +1441,7 @@ const SalesReturn = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-6 h-6 text-red-600" />
+                <DeleteIcon className="w-6 h-6 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm Bulk Delete</h3>
               <p className="text-sm text-gray-500 mb-6">
@@ -1542,7 +1542,7 @@ const SalesReturn = () => {
                   disabled={bulkLoading}
                   className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 whitespace-nowrap"
                 >
-                  <Trash2 className="w-4 h-4 text-red-600" />
+                  <DeleteIcon className="w-4 h-4 text-red-600" />
                   Delete
                 </button>
                 <button

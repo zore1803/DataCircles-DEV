@@ -1,3 +1,6 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import VideoIcon from "../common/VideoIcon";
 import CellphoneIcon from "../common/CellphoneIcon";
 // ContactMeetingForm.jsx
@@ -6,8 +9,8 @@ import API from "../../services/api";
 import toast from "react-hot-toast";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
-  X, Calendar, Clock, Users, MapPin, FileText,
-  AlertTriangle, CheckCircle2, Search, Trash2, User,
+  X, Clock, Users, MapPin,
+  AlertTriangle, CheckCircle2, Search, User,
   Building, Lightbulb, Timer, Flag, Pencil
 } from "lucide-react";
 
@@ -413,7 +416,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
           <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center gap-3">
               <div className="bg-blue-600 p-2.5 rounded-xl shadow-sm">
-                <Calendar className="w-5 h-5 text-white" />
+                <CalendarIcon className="w-5 h-5 text-white" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">
@@ -452,7 +455,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                   {form.description && (
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                       <div className="flex items-start gap-2 mb-2">
-                        <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
+                        <PdfIcon className="w-4 h-4 text-gray-500 mt-0.5" />
                         <span className="text-sm font-semibold text-gray-700">Description</span>
                       </div>
                       <p className="text-gray-700 whitespace-pre-line leading-relaxed">{form.description}</p>
@@ -463,7 +466,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <CalendarIcon className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-semibold text-gray-700">Date & Time</span>
                     </div>
                     <p className="font-bold text-gray-900 text-lg">
@@ -508,7 +511,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                       onClick={handleDelete}
                       className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl font-semibold transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                       Delete Meeting
                     </button>
                   )}
@@ -517,7 +520,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
             ) : (
               /* EDIT/CREATE MODE - Form */
               <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
-                <FormField label="Meeting Title" required error={errors.title} icon={FileText}>
+                <FormField label="Meeting Title" required error={errors.title} icon={PdfIcon}>
                   <input
                     ref={titleInputRef}
                     type="text"
@@ -532,7 +535,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {!calendarDate ? (
-                    <FormField label="Date" required error={errors.date} icon={Calendar}>
+                    <FormField label="Date" required error={errors.date} icon={CalendarIcon}>
                       <input
                         ref={dateInputRef}
                         type="date"
@@ -546,9 +549,9 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                       />
                     </FormField>
                   ) : (
-                    <FormField label="Date" icon={Calendar} description="Selected from calendar">
+                    <FormField label="Date" icon={CalendarIcon} description="Selected from calendar">
                       <div className="flex items-center gap-2 py-3 px-4 bg-blue-50 text-blue-800 rounded-xl border border-blue-200">
-                        <Calendar className="w-4 h-4" />
+                        <CalendarIcon className="w-4 h-4" />
                         <span className="font-medium">{calendarDate}</span>
                       </div>
                     </FormField>
@@ -615,7 +618,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                     </select>
                   </FormField>
 
-                  <FormField label="Meeting Category" icon={FileText}>
+                  <FormField label="Meeting Category" icon={PdfIcon}>
                     <select
                       value={form.meetingCategory}
                       onChange={(e) => handleChange("meetingCategory", e.target.value)}
@@ -651,7 +654,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
 
                 <FormField
                   label="Description"
-                  icon={FileText}
+                  icon={PdfIcon}
                   description="Meeting agenda, topics, or notes"
                 >
                   <textarea
@@ -666,7 +669,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                 {existingMeetings.length > 0 && (
                   <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
                     <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                      <Calendar className="w-4 h-4" />
+                      <CalendarIcon className="w-4 h-4" />
                       Other meetings on this date
                     </h4>
                     <div className="space-y-2">

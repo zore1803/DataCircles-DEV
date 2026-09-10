@@ -1,3 +1,5 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -14,9 +16,7 @@ import {
   ChevronRight,
   IndianRupee,
   Edit2,
-  Trash2,
   Truck,
-  Calendar,
   CheckSquare,
   X,
   ArrowUpCircle,
@@ -537,7 +537,7 @@ const PaymentPage = () => {
                 onClick={() => setShowBulkActions(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
               >
-                <Trash2 className="w-4 h-4" />
+                <DeleteIcon className="w-4 h-4" />
                 Bulk Delete
               </button>
               <button
@@ -597,7 +597,7 @@ const PaymentPage = () => {
                     </th>
                   )}
                   <SortableHeader field="paymentDate">
-                    <Calendar className="w-4 h-4 inline mr-1" />
+                    <CalendarIcon className="w-4 h-4 inline mr-1" />
                     Date
                   </SortableHeader>
                   <SortableHeader field="vendor.name">
@@ -725,7 +725,7 @@ const PaymentPage = () => {
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <DeleteIcon className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -756,7 +756,7 @@ const PaymentPage = () => {
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="bg-red-100 p-2 rounded-lg">
-                  <Trash2 className="w-5 h-5 text-red-600" />
+                  <DeleteIcon className="w-4 h-4 text-red-600" />
                 </div>
                 <h2 className="text-xl font-semibold">Delete Payment</h2>
               </div>
@@ -777,7 +777,7 @@ const PaymentPage = () => {
                   onClick={confirmDelete}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <DeleteIcon className="w-4 h-4" />
                   Delete
                 </button>
               </div>

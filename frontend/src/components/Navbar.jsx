@@ -1,3 +1,4 @@
+import PdfIcon from "./common/PdfIcon";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { NAV_RESET_EVENT } from "../hooks/useNavReset";
@@ -10,7 +11,6 @@ import {
   Building,
   BriefcaseBusiness,
   Users,
-  FileText,
   CheckSquare,
   Truck,
   ClipboardList,
@@ -21,7 +21,6 @@ import {
   Settings,
   LogOut,
   Wallet,
-  Calendar,
   ChevronDown,
   ChevronRight,
   Package,
@@ -389,7 +388,7 @@ const Navbar = () => {
       icon: Building,
     },
     { name: "Users", href: "/super-admin/users", icon: Users },
-    { name: "Billing", href: "/super-admin/billing", icon: FileText },
+    { name: "Billing", href: "/super-admin/billing", icon: PdfIcon },
     { name: "Analytics", href: "/super-admin/analytics", icon: BarChart3 },
     { name: "Support", href: "/super-admin/support", icon: Settings },
     { name: "Plans", href: "/super-admin/plans", icon: CreditCard },

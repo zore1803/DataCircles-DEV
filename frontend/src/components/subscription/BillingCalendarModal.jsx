@@ -1,3 +1,4 @@
+import CalendarIcon from "../common/CalendarIcon";
 // components/subscription/BillingCalendarModal.jsx
 //
 // Billing Calendar — a state-over-time visualization of the subscription's
@@ -25,7 +26,7 @@
 // billing-events (history) and GET /subscription/billing-projection
 // (current + scheduled + upcoming — backend/utils/billingProjection.js).
 import React, { useEffect, useMemo, useState } from "react";
-import { X, Calendar, AlertTriangle, Gift } from "lucide-react";
+import { X, AlertTriangle, Gift } from "lucide-react";
 import { subscriptionAPI } from "../../services/subscriptionApi";
 import { formatPrice } from "../../utils/pricingSnapshot";
 import BillingCalendarTimeline from "./BillingCalendarTimeline";
@@ -398,7 +399,7 @@ const BillingCalendarModal = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600" />
+            <CalendarIcon className="w-5 h-5 text-blue-600" />
             <h2 className="text-base font-bold text-gray-900">Billing Calendar</h2>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close">

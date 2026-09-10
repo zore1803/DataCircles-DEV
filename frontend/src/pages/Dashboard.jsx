@@ -1,3 +1,4 @@
+import DeleteIcon from "../components/common/DeleteIcon";
 import Checkbox from "../components/common/Checkbox";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -7,7 +8,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid, Tooltip } from "recharts";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import CrmHealthGauge from "../components/dashboard/CrmHealthGauge";
-import { TrendingUp, TrendingDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, X, CheckSquare, Building2, Users, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Pin, PinOff, EyeOff, X, CheckSquare, Building2, Users, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
 import VideoIcon from "../components/common/VideoIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
@@ -730,7 +731,7 @@ function Dashboard() {
                             }}
                             className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 whitespace-nowrap"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <DeleteIcon className="w-4 h-4" />
                             Delete Invoice
                           </button>
                         </div>
@@ -2051,7 +2052,7 @@ function Dashboard() {
                 onClick={() => setShowBulkInvoiceDeleteModal(true)}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Trash2 className="w-4 h-4 text-red-600" />
+                <DeleteIcon className="w-4 h-4 text-red-600" />
                 Delete
               </button>
               <button
@@ -2288,7 +2289,7 @@ function Dashboard() {
             <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
               <div className="p-6 text-center">
                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Trash2 className="w-6 h-6 text-red-600" />
+                  <DeleteIcon className="w-6 h-6 text-red-600" />
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
                   Confirm Delete
@@ -2362,7 +2363,7 @@ function Dashboard() {
             <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
               <div className="p-6 text-center">
                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Trash2 className="w-6 h-6 text-red-600" />
+                  <DeleteIcon className="w-6 h-6 text-red-600" />
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2 font-sf">
                   Confirm Delete

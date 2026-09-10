@@ -1,3 +1,6 @@
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
+import PdfIcon from "../common/PdfIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
@@ -6,14 +9,11 @@ import toast from "react-hot-toast";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X,
-  Calendar,
   Clock,
   User,
   Users,
-  FileText,
   CheckCircle2,
   AlertCircle,
-  Trash2,
   Loader2,
   Edit3,
   Save,
@@ -337,12 +337,12 @@ const VendorTaskForm = ({
                   >
                     {calendarDate ? (
                       <div className="flex items-center gap-2 py-3 px-4 bg-blue-50 text-blue-800 rounded-xl border border-blue-200">
-                        <Calendar className="w-4 h-4" />
+                        <CalendarIcon className="w-4 h-4" />
                         <span className="font-medium">{calendarDate}</span>
                       </div>
                     ) : (
                       <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <input
                           type="date"
                           value={form.selectedDate}
@@ -360,7 +360,7 @@ const VendorTaskForm = ({
                   </FormField>
                   <FormField label="Due Date" required error={errors.dueDate}>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <input
                         type="date"
                         value={form.dueDate}
@@ -383,7 +383,7 @@ const VendorTaskForm = ({
                   description="Provide additional context and requirements"
                 >
                   <div className="relative">
-                    <FileText className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
+                    <PdfIcon className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
                     <textarea
                       value={form.description}
                       onChange={(e) =>
@@ -475,7 +475,7 @@ const VendorTaskForm = ({
                   {form.description && (
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                       <div className="flex items-start gap-2 mb-2">
-                        <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
+                        <PdfIcon className="w-4 h-4 text-gray-500 mt-0.5" />
                         <span className="text-sm font-semibold text-gray-700">
                           Description
                         </span>
@@ -511,7 +511,7 @@ const VendorTaskForm = ({
                     </div>
                     <div className="p-4 bg-white border border-gray-200 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="w-4 h-4 text-gray-500" />
+                        <CalendarIcon className="w-4 h-4 text-gray-500" />
                         <span className="text-sm font-semibold text-gray-700">
                           Due Date
                         </span>
@@ -589,7 +589,7 @@ const VendorTaskForm = ({
                     {isDeleting ? (
                       <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      <Trash2 className="w-4 h-4" />
+                      <DeleteIcon className="w-4 h-4" />
                     )}
                     Delete
                   </button>

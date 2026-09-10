@@ -1,12 +1,12 @@
+import CalendarIcon from "../common/CalendarIcon";
+import PdfIcon from "../common/PdfIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import { useEffect, useState } from "react";
 import {
-  Calendar,
   CreditCard,
   CheckCircle,
   XCircle,
   Clock,
-  FileText,
   ChevronDown,
   ChevronUp,
   Receipt,
@@ -589,7 +589,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
         {filteredPayments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4">
             <div className="p-4 bg-gray-100 rounded-full mb-4">
-              <FileText className="w-10 h-10 text-gray-400" />
+              <PdfIcon className="w-10 h-10 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               No payment history found
@@ -635,7 +635,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2 text-sm text-gray-900">
-                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <CalendarIcon className="w-4 h-4 text-gray-400" />
                           {formatDate(payment.createdAt)}
                         </div>
                       </td>

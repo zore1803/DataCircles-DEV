@@ -1,6 +1,7 @@
+import DeleteIcon from "./common/DeleteIcon";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, Trash2, CheckCircle, X } from "lucide-react";
+import { Pencil, CheckCircle, X } from "lucide-react";
 import PlusIcon from "./common/PlusIcon";
 import BellIcon from "./common/BellIcon";
 import API from "../services/api";
@@ -22,7 +23,7 @@ const POLL_MS = 15000;
 const actionStyle = {
   created: { Icon: PlusIcon, cls: "bg-[#E7F7EE] text-[#12B76A]" },
   updated: { Icon: Pencil, cls: "bg-[#EAF3FF] text-[#0085FF]" },
-  deleted: { Icon: Trash2, cls: "bg-[#FDECEC] text-[#DF120B]" },
+  deleted: { Icon: DeleteIcon, cls: "bg-[#FDECEC] text-[#DF120B]" },
 };
 
 const timeAgo = (iso) => {

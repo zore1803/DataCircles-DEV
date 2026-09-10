@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import ReactQuill from "react-quill-new";
@@ -8,7 +9,6 @@ import toast from 'react-hot-toast';
 import { 
   StickyNote,
   Edit3,
-  Trash2,
   Clock,
   User,
   Save,
@@ -142,7 +142,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView, contactName }) => {
             className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
             title="Delete"
           >
-            <Trash2 className="w-4 h-4" />
+            <DeleteIcon className="w-4 h-4" />
           </button>
         </div>
       </div>

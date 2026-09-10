@@ -1,5 +1,6 @@
+import DeleteIcon from "../common/DeleteIcon";
 import React from "react";
-import { X, Trash2, Loader2, Edit3 } from "lucide-react";
+import { X, Loader2, Edit3 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const DealIcon = (props) => (
@@ -135,7 +136,7 @@ const TaskDetailsModal = ({ open, taskData, users, onDelete, onClose, onEdit, on
               {isDeleting ? (
                 <Loader2 className="w-5 h-5 animate-spin" style={{ color: "#F60000" }} />
               ) : (
-                <Trash2 className="w-5 h-5" style={{ color: "#F60000" }} />
+                <DeleteIcon className="w-4 h-4" style={{ color: "#F60000" }} />
               )}
             </button>
             <div style={{ width: 1, height: 18, backgroundColor: "rgba(28, 27, 31, 0.3)" }} />

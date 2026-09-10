@@ -1,3 +1,5 @@
+import CalendarIcon from "../components/common/CalendarIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import CellphoneIcon from "../components/common/CellphoneIcon";
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
@@ -5,12 +7,10 @@ import {
   ArrowLeft,
   Users,
   Building,
-  FileText,
   AlertCircle,
   Package,
   Target,
   CheckCircle2,
-  Calendar,
   Clock,
   Briefcase,
   TrendingUp,
@@ -647,19 +647,19 @@ const TenantDetails = () => {
           <StatCard
             label="Invoices"
             value={stats.totalInvoices || 0}
-            icon={FileText}
+            icon={PdfIcon}
             color="text-blue-600"
           />
           <StatCard
             label="Proforma Invoices"
             value={stats.totalProformaInvoices || 0}
-            icon={FileText}
+            icon={PdfIcon}
             color="text-indigo-600"
           />
           <StatCard
             label="Quotations"
             value={stats.totalQuotations || 0}
-            icon={FileText}
+            icon={PdfIcon}
             color="text-purple-600"
           />
           <StatCard
@@ -692,7 +692,7 @@ const TenantDetails = () => {
           <StatCard
             label="Meetings"
             value={stats.totalMeetings || 0}
-            icon={Calendar}
+            icon={CalendarIcon}
             color="text-blue-600"
           />
           <StatCard

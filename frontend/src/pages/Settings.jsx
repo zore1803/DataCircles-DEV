@@ -1,3 +1,5 @@
+import CalendarClockIcon from "../components/common/CalendarClockIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
@@ -22,10 +24,8 @@ import {
   ExternalLink,
   Receipt,
   Gift,
-  FileText,
   Wallet as WalletIcon,
   ListChecks,
-  CalendarClock,
 } from "lucide-react";
 import SettingsIcon from "../components/common/SettingsIcon";
 import BankDetails from "../components/settings/BankDetails";
@@ -268,7 +268,7 @@ const Settings = () => {
     },
     {
       id: "document-settings",
-      icon: <FileText className="w-5 h-5" />,
+      icon: <PdfIcon className="w-4 h-4" />,
       label: "Document Settings",
       description: "Set invoice numbering defaults and document preferences",
       color: "text-sky-600",
@@ -364,7 +364,7 @@ const Settings = () => {
     },
     {
       id: "meeting-fields",
-      icon: <CalendarClock className="w-5 h-5" />,
+      icon: <CalendarClockIcon className="w-5 h-5" />,
       label: "Meeting Fields",
       description: "Customize meeting data fields",
       color: "text-violet-600",
@@ -388,7 +388,7 @@ const Settings = () => {
     },
     {
       id: "forms",
-      icon: <FileText className="w-5 h-5" />,
+      icon: <PdfIcon className="w-4 h-4" />,
       label: "Forms",
       description: "Build and manage how customers enter your CRM",
       color: "text-emerald-600",

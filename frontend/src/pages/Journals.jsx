@@ -1,3 +1,5 @@
+import DeleteIcon from "../components/common/DeleteIcon";
+import PdfIcon from "../components/common/PdfIcon";
 import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
@@ -6,7 +8,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffe
 import { createPortal } from "react-dom";
 import {
   BookOpen, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pin, PinOff,
-  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Loader2, FileText, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
+  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Eye, CheckSquare, Loader2, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
@@ -773,7 +775,7 @@ export default function Journals() {
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                 onClick={() => { closeMenu(); handleDeleteJournal(j); }}
               >
-                <Trash2 className="w-4 h-4" /> Delete
+                <DeleteIcon className="w-4 h-4" /> Delete
               </button>
             </div>
           </>,
@@ -1081,7 +1083,7 @@ export default function Journals() {
                 onClick={handleBulkExportNames}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <FileText className="w-4 h-4 text-purple-600" />
+                <PdfIcon className="w-4 h-4 text-purple-600" />
                 Export Names
               </button>
               <button
@@ -1096,7 +1098,7 @@ export default function Journals() {
                 disabled={isDeleting}
                 className="h-10 px-4 -ml-px bg-white border border-gray-300 text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
               >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin text-red-600" /> : <Trash2 className="w-4 h-4 text-red-600" />}
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin text-red-600" /> : <DeleteIcon className="w-4 h-4 text-red-600" />}
                 Delete
               </button>
               {activeTab === "active" && (

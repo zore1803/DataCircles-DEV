@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
@@ -5,7 +6,7 @@ import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import SettingsIcon from "../common/SettingsIcon";
 import {
-  Search as SearchIcon, X, Pencil, Trash2, ChevronDown,
+  Search as SearchIcon, X, Pencil, ChevronDown,
   Pin, PinOff, ArrowUp, ArrowDown, EyeOff, ChevronLeft, ChevronRight, Eye,
   Share2, Repeat, Copy, MessageCircle, Mail, MessageSquare,
 } from "lucide-react";
@@ -139,7 +140,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
   );
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
   const [pinnedCols, setPinnedCols] = useState({});
-  const [showColumnsetShowColumnSettings] = useState(false);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
@@ -1145,7 +1146,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                                             onClick={() => { closeRowMenu(); handleDelete(r); }}
                                             className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 flex items-center gap-2"
                                           >
-                                            <Trash2 className="w-4 h-4" />
+                                            <DeleteIcon className="w-4 h-4" />
                                             Delete
                                           </button>
                                         </>

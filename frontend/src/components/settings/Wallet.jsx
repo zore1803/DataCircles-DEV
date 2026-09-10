@@ -1,3 +1,4 @@
+import PdfIcon from "../common/PdfIcon";
 import PlusIcon from "../common/PlusIcon";
 // components/settings/Wallet.jsx
 //
@@ -8,7 +9,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Wallet as WalletIcon,
   Sparkles,
-  FileText,
   Package,
   MessageCircle,
   Receipt,
@@ -311,7 +311,7 @@ const Wallet = () => {
         {history.transactions.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-14 text-center">
             <div className="mb-3 rounded-2xl bg-gray-50 p-3.5">
-              <FileText className="h-6 w-6 text-gray-300" />
+              <PdfIcon className="h-6 w-6 text-gray-300" />
             </div>
             <p className="text-sm font-medium text-gray-700">No wallet activity yet</p>
             <p className="mt-1 text-xs text-gray-400">

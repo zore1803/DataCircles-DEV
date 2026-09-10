@@ -1,3 +1,4 @@
+import PdfIcon from "../components/common/PdfIcon";
 import React, { useState, useEffect } from "react";
 import {
   Save,
@@ -11,7 +12,6 @@ import {
   Mail,
   Tag,
   Layers,
-  FileText,
   ChevronRight,
   Users,
   ToggleLeft,
@@ -59,9 +59,9 @@ const MODULE_ICONS = {
   companies: Layers,
   deals: Zap,
   vendors: Package,
-  invoices: FileText,
-  quotations: FileText,
-  "delivery-challans": FileText,
+  invoices: PdfIcon,
+  quotations: PdfIcon,
+  "delivery-challans": PdfIcon,
   tasks: CheckCircle2,
   callLogs: Layers,
   meetings: Layers,

@@ -1,6 +1,7 @@
+import CalendarClockIcon from "../common/CalendarClockIcon";
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { CalendarClock, CheckCircle2, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 
@@ -130,7 +131,7 @@ function GoogleIntegration() {
           {configured && !connected && (
             <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
               <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center border-2 border-blue-100 mb-2">
-                <CalendarClock className="w-8 h-8 text-blue-500" />
+                <CalendarClockIcon className="w-8 h-8 text-blue-500" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900">No Google Account Connected</h3>
               <p className="text-gray-500 max-w-md mx-auto text-sm">

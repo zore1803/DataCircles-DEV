@@ -1,3 +1,4 @@
+import CalendarIcon from "../components/common/CalendarIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
   ChevronUp,
@@ -9,7 +10,6 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  Calendar,
   User,
   Building,
   Activity,
@@ -254,7 +254,7 @@ const TicketDetailModal = ({ ticket, isOpen, onClose, onStatusUpdate }) => {
             {/* Timestamps */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-start space-x-3">
-                <Calendar className="w-4 h-4 text-gray-400 mt-1" />
+                <CalendarIcon className="w-4 h-4 text-gray-400 mt-1" />
                 <div>
                   <p className="text-xs font-medium text-gray-500">
                     Created At
@@ -791,7 +791,7 @@ const Support = () => {
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm text-gray-900 flex items-center">
-                          <Calendar className="w-3 h-3 mr-1 text-gray-400" />
+                          <CalendarIcon className="w-3 h-3 mr-1 text-gray-400" />
                           {new Date(ticket.createdAt).toLocaleDateString(
                             "en-US",
                             {

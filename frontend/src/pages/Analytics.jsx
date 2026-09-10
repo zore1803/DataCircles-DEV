@@ -1,3 +1,4 @@
+import PdfIcon from "../components/common/PdfIcon";
 import React, { useState, useEffect } from "react";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import {
@@ -20,7 +21,6 @@ import {
   TrendingDown,
   Target,
   CheckCircle2,
-  FileText,
   Users,
   Building,
   Package,
@@ -379,7 +379,7 @@ const Analytics = () => {
           <StatCard
             label="GST Registered"
             value={companies.withGSTIN}
-            icon={FileText}
+            icon={PdfIcon}
             color="text-indigo-600"
           />
           <StatCard
@@ -987,7 +987,7 @@ const Analytics = () => {
               <span className="text-sm font-medium text-gray-600">
                 Avg Invoice Value
               </span>
-              <FileText className="w-4 h-4 text-green-600" />
+              <PdfIcon className="w-4 h-4 text-green-600" />
             </div>
             <h6 className="text-xl font-bold text-gray-900">
               ₹

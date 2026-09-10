@@ -1,3 +1,4 @@
+import PdfIcon from "../common/PdfIcon";
 import DownloadIcon from "../common/DownloadIcon";
 // src/components/deal/DealQuickView.jsx
 import React, { useEffect, useState } from "react";
@@ -10,9 +11,7 @@ import {
   Edit2,
   Building2,
   User,
-  Calendar,
   IndianRupee,
-  FileText,
   Send,
   Eye,
   ExternalLink,
@@ -98,7 +97,7 @@ const InfoRow = ({ icon: Icon, label, value, link, children }) => (
 const InvoiceMiniRow = ({ invoice, onView, onDownload }) => (
   <div className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
     <div className="flex items-center gap-3 min-w-0">
-      <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+      <PdfIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
       <div className="min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">
           #{invoice.invoiceNumber || "N/A"}
@@ -322,7 +321,7 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
               {/* Key Info */}
               <div className="bg-white border border-gray-200 rounded-xl p-5 mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-gray-600" />
+                  <PdfIcon className="w-4 h-4 text-gray-600" />
                   Deal Information
                 </h3>
 
@@ -350,7 +349,7 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
                   {deal.additionalFields?.map((field, i) => (
                     <InfoRow
                       key={i}
-                      icon={FileText}
+                      icon={PdfIcon}
                       label={field.key}
                       value={field.value || "—"}
                     />
@@ -362,7 +361,7 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
               <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-gray-600" />
+                    <PdfIcon className="w-4 h-4 text-gray-600" />
                     Linked Invoices
                   </h3>
                   <p className="text-sm text-gray-600">

@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 // components/settings/FormsList.jsx
 // Forms List — Build order step 1, per FORMS_FRONTEND_ARCHITECTURE.md §2. Renders inside the
 // Settings shell at /settings/forms (settingsItems entry in Settings.jsx). Table via TanStack,
@@ -15,7 +16,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { X, ChevronLeft, ChevronRight, User, Building2, Truck, Trash2, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, User, Building2, Truck, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
 import FormIcon from "../common/FormIcon";
 import AddFormIcon from "../common/AddFormIcon";
 
@@ -305,7 +306,7 @@ const FormsList = () => {
               onClick={(e) => { e.stopPropagation(); setDeleteTarget(info.row.original); }}
               className="p-1.5 text-gray-300 hover:text-red-500 rounded"
             >
-              <Trash2 className="w-4 h-4" />
+              <DeleteIcon className="w-4 h-4" />
             </button>
           )}
           <ChevronRight className="w-4 h-4 text-gray-300" />

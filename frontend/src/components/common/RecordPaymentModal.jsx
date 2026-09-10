@@ -1,8 +1,9 @@
+import DeleteIcon from "./DeleteIcon";
 import PlusIcon from "./PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
   X, CheckCircle2, Clock, Paperclip, MessageSquare, Mail,
-  ChevronDown, Trash2, Check
+  ChevronDown, Check
 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -649,7 +650,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                         {deletingId === payment._id ? (
                           <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <DeleteIcon className="w-4 h-4" />
                         )}
                       </button>
                     </div>

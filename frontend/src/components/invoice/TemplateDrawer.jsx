@@ -1,3 +1,4 @@
+import DeleteIcon from "../common/DeleteIcon";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -7,7 +8,6 @@ import {
   LayoutTemplate,
   Hash,
   PenLine,
-  Trash2,
   Edit3,
   CheckCircle,
 } from "lucide-react";
@@ -669,7 +669,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                             className="p-1.5 rounded-lg text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
                             title="Delete signature"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <DeleteIcon className="w-4 h-4" />
                           </button>
                         </div>
                       </div>

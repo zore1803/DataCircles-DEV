@@ -1,8 +1,9 @@
+import DeleteIcon from "../common/DeleteIcon";
 // src/components/company/SubsidiaryModal.jsx
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
-import { X, Trash2, Building2, ChevronDown } from "lucide-react";
+import { X, Building2, ChevronDown } from "lucide-react";
 
 import SearchIcon from "../common/SearchIcon";
 const SubsidiaryModal = ({ companyId, isOpen, onClose, onSuccess }) => {
@@ -254,7 +255,7 @@ const SubsidiaryModal = ({ companyId, isOpen, onClose, onSuccess }) => {
                       onClick={() => handleRemoveSubsidiary(sub._id, sub.name)}
                       className="text-red-600 hover:bg-red-50 p-2 rounded-xl"
                     >
-                      <Trash2 size={18} />
+                      <DeleteIcon className="w-4 h-4" />
                     </button>
                   </div>
                 ))}

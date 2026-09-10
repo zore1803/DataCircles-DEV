@@ -1,3 +1,6 @@
+import CalendarClockIcon from "../common/CalendarClockIcon";
+import CalendarIcon from "../common/CalendarIcon";
+import DeleteIcon from "../common/DeleteIcon";
 import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import SearchIcon from "../common/SearchIcon";
@@ -5,7 +8,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import Skeleton from "../common/Skeleton";
 import StatTileSkeleton from "../common/StatTileSkeleton";
 import StatTile from "../common/StatTile";
-import { Calendar, Trash2, Eye, Edit3, CalendarClock, CalendarCheck, Clock3 } from "lucide-react";
+import { Eye, Edit3, CalendarCheck, Clock3 } from "lucide-react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
@@ -433,7 +436,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
       actions={[
         { label: "View", icon: Eye, onClick: () => { setSelectedMeeting(meeting); setIsMeetingModalOpen(true); } },
         { label: "Edit", icon: Edit3, onClick: () => handleEditMeeting(meeting) },
-        { label: "Delete", icon: Trash2, danger: true, onClick: () => { if (window.confirm("Delete this meeting?")) handleMeetingDelete(meeting._id); } },
+        { label: "Delete", icon: DeleteIcon, danger: true, onClick: () => { if (window.confirm("Delete this meeting?")) handleMeetingDelete(meeting._id); } },
       ]}
     />
   );
@@ -529,8 +532,8 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
   })();
 
   const meetingKpiTiles = [
-    { label: "Total Meetings", value: totalMeetingsCount, icon: Calendar, subtitle: "Since Onboarding" },
-    { label: "Upcoming", value: upcomingIn15Count, icon: CalendarClock, subtitle: "Next 15 Days", subtitleClass: "text-blue-500" },
+    { label: "Total Meetings", value: totalMeetingsCount, icon: CalendarIcon, subtitle: "Since Onboarding" },
+    { label: "Upcoming", value: upcomingIn15Count, icon: CalendarClockIcon, subtitle: "Next 15 Days", subtitleClass: "text-blue-500" },
     { label: "Completed", value: completedMeetingsCount, icon: CalendarCheck, subtitle: `${meetingCompletionRate}% Completion Rate`, subtitleClass: "text-green-600" },
     { label: "Next Meeting", value: nextMeetingKpiLabel, icon: Clock3, subtitle: nextMeetingForKpi ? "Scheduled" : "None Scheduled" },
   ];
@@ -653,7 +656,7 @@ const VendorMeetingsTable = ({ vendorId, showKPIs = true, autoOpenCreate = false
           }
           emptyContent={
             <div className="flex flex-col items-center gap-2">
-              <Calendar className="w-10 h-10 text-gray-400" />
+              <CalendarIcon className="w-10 h-10 text-gray-400" />
               <p className="text-sm text-gray-600">
                 {search || activeFilterCount ? "No meetings match your filters" : "No meetings yet"}
               </p>
