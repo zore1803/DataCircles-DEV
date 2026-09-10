@@ -1,7 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState } from "react";
 import {
   Globe,
-  Plus,
   AlertCircle,
   Copy,
   CheckCircle2,
@@ -112,7 +112,7 @@ function CustomDomain() {
                   onClick={startConnect}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2 shadow-sm"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Connect Custom Domain
                 </button>
               </div>

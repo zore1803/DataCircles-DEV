@@ -1,6 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronDown, GripVertical, X, FileText, Plus, Trash2, Save } from 'lucide-react';
+import { ChevronDown, GripVertical, X, FileText, Trash2, Save } from 'lucide-react';
 import API from '../../services/api';
 import { TOKEN_DEFINITIONS, buildFilename } from '../../utils/pdfFilename';
 
@@ -196,7 +197,7 @@ const PdfFileNameSettings = ({ value = {}, onChange }) => {
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <PlusIcon className="w-4 h-4" />
                 Add information
               </button>
               

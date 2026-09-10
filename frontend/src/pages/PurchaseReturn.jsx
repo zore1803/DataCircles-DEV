@@ -1,3 +1,6 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
@@ -13,17 +16,12 @@ import {
   RotateCcw,
   Edit2,
   Trash2,
-  MoreVertical,
   CheckSquare,
   X,
-  Plus,
   Eye,
   EyeOff,
-  Download,
   Pin,
   PinOff,
-  Settings,
-  Upload,
   Video,
   Share2,
   MessageCircle,
@@ -59,8 +57,10 @@ import {
 } from "@tanstack/react-table";
 
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import UploadIcon from "../components/common/UploadIcon";
 
 /*
  * Purchase Return list — edge-to-edge header/table/pin/reorder/columns/
@@ -687,7 +687,7 @@ const PurchaseReturn = () => {
           }}
           className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -736,7 +736,7 @@ const PurchaseReturn = () => {
                     onClick={() => { closeRowMenu(); handleDownload(p); }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Download className="w-4 h-4 text-green-600" />
+                    <DownloadIcon className="w-4 h-4 text-green-600" />
                     Download
                   </button>
                   <button
@@ -1727,7 +1727,7 @@ const PurchaseReturn = () => {
                   onClick={() => handleExport("excel")}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-green-600" />
+                  <DownloadIcon className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -1859,7 +1859,7 @@ const PurchaseReturn = () => {
                         className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
                         title="More options"
                       >
-                        <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                        <MoreIcon className="w-4 h-4" />
                       </button>
                       {isMoreMenuOpen && (
                         <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
@@ -1879,7 +1879,7 @@ const PurchaseReturn = () => {
                             onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Upload className="w-4 h-4 text-gray-400" />
+                            <UploadIcon className="w-4 h-4 text-gray-400" />
                             Import
                           </button>
                           <div className="relative" ref={exportButtonRef}>
@@ -1887,7 +1887,7 @@ const PurchaseReturn = () => {
                               onClick={() => setShowExportMenu((prev) => !prev)}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Download className="w-4 h-4 text-gray-400" />
+                              <DownloadIcon className="w-4 h-4 text-gray-400" />
                               Export
                             </button>
                             {showExportMenu && (
@@ -1911,7 +1911,7 @@ const PurchaseReturn = () => {
                             onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Settings className="w-4 h-4 text-gray-400" />
+                            <SettingsIcon className="w-4 h-4 text-gray-400" />
                             Columns
                           </button>
                           
@@ -1924,7 +1924,7 @@ const PurchaseReturn = () => {
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
                       title="New Return"
                     >
-                      <Plus className="w-4 h-4 flex-shrink-0" />
+                      <PlusIcon className="w-4 h-4 flex-shrink-0" />
                       <span className="hidden lg:inline">New Return</span>
                     </button>
                   </div>

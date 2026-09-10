@@ -1,7 +1,7 @@
+import DownloadIcon from "./DownloadIcon";
 import React from 'react';
 import {
   CheckSquare,
-  Download,
   Edit2,
   ListChecks,
   StickyNote,
@@ -48,7 +48,7 @@ const BulkActionBar = ({
   // Every action is optional — a button renders only when its handler exists —
   // so the first/last rounding is computed from what actually renders.
   const leftButtons = [
-    onExport && { key: 'export', label: 'Export', Icon: Download, iconClass: 'text-green-600', onClick: onExport },
+    onExport && { key: 'export', label: 'Export', Icon: DownloadIcon, iconClass: 'text-green-600', onClick: onExport },
     onAddNote && { key: 'note', label: 'Add Note', Icon: StickyNote, iconClass: 'text-emerald-600', onClick: onAddNote },
     onAddTask && { key: 'task', label: 'Add Task', Icon: ListChecks, iconClass: 'text-indigo-600', onClick: onAddTask },
     onUpdateStatus && { key: 'update', label: 'Bulk Update', Icon: Edit2, iconClass: 'text-blue-600', onClick: onUpdateStatus },

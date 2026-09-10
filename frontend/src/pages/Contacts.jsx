@@ -1,3 +1,7 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import HotlistIcon from "../components/common/HotlistIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
@@ -6,7 +10,6 @@ import { createPortal } from "react-dom";
 import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import {
-  Plus,
   Edit,
   ChevronUp,
   ChevronDown,
@@ -17,14 +20,11 @@ import {
   Mail,
   Phone,
   User,
-  MoreVertical,
   RefreshCw,
   Trash2,
   Edit2,
   CheckSquare,
   X,
-  Upload,
-  Download,
   Target,
   TrendingUp,
   AlertCircle,
@@ -56,7 +56,6 @@ import VideoTutorialButton from "../components/VideoTutorialButton";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import { getVideoTutorial } from "../utils/videoTutorials";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
-import { Settings } from "lucide-react"; // Add this to your lucide-react imports
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
 import {
@@ -86,8 +85,10 @@ import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
 
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import TableViewIcon from "../components/common/TableViewIcon";
 import KanbanViewIcon from "../components/common/KanbanViewIcon";
+import UploadIcon from "../components/common/UploadIcon";
 // Custom hook to detect mobile screen
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -846,7 +847,7 @@ function Contacts() {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -2210,7 +2211,7 @@ function Contacts() {
               e.stopPropagation();
             }}
           >
-            <MoreVertical className="w-4 h-4" />
+            <MoreIcon className="w-4 h-4" />
           </button>
 
           <div className="hidden group-hover/action:block absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-100 z-50 py-1">
@@ -2317,7 +2318,7 @@ function Contacts() {
                 onClick={() => setShowExportModal(true)}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
@@ -2512,7 +2513,7 @@ function Contacts() {
                   className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
                   title="More options"
                 >
-                  <MoreVertical className="w-4 h-4" />
+                  <MoreIcon className="w-4 h-4" />
                 </button>
 
                 {isMoreMenuOpen && (
@@ -2551,9 +2552,7 @@ function Contacts() {
                       }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                      </svg>
+                      <HotlistIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
                     </button>
                     
@@ -2564,7 +2563,7 @@ function Contacts() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Upload className="w-4 h-4 text-gray-400" />
+                      <UploadIcon className="w-4 h-4 text-gray-400" />
                       Import
                     </button>
                     <Link
@@ -2582,7 +2581,7 @@ function Contacts() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Settings className="w-4 h-4 text-gray-400" />
+                      <SettingsIcon className="w-4 h-4 text-gray-400" />
                       Columns
                     </button>
                     <button
@@ -2611,9 +2610,7 @@ function Contacts() {
                   : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
                   }`}
               >
-                <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill={activeTab === "Hotlist" ? "#1D4ED8" : "#1F2937"} />
-                </svg>
+                <HotlistIcon className={`w-4 h-4 ${activeTab === "Hotlist" ? "text-[#1D4ED8]" : "text-[#1F2937]"}`} />
                 <span className="font-medium">Hotlist</span>
               </button>
 
@@ -2625,7 +2622,7 @@ function Contacts() {
                 title={showQuickAdd && !editContact ? "Cancel" : "New Contact"}
                 className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
               >
-                <Plus className="w-4 h-4 flex-shrink-0" />
+                <PlusIcon className="w-4 h-4 flex-shrink-0" />
                 <span className="hidden lg:inline">{showQuickAdd && !editContact ? "Cancel" : "New Contact"}</span>
               </button>
 
@@ -2696,7 +2693,7 @@ function Contacts() {
               onClick={() => setShowExportModal(true)}
               className="px-4 py-2 bg-white border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 focus:outline-none transition-colors flex items-center gap-2"
             >
-              <Download className="w-4 h-4" />
+              <DownloadIcon className="w-4 h-4" />
               Export
             </button>
             <button
@@ -2838,7 +2835,7 @@ function Contacts() {
                                   >
                                     {contact.name}
                                   </span>
-                                  <MoreVertical className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
+                                  <MoreIcon className="w-4 h-4 text-[#BEBEC8] flex-shrink-0" />
                                 </div>
                                 <span
                                   className="truncate"

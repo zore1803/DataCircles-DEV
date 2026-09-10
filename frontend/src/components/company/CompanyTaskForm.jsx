@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import SearchIcon from "../common/SearchIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -14,14 +16,12 @@ import {
   Loader2,
   Edit3,
   Save,
-  Plus,
   Building,
   ChevronDown,
   CheckCircle2 as CheckIcon,
   Timer,
   Flag,
   User as UserIcon,
-  Search,
 } from "lucide-react";
 
 // Compact searchable picker for Contact/Deal — a plain <select> with 15+
@@ -89,7 +89,7 @@ const SearchableEntityDropdown = ({ options, value, onChange, displayKey, placeh
           >
             <div className="p-2 border-b border-gray-100">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   autoFocus
@@ -748,7 +748,7 @@ const CompanyTaskForm = ({
                     <span className="text-[#1F2937] opacity-50">
                       {form.users?.length ? `${form.users.length} selected` : "Select Users"}
                     </span>
-                    <Plus className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <PlusIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   </button>
                 )}
 
@@ -761,7 +761,7 @@ const CompanyTaskForm = ({
                     <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
                       <div className="p-2 border-b border-gray-100">
                         <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                           <input
                             type="text"
                             autoFocus

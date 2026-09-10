@@ -1,7 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
-  Plus,
   IndianRupeeIcon,
   Trash2,
   Calendar,
@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronRight,
-  Settings,
   Minimize2,
   Printer,
   Inbox,
@@ -28,6 +27,7 @@ import { computeDocument, GST_RATES } from "../../../../shared/documentTemplates
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 import SearchIcon from "../common/SearchIcon";
+import SettingsIcon from "../common/SettingsIcon";
 // Function to convert number to words
 function numberToWords(num) {
   const ones = [
@@ -260,7 +260,7 @@ const ItemSearchSelect = ({
                       className="w-full flex items-center gap-2 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       aria-label="Add new item"
                     >
-                      <Plus className="w-4 h-4" />
+                      <PlusIcon className="w-4 h-4" />
                       Add New Item
                     </button>
                   </div>
@@ -1420,7 +1420,7 @@ const InvoiceFormFull = ({
                 title="Invoice settings"
                 className="h-8 px-4 flex items-center gap-1.5 bg-white border border-[#E1E4EA] rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
-                <Settings className="w-3.5 h-3.5 text-[#525866]" />
+                <SettingsIcon className="w-4 h-4 text-[#525866]" />
                 Settings
               </button>
               <button
@@ -1715,7 +1715,7 @@ const InvoiceFormFull = ({
                     onClick={handleAddToBill}
                     className="h-[38px] px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-[#158FFF] hover:opacity-90 text-white text-[13px] font-semibold rounded-full transition-colors whitespace-nowrap"
                   >
-                    <Plus className="w-4 h-4" />
+                    <PlusIcon className="w-4 h-4" />
                     Add to Bill
                   </button>
                 </div>
@@ -1734,7 +1734,7 @@ const InvoiceFormFull = ({
                     onClick={handleOpenItemForm}
                     className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold text-sm rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    <Plus className="w-4 h-4" />
+                    <PlusIcon className="w-4 h-4" />
                     Add New Product
                   </button>
                 </div>

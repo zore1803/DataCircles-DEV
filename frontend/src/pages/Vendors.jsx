@@ -1,3 +1,6 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, {
   useEffect,
   useState,
@@ -10,8 +13,6 @@ import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import API from "../services/api";
 import { Link } from "react-router-dom";
 import {
-  MoreVertical,
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
@@ -20,16 +21,14 @@ import {
   Edit2,
   Trash2,
   Truck,
-  Upload,
   CheckSquare,
   History,
-  Download,
   FileText,
   Pin,
   PinOff,
   EyeOff,
   Video,
-  Settings, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowUp, ArrowDown } from "lucide-react";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
 import { formatNumberFixed } from "../utils/numberFormatter";
@@ -51,10 +50,12 @@ import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import { useSubscription } from "../contexts/SubscriptionContext";
 import { hasMinPlan } from "../utils/subscriptionHelpers";
 import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModal";
+import UploadIcon from "../components/common/UploadIcon";
 function useOutsideClick(ref, callback) {
   useEffect(() => {
     function handleClickOutside(event) {
@@ -690,7 +691,7 @@ function Vendors() {
           className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
 
         {isOpen && rowActionsPos && createPortal(
@@ -1215,7 +1216,7 @@ function Vendors() {
                 onClick={() => setShowExportModal(true)}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
@@ -1368,7 +1369,7 @@ function Vendors() {
               title="More"
               className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
             >
-              <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+              <MoreIcon className="w-4 h-4" />
             </button>
             {showMoreMenu && (
               <div
@@ -1399,7 +1400,7 @@ function Vendors() {
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
-                  <Upload className="w-4 h-4 text-gray-400" />
+                  <UploadIcon className="w-4 h-4 text-gray-400" />
                   {showImport ? "Hide Import" : "Import"}
                 </button>
                 <button
@@ -1409,7 +1410,7 @@ function Vendors() {
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
-                  <Settings className="w-4 h-4 text-gray-400" />
+                  <SettingsIcon className="w-4 h-4 text-gray-400" />
                   Column Settings
                 </button>
                 <Link
@@ -1432,7 +1433,7 @@ function Vendors() {
             title={showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
             className="h-10 w-10 lg:w-auto lg:px-4 flex items-center justify-center gap-1.5 bg-[#0085FF] hover:bg-blue-600 rounded-full transition-colors flex-shrink-0 ml-1"
           >
-            <Plus size={18} className="text-white flex-shrink-0" />
+            <PlusIcon className="w-4 h-4 text-white flex-shrink-0" />
             <span className="hidden lg:inline text-white text-[14px] font-medium leading-[20px] whitespace-nowrap">
               {showQuickAdd && !editVendor ? "Cancel" : "Add Vendor"}
             </span>

@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
@@ -16,7 +17,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   GripVertical,
-  Plus,
   Edit3,
   Trash2,
   Save,
@@ -239,7 +239,7 @@ export default function KanbanSettings() {
       <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="bg-green-100 p-2 rounded-lg">
-            <Plus className="w-5 h-5 text-green-600" />
+            <PlusIcon className="w-4 h-4 text-green-600" />
           </div>
           <h3 className="text-lg font-bold text-gray-900">Add New Stage</h3>
         </div>
@@ -257,7 +257,7 @@ export default function KanbanSettings() {
             onClick={handleAdd}
             className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg w-full sm:w-auto"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             <span className="hidden sm:inline">Add Stage</span>
             <span className="sm:hidden">Add</span>
           </button>

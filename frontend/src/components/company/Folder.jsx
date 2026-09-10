@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
 import React, { useState, useEffect, useCallback } from "react";
 import HighlightText from "../common/HighlightText";
 import { createRoot } from "react-dom/client";
@@ -18,9 +20,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  Upload,
   Trash2,
-  Download,
   Filter,
   X,
   Edit3,
@@ -31,8 +31,6 @@ import {
   Maximize2,
   Save,
   UserCog,
-  MoreVertical,
-  Plus,
 } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import AppToaster from "../AppToaster";
@@ -44,6 +42,7 @@ import Skeleton from "../common/Skeleton";
 import useFillToBottom from "../../hooks/useFillToBottom";
 
 import SearchIcon from "../common/SearchIcon";
+import UploadIcon from "../common/UploadIcon";
 const FOLDER_ITEM_COUNT_RANGES = [
   { label: "Empty", test: (n) => n === 0 },
   { label: "1–5 Items", test: (n) => n >= 1 && n <= 5 },
@@ -488,7 +487,7 @@ const DragDropZone = ({ onFileDrop, isActive, children }) => {
       {isDragOver && (
         <div className="absolute inset-0 bg-gray-50 bg-opacity-95 border-2 border-dashed border-gray-400 rounded-lg flex items-center justify-center z-50">
           <div className="text-center p-6">
-            <Upload className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <UploadIcon className="w-12 h-12 text-gray-600 mx-auto mb-3" />
             <p className="text-gray-900 font-semibold text-sm">Drop files here</p>
             <p className="text-gray-600 text-xs mt-1">Release to upload</p>
           </div>
@@ -600,7 +599,7 @@ const FileCard = ({ file, fileIndex, onView, onDelete, onEditLink, onRenameFile,
           onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
           className="hover:opacity-70 transition-opacity"
         >
-          <MoreVertical className="w-5 h-5" style={{ color: "#525252" }} />
+          <MoreIcon className="w-5 h-5" style={{ color: "#525252" }} />
         </button>
         {menuOpen && menuPos && createPortal(
           <>
@@ -2072,7 +2071,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                   }
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
                 >
-                  <Plus size={16} />
+                  <PlusIcon className="w-4 h-4" />
                   Add new folder
                 </button>
               </div>
@@ -2239,7 +2238,7 @@ const Folder = ({ companyId: propCompanyId, onFoldersChange, isLoading = false, 
                   }
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
                 >
-                  <Plus size={16} />
+                  <PlusIcon className="w-4 h-4" />
                   Add new folder
                 </button>
               </div>

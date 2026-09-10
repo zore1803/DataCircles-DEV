@@ -1,10 +1,12 @@
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import { useEffect, useState, useMemo, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ResponsiveContainer, ComposedChart, XAxis, YAxis, Area, Line, CartesianGrid, Tooltip } from "recharts";
 import { formatNumberToIndian } from "../utils/numberFormatter";
 import CrmHealthGauge from "../components/dashboard/CrmHealthGauge";
-import { TrendingUp, TrendingDown, MoreVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, Download, X, CheckSquare, Building2, Users, Video, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, Edit2, Trash2, Pin, PinOff, EyeOff, X, CheckSquare, Building2, Users, Video, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
 import FilterIcon from "../components/common/FilterIcon";
 import DataTable from "../components/common/DataTable";
 import InvoiceQuickView from "../components/invoice/InvoiceQuickView";
@@ -692,7 +694,7 @@ function Dashboard() {
                       className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                       title="More actions"
                     >
-                      <MoreVertical className="w-4 h-4" />
+                      <MoreIcon className="w-4 h-4" />
                     </button>
                     {isActionsOpen && invoiceActionsPos && createPortal(
                       <>
@@ -2043,7 +2045,7 @@ function Dashboard() {
                 onClick={handleExportSelectedInvoices}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
@@ -2130,7 +2132,7 @@ function Dashboard() {
               className="box-border flex flex-row justify-center items-center flex-shrink-0"
               style={{ padding: 12, gap: 8, width: 44, height: 44, background: "#FFFFFF", border: "1px solid #E1E4EA", borderRadius: 96 }}
             >
-              <MoreVertical size={20} style={{ color: "#1F2937" }} />
+              <MoreIcon className="w-4 h-4 text-[#1F2937]" />
             </button>
           </div>
         </div>

@@ -1,7 +1,8 @@
+import PlusIcon from "../components/common/PlusIcon";
 // pages/CouponManagement.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Tag, Plus, X, Save, Trash2, ToggleLeft, ToggleRight,
+  Tag, X, Save, Trash2, ToggleLeft, ToggleRight,
   Percent, IndianRupee, Calendar, BarChart3, Shuffle,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -277,7 +278,7 @@ const CouponManagement = () => {
           onClick={openNew}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
         >
-          <Plus className="w-4 h-4" /> New Coupon
+          <PlusIcon className="w-4 h-4" /> New Coupon
         </button>
       </div>
 

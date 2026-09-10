@@ -1,8 +1,8 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
-  Plus,
   IndianRupeeIcon,
   Trash2,
   FileText,
@@ -18,9 +18,7 @@ import {
   Pencil,
   Maximize2,
   Minimize2,
-  Settings,
   ChevronsLeftRight,
-  Search,
   Inbox,
 } from "lucide-react";
 import API from "../../services/api";
@@ -32,6 +30,7 @@ import toast from "react-hot-toast";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
 
 import SearchIcon from "../common/SearchIcon";
+import SettingsIcon from "../common/SettingsIcon";
 import InvoiceLivePreview from "./InvoiceLivePreview";
 import InsufficientStockDialog from "../common/InsufficientStockDialog";
 import TemplateDrawer from "./TemplateDrawer";
@@ -242,7 +241,7 @@ const ItemSearchSelect = ({
                   className="w-full flex items-center gap-2 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                   aria-label="Add new item"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Add New Item
                 </button>
               </div>
@@ -1583,7 +1582,7 @@ const InvoiceForm = ({
                     Show description
                   </label>
                   <button type="button" className="text-gray-400 hover:text-gray-600" aria-label="Settings">
-                    <Settings className="w-4 h-4" />
+                    <SettingsIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1618,7 +1617,7 @@ const InvoiceForm = ({
                     onClick={handleAddToBill}
                     className="h-[42px] px-4 flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
                   >
-                    <Plus className="w-4 h-4" />
+                    <PlusIcon className="w-4 h-4" />
                     Add to Bill
                   </button>
                 </div>
@@ -1635,7 +1634,7 @@ const InvoiceForm = ({
                     onClick={handleOpenItemForm}
                     className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold text-sm rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    <Plus className="w-4 h-4" />
+                    <PlusIcon className="w-4 h-4" />
                     Add New Product
                   </button>
                 </div>
@@ -2107,7 +2106,7 @@ const OpenNotesTermsButton = ({ label, onClick }) => (
     title="Edit notes and terms"
     className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0085FF] hover:underline flex-shrink-0"
   >
-    <Plus className="w-3 h-3" />
+    <PlusIcon className="w-4 h-4" />
     {label}
   </button>
 );
@@ -3216,7 +3215,7 @@ const CreateInvoicePanel = ({
                 title={`${docName} settings`}
                 className="h-8 w-8 lg:w-auto lg:px-4 flex items-center justify-center lg:justify-start gap-1.5 bg-white border border-[#E1E4EA] rounded-full lg:rounded-lg text-[13px] font-medium text-[#1F2937] hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0"
               >
-                <Settings className="w-3.5 h-3.5 text-[#525866]" />
+                <SettingsIcon className="w-4 h-4 text-[#525866]" />
                 <span className="hidden lg:inline">Settings</span>
               </button>
               {/* Saving/creating lives in the sticky bar at the foot of the
@@ -3377,7 +3376,7 @@ const CreateInvoicePanel = ({
                   title="Create a new deal"
                   className="w-[38px] h-[38px] flex-shrink-0 rounded-full bg-[#158FFF] hover:opacity-90 text-white flex items-center justify-center transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                 </button>
               </div>
               {fieldErrors.deal && (
@@ -3604,7 +3603,7 @@ const CreateInvoicePanel = ({
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 mb-4 bg-blue-50/60 border border-blue-100 rounded-xl">
               {/* Inline search — no dropdown component, just a plain input */}
               <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#99A0AE] pointer-events-none" />
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#99A0AE] pointer-events-none" />
                 <input
                   type="text"
                   value={quickAddSearch}
@@ -3678,7 +3677,7 @@ const CreateInvoicePanel = ({
                   onClick={handleAddToBill}
                   className="h-[38px] px-4 flex items-center gap-1.5 bg-[#158FFF] hover:opacity-90 text-white text-[13px] font-semibold rounded-full transition-colors whitespace-nowrap"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Add to Bill
                 </button>
               </div>
@@ -3696,7 +3695,7 @@ const CreateInvoicePanel = ({
                   onClick={() => setShowQuickItemDrawer(true)}
                   className="flex items-center gap-2 px-5 py-2 bg-[#0085FF] text-white text-[13px] font-semibold rounded-lg hover:bg-blue-600 transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Add New Product
                 </button>
               </div>

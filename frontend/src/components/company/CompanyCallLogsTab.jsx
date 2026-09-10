@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
@@ -7,7 +8,6 @@ import {
   Phone,
   PhoneOutgoing,
   PhoneIncoming,
-  Plus,
   ChevronUp,
   ChevronDown,
   Pin,
@@ -699,7 +699,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
             style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
             title="New Call"
           >
-            <Plus size={20} />
+            <PlusIcon className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -735,7 +735,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Plus size={16} />
+            <PlusIcon className="w-4 h-4" />
             Add new call log
           </button>
         </div>

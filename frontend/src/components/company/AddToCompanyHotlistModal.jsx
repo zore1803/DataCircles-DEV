@@ -1,6 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 // src/components/company/AddToCompanyHotlistModal.jsx
 import React, { useState, useEffect } from "react";
-import { X, FolderPlus, Plus, Folder } from "lucide-react";
+import { X, FolderPlus, Folder } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -144,7 +145,7 @@ export default function AddToCompanyHotlistModal({
                 onClick={() => setIsCreatingNew(true)}
                 className="w-full py-2.5 flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
               >
-                <Plus className="w-4 h-4" /> Create New Hotlist
+                <PlusIcon className="w-4 h-4" /> Create New Hotlist
               </button>
             </div>
           ) : (

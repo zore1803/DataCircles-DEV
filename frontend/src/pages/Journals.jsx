@@ -1,8 +1,11 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
-  BookOpen, Plus, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, MoreVertical, Pin, PinOff,
-  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Download, Loader2, FileText, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
+  BookOpen, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pin, PinOff,
+  EyeOff, Pencil, ArrowDownCircle, ArrowUpCircle, Trash2, Eye, CheckSquare, Loader2, FileText, Lock, Unlock, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "../components/common/SearchIcon";
 import HighlightText from "../components/common/HighlightText";
@@ -712,7 +715,7 @@ export default function Journals() {
           }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <MoreVertical size={15} />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && actionMenuPos && createPortal(
           <>
@@ -914,7 +917,7 @@ export default function Journals() {
           className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
           title="New Journal"
         >
-          <Plus className="w-4 h-4 flex-shrink-0" />
+          <PlusIcon className="w-4 h-4 flex-shrink-0" />
           <span className="hidden lg:inline">New Journal</span>
         </button>
       </div>
@@ -1070,7 +1073,7 @@ export default function Journals() {
                 disabled={isExporting}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap disabled:opacity-50"
               >
-                {isExporting ? <Loader2 className="w-4 h-4 animate-spin text-green-600" /> : <Download className="w-4 h-4 text-green-600" />}
+                {isExporting ? <Loader2 className="w-4 h-4 animate-spin text-green-600" /> : <DownloadIcon className="w-4 h-4 text-green-600" />}
                 Export All (Excel)
               </button>
               <button

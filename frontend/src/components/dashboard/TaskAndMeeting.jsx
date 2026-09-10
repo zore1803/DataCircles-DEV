@@ -1,9 +1,10 @@
+import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../services/api";
 import TaskDetailsModal from "../Task/TaskDetailsModal";
 import MeetingDetailsModal from "../company/MeetingDetailsModal";
-import { Calendar, Clock, Users, FileText, ChevronDown, ArrowUpRight, MoreHorizontal, Layout } from "lucide-react";
+import { Calendar, Clock, Users, FileText, ChevronDown, ArrowUpRight, Layout } from "lucide-react";
 
 // NEW: Exported TasksCard to be used in Dashboard side-by-side
 export const TasksCard = ({ tasks, totalTasks }) => {
@@ -65,7 +66,7 @@ export const TasksCard = ({ tasks, totalTasks }) => {
             <ArrowUpRight className="w-4 h-4 text-gray-500" />
           </button>
           <button className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
-            <MoreHorizontal className="w-4 h-4 text-gray-500" />
+            <MoreIcon className="w-4 h-4 text-gray-500" />
           </button>
         </div>
       </div>

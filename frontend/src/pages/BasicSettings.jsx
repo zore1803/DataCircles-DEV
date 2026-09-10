@@ -12,7 +12,6 @@ import {
   HelpCircle,
   Workflow,
   Mail,
-  Settings as SettingsIcon,
   ChevronRight,
   Sparkles,
   Zap,
@@ -22,6 +21,7 @@ import {
   ListChecks,
   CalendarClock,
 } from "lucide-react";
+import SettingsIcon from "../components/common/SettingsIcon";
 import KanbanSettings from "../components/settings/KanbanSettings";
 import CompanyFieldSettings from "../components/settings/CompanyFieldSettings";
 import ContactFieldSettings from "../components/settings/ContactFieldSettings";
@@ -229,7 +229,7 @@ const BasicSettings = () => {
   const categoryOrder = ["General", "Customization", "Support"];
 
   const categoryIcons = {
-    General: <SettingsIcon className="w-5 h-5" />,
+    General: <SettingsIcon className="w-4 h-4" />,
     Customization: <Zap className="w-5 h-5" />,
     Support: <HelpCircle className="w-5 h-5" />,
   };
@@ -352,7 +352,7 @@ const BasicSettings = () => {
                   <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-2 rounded-lg shadow-md">
                     <div className="text-white">
                       {categoryIcons[category] || (
-                        <SettingsIcon className="w-5 h-5" />
+                        <SettingsIcon className="w-4 h-4" />
                       )}
                     </div>
                   </div>

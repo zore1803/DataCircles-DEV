@@ -1,3 +1,5 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState } from "react";
 import API from "../services/api";
 import { useNavigate } from "react-router-dom";
@@ -14,10 +16,8 @@ import {
   Trash2,
   Truck,
   Calendar,
-  MoreVertical,
   CheckSquare,
   X,
-  Plus,
   ArrowUpCircle,
   ArrowDownCircle,
   Building,
@@ -490,7 +490,7 @@ const PaymentPage = () => {
               onClick={handleAddNew}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 transition shadow-sm"
             >
-              <Plus className="w-4 h-4" />
+              <PlusIcon className="w-4 h-4" />
               Add Payment
             </button>
           </div>
@@ -616,7 +616,7 @@ const PaymentPage = () => {
                   <SortableHeader field="paymentType">Type</SortableHeader>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
-                      <MoreVertical className="w-4 h-4" />
+                      <MoreIcon className="w-4 h-4" />
                       Actions
                     </div>
                   </th>

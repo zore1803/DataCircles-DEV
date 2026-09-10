@@ -1,5 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Lock, Loader2, Timer, FileText, Settings2, Edit3, X, Check, CalendarDays } from "lucide-react";
+import { Trash2, Lock, Loader2, Timer, FileText, Settings2, Edit3, X, Check, CalendarDays } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -240,7 +241,7 @@ function SystemDefaultsSettings() {
               disabled={isSaving || !newTaskStatus.trim()}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" /> Add
+              <PlusIcon className="w-4 h-4" /> Add
             </button>
           </form>
 
@@ -344,7 +345,7 @@ function SystemDefaultsSettings() {
               disabled={isSaving || !newNoteType.trim()}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" /> Add
+              <PlusIcon className="w-4 h-4" /> Add
             </button>
           </form>
 
@@ -448,7 +449,7 @@ function SystemDefaultsSettings() {
               disabled={isSaving || !newMeetingType.trim()}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" /> Add
+              <PlusIcon className="w-4 h-4" /> Add
             </button>
           </form>
 

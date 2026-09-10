@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Bell, Plus, Pencil, Trash2, CheckCircle, X } from "lucide-react";
+import { Bell, Pencil, Trash2, CheckCircle, X } from "lucide-react";
+import PlusIcon from "./common/PlusIcon";
 import API from "../services/api";
 
 /*

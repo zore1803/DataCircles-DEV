@@ -1,3 +1,6 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../utils/domUtils";
@@ -38,7 +41,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  MoreVertical,
   Edit2,
   X,
   Trash2,
@@ -48,13 +50,9 @@ import {
   Calendar,
   Building2,
   CheckSquare,
-  Plus,
   Filter,
-  Download,
-  Upload,
   CalendarDays,
   Briefcase,
-  Settings,
   List,
   Award,
   Target,
@@ -434,7 +432,7 @@ const ModernDealCard = React.memo(({ deal, onClick, isStale, colorTheme = "blue"
               className="p-1 cursor-pointer hover:bg-gray-100 rounded-md transition-colors z-10"
               title="More actions"
             >
-              <MoreVertical className="w-4 h-4 text-[#BEBEC8]" />
+              <MoreIcon className="w-4 h-4 text-[#BEBEC8]" />
             </button>
             {isActionsOpen && actionsPos && createPortal(
               <>
@@ -613,7 +611,7 @@ const ModernKanbanColumn = React.memo(({
           className="flex items-center justify-center cursor-pointer hover:opacity-70 transition-opacity flex-shrink-0"
           title="Add deal"
         >
-          <Plus className="w-4 h-4" style={{ color: "#BEBEC8" }} />
+          <PlusIcon className="w-4 h-4 text-[#BEBEC8]" />
         </button>
       </div>
 
@@ -2323,7 +2321,7 @@ function Deals() {
                 onClick={() => setShowExportModal(true)}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
@@ -2480,7 +2478,7 @@ function Deals() {
                   className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
                   title="More options"
                 >
-                  <MoreVertical className="w-4 h-4" />
+                  <MoreIcon className="w-4 h-4" />
                 </button>
 
                 {isMoreMenuOpen && (
@@ -2541,7 +2539,7 @@ function Deals() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Upload className="w-4 h-4 text-gray-400" />
+                      <UploadIcon className="w-4 h-4 text-gray-400" />
                       Import
                     </button>
                     <div className="relative" ref={exportButtonRef}>
@@ -2549,7 +2547,7 @@ function Deals() {
                         onClick={() => setShowExportMenu((prev) => !prev)}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <Download className="w-4 h-4 text-gray-400" />
+                        <DownloadIcon className="w-4 h-4 text-gray-400" />
                         Export
                       </button>
                       {showExportMenu && (
@@ -2584,7 +2582,7 @@ function Deals() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Settings className="w-4 h-4 text-gray-400" />
+                      <SettingsIcon className="w-4 h-4 text-gray-400" />
                       Columns
                     </button>
                     <button
@@ -2594,7 +2592,7 @@ function Deals() {
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Settings className="w-4 h-4 text-gray-400" />
+                      <SettingsIcon className="w-4 h-4 text-gray-400" />
                       Deal Settings
                     </button>
                   </div>
@@ -2610,7 +2608,7 @@ function Deals() {
                 title={showQuickAdd && !editDeal ? "Cancel" : "New Deal"}
                 className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
               >
-                <Plus className="w-4 h-4 flex-shrink-0" />
+                <PlusIcon className="w-4 h-4 flex-shrink-0" />
                 <span className="hidden lg:inline">{showQuickAdd && !editDeal ? "Cancel" : "New Deal"}</span>
               </button>
             </div>
@@ -3078,3 +3076,5 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import Skeleton from "../components/common/Skeleton";
 import DealCardSkeleton from "../components/common/DealCardSkeleton";
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
+import UploadIcon from "../components/common/UploadIcon";

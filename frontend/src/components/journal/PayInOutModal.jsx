@@ -1,6 +1,8 @@
+import PlusIcon from "../common/PlusIcon";
+import SearchIcon from "../common/SearchIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
-  X, Paperclip, MessageSquare, Mail, Plus, ChevronDown, Check, Search,
+  X, Paperclip, MessageSquare, Mail, ChevronDown, Check,
 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -68,7 +70,7 @@ const PartySearchInput = ({ value, onChange, partyType, placeholder, fieldClass 
   return (
     <div className="relative" ref={wrapperRef}>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
         <input
           type="text"
           value={value}
@@ -493,7 +495,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                     >
                       <MessageSquare className={`w-3.5 h-3.5 ${notifySMS ? "text-green-500" : "text-green-400"}`} />
                       Send SMS
-                      {notifySMS ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3 text-gray-400" />}
+                      {notifySMS ? <Check className="w-3 h-3" /> : <PlusIcon className="w-4 h-4 text-gray-400" />}
                     </button>
 
                     <button
@@ -505,7 +507,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                     >
                       <Mail className={`w-3.5 h-3.5 ${notifyEmail ? "text-blue-500" : "text-blue-400"}`} />
                       Send Email
-                      {notifyEmail ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3 text-gray-400" />}
+                      {notifyEmail ? <Check className="w-3 h-3" /> : <PlusIcon className="w-4 h-4 text-gray-400" />}
                     </button>
                   </div>
 
@@ -551,7 +553,7 @@ const PayInOutModal = ({ isOpen, onClose, journal, type, onSuccess }) => {
                     onClick={() => window.open("/settings/brand", "_blank")}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
                   >
-                    <Plus className="w-3 h-3" />
+                    <PlusIcon className="w-4 h-4" />
                     Add New Signature
                   </button>
                 </div>

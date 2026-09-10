@@ -1,3 +1,5 @@
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -10,20 +12,16 @@ import {
   ChevronUp,
   Clock,
   Copy,
-  Download,
   Eye,
   EyeOff,
   Mail,
   MessageCircle,
   MessageSquare,
-  MoreVertical,
   Pin,
   PinOff,
   Plug,
-  Settings,
   Share2,
   Trash2,
-  Upload,
   X,
   XCircle, ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
@@ -40,6 +38,7 @@ import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import FilterIcon from "../components/common/FilterIcon";
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
 import { useColumnSettings } from "../hooks/useColumnSettings";
@@ -47,6 +46,7 @@ import { exportClientSide, formatINR } from "../utils/clientExport";
 import HighlightText from "../components/common/HighlightText";
 import { getPinnedBoundaryOverlayStyle } from "../utils/pinnedColumnShadow";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
+import UploadIcon from "../components/common/UploadIcon";
 
 const getAncestorZoom = (el) => {
   let z = 1;
@@ -786,7 +786,7 @@ export default function EInvoicing() {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
 
         {isOpen && rowActionsPos && createPortal(
@@ -801,7 +801,7 @@ export default function EInvoicing() {
                 <Eye className="w-3.5 h-3.5 text-[#1C1B1F]" /> View
               </button>
               <button onClick={() => handleDownload(r)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal text-[#161618] hover:bg-gray-50 whitespace-nowrap">
-                <Download className="w-3.5 h-3.5 text-[#1C1B1F]" /> Download
+                <DownloadIcon className="w-4 h-4 text-[#1C1B1F]" /> Download
               </button>
               <button
                 onClick={(e) => {
@@ -1010,7 +1010,7 @@ export default function EInvoicing() {
                 onClick={() => handleExport("excel")}
                 className="h-10 px-4 bg-white border border-gray-300 rounded-l-[25px] text-gray-900 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
@@ -1140,7 +1140,7 @@ export default function EInvoicing() {
                     className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
                     title="More options"
                   >
-                    <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                    <MoreIcon className="w-4 h-4" />
                   </button>
                   {isMoreMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
@@ -1160,7 +1160,7 @@ export default function EInvoicing() {
                         onClick={() => { toast("Import — coming soon.", { icon: "🚧" }); setIsMoreMenuOpen(false); }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <Upload className="w-4 h-4 text-gray-400" />
+                        <UploadIcon className="w-4 h-4 text-gray-400" />
                         Import
                       </button>
                       <div className="relative" ref={exportButtonRef}>
@@ -1168,7 +1168,7 @@ export default function EInvoicing() {
                           onClick={() => setShowExportMenu((prev) => !prev)}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <Download className="w-4 h-4 text-gray-400" />
+                          <DownloadIcon className="w-4 h-4 text-gray-400" />
                           Export
                         </button>
                         {showExportMenu && (
@@ -1200,7 +1200,7 @@ export default function EInvoicing() {
                         onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <Settings className="w-4 h-4 text-gray-400" />
+                        <SettingsIcon className="w-4 h-4 text-gray-400" />
                         Columns
                       </button>
                     </div>

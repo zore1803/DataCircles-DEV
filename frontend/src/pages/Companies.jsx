@@ -1,3 +1,7 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import HotlistIcon from "../components/common/HotlistIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
@@ -9,14 +13,12 @@ import logo from "/DataCircles.png";
 import FilterIcon from "../components/common/FilterIcon";
 import HighlightText from "../components/common/HighlightText";
 import {
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Filter,
-  Upload,
   Building2,
   MapPin,
   Briefcase,
@@ -25,12 +27,8 @@ import {
   Trash2,
   FileText,
   CheckSquare,
-  MoreVertical,
-  Settings,
   FolderPlus,
-  Download,
   StickyNote,
-  MoreHorizontal,
   SlidersHorizontal,
   Eye,
   EyeOff,
@@ -107,7 +105,9 @@ import CompanyQuickView from "../components/company/CompanyQuickView";
 import AppToaster from "../components/AppToaster";
 
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
+import UploadIcon from "../components/common/UploadIcon";
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
 // mounted on document.body render in visual (un-zoomed) space and mouse clientX/Y are
@@ -591,7 +591,7 @@ function Companies() {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -1849,7 +1849,7 @@ function Companies() {
                   onClick={() => setShowExportModal(true)}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-green-600" />
+                  <DownloadIcon className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -2015,13 +2015,7 @@ function Companies() {
                         : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
                         }`}
                     >
-                      {/* Was 13x13 — smaller than every other toolbar icon
-                          here (search/filter/more/plus are all 16px), which
-                          made Hotlist's icon read as visibly undersized next
-                          to them. */}
-                      <svg width="16" height="16" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#1F2937" />
-                      </svg>
+                      <HotlistIcon className="w-4 h-4 text-[#1F2937]" />
                       <span className="font-medium">Hotlist</span>
                     </button>
 
@@ -2032,7 +2026,7 @@ function Companies() {
                         className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
                         title="More options"
                       >
-                        <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                        <MoreIcon className="w-4 h-4" />
                         {filterIndustry && (
                           <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
                         )}
@@ -2063,9 +2057,7 @@ function Companies() {
                               }}
                               className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <svg width="14" height="14" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
-                                <path d="M3.33333 11.6667H5V3.33333H3.33333V11.6667ZM10 10H11.6667V3.33333H10V10ZM6.66667 7.5H8.33333V3.33333H6.66667V7.5ZM1.66667 15C1.20833 15 0.815972 14.8368 0.489583 14.5104C0.163194 14.184 0 13.7917 0 13.3333V1.66667C0 1.20833 0.163194 0.815972 0.489583 0.489583C0.815972 0.163194 1.20833 0 1.66667 0H13.3333C13.7917 0 14.184 0.163194 14.5104 0.489583C14.8368 0.815972 15 1.20833 15 1.66667V13.3333C15 13.7917 14.8368 14.184 14.5104 14.5104C14.184 14.8368 13.7917 15 13.3333 15H1.66667ZM1.66667 13.3333H13.3333V1.66667H1.66667V13.3333Z" fill="#9CA3AF" />
-                              </svg>
+                              <HotlistIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               {showHotlist ? "Hide Hotlist" : "Hotlist"}
                             </button>
                             <button
@@ -2075,7 +2067,7 @@ function Companies() {
                               }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Settings className="w-4 h-4 text-gray-400" />
+                              <SettingsIcon className="w-4 h-4 text-gray-400" />
                               Columns
                             </button>
                             <button
@@ -2085,7 +2077,7 @@ function Companies() {
                               }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Upload className="w-4 h-4 text-gray-400" />
+                              <UploadIcon className="w-4 h-4 text-gray-400" />
                               Import
                             </button>
                             
@@ -2107,7 +2099,7 @@ function Companies() {
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
                       title="New Company"
                     >
-                      <Plus className="w-4 h-4 flex-shrink-0" />
+                      <PlusIcon className="w-4 h-4 flex-shrink-0" />
                       <span className="hidden lg:inline">New Company</span>
                     </button>
                   </div>

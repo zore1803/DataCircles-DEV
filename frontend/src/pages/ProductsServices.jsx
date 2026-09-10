@@ -1,9 +1,10 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import {
-  MoreVertical,
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
@@ -12,8 +13,6 @@ import {
   Edit2,
   Trash2,
   Boxes,
-  Upload,
-  Download,
   CheckSquare,
   Eye,
   EyeOff,
@@ -52,6 +51,7 @@ import {
 import SearchIcon from "../components/common/SearchIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
+import UploadIcon from "../components/common/UploadIcon";
 
 // The app is rendered inside #root which carries a CSS `zoom` (0.75 on desktop).
 // getBoundingClientRect() returns UNSCALED layout coordinates, while portal overlays
@@ -1060,7 +1060,7 @@ function ProductsServices() {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -1724,7 +1724,7 @@ function ProductsServices() {
                   onClick={() => setShowExportModal(true)}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-green-600" />
+                  <DownloadIcon className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -1869,7 +1869,7 @@ function ProductsServices() {
                     className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
                     title="More options"
                   >
-                    <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                    <MoreIcon className="w-4 h-4" />
                     {activeFilters.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
                     )}
@@ -1909,7 +1909,7 @@ function ProductsServices() {
                         }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <Upload className="w-4 h-4 text-gray-400" />
+                        <UploadIcon className="w-4 h-4 text-gray-400" />
                         Import
                       </button>
                       <div className="relative" ref={exportButtonRef}>
@@ -1917,7 +1917,7 @@ function ProductsServices() {
                           onClick={() => setShowExportMenu((prev) => !prev)}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          <Download className="w-4 h-4 text-gray-400" />
+                          <DownloadIcon className="w-4 h-4 text-gray-400" />
                           Export
                         </button>
                         {showExportMenu && (
@@ -1956,7 +1956,7 @@ function ProductsServices() {
                   className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
                   title="Add Item"
                 >
-                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <PlusIcon className="w-4 h-4 flex-shrink-0" />
                   <span className="hidden lg:inline">Add Item</span>
                 </button>
               </div>

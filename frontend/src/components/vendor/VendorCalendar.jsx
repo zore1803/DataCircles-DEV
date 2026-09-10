@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import API from "../../services/api";
 import VendorMeetingForm from "./VendorMeetingForm";
@@ -8,7 +9,6 @@ import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
-  Plus,
   Users,
   CheckSquare,
   X,
@@ -150,7 +150,7 @@ const ActivityListPopup = ({
                 onClick={() => onAddMeeting(date)}
                 className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
               >
-                <Plus className="w-3 h-3" />
+                <PlusIcon className="w-4 h-4" />
                 Add
               </button>
             </div>
@@ -178,7 +178,7 @@ const ActivityListPopup = ({
                 onClick={() => onAddTask(date)}
                 className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
               >
-                <Plus className="w-3 h-3" />
+                <PlusIcon className="w-4 h-4" />
                 Add
               </button>
             </div>
@@ -647,7 +647,7 @@ const VendorCalendar = ({ vendorId }) => {
           className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
           title="Add Event"
         >
-          <Plus className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+          <PlusIcon className="w-4 h-4" />
         </button>
       </div>
 

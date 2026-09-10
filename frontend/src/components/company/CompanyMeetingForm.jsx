@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -14,7 +15,6 @@ import {
   Phone,
   AlertTriangle,
   CheckCircle2,
-  Plus,
   Trash2,
   User,
   Building,
@@ -171,7 +171,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
           className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-xl text-left hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-gray-400" />
+            <PlusIcon className="w-4 h-4 text-gray-400" />
             <span className={selectedUsers.length === 0 ? "text-gray-500" : "text-gray-900"}>
               {selectedUsers.length === 0 ? placeholder : `${selectedUsers.length} participant(s) selected`}
             </span>

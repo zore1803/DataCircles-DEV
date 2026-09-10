@@ -1,3 +1,6 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, {
   useState,
   useRef,
@@ -7,8 +10,6 @@ import React, {
   useCallback,
 } from "react";
 import {
-  MoreVertical,
-  Plus,
   FileText,
   ChevronUp,
   ChevronDown,
@@ -16,7 +17,6 @@ import {
   ChevronRight,
   Pencil,
   Eye,
-  Download,
   Send,
   Trash2,
   Repeat,
@@ -109,7 +109,7 @@ const OpenNotesTermsButton = ({ label, onClick }) => (
     title="Edit notes and terms"
     className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0085FF] hover:underline flex-shrink-0"
   >
-    <Plus className="w-3 h-3" />
+    <PlusIcon className="w-4 h-4" />
     {label}
   </button>
 );
@@ -591,7 +591,7 @@ const InvoiceViewer = ({
                 onClick={handleDownloadCurrentCopy}
                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <Download className="w-4 h-4" />
+                <DownloadIcon className="w-4 h-4" />
               </button>
               <button
                 title="Print"
@@ -2063,7 +2063,7 @@ const Accounting = () => {
           }}
           className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {menuOpen && rowMenuPos && createPortal(
           <>
@@ -2115,7 +2115,7 @@ const Accounting = () => {
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
-                    <Download className="w-4 h-4 text-green-600" />
+                    <DownloadIcon className="w-4 h-4 text-green-600" />
                     Download
                   </button>
                   <button
@@ -2359,7 +2359,7 @@ const Accounting = () => {
                   onClick={handleExportSelected}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-green-600" />
+                  <DownloadIcon className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -2380,7 +2380,7 @@ const Accounting = () => {
                   {bulkDownloading ? (
                     <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <Download className="w-4 h-4 text-indigo-600" />
+                    <DownloadIcon className="w-4 h-4 text-indigo-600" />
                   )}
                   Download Merged PDF
                 </button>
@@ -2623,7 +2623,7 @@ const Accounting = () => {
                   }}
                   className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
                 >
-                  <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                  <MoreIcon className="w-4 h-4" />
                 </button>
                 {showMoreMenu && (
                   <div
@@ -2717,7 +2717,7 @@ const Accounting = () => {
                 }}
                 className="flex flex-row justify-center items-center hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 lg:!w-auto"
               >
-                <Plus size={18} className="text-white flex-shrink-0" />
+                <PlusIcon className="w-4 h-4 text-white flex-shrink-0" />
                 <span
                   className="hidden lg:inline text-white text-[14px] font-medium leading-[20px] whitespace-nowrap"
                   style={{ minWidth: activeTab === "tax" ? 106 : undefined }}

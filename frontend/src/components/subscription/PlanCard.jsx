@@ -1,5 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 ﻿import React, { useState } from "react";
-import { Check, ArrowUp, ArrowDown, CreditCard, Gift, Sparkles, Eye, ChevronDown, ChevronUp, Plus, Minus, X } from "lucide-react";
+import { Check, ArrowUp, ArrowDown, CreditCard, Gift, Sparkles, Eye, ChevronDown, ChevronUp, Minus, X } from "lucide-react";
 import FeaturesModal from "./FeaturesModal";
 import RewardAvailabilityBadge from "./RewardAvailabilityBadge";
 import { ruleForProduct, discountForItem, isCouponStillRecurring } from "../../utils/couponHelpers";
@@ -644,7 +645,7 @@ const PlanCard = ({
                               disabled={qty >= max}
                               className={`w-6 h-6 flex items-center justify-center rounded text-xs disabled:opacity-40 ${plan.popular ? "bg-white/20 text-white hover:bg-white/30" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                             >
-                              <Plus className="w-3 h-3" />
+                              <PlusIcon className="w-4 h-4" />
                             </button>
                           </>
                         )}

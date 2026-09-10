@@ -1,5 +1,6 @@
+import PlusIcon from "./PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, ChevronDown } from "lucide-react";
+import { X, Trash2, ChevronDown } from "lucide-react";
 import FilterIcon from "./FilterIcon";
 
 import SearchIcon from "./SearchIcon";
@@ -362,7 +363,7 @@ export default function AdvancedFilterPanel({
                 onClick={addFilter}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
               >
-                <Plus className="w-4 h-4" /> Add Rule
+                <PlusIcon className="w-4 h-4" /> Add Rule
               </button>
             </div>
           ) : (
@@ -507,7 +508,7 @@ export default function AdvancedFilterPanel({
               onClick={addFilter}
               className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl text-sm font-medium text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors"
             >
-              <Plus className="w-4 h-4" /> Add Another Rule
+              <PlusIcon className="w-4 h-4" /> Add Another Rule
             </button>
           )}
         </div>

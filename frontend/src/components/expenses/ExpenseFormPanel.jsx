@@ -1,5 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { X, Check, ChevronDown, Plus, Paperclip } from "lucide-react";
+import { X, Check, ChevronDown, Paperclip } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -380,7 +381,7 @@ export default function ExpenseFormPanel({ kind = "expense", record, onClose, on
                     : "border border-[#1F2937]/15 text-[#1F2937] hover:bg-gray-50"
                 }`}
               >
-                <Plus className="w-3 h-3" />
+                <PlusIcon className="w-4 h-4" />
                 Create with vendor
               </button>
 
@@ -397,7 +398,7 @@ export default function ExpenseFormPanel({ kind = "expense", record, onClose, on
                     : "border border-[#1F2937]/15 text-[#1F2937] hover:bg-gray-50"
                 }`}
               >
-                <Plus className="w-3 h-3" />
+                <PlusIcon className="w-4 h-4" />
                 Multi Currency
               </button>
 

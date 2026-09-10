@@ -1,8 +1,12 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import SettingsIcon from "../common/SettingsIcon";
 import {
-  Search as SearchIcon, X, Plus, Pencil, Trash2, ChevronDown, MoreVertical,
-  Pin, PinOff, ArrowUp, ArrowDown, EyeOff, Settings, ChevronLeft, ChevronRight, Eye,
-  Download, Share2, Repeat, Copy, MessageCircle, Mail, MessageSquare,
+  Search as SearchIcon, X, Pencil, Trash2, ChevronDown,
+  Pin, PinOff, ArrowUp, ArrowDown, EyeOff, ChevronLeft, ChevronRight, Eye,
+  Share2, Repeat, Copy, MessageCircle, Mail, MessageSquare,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
@@ -134,7 +138,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
   );
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
   const [pinnedCols, setPinnedCols] = useState({});
-  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [showColumnsetShowColumnSettings] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [openColumnMenuKey, setOpenColumnMenuKey] = useState(null);
   const [columnMenuPos, setColumnMenuPos] = useState(null);
@@ -750,7 +754,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
               title="More"
               className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
             >
-              <MoreVertical className="w-4 h-4" />
+              <MoreIcon className="w-4 h-4" />
             </button>
             {moreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1">
@@ -760,7 +764,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                   onClick={() => { setShowColumnSettings(true); setMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#161618] hover:bg-gray-50 transition-colors"
                 >
-                  <Settings className="w-4 h-4 text-gray-400" />
+                  <SettingsIcon className="w-4 h-4 text-gray-400" />
                   Manage Columns
                 </button>
                 <button
@@ -782,7 +786,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
             className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 focus:outline-none cursor-pointer transition-colors flex-shrink-0"
             title={`Add ${noun}`}
           >
-            <Plus className="w-4 h-4 flex-shrink-0" />
+            <PlusIcon className="w-4 h-4 flex-shrink-0" />
             <span className="hidden lg:inline whitespace-nowrap">Add {noun}</span>
           </button>
         </div>
@@ -837,7 +841,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                 onClick={openCreate}
                 className="mt-5 inline-flex items-center gap-2 h-10 px-5 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <PlusIcon className="w-4 h-4" />
                 Add {noun}
               </button>
             )}
@@ -1071,7 +1075,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                                   title="Actions"
                                   className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
                                 >
-                                  <MoreVertical className="w-4 h-4" />
+                                  <MoreIcon className="w-4 h-4" />
                                 </button>
                                 {openMenu === r._id && rowMenuPos && createPortal(
                                   <>
@@ -1109,7 +1113,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                                             onClick={() => { closeRowMenu(); handleDownloadRow(r); }}
                                             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                           >
-                                            <Download className="w-4 h-4 text-green-600" />
+                                            <DownloadIcon className="w-4 h-4 text-green-600" />
                                             Download
                                           </button>
                                           <button

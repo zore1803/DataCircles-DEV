@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import { User, Mail, Phone, Camera, Upload, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
+import { User, Mail, Phone, Camera, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
 import logo from "/DataCircles.png";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
@@ -486,7 +486,7 @@ const Profile = () => {
                     </>
                   ) : (
                     <>
-                      <Upload className="w-4 h-4" />
+                      <UploadIcon className="w-4 h-4" />
                       Upload Image
                     </>
                   )}
@@ -655,3 +655,4 @@ const Profile = () => {
 
 export default Profile;
 import PageSkeleton from "../components/common/PageSkeleton";
+import UploadIcon from "../components/common/UploadIcon";

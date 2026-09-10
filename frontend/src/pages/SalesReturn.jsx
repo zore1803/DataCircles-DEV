@@ -1,24 +1,22 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import {
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Upload,
-  Download,
   Edit2,
   Trash2,
   Eye,
   EyeOff,
   Pin,
   PinOff,
-  MoreVertical,
-  Settings,
   CheckSquare,
   ClipboardList,
   DollarSign,
@@ -41,6 +39,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import HighlightText from "../components/common/HighlightText";
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
@@ -53,6 +52,7 @@ import { exportClientSide, formatINR } from "../utils/clientExport";
 import SalesReturnForm from "../components/salesReturn/SalesReturnForm";
 import SalesReturnPreview from "../components/salesReturn/SalesReturnPreview";
 import ImportSalesReturns from "../components/salesReturn/ImportSalesReturns";
+import UploadIcon from "../components/common/UploadIcon";
 import {
   useReactTable,
   getCoreRowModel,
@@ -647,7 +647,7 @@ const SalesReturn = () => {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -674,7 +674,7 @@ const SalesReturn = () => {
                 onClick={() => { close(); handleDownload(row); }}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Download PDF
               </button>
               <button
@@ -1535,7 +1535,7 @@ const SalesReturn = () => {
                   onClick={() => handleExport("Excel")}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-green-600" />
+                  <DownloadIcon className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -1662,7 +1662,7 @@ const SalesReturn = () => {
                         className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50"
                         title="More options"
                       >
-                        <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                        <MoreIcon className="w-4 h-4" />
                         {statusFilter && (
                           <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600" />
                         )}
@@ -1685,7 +1685,7 @@ const SalesReturn = () => {
                             onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Upload className="w-4 h-4 text-gray-400" />
+                            <UploadIcon className="w-4 h-4 text-gray-400" />
                             Import
                           </button>
                           <div className="relative" ref={exportButtonRef}>
@@ -1693,7 +1693,7 @@ const SalesReturn = () => {
                               onClick={() => setShowExportMenu((prev) => !prev)}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Download className="w-4 h-4 text-gray-400" />
+                              <DownloadIcon className="w-4 h-4 text-gray-400" />
                               Export
                             </button>
                             {showExportMenu && (
@@ -1717,7 +1717,7 @@ const SalesReturn = () => {
                             onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Settings className="w-4 h-4 text-gray-400" />
+                            <SettingsIcon className="w-4 h-4 text-gray-400" />
                             Columns
                           </button>
                         </div>
@@ -1729,7 +1729,7 @@ const SalesReturn = () => {
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 flex-shrink-0"
                       title="New Sales Return"
                     >
-                      <Plus className="w-4 h-4" />
+                      <PlusIcon className="w-4 h-4" />
                       <span className="hidden lg:inline">New Sales Return</span>
                     </button>
                   </div>
@@ -1841,7 +1841,7 @@ const SalesReturn = () => {
                                 onClick={openCreate}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
                               >
-                                <Plus className="w-3.5 h-3.5" />
+                                <PlusIcon className="w-4 h-4" />
                                 Create your first return
                               </button>
                             </div>

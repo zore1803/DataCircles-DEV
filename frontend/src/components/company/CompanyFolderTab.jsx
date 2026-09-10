@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Files, Cloud, Upload, History } from "lucide-react";
+import { Files, Cloud, History } from "lucide-react";
+import UploadIcon from "../common/UploadIcon";
 import Folder from "./Folder";
 import StatTile from "../common/StatTile";
 import StatTileSkeleton from "../common/StatTileSkeleton";
@@ -66,7 +67,7 @@ export default function CompanyFolderTab({ showStats = true, isLoading = false, 
     {
       label: "Recent Uploads",
       value: recentUploads,
-      icon: Upload,
+      icon: UploadIcon,
       subtitle: latest ? `Last upload ${relativeTime(latest.uploadedAt)}` : null,
       subtitleClass: "text-gray-400",
     },

@@ -1,3 +1,5 @@
+import SearchIcon from "../common/SearchIcon";
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Skeleton from "../common/Skeleton";
 import StatTile from "../common/StatTile";
@@ -11,7 +13,6 @@ import {
   Calendar,
   ArrowUpCircle,
   ArrowDownCircle,
-  Download,
   X,
   Filter,
   RefreshCw,
@@ -35,7 +36,6 @@ import FilterIcon from "../common/FilterIcon";
 import { useBulkSelection, useBulkStrip } from "../../hooks/useBulkSelection";
 import { useTopLoadingSignal } from "../common/TopLoadingBar";
 import { exportToCSV } from "../../utils/exportToCSV";
-import { Search } from "lucide-react";
 import toast from "react-hot-toast";
 import AppToaster from "../AppToaster";
 import HighlightText from "../common/HighlightText";
@@ -711,7 +711,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
       ) : (
         <div className="flex items-center gap-4 mb-3" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-900 opacity-50" />
             <input
               type="text"
               value={search}
@@ -743,7 +743,7 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
             className="flex items-center justify-center h-[44px] w-[44px] border border-[#E1E4EA] text-gray-700 rounded-full hover:bg-gray-50 transition-colors flex-shrink-0"
             title="Download PDF"
           >
-            <Download size={18} />
+            <DownloadIcon />
           </button>
           {/* Got/Gave moved to the far right of the row — the eye button
               that used to sit here (toggling the below-fold showKPIs block,

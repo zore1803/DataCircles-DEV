@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
@@ -5,7 +6,6 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
-  Plus,
   Users,
   ChevronLeft,
   ChevronRight,
@@ -868,7 +868,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
           style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
           title="Add Meeting"
         >
-          <Plus size={20} />
+          <PlusIcon className="w-4 h-4" />
         </button>
       </div>
       )}
@@ -882,7 +882,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
             onClick={() => setManualMeetingFormOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Plus size={16} />
+            <PlusIcon className="w-4 h-4" />
             Add new meeting
           </button>
         </div>

@@ -1,3 +1,4 @@
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import logo from "/DataCircles.png";
 import { formatNumberToIndian } from "../utils/numberFormatter";
@@ -27,7 +28,6 @@ import {
 } from "recharts";
 import {
   Calendar,
-  Download,
   TrendingUp,
   TrendingDown,
   Users,
@@ -1065,7 +1065,7 @@ const Insights = () => {
             onClick={onExport}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
           >
-            <Download className="w-4 h-4" />
+            <DownloadIcon className="w-4 h-4" />
             Export PDF
           </button>
         </div>

@@ -1,5 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 import React from "react";
-import { X, Trash2, Loader2, Edit3, Users, Plus, Video } from "lucide-react";
+import { X, Trash2, Loader2, Edit3, Users, Video } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CircleCheckIcon = (props) => (
@@ -415,7 +416,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                 className="flex items-center hover:opacity-80 transition-opacity"
                 style={{ gap: 6 }}
               >
-                <Plus className="w-3.5 h-3.5" style={{ color: "#0085FF" }} />
+                <PlusIcon className="w-4 h-4 text-[#0085FF]" />
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#0085FF" }}>
                   Add Internal Participant
                 </span>
@@ -460,7 +461,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                 className="flex items-center hover:opacity-80 transition-opacity"
                 style={{ gap: 6 }}
               >
-                <Plus className="w-3.5 h-3.5" style={{ color: "#0085FF" }} />
+                <PlusIcon className="w-4 h-4 text-[#0085FF]" />
                 <span style={{ fontFamily: "Inter", fontWeight: 500, fontSize: 10, lineHeight: "120%", color: "#0085FF" }}>
                   Add Client Contact
                 </span>

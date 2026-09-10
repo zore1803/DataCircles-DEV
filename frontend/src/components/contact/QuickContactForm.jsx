@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
 import PhoneNumberInput from "../common/PhoneNumberInput";
 import { createPortal } from "react-dom";
@@ -5,7 +6,7 @@ import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
 import CustomDropdown from "../common/CustomDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
-import { Plus, X, Paperclip } from "lucide-react";
+import { X, Paperclip } from "lucide-react";
 import toast from "react-hot-toast";
 
 const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, onRequestClose, initialCompanyId = "", editContact = null }) => {
@@ -678,7 +679,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add New Company"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {validationErrors.company && (

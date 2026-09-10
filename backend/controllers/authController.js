@@ -265,10 +265,6 @@ exports.updateProfile = async (req, res) => {
       if (!/^\d{10}$/.test(phone)) {
         return res.status(400).json({ error: "Please enter a valid 10-digit phone number" });
       }
-      const existing = await User.findOne({ phone });
-      if (existing) {
-        return res.status(400).json({ error: "This phone number is already in use." });
-      }
       user.phone = phone;
       user.isPhoneVerified = false;
     }

@@ -1,5 +1,6 @@
+import SearchIcon from "../common/SearchIcon";
 import React, { useEffect, useMemo, useState } from "react";
-import { X, Plus, Trash2, Search } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchableDropdown from "../contact/SearchableDropdown";
@@ -324,7 +325,7 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
               </div>
 
               <div className="relative mb-3">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={itemSearch}

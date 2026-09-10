@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
@@ -15,7 +16,6 @@ import {
   Phone,
   AlertTriangle,
   CheckCircle2,
-  Plus,
   Trash2,
   User,
   Building,
@@ -354,7 +354,7 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityType, disabled,
           <div className="absolute left-0 right-0 mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-gray-100">
               <div className="relative">
-                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-3.5 h-3.5 text-[#525866]" />
+                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
                 <input
                   type="text"
                   autoFocus
@@ -455,7 +455,7 @@ const MultiSelectDropdown = ({ users, selectedUsers, onSelectionChange, placehol
           <span className={selectedUsers.length === 0 ? "text-[#1F2937] opacity-50" : "text-[#1F2937]"}>
             {selectedUsers.length === 0 ? placeholder : `${selectedUsers.length} participant(s) selected`}
           </span>
-          <Plus className="w-3.5 h-3.5 text-[#1F2937] opacity-50 flex-shrink-0" />
+          <PlusIcon className="w-4 h-4 text-[#1F2937] opacity-50 flex-shrink-0" />
         </button>
         {isOpen && (
           <>

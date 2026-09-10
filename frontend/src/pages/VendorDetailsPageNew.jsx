@@ -1,3 +1,5 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import API from "../services/api";
@@ -17,7 +19,6 @@ import PageSkeleton from "../components/common/PageSkeleton";
 import toast from "react-hot-toast";
 import {
   Edit2,
-  MoreVertical,
   Twitter,
   Linkedin,
   Instagram,
@@ -29,7 +30,6 @@ import {
   Video,
   FolderOpen,
   FilePlus,
-  Plus,
   ChevronDown,
   StickyNote,
   Clock,
@@ -926,7 +926,7 @@ const VendorDetailsPageNew = () => {
                       : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
                       }`}
                   >
-                    <MoreVertical size={16} strokeWidth={2.5} />
+                    <MoreIcon className="w-4 h-4" />
                   </button>
                   {showActionsMenu && (
                     <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
@@ -963,7 +963,7 @@ const VendorDetailsPageNew = () => {
                     title="New Entry"
                     className="flex items-center justify-center gap-1.5 h-8 w-8 lg:w-auto px-0 lg:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
                   >
-                    <Plus size={14} className="lg:hidden" />
+                    <PlusIcon className="w-4 h-4 lg:hidden" />
                     <span className="hidden lg:inline">New Entry</span>
                     <ChevronDown size={14} className="hidden lg:inline" />
                   </button>

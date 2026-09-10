@@ -1,6 +1,7 @@
+import DownloadIcon from "./DownloadIcon";
 // src/components/common/ExportModal.jsx
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Download, CheckSquare, Square } from "lucide-react";
+import { X, CheckSquare, Square } from "lucide-react";
 import toast from "react-hot-toast";
 import SearchIcon from "./SearchIcon";
 import API from "../../services/api"; // Make sure your API instance is imported
@@ -117,7 +118,7 @@ export default function ExportModal({
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-xl">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
-              <Download className="w-5 h-5 text-green-600" />
+              <DownloadIcon className="w-4 h-4 text-green-600" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900 font-sf">
@@ -220,7 +221,7 @@ export default function ExportModal({
               disabled={selectedCols.length === 0 || isExporting}
               className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-2"
             >
-              <Download className="w-4 h-4" />
+              <DownloadIcon className="w-4 h-4" />
               {isExporting ? "Exporting..." : "Export to Excel"}
             </button>
           </div>

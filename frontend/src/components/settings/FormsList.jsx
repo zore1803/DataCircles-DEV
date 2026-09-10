@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 // components/settings/FormsList.jsx
 // Forms List — Build order step 1, per FORMS_FRONTEND_ARCHITECTURE.md §2. Renders inside the
 // Settings shell at /settings/forms (settingsItems entry in Settings.jsx). Table via TanStack,
@@ -15,7 +16,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Plus, X, ChevronLeft, ChevronRight, FileText, User, Building2, Truck, Trash2, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, FileText, User, Building2, Truck, Trash2, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
 
 const columnHelper = createColumnHelper();
 
@@ -356,7 +357,7 @@ const FormsList = () => {
             onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none cursor-pointer shadow-sm transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             New Form
           </button>
         ) : null}

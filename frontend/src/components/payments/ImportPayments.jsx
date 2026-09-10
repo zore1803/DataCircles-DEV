@@ -1,7 +1,9 @@
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect } from "react";
-import { Upload, FileSpreadsheet, AlertCircle, X, Download } from "lucide-react";
+import { FileSpreadsheet, AlertCircle, X } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
+import UploadIcon from "../common/UploadIcon";
 
 /*
  * Import for Payment records only — the one row-type payments-timeline
@@ -218,7 +220,7 @@ Global Traders,8500,2026-01-18,Credit,UPI,SBI Savings,Advance received`;
                 </>
               ) : (
                 <>
-                  <Upload className="w-12 h-12 text-gray-400 mb-3" />
+                  <UploadIcon className="w-12 h-12 text-gray-400 mb-3" />
                   <p className="text-sm text-gray-700 mb-2"><span className="font-medium">Click to upload</span> or drag and drop</p>
                   <p className="text-xs text-gray-500 mb-4">CSV files only</p>
                 </>
@@ -232,7 +234,7 @@ Global Traders,8500,2026-01-18,Credit,UPI,SBI Savings,Advance received`;
 
           <div className="mb-6">
             <button onClick={downloadSampleCSV} className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors" disabled={loading}>
-              <Download className="w-4 h-4 mr-2" /> Download Sample Template
+              <DownloadIcon className="w-4 h-4 mr-2" /> Download Sample Template
             </button>
           </div>
 

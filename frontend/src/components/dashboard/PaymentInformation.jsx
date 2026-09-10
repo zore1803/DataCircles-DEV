@@ -1,7 +1,8 @@
+import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../services/api";
-import { ArrowUpRight, MoreHorizontal, ChevronDown } from "lucide-react";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
 import FilterIcon from "../common/FilterIcon";
 
 // Helper for 12th Nov style dates
@@ -76,7 +77,7 @@ const PaymentInformation = ({ invoices, summary }) => {
             <ArrowUpRight className="w-4 h-4 text-gray-500" />
           </button>
           <button className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
-            <MoreHorizontal className="w-4 h-4 text-gray-500" />
+            <MoreIcon className="w-4 h-4 text-gray-500" />
           </button>
         </div>
       </div>

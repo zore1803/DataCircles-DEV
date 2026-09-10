@@ -6,7 +6,6 @@ import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
-  Plus,
   Users,
   CheckSquare,
   X,

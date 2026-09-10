@@ -1,6 +1,7 @@
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Download, CheckCircle2, Clock, XCircle, AlertCircle, ArrowRight } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, AlertCircle, ArrowRight } from "lucide-react";
 import axios from "axios";
 
 const API_BASE = (import.meta.env.VITE_APP_API_URL || "").replace(/\/$/, "");
@@ -228,7 +229,7 @@ export default function PublicDocumentPage() {
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" />
+                  <DownloadIcon className="w-4 h-4" />
                   Download {doc.docName}
                 </>
               )}

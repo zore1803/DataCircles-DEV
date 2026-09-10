@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 // components/settings/Wallet.jsx
 //
 // Org-facing prepaid credit wallet. Independent of the subscription — nothing
@@ -6,7 +7,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Wallet as WalletIcon,
-  Plus,
   Sparkles,
   FileText,
   Package,
@@ -265,7 +265,7 @@ const Wallet = () => {
               disabled={purchasing || !(creditsToBuy > 0)}
               className="mt-4 flex w-full items-center justify-center gap-2 h-[42px] rounded-full bg-emerald-600 px-5 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="w-4 h-4" />
               {purchasing ? "Processing…" : "Buy Credits"}
             </button>
           </div>

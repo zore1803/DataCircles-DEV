@@ -1,3 +1,5 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams, Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import API from "../services/api";
@@ -30,13 +32,11 @@ import {
   Users,
   FileText,
   Eye,
-  Plus,
   Receipt,
   CheckSquare,
   Mail,
   Phone,
   File,
-  MoreVertical,
   StickyNote,
   Calendar,
   FolderOpen,
@@ -1006,7 +1006,7 @@ const CompanyProfilePage = () => {
                   : "bg-white border-gray-200 text-gray-800 hover:bg-gray-50"
                   }`}
               >
-                <MoreVertical size={16} strokeWidth={2.5} />
+                <MoreIcon className="w-4 h-4" />
               </button>
               {showActionsMenu && (
                 <div className="absolute right-0 mt-1 w-32 lg:w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
@@ -1069,7 +1069,7 @@ const CompanyProfilePage = () => {
                 title="New Entry"
                 className="flex items-center justify-center gap-1.5 h-8 w-8 lg:w-auto px-0 lg:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-full transition-colors"
               >
-                <Plus size={14} className="lg:hidden" />
+                <PlusIcon className="w-4 h-4 lg:hidden" />
                 <span className="hidden lg:inline">New Entry</span>
                 <ChevronDown size={14} className="hidden lg:inline" />
               </button>
@@ -1247,7 +1247,7 @@ const CompanyProfilePage = () => {
                             title="Add Deal"
                             className="w-7 h-7 flex items-center justify-center rounded-full bg-[#0085FF] hover:bg-blue-600 text-white transition-colors"
                           >
-                            <Plus size={14} />
+                            <PlusIcon className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -2027,7 +2027,7 @@ const CompanyProfilePage = () => {
                 }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
               >
-                <Plus size={16} /> Add New Meeting
+                <PlusIcon className="w-4 h-4" /> Add New Meeting
               </button>
             </div>
           </div>

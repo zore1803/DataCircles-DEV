@@ -1,3 +1,4 @@
+import PlusIcon from "../components/common/PlusIcon";
 // pages/ReferralProgramAdmin.jsx
 //
 // Super Admin — Referral Program management. Org-scoped by design: every
@@ -11,7 +12,7 @@
 // edits only affect rewards created AFTER the change (Reward is immutable).
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Gift, Save, Ban, Plus, Users, Tag, Clock, Building2, X,
+  Gift, Save, Ban, Users, Tag, Clock, Building2, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { configureAxios } from "../services/api";
@@ -313,7 +314,7 @@ const ReferralProgramAdmin = () => {
             <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2"><Tag className="w-4 h-4 text-purple-600" /> Rewards</h3>
               <button onClick={() => setShowGrant(true)} className="flex items-center gap-1.5 text-xs font-medium bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700">
-                <Plus className="w-3.5 h-3.5" /> Grant manual reward
+                <PlusIcon className="w-4 h-4" /> Grant manual reward
               </button>
             </div>
             {(overview?.rewards || []).length === 0 ? (

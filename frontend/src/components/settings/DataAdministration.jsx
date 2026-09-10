@@ -1,6 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Database, TrendingUp, Loader2, Wallet as WalletIcon, Plus } from "lucide-react";
+import { Database, TrendingUp, Loader2, Wallet as WalletIcon } from "lucide-react";
 import API from "../../services/api";
 import { walletAPI } from "../../services/walletApi";
 
@@ -103,7 +104,7 @@ function DataAdministration() {
                 onClick={() => navigate("/settings/wallet")}
                 className="flex items-center gap-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <PlusIcon className="w-4 h-4" />
                 Add Money
               </button>
             </div>

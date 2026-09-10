@@ -1,6 +1,6 @@
+import DownloadIcon from "../common/DownloadIcon";
 import { useEffect, useState } from "react";
 import {
-  Download,
   Calendar,
   CreditCard,
   CheckCircle,
@@ -734,7 +734,7 @@ const BillingHistory = ({ embedded = false } = {}) => {
                     onClick={() => handleDownloadInvoice(payment)}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all text-xs font-medium border border-blue-200 hover:border-blue-300"
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    <DownloadIcon className="w-4 h-4" />
                     Download
                   </button>
                 </div>

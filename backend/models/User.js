@@ -44,10 +44,13 @@ const userSchema = new mongoose.Schema(
       unique: true,
       // Remove default: null to prevent explicit nulls
     },
+    // Not unique — multiple accounts (e.g. a shared family/office number, or
+    // one person's separate personal and staff accounts) can register the
+    // same phone number. Login-by-phone (verifyOtp/userSync) resolves ties
+    // by taking the first match, same as before this was ever unique.
     phone: {
       type: String,
       sparse: true,
-      unique: true,
       // Remove default: null to prevent explicit nulls
     },
     role: { type: String, enum: ["admin", "staff"], default: "staff" },

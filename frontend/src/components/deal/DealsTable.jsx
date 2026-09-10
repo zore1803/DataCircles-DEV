@@ -1,3 +1,4 @@
+import MoreIcon from "../common/MoreIcon";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -18,7 +19,7 @@ import {
   Pin,
   PinOff,
   EyeOff,
-  MoreVertical, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowUp, ArrowDown } from "lucide-react";
 import CustomDropdown from "../common/CustomDropdown";
 import TableSkeletonRows from "../common/TableSkeletonRows";
 
@@ -753,7 +754,7 @@ export default function DealsTable({
                   className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                   title="More actions"
                 >
-                  <MoreVertical className="w-4 h-4" />
+                  <MoreIcon className="w-4 h-4" />
                 </button>
                 {isActionsOpen && rowActionsPos && createPortal(
                   <>

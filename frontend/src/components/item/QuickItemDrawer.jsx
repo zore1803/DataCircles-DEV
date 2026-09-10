@@ -1,8 +1,8 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   X,
-  Plus,
   ChevronRight,
   Lock,
   Trash2,
@@ -486,7 +486,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                       onClick={() => { setCurrentVariant(BLANK_VARIANT); setVariantIndex(null); setShowVariantForm(true); }}
                       className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Add Variant
+                      <PlusIcon className="w-4 h-4" /> Add Variant
                     </button>
                   )}
                 </div>
@@ -517,7 +517,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                         <div className="flex items-center justify-between mb-2">
                           <label className={lbl + " mb-0"}>Attributes</label>
                           <button type="button" onClick={() => setCurrentVariant((p) => ({ ...p, attributes: { ...p.attributes, "": "" } }))} className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-                            <Plus className="w-3.5 h-3.5" /> Add Attribute
+                            <PlusIcon className="w-4 h-4" /> Add Attribute
                           </button>
                         </div>
                         {Object.keys(currentVariant.attributes || {}).length > 0 && (
@@ -680,7 +680,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                       onClick={() => imageInputRef.current?.click()}
                       className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 cursor-pointer transition-colors"
                     >
-                      <Plus className="w-5 h-5 mb-1" />
+                      <PlusIcon className="w-4 h-4 mb-1" />
                       <span className="text-[11px] font-medium">Upload</span>
                     </button>
                     <input

@@ -1,12 +1,16 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, ChevronDown, ChevronUp, MoreVertical, Pencil, Trash2, Eye, EyeOff,
-  SlidersHorizontal, Plus, Download, Share2, Edit2,
+  X, ChevronDown, ChevronUp, Pencil, Trash2, Eye, EyeOff,
+  SlidersHorizontal, Share2, Edit2,
   ChevronLeft, ChevronRight, Pin, PinOff, FileText,
-  Settings, Upload, Video, TrendingUp, TrendingDown, Wallet, ListChecks,
+  Video, TrendingUp, TrendingDown, Wallet, ListChecks,
   ArrowLeftRight, ArrowUp, ArrowDown } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import BankLogo from "../components/BankLogo";
@@ -32,6 +36,7 @@ import PaymentReceiptModal from "../components/vendor/PaymentReceiptModal";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import StatTile from "../components/common/StatTile";
+import UploadIcon from "../components/common/UploadIcon";
 
 /* ─── Column definitions ───────────────────────────────────────────── */
 const DEFAULT_COL_WIDTHS = {
@@ -1112,7 +1117,7 @@ export default function PaymentsTimeline() {
           }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <MoreVertical size={15} />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && actionMenuPos && createPortal(
           <>
@@ -1142,7 +1147,7 @@ export default function PaymentsTimeline() {
                   setActionMenuPos(null);
                   handleExportExcel(doc);
                 }}>
-                <Download className="w-4 h-4 text-gray-400" /> Download
+                <DownloadIcon className="w-4 h-4 text-gray-400" /> Download
               </button>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 onClick={() => { setOpenActionMenuId(null); setActionMenuPos(null); toast.success("Share coming soon!"); }}>
@@ -1581,7 +1586,7 @@ export default function PaymentsTimeline() {
               className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
               title="More options"
             >
-              <MoreVertical className="w-4 h-4" />
+              <MoreIcon className="w-4 h-4" />
             </button>
 
             {isMoreMenuOpen && (
@@ -1590,7 +1595,7 @@ export default function PaymentsTimeline() {
                   onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Settings className="w-4 h-4 text-gray-400" />
+                  <SettingsIcon className="w-4 h-4 text-gray-400" />
                   Columns
                 </button>
                 <button
@@ -1604,7 +1609,7 @@ export default function PaymentsTimeline() {
                   onClick={() => { setShowImport(true); setIsMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Upload className="w-4 h-4 text-gray-400" />
+                  <UploadIcon className="w-4 h-4 text-gray-400" />
                   Import
                 </button>
                 <button
@@ -1626,7 +1631,7 @@ export default function PaymentsTimeline() {
             }}
             className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors flex-shrink-0 ml-1 cursor-pointer"
           >
-            <Plus className="w-4 h-4 flex-shrink-0 text-white" />
+            <PlusIcon className="w-4 h-4 flex-shrink-0 text-white" />
             <span className="whitespace-nowrap">Add Payment</span>
           </button>
         </div>
@@ -2180,7 +2185,7 @@ export default function PaymentsTimeline() {
                     className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0 cursor-pointer flex items-center justify-center"
                     title="More options"
                   >
-                    <MoreVertical size={16} />
+                    <MoreIcon className="w-4 h-4" />
                   </button>
                   {showModalOptions && (
                     <>
@@ -2205,7 +2210,7 @@ export default function PaymentsTimeline() {
                           }}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors cursor-pointer font-medium"
                         >
-                          <Download size={14} className="text-gray-400" />
+                          <DownloadIcon className="w-4 h-4 text-gray-400" />
                           Download Excel
                         </button>
                       </div>

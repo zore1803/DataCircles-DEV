@@ -1,6 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
 import QuickDealForm from "../deal/QuickDealForm";
 import toast from "react-hot-toast";
 
@@ -34,7 +34,7 @@ const DealsTable = ({ deals = [], contact, company, onDealCreated }) => {
             onClick={() => setShowQuickDealForm(true)}
             className="inline-flex items-center gap-2 px-3 py-2 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             Add Deal
           </button>
         </div>
@@ -93,7 +93,7 @@ const DealsTable = ({ deals = [], contact, company, onDealCreated }) => {
                   <td colSpan="5" className="px-4 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                        <Plus className="w-6 h-6 text-gray-400" />
+                        <PlusIcon className="w-4 h-4 text-gray-400" />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900 mb-1">No deals yet</p>

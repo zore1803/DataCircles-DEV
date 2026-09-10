@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
 // import React, { useEffect, useState, useRef } from "react";
 // import {
 //   DndContext,
@@ -372,7 +374,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { MoreVertical, Phone, Mail, Edit, Trash2, Plus } from "lucide-react";
+import { Phone, Mail, Edit, Trash2 } from "lucide-react";
 
 // ============================================================================
 // 1. PIXEL-PERFECT CARD COMPONENT
@@ -419,7 +421,7 @@ const KanbanCard = ({ contact, isDragging, onEdit, onDelete }) => {
             }}
             className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 transition-colors"
           >
-            <MoreVertical className="w-4 h-4" />
+            <MoreIcon className="w-4 h-4" />
           </button>
 
           {/* Dropdown Menu */}
@@ -578,7 +580,7 @@ const DroppableColumn = ({
           onClick={() => onAddContact && onAddContact(column)}
           className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
         >
-          <Plus className="w-5 h-5" />
+          <PlusIcon className="w-4 h-4" />
         </button>
       </div>
 

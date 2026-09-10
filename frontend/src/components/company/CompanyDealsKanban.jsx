@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import BulkActionBar from "../common/BulkActionBar";
@@ -36,15 +38,12 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
   Filter,
-  Plus,
   Gem,
   Clock,
   Handshake,
   Sparkles,
   ListChecks,
   CalendarClock,
-  MoreHorizontal,
-  MoreVertical,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -243,7 +242,7 @@ const DealCardContent = ({ deal, selectSlot = null, setDealToDelete }) => {
               className="p-1 cursor-pointer hover:bg-gray-100 rounded-md transition-colors z-10"
               title="More actions"
             >
-              <MoreHorizontal className="w-4 h-4 text-[#BEBEC8]" />
+              <MoreIcon className="w-4 h-4 text-[#BEBEC8]" />
             </button>
             {isActionsOpen && actionsPos && createPortal(
               <>
@@ -492,7 +491,7 @@ const KanbanColumn = React.memo(({ status, deals, amountDeals, totalDealsCount, 
           className="flex items-center justify-center cursor-pointer hover:opacity-70 transition-opacity flex-shrink-0"
           title="Add deal"
         >
-          <Plus className="w-4 h-4" style={{ color: "#BEBEC8" }} />
+          <PlusIcon className="w-4 h-4 text-[#BEBEC8]" />
         </button>
       </div>
 
@@ -1599,7 +1598,7 @@ export default function CompanyDealsKanban({
             style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
             title="Add Deal"
           >
-            <Plus size={20} />
+            <PlusIcon className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -1711,7 +1710,7 @@ export default function CompanyDealsKanban({
             onClick={() => setManualDealFormOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Plus size={16} />
+            <PlusIcon className="w-4 h-4" />
             Add new deal
           </button>
         </div>
@@ -1989,7 +1988,7 @@ export default function CompanyDealsKanban({
                                   className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                                   title="More actions"
                                 >
-                                  <MoreVertical className="w-4 h-4" />
+                                  <MoreIcon className="w-4 h-4" />
                                 </button>
                                 {isActionsOpen && rowActionsPos && createPortal(
                                   <>

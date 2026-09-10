@@ -6,7 +6,6 @@ import { INDIA_STATES } from "../../constants/addressOptions";
 import PageSkeleton from "../common/PageSkeleton";
 import {
   Save,
-  Upload,
   Palette,
   Building2,
   ArrowLeft,
@@ -20,6 +19,7 @@ import {
   X,
   Info,
 } from "lucide-react";
+import UploadIcon from "../common/UploadIcon";
 
 function BrandSettings() {
   const navigate = useNavigate();
@@ -536,7 +536,7 @@ function BrandSettings() {
                         </button>
                       </>
                     ) : (
-                      <Upload className="w-8 h-8 text-gray-400" />
+                      <UploadIcon className="w-8 h-8 text-gray-400" />
                     )}
                   </div>
                   <input
@@ -550,7 +550,7 @@ function BrandSettings() {
                     htmlFor="logo-upload"
                     className="inline-flex items-center gap-2 px-4 py-2 border-2 border-gray-300 rounded-xl text-sm bg-white hover:bg-gray-50 cursor-pointer transition-colors font-semibold"
                   >
-                    <Upload className="w-4 h-4" />
+                    <UploadIcon className="w-4 h-4" />
                     Upload Logo
                   </label>
                   <p className="text-xs text-gray-500 mt-3 text-center">
@@ -591,7 +591,7 @@ function BrandSettings() {
                         </button>
                       </>
                     ) : (
-                      <Upload className="w-8 h-8 text-gray-400" />
+                      <UploadIcon className="w-8 h-8 text-gray-400" />
                     )}
                   </div>
                   <input
@@ -605,7 +605,7 @@ function BrandSettings() {
                     htmlFor="signature-upload"
                     className="inline-flex items-center gap-2 px-4 py-2 border-2 border-gray-300 rounded-xl text-sm bg-white hover:bg-gray-50 cursor-pointer transition-colors font-semibold"
                   >
-                    <Upload className="w-4 h-4" />
+                    <UploadIcon className="w-4 h-4" />
                     Upload Signature
                   </label>
                   <p className="text-xs text-gray-500 mt-3 text-center">

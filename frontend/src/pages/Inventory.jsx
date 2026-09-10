@@ -1,13 +1,16 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, ChevronDown, ChevronUp, MoreVertical, Eye, EyeOff, Plus, Minus,
-  ChevronLeft, ChevronRight, Pin, PinOff, Package, Settings,
+  X, ChevronDown, ChevronUp, Eye, EyeOff, Minus,
+  ChevronLeft, ChevronRight, Pin, PinOff, Package,
   TrendingDown, Boxes, IndianRupee, Wallet, History, ArrowRight, Check, ArrowUp, ArrowDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { formatINR } from "../utils/clientExport";
 import BulkActionBar from "../components/common/BulkActionBar";
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import API from "../services/api";
@@ -684,7 +687,7 @@ export default function Inventory() {
           }}
           className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <MoreVertical size={15} />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && actionMenuPos && createPortal(
           <>
@@ -701,7 +704,7 @@ export default function Inventory() {
                   setStockModal({ open: true, item, direction: "in" });
                 }}
               >
-                <Plus className="w-4 h-4 text-green-600" /> Stock In
+                <PlusIcon className="w-4 h-4 text-green-600" /> Stock In
               </button>
               <button
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -944,7 +947,7 @@ export default function Inventory() {
               className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
               title="More options"
             >
-              <MoreVertical className="w-4 h-4" />
+              <MoreIcon className="w-4 h-4" />
             </button>
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
@@ -952,7 +955,7 @@ export default function Inventory() {
                   onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Settings className="w-4 h-4 text-gray-400" /> Columns
+                  <SettingsIcon className="w-4 h-4 text-gray-400" /> Columns
                 </button>
                 <button
                   onClick={() => { setShowStats((p) => !p); setIsMoreMenuOpen(false); }}
@@ -1396,7 +1399,7 @@ export default function Inventory() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${m.direction === "in" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                          {m.direction === "in" ? <Plus className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+                          {m.direction === "in" ? <PlusIcon className="w-4 h-4" /> : <Minus className="w-3 h-3" />}
                           {m.quantity}
                         </span>
                         <span className="text-xs font-medium text-gray-600 capitalize truncate">

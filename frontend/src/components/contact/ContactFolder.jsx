@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../services/api";
 import { Link } from "react-router-dom";
@@ -5,7 +6,6 @@ import toast from "react-hot-toast";
 import StatusDropdown from "./StatusDropdown";
 import SearchIcon from "../common/SearchIcon";
 import {
-  Plus,
   Edit3,
   Trash2,
   ChevronDown,
@@ -230,7 +230,7 @@ const ContactFolder = () => {
             onClick={() => setShowCreateForm(!showCreateForm)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             Create New Folder
           </button>
         </div>

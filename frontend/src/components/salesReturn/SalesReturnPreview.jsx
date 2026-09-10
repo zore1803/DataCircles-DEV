@@ -1,5 +1,6 @@
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useEffect, useState } from "react";
-import { Pencil, Printer, Trash2, X, Download } from "lucide-react";
+import { Pencil, Printer, Trash2, X } from "lucide-react";
 import API from "../../services/api";
 
 // Server-rendered-PDF preview, same approach as PurchaseReturnPreview.jsx:
@@ -91,7 +92,7 @@ const SalesReturnPreview = ({ salesReturn, isOpen, onClose, onEdit, onDelete }) 
                 disabled={!pdfUrl}
                 className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Download className="w-4 h-4" />
+                <DownloadIcon className="w-4 h-4" />
               </button>
               <button
                 onClick={handlePrint}

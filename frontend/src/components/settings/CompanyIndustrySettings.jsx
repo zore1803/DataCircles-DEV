@@ -1,7 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import {
-  Plus,
   Edit3,
   Trash2,
   Save,
@@ -158,7 +158,7 @@ const CompanyIndustrySettings = () => {
       <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="bg-green-100 p-2 rounded-lg">
-            <Plus className="w-5 h-5 text-green-600" />
+            <PlusIcon className="w-4 h-4 text-green-600" />
           </div>
           <h3 className="text-xl font-bold text-gray-900">Add New Industry</h3>
         </div>
@@ -182,7 +182,7 @@ const CompanyIndustrySettings = () => {
             onClick={handleAdd}
             className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             Add Industry
           </button>
         </div>

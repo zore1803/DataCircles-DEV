@@ -1,5 +1,6 @@
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useEffect, useRef, useState } from "react";
-import { Copy, Check, Download, Share2 } from "lucide-react";
+import { Copy, Check, Share2 } from "lucide-react";
 import QRCode from "qrcode";
 import toast from "react-hot-toast";
 
@@ -49,7 +50,7 @@ function QrCodePanel({ url }) {
         disabled={!dataUrl}
         className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
       >
-        <Download className="w-3.5 h-3.5" />
+        <DownloadIcon className="w-4 h-4" />
         Download QR
       </button>
     </div>

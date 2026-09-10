@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
@@ -12,7 +14,6 @@ import toast from 'react-hot-toast';
 import HighlightText from "../common/HighlightText";
 import { 
   StickyNote,
-  Plus,
   Edit3,
   Trash2,
   Clock,
@@ -21,7 +22,6 @@ import {
   X,
   Eye,
   Calendar,
-  MoreVertical
 } from "lucide-react";
 import AppToaster from "../AppToaster";
 import DataTable from "../common/DataTable";
@@ -353,7 +353,7 @@ const NoteCard = ({ note, onEdit, onDelete, onView, searchTerm }) => {
               className="p-1 rounded hover:bg-gray-100 transition-colors"
               title="More options"
             >
-              <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+              <MoreIcon className="w-4 h-4 text-[#1C1B1F]" />
             </button>
 
             {menuOpen && menuPos && createPortal(
@@ -1053,7 +1053,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
         ) : (
         <div className="flex items-center gap-4 mb-2" style={{ height: "44px" }}>
           <div className="relative flex-1 h-full">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-900 opacity-50" />
+            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-900 opacity-50" />
             <input
               type="text"
               value={searchTerm}
@@ -1114,7 +1114,7 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
             className="flex items-center justify-center rounded-full border hover:bg-gray-50 flex-shrink-0"
             style={{ width: "44px", height: "44px", borderColor: "rgba(31, 41, 55, 0.1)" }}
           >
-            <Plus size={20} className="text-gray-700" />
+            <PlusIcon className="w-4 h-4 text-gray-700" />
           </button>
         </div>
         )}

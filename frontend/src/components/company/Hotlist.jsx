@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../services/api";
 import { useNavigate } from "react-router-dom";
@@ -5,7 +6,6 @@ import toast from "react-hot-toast";
 import HighlightText from "../common/HighlightText";
 import SearchIcon from "../common/SearchIcon";
 import {
-  Plus,
   Edit3,
   Trash2,
   X,
@@ -658,7 +658,7 @@ const Hotlist = () => {
               onClick={() => startEdit(openFolder)}
               className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex-shrink-0"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="w-4 h-4" />
               Add Companies
             </button>
           </div>
@@ -680,7 +680,7 @@ const Hotlist = () => {
               onClick={() => startEdit(openFolder)}
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="w-4 h-4" />
               Add Companies
             </button>
           </div>
@@ -770,7 +770,7 @@ const Hotlist = () => {
               onClick={() => setShowCreateFolder((prev) => !prev)}
               className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors flex-shrink-0"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="w-4 h-4" />
               New Folder
             </button>
           </div>
@@ -790,7 +790,7 @@ const Hotlist = () => {
               onClick={createFolder}
               className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium flex items-center justify-center gap-2 text-sm sm:text-base"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="w-4 h-4" />
               Create
             </button>
           </div>

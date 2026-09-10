@@ -1,7 +1,8 @@
+import DownloadIcon from "../common/DownloadIcon";
 // components/vendor/PaymentReceiptModal.jsx
 import React from 'react';
 import { formatNumberFixed } from "../../utils/numberFormatter";
-import { X, Download, Printer } from 'lucide-react';
+import { X, Printer } from 'lucide-react';
 
 const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
   if (!isOpen || !payment) return null;
@@ -52,7 +53,7 @@ const PaymentReceiptModal = ({ isOpen, onClose, payment, vendor }) => {
               className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               title="Download"
             >
-              <Download size={20} />
+              <DownloadIcon />
             </button>
             <button
               onClick={handlePrint}

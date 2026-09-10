@@ -1,8 +1,10 @@
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useRef } from "react";
-import { X, Upload, FileText, Download, CheckCircle2 } from "lucide-react";
+import { X, FileText, CheckCircle2 } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
 import toast from "react-hot-toast";
+import UploadIcon from "../common/UploadIcon";
 
 // Maps common header spellings onto the row shape bulkImportPurchaseReturns
 // expects — same "auto-match by header name" idea as ImportPurchases.jsx's
@@ -167,7 +169,7 @@ const ImportPurchaseReturns = ({ isOpen, onClose, onImportSuccess }) => {
             onClick={downloadSampleCSV}
             className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
-            <Download className="w-4 h-4" /> Download sample CSV
+            <DownloadIcon className="w-4 h-4" /> Download sample CSV
           </button>
 
           {!rows ? (
@@ -180,7 +182,7 @@ const ImportPurchaseReturns = ({ isOpen, onClose, onImportSuccess }) => {
                 dragOver ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-gray-300"
               }`}
             >
-              <Upload className="w-8 h-8 text-gray-300" />
+              <UploadIcon className="w-8 h-8 text-gray-300" />
               <p className="text-sm font-medium text-gray-600">Drop a CSV/Excel file here, or click to browse</p>
               <p className="text-xs text-gray-400">Columns: Return Number, Vendor Name, Item Name, Quantity, Unit Price, Mode, Reason, Status, Notes</p>
               <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileSelect} className="hidden" />

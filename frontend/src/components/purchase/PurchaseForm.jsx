@@ -1,6 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import {
-  Plus,
   Trash2,
   X,
   ChevronDown,
@@ -522,7 +522,7 @@ const PurchaseForm = ({
                   className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors flex-shrink-0"
                   aria-label="Add new vendor"
                 >
-                  <Plus className="w-5 h-5" />
+                  <PlusIcon className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -560,7 +560,7 @@ const PurchaseForm = ({
                 onClick={addItem}
                 className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium text-xs transition-colors"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <PlusIcon className="w-4 h-4" />
                 Add Item Manually
               </button>
             </div>

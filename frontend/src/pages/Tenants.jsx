@@ -1,3 +1,4 @@
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
   ChevronUp,
@@ -14,7 +15,6 @@ import {
   X,
   Calendar,
   IndianRupeeIcon,
-  Download,
   Trash2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -527,7 +527,7 @@ const Tenants = () => {
               className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
-              <Download className="w-4 h-4" />
+              <DownloadIcon className="w-4 h-4" />
               <span className="font-medium">Export</span>
               <ChevronDown className="w-4 h-4" />
             </button>

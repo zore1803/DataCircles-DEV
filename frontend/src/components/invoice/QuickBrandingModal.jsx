@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Building2, Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import API from '../../services/api';
 import toast from 'react-hot-toast';
 import { INDIA_STATES } from '../../constants/addressOptions';
+import UploadIcon from "../common/UploadIcon";
 
 const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
   const [formData, setFormData] = useState({
@@ -286,7 +287,7 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
                   </div>
                 ) : (
                   <label className="cursor-pointer">
-                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <UploadIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600">Click to upload logo</p>
                     <input
                       type="file"
@@ -318,7 +319,7 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
                   </div>
                 ) : (
                   <label className="cursor-pointer">
-                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <UploadIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600">Click to upload signature</p>
                     <input
                       type="file"

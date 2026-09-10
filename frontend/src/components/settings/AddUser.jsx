@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { Users, ArrowRight, Shield, UserPlus, Settings } from "lucide-react";
+import { Users, ArrowRight, Shield, UserPlus } from "lucide-react";
+import SettingsIcon from "../common/SettingsIcon";
 
 const AddUser = () => {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ const AddUser = () => {
 
             <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
               <div className="bg-blue-100 p-2 rounded-lg w-fit mb-3">
-                <Settings className="w-5 h-5 text-blue-600" />
+                <SettingsIcon className="w-4 h-4 text-blue-600" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-1 text-sm">
                 Manage Teams

@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import API from "../../services/api";
@@ -5,7 +6,6 @@ import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import {
   X,
-  Plus,
   Calendar,
   Clock,
   Users,
@@ -84,7 +84,7 @@ const EntityPickerDropdown = ({ entities, value, onChange, entityLabel, displayK
           <div className="absolute left-0 right-0 mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-gray-100">
               <div className="relative">
-                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-3.5 h-3.5 text-[#525866]" />
+                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
                 <input
                   type="text"
                   autoFocus
@@ -663,7 +663,7 @@ const QuickTaskForm = ({
                       title={`Add New ${form.relationModel}`}
                       className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                     >
-                      <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                      <PlusIcon className="w-4 h-4 text-white" />
                     </button>
                   </div>
                   {validationErrors.relatedTo && (
@@ -770,7 +770,7 @@ const QuickTaskForm = ({
                       <span className="text-[#1F2937] opacity-50">
                         {form.users.length > 0 ? `${form.users.length} selected` : "Select Users"}
                       </span>
-                      <Plus className="w-3.5 h-3.5 text-[#1F2937] opacity-50" />
+                      <PlusIcon className="w-4 h-4 text-[#1F2937] opacity-50" />
                     </button>
 
                       {showUserSelector && (
@@ -779,7 +779,7 @@ const QuickTaskForm = ({
                           <div className="absolute z-50 left-0 right-0 bottom-full mb-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
                             <div className="p-2 border-b border-gray-100">
                               <div className="relative">
-                                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-3.5 h-3.5 text-[#525866]" />
+                                <SearchIcon className="absolute left-3 -translate-y-1/2 top-1/2 w-4 h-4 text-[#525866]" />
                                 <input
                                   type="text"
                                   value={userSearch}

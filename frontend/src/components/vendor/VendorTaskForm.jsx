@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -15,7 +16,6 @@ import {
   Loader2,
   Edit3,
   Save,
-  Plus,
 } from "lucide-react";
 
 const initialState = {
@@ -427,7 +427,7 @@ const VendorTaskForm = ({
                       onClick={() => setShowUserSelector(!showUserSelector)}
                       className="flex items-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-200 hover:bg-blue-100 transition-colors w-full justify-center"
                     >
-                      <Plus className="w-4 h-4" />
+                      <PlusIcon className="w-4 h-4" />
                       {showUserSelector ? "Hide Users" : "Select Users"}
                     </button>
                     {showUserSelector && (

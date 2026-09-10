@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getAncestorZoom } from "../../utils/domUtils";
@@ -5,7 +7,6 @@ import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import { useParams } from "react-router-dom";
 import {
   Filter,
-  Plus,
   StickyNote,
   FileText,
   Tag,
@@ -14,7 +15,6 @@ import {
   Calendar,
   Clock,
   Eye,
-  MoreVertical,
   Pin,
   PinOff,
   ChevronLeft,
@@ -954,7 +954,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
           style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
           title="Add Note"
         >
-          <Plus size={20} />
+          <PlusIcon className="w-4 h-4" />
         </button>
       </div>
       )}
@@ -1006,7 +1006,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
             onClick={() => setManualEditorOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Plus size={16} />
+            <PlusIcon className="w-4 h-4" />
             Add new note
           </button>
         </div>
@@ -1368,7 +1368,7 @@ export default function CompanyNotesTab({ showStats = true, autoOpenCreate = fal
                         className="p-1 rounded hover:bg-gray-200 text-gray-800 transition-colors flex-shrink-0"
                         title="More options"
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <MoreIcon className="w-4 h-4" />
                       </button>
 
                       {isActionsOpen && rowActionsPos && createPortal(

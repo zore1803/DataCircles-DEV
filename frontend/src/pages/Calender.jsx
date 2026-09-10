@@ -1,3 +1,5 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../services/api";
 import AdminMeetingForm from "../components/admin/AdminMeetingForm";
@@ -5,9 +7,6 @@ import toast from "react-hot-toast";
 import {
   ChevronLeft,
   ChevronRight,
-  Plus,
-  MoreHorizontal,
-  MoreVertical,
   X,
   Calendar as CalendarIcon,
   Clock,
@@ -694,7 +693,7 @@ const AdminCalendar = () => {
               borderRadius: 96,
             }}
           >
-            {loading ? <Skeleton width={16} height={16} shape="circle" /> : <MoreVertical size={16} strokeWidth={2.5} style={{ color: "#1F2937" }} />}
+            {loading ? <Skeleton width={16} height={16} shape="circle" /> : <MoreIcon className="w-4 h-4 text-[#1F2937]" />}
           </button>
 
           <button
@@ -713,7 +712,7 @@ const AdminCalendar = () => {
               <Skeleton width={90} height={14} />
             ) : (
               <>
-                <Plus size={16} style={{ color: "#FFFFFF" }} />
+                <PlusIcon className="w-4 h-4 text-white" />
                 <span
                   style={{
                     fontFamily: "Inter",

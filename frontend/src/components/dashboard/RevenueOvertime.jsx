@@ -10,7 +10,8 @@ import {
     AreaChart,
     CartesianGrid
 } from "recharts";
-import { ChevronDown as ChevronIcon, ArrowUpRight as ArrowIcon, MoreHorizontal as MoreIcon } from "lucide-react";
+import { ChevronDown as ChevronIcon, ArrowUpRight as ArrowIcon } from "lucide-react";
+import MoreIcon from "../common/MoreIcon";
 
 const RevenueOvertime = ({ deals }) => {
     // Generate high-fidelity mockup data to match the visual complexity of the screenshot

@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import BankLogo from '../BankLogo';
 
 import { useCallback, useEffect, useState, useRef } from "react";
@@ -11,7 +12,6 @@ import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import {
-  Plus,
   Edit3,
   Trash2,
   CheckCircle,
@@ -192,7 +192,7 @@ const BankDetails = () => {
               onClick={handleOpenAdd}
               className="inline-flex items-center gap-2 h-[38px] rounded-full bg-[#0085FF] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 whitespace-nowrap"
             >
-              <Plus className="h-4 w-4" />
+              <PlusIcon className="w-4 h-4" />
               Add Bank Details
             </button>
           </>,

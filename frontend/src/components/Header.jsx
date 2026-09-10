@@ -1,3 +1,4 @@
+import PlusIcon from "./common/PlusIcon";
 // import { useEffect, useState } from "react";
 // import { useLocation, useNavigate } from "react-router-dom";
 // import {
@@ -538,7 +539,7 @@
 //                   {isAddMenuOpen ? (
 //                     <X className="h-5 w-5" />
 //                   ) : (
-//                     <Plus className="h-5 w-5" />
+//                     <PlusIcon className="w-4 h-4" />
 //                   )}
 //                 </button>
 
@@ -747,7 +748,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import dataCirclesLogo from "../assets/Datacircles logo.png";
 import {
   Search,
-  Plus,
   X,
   User,
   Building,
@@ -1597,7 +1597,7 @@ const Header = () => {
               {isAddMenuOpen ? (
                 <X className="w-4 h-4" strokeWidth={3} />
               ) : (
-                <Plus className="w-4 h-4" strokeWidth={3} />
+                <PlusIcon className="w-4 h-4" />
               )}
             </button>
 
@@ -1697,7 +1697,7 @@ const Header = () => {
               ref={mobileSearchSlotRef}
               className={`flex items-center gap-2 px-2.5 h-8 border border-[#E1E4EA] rounded-full flex-1 min-w-0 max-w-[172px] transition-opacity duration-150 ${isSearchOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}
             >
-              <SearchIcon className="text-[#525866] flex-shrink-0 w-5 h-5" />
+              <SearchIcon className="text-[#525866] flex-shrink-0 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search..."
@@ -1726,7 +1726,7 @@ const Header = () => {
                 {isAddMenuOpen ? (
                   <X className="w-4 h-4 text-white" />
                 ) : (
-                  <Plus className="w-4 h-4 text-white" />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 )}
               </button>
 

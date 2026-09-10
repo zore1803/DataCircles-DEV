@@ -1,6 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Plus, ChevronDown, Check, Pencil, Trash2, ArrowLeft } from "lucide-react";
+import { X, ChevronDown, Check, Pencil, Trash2, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 
@@ -349,7 +350,7 @@ const NotesTermsDrawer = ({
                 }
                 className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white text-[13px] font-medium transition-colors flex-shrink-0"
               >
-                <Plus className="w-4 h-4" />
+                <PlusIcon className="w-4 h-4" />
                 Create New {tab.noun}
               </button>
             </div>

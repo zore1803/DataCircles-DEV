@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   X, Calendar, Clock, Users, MapPin, FileText, Video, Phone,
-  AlertTriangle, CheckCircle2, Search, Plus, Trash2, User,
+  AlertTriangle, CheckCircle2, Search, Trash2, User,
   Building, Lightbulb, Timer, Flag, Pencil
 } from "lucide-react";
 

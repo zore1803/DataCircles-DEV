@@ -1,14 +1,14 @@
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect } from "react";
 import {
-  Upload,
   FileSpreadsheet,
   AlertCircle,
   X,
-  Download,
 } from "lucide-react";
 import Papa from "papaparse";
 import API from "../../services/api";
 import ItemFieldMappingModal from "./ItemFieldMappingModal";
+import UploadIcon from "../common/UploadIcon";
 
 function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
   const [file, setFile] = useState(null);
@@ -367,7 +367,7 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
                   </>
                 ) : (
                   <>
-                    <Upload className="w-12 h-12 text-gray-400 mb-3" />
+                    <UploadIcon className="w-12 h-12 text-gray-400 mb-3" />
                     <p className="text-sm text-gray-700 mb-2">
                       <span className="font-medium">Click to upload</span> or
                       drag and drop
@@ -408,7 +408,7 @@ function ImportItems({ isOpen: propIsOpen, onClose, onImportSuccess }) {
                   className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors cursor-pointer bg-blue-50 px-3 py-2 rounded-lg"
                   disabled={loading}
                 >
-                  <Download className="w-4 h-4 mr-2" />
+                  <DownloadIcon className="w-4 h-4 mr-2" />
                   Basic Template
                 </button>
               </div>

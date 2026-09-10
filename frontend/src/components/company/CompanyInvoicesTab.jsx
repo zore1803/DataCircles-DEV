@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { createPortal } from "react-dom";
@@ -22,13 +24,10 @@ import { bulkDelete } from "../../utils/bulkOperations";
 import API from "../../services/api";
 import {
   Filter,
-  Plus,
   ArrowUp,
   ArrowDown,
   Pin,
   PinOff,
-  MoreVertical,
-  Download,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -748,7 +747,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
             style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
             title="Add Invoice"
           >
-            <Plus size={20} />
+            <PlusIcon className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -761,7 +760,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
             onClick={() => setManualInvoiceFormOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Plus size={16} />
+            <PlusIcon className="w-4 h-4" />
             Add new invoice
           </button>
         </div>
@@ -1019,7 +1018,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                           className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
                           title="Download"
                         >
-                          <Download className="w-4 h-4" />
+                          <DownloadIcon className="w-4 h-4" />
                         </button>
                       );
 

@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import { 
@@ -9,7 +10,6 @@ import {
   Trash2, 
   PhoneOutgoing, 
   PhoneIncoming,
-  Plus,
   ChevronDown
 } from "lucide-react";
 import CallLogForm from "./CallLogForm";
@@ -169,7 +169,7 @@ const CallLogs = ({ contactId }) => {
           onClick={() => setShowForm(true)}
           className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors"
         >
-          <Plus className="w-4 h-4" />
+          <PlusIcon className="w-4 h-4" />
           New Call
         </button>
       </div>

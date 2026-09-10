@@ -1,3 +1,4 @@
+import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useRef } from "react";
 import {
   DndContext,
@@ -17,12 +18,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  MoreVertical,
   Calendar,
   Clock,
   Edit,
   Trash2,
-  Plus,
   CheckCircle,
   AlertCircle,
   User,
@@ -94,7 +93,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete, selected = false, 
             }}
             className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100 transition-colors"
           >
-            <MoreVertical className="w-4 h-4" />
+            <MoreIcon className="w-4 h-4" />
           </button>
 
           {/* Dropdown Menu */}

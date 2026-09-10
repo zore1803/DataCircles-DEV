@@ -1,7 +1,8 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
-import { Save, FileText, PenSquare, Eye, Plus, Trash2, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
+import { Save, FileText, PenSquare, Eye, Trash2, CheckCircle, ShieldCheck, Edit3, MessageCircle, MessageSquare, Mail, Lock } from "lucide-react";
 import SignatureModal from "./SignatureModal";
 import PdfFileNameSettings from "./PdfFileNameSettings";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
@@ -780,7 +781,7 @@ function DocumentSettings() {
             onClick={handleOpenAddModal}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 transition"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             Add Signature
           </button>
         </div>
@@ -972,7 +973,7 @@ function DocumentSettings() {
               onClick={() => startNewTemplate(templateTab)}
               className="inline-flex items-center gap-2 text-sm font-medium text-sky-600 hover:text-sky-700"
             >
-              <Plus className="w-4 h-4" /> Add Template
+              <PlusIcon className="w-4 h-4" /> Add Template
             </button>
           </div>
         )}

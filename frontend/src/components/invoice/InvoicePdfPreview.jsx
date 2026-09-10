@@ -1,5 +1,6 @@
+import DownloadIcon from "../common/DownloadIcon";
 import { useEffect, useState } from "react";
-import { X, Download, Loader2 } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -66,7 +67,7 @@ export default function InvoicePdfPreview({ open, id, title, apiPath = "invoices
                 pdfUrl ? "" : "pointer-events-none opacity-50"
               }`}
             >
-              <Download className="w-4 h-4" />
+              <DownloadIcon className="w-4 h-4" />
               Download
             </a>
             <button

@@ -1,3 +1,5 @@
+import PlusIcon from "../common/PlusIcon";
+import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import ReactQuill from "react-quill-new";
@@ -9,7 +11,6 @@ import { getAncestorZoom } from "../../utils/domUtils";
 import {
   ChevronDown,
   StickyNote,
-  Plus,
   Edit3,
   Trash2,
   Users,
@@ -18,7 +19,6 @@ import {
   Eye,
   Copy,
   Calendar,
-  MoreVertical,
   Type,
   Flag,
   CheckCircle,
@@ -170,7 +170,7 @@ const EntityPickerDropdown = ({ options, value, onChange, displayKey, placeholde
           >
             <div className="p-2 border-b border-gray-100">
               <div className="relative">
-                <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#525866]" />
+                <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#525866]" />
                 <input
                   type="text"
                   autoFocus
@@ -1102,7 +1102,7 @@ export const NoteCard = ({ note, onEdit, onDelete, onView, onDuplicate }) => {
               className="p-1 rounded hover:bg-gray-100 transition-colors"
               title="More options"
             >
-              <MoreVertical style={{ width: 20, height: 20, color: "#1C1B1F" }} />
+              <MoreIcon className="w-4 h-4 text-[#1C1B1F]" />
             </button>
 
             {menuOpen && menuPos && createPortal(
@@ -1377,7 +1377,7 @@ export const NoteEditor = ({
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add contact"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {taggedContacts.length > 0 && (
@@ -1428,7 +1428,7 @@ export const NoteEditor = ({
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add deal"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {taggedDeals.length > 0 && (
@@ -1479,7 +1479,7 @@ export const NoteEditor = ({
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Add invoice"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {taggedInvoices.length > 0 && (
@@ -1790,7 +1790,7 @@ const NoteSection = ({ companyId: propCompanyId, dealId, isQuickView }) => {
           onClick={() => setIsEditorOpen(true)}
           className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
         >
-          <Plus className="w-4 h-4" />
+          <PlusIcon className="w-4 h-4" />
           New Note
         </button>
       </div>

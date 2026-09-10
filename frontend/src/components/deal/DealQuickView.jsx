@@ -1,3 +1,4 @@
+import DownloadIcon from "../common/DownloadIcon";
 // src/components/deal/DealQuickView.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
@@ -12,7 +13,6 @@ import {
   Calendar,
   IndianRupee,
   FileText,
-  Download,
   Send,
   Eye,
   ExternalLink,
@@ -129,7 +129,7 @@ const InvoiceMiniRow = ({ invoice, onView, onDownload }) => (
           className="p-1.5 text-blue-600 hover:text-blue-700 rounded hover:bg-white"
           title="Download"
         >
-          <Download size={14} />
+          <DownloadIcon />
         </button>
       </div>
     </div>
@@ -406,7 +406,7 @@ const DealQuickView = ({ dealId, onClose, onEdit }) => {
                   onClick={() => downloadPDF(selectedInvoice._id)}
                   className="p-2 text-green-600 hover:bg-green-50 rounded"
                 >
-                  <Download size={18} />
+                  <DownloadIcon />
                 </button>
                 <button
                   onClick={() => {

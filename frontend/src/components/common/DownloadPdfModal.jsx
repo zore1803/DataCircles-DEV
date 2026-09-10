@@ -1,5 +1,6 @@
+import DownloadIcon from "./DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
-import { X, FileText, Download } from "lucide-react";
+import { X, FileText } from "lucide-react";
 
 // Sanitize characters illegal in most OS file systems
 const sanitize = (name) =>
@@ -87,7 +88,7 @@ const DownloadPdfModal = ({ isOpen, documentData, onConfirm, onCancel }) => {
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <Download className="w-4 h-4 text-blue-600" />
+              <DownloadIcon className="w-4 h-4 text-blue-600" />
               <h2 className="text-sm font-semibold text-gray-900">
                 Download PDF
               </h2>
@@ -168,7 +169,7 @@ const DownloadPdfModal = ({ isOpen, documentData, onConfirm, onCancel }) => {
               onClick={() => onConfirm(preview)}
               className="px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm"
             >
-              <Download className="w-3.5 h-3.5" />
+              <DownloadIcon className="w-4 h-4" />
               Download
             </button>
           </div>

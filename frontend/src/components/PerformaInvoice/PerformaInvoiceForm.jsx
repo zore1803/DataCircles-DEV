@@ -1,7 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
 import {
-  Plus,
   IndianRupeeIcon,
   Trash2,
   Calendar,
@@ -219,7 +219,7 @@ const ItemSearchSelect = ({
                   className="w-full flex items-center gap-2 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                   aria-label="Add new item"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Add New Item
                 </button>
               </div>
@@ -1428,7 +1428,7 @@ const PerformaInvoiceForm = ({
                     onClick={handleAddToBill}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
                   >
-                    <Plus className="w-4 h-4" />
+                    <PlusIcon className="w-4 h-4" />
                     Add to Bill
                   </button>
                 </div>
@@ -1696,7 +1696,7 @@ const PerformaInvoiceForm = ({
                   className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium p-2 rounded-lg hover:bg-blue-50 transition-all duration-200"
                   aria-label="Add another item"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Add Another Item
                 </button>
               </div>

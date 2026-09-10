@@ -1,6 +1,7 @@
+import DownloadIcon from "../common/DownloadIcon";
 // components/vendor/PaymentReceipt.jsx
 import React, { useRef } from "react";
-import { Building2, Download, Printer } from "lucide-react";
+import { Building2, Printer } from "lucide-react";
 import { formatNumberFixed } from "../../utils/numberFormatter";
 import { useReactToPrint } from "react-to-print";
 import html2canvas from "html2canvas-pro"; // Changed to html2canvas-pro
@@ -98,7 +99,7 @@ const PaymentReceipt = ({ payment, onClose, companyDetails }) => {
               onClick={handleDownloadPDF}
               className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              <Download className="w-4 h-4" />
+              <DownloadIcon className="w-4 h-4" />
               Download PDF
             </button>
             <button

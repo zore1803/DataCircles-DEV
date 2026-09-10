@@ -1,3 +1,6 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import useSearchOverlayOpen from "../hooks/useSearchOverlayOpen";
 import { createPortal } from "react-dom";
@@ -18,19 +21,14 @@ import {
   CheckSquare,
   Edit2,
   Trash2,
-  Plus,
   Calendar,
   Users,
   X,
-  Download,
   Clock,
   MapPin,
   Building2,
   User,
   Truck,
-  Settings,
-  Upload,
-  MoreVertical,
   CheckCircle,
   Layout,
   Eye,
@@ -65,6 +63,7 @@ import UpgradeRequiredModal from "../components/subscription/UpgradeRequiredModa
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import TableViewIcon from "../components/common/TableViewIcon";
 import KanbanViewIcon from "../components/common/KanbanViewIcon";
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -451,6 +450,7 @@ const getAncestorZoom = (el) => {
 };
 
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import UploadIcon from "../components/common/UploadIcon";
 
 function Tasks() {
   const isSearchOverlayOpen = useSearchOverlayOpen();
@@ -2076,7 +2076,7 @@ function Tasks() {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -2954,7 +2954,7 @@ function Tasks() {
                 onClick={handleExport}
                 className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 focus:outline-none focus:z-10 transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
               >
-                <Download className="w-4 h-4 text-green-600" />
+                <DownloadIcon className="w-4 h-4 text-green-600" />
                 Export
               </button>
               <button
@@ -3222,7 +3222,7 @@ function Tasks() {
                 borderRadius: 96,
               }}
             >
-              <MoreVertical size={20} style={{ color: "#1F2937" }} />
+              <MoreIcon className="w-4 h-4 text-[#1F2937]" />
             </button>
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">
@@ -3299,7 +3299,7 @@ function Tasks() {
                   title={activeTab !== "tasks" ? "Meeting import isn't available yet — each meeting needs a linked company/contact/vendor" : undefined}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${activeTab !== "tasks" ? "text-gray-300 cursor-not-allowed" : "text-gray-700 hover:bg-gray-50"}`}
                 >
-                  <Upload className="w-4 h-4 text-gray-400" />
+                  <UploadIcon className="w-4 h-4 text-gray-400" />
                   {taskImportBusy ? "Importing…" : "Import"}
                 </button>
                 <button
@@ -3309,7 +3309,7 @@ function Tasks() {
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Download className="w-4 h-4 text-gray-400" />
+                  <DownloadIcon className="w-4 h-4 text-gray-400" />
                   Export
                 </button>
                 <button
@@ -3319,7 +3319,7 @@ function Tasks() {
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Settings className="w-4 h-4 text-gray-400" />
+                  <SettingsIcon className="w-4 h-4 text-gray-400" />
                   Columns
                 </button>
               </div>
@@ -3337,7 +3337,7 @@ function Tasks() {
               borderRadius: 96,
             }}
           >
-            <Plus size={18} style={{ color: "#FFFFFF" }} className="flex-shrink-0" />
+            <PlusIcon className="w-4 h-4 text-white flex-shrink-0" />
             <span
               className="hidden lg:inline"
               style={{

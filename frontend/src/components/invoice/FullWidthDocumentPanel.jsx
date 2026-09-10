@@ -1,5 +1,6 @@
+import PlusIcon from "../common/PlusIcon";
 import React from "react";
-import { Plus, Search, Trash2, Info } from "lucide-react";
+import { Search, Trash2, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   SectionHeader,
@@ -102,7 +103,7 @@ const FullWidthDocumentPanel = ({
               title="Create a new deal"
               className="w-10 h-10 flex-shrink-0 rounded-lg bg-[#0085FF] hover:bg-blue-600 text-white flex items-center justify-center transition-colors"
             >
-              <Plus className="w-4 h-4" />
+              <PlusIcon className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -438,7 +439,7 @@ const FullWidthDocumentPanel = ({
                           onClick={() => updateItem(index, { showDescription: true })}
                           className="inline-flex items-center gap-1 mt-1 text-[11px] font-medium text-[#0085FF] hover:underline"
                         >
-                          <Plus className="w-3 h-3" />
+                          <PlusIcon className="w-4 h-4" />
                           Add description
                         </button>
                       )}
@@ -544,7 +545,7 @@ const FullWidthDocumentPanel = ({
         onClick={addItem}
         className="w-full h-10 min-h-[40px] flex-shrink-0 flex items-center justify-center gap-2 rounded-lg bg-white border border-[#0085FF]/20 text-sm font-medium text-[#0085FF] hover:bg-blue-50 transition-colors mt-2"
       >
-        <Plus className="w-4 h-4" />
+        <PlusIcon className="w-4 h-4" />
         Add Another Item
       </button>
 

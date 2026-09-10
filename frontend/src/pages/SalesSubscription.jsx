@@ -1,23 +1,21 @@
+import PlusIcon from "../components/common/PlusIcon";
+import MoreIcon from "../components/common/MoreIcon";
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
 import {
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Upload,
-  Download,
   Edit2,
   Trash2,
   EyeOff,
   Pin,
   PinOff,
-  MoreVertical,
-  Settings,
   CheckSquare,
   Repeat,
   Zap,
@@ -27,6 +25,7 @@ import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
 import HighlightText from "../components/common/HighlightText";
 import SearchIcon from "../components/common/SearchIcon";
+import SettingsIcon from "../components/common/SettingsIcon";
 import FilterIcon from "../components/common/FilterIcon";
 import AdvancedFilterPanel from "../components/common/AdvancedFilterPanel";
 import ColumnSettingsPanel from "../components/ColumnSettingsPanel";
@@ -37,6 +36,7 @@ import BulkActions from "../components/BulkActions";
 import AppToaster from "../components/AppToaster";
 import { exportClientSide, formatINR } from "../utils/clientExport";
 import SalesSubscriptionForm from "../components/salesSubscription/SalesSubscriptionForm";
+import UploadIcon from "../components/common/UploadIcon";
 import {
   useReactTable,
   getCoreRowModel,
@@ -566,7 +566,7 @@ const SalesSubscription = () => {
           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
           title="More actions"
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreIcon className="w-4 h-4" />
         </button>
         {isOpen && rowActionsPos && createPortal(
           <>
@@ -999,7 +999,7 @@ const SalesSubscription = () => {
                   onClick={() => handleExport("Excel")}
                   className="h-10 px-4 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-l-[25px] hover:bg-gray-50 flex items-center gap-2 whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-green-600" />
+                  <DownloadIcon className="w-4 h-4 text-green-600" />
                   Export
                 </button>
                 <button
@@ -1126,7 +1126,7 @@ const SalesSubscription = () => {
                         className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50"
                         title="More options"
                       >
-                        <MoreVertical strokeWidth={2.5} className="w-4 h-4" />
+                        <MoreIcon className="w-4 h-4" />
                       </button>
                       {isMoreMenuOpen && (
                         <div className="absolute right-0 z-50 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-in fade-in zoom-in duration-200 origin-top-right">
@@ -1142,7 +1142,7 @@ const SalesSubscription = () => {
                             title="Bulk import for subscriptions isn't built yet"
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 cursor-not-allowed"
                           >
-                            <Upload className="w-4 h-4" />
+                            <UploadIcon className="w-4 h-4" />
                             Import (soon)
                           </button>
                           <div className="relative" ref={exportButtonRef}>
@@ -1150,7 +1150,7 @@ const SalesSubscription = () => {
                               onClick={() => setShowExportMenu((prev) => !prev)}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Download className="w-4 h-4 text-gray-400" />
+                              <DownloadIcon className="w-4 h-4 text-gray-400" />
                               Export
                             </button>
                             {showExportMenu && (
@@ -1174,7 +1174,7 @@ const SalesSubscription = () => {
                             onClick={() => { setShowColumnSettings(true); setIsMoreMenuOpen(false); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <Settings className="w-4 h-4 text-gray-400" />
+                            <SettingsIcon className="w-4 h-4 text-gray-400" />
                             Columns
                           </button>
                         </div>
@@ -1186,7 +1186,7 @@ const SalesSubscription = () => {
                       className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto px-0 lg:px-4 bg-[#0085FF] text-white text-sm font-medium rounded-full hover:bg-blue-600 flex-shrink-0"
                       title="Create Subscription"
                     >
-                      <Plus className="w-4 h-4" />
+                      <PlusIcon className="w-4 h-4" />
                       <span className="hidden lg:inline">Create Subscription</span>
                     </button>
                   </div>
@@ -1299,7 +1299,7 @@ const SalesSubscription = () => {
                                 onClick={openCreate}
                                 className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700"
                               >
-                                <Plus className="w-4 h-4" />
+                                <PlusIcon className="w-4 h-4" />
                                 Create Subscription
                               </button>
                             </div>

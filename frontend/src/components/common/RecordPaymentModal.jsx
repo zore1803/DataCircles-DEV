@@ -1,7 +1,8 @@
+import PlusIcon from "./PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
   X, CheckCircle2, Clock, Paperclip, MessageSquare, Mail,
-  Plus, ChevronDown, Trash2, Check
+  ChevronDown, Trash2, Check
 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -495,7 +496,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     >
                       <MessageSquare className={`w-3.5 h-3.5 ${notifySMS ? "text-green-500" : "text-green-400"}`} />
                       Send SMS
-                      {notifySMS ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3 text-gray-400" />}
+                      {notifySMS ? <Check className="w-3 h-3" /> : <PlusIcon className="w-4 h-4 text-gray-400" />}
                     </button>
 
                     {/* Email toggle */}
@@ -510,7 +511,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     >
                       <Mail className={`w-3.5 h-3.5 ${notifyEmail ? "text-blue-500" : "text-blue-400"}`} />
                       Send Email
-                      {notifyEmail ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3 text-gray-400" />}
+                      {notifyEmail ? <Check className="w-3 h-3" /> : <PlusIcon className="w-4 h-4 text-gray-400" />}
                     </button>
                   </div>
 
@@ -565,7 +566,7 @@ const RecordPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                       onClick={() => window.open("/settings/brand", "_blank")}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
                     >
-                      <Plus className="w-3 h-3" />
+                      <PlusIcon className="w-4 h-4" />
                       Add New Signature
                     </button>
                   </div>

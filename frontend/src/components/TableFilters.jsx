@@ -1,3 +1,4 @@
+import DownloadIcon from "../common/DownloadIcon";
 // components/common/TableFilters.jsx
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
@@ -5,7 +6,6 @@ import {
   ChevronDown,
   SortAsc,
   SortDesc,
-  Download,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -360,7 +360,7 @@ const TableFilters = ({
                 onClick={exportToPDF}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
               >
-                <Download className="w-4 h-4" />
+                <DownloadIcon className="w-4 h-4" />
                 Export PDF
               </button>
             )}

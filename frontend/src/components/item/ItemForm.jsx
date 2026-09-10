@@ -1,8 +1,8 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
 import {
   X,
-  Plus,
   Trash2,
   Type,
   FolderOpen,
@@ -661,7 +661,7 @@ const ItemForm = ({
                   onClick={() => setShowVariantForm(true)}
                   className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <PlusIcon className="w-4 h-4" />
                   Add Variant
                 </button>
               )}
@@ -734,7 +734,7 @@ const ItemForm = ({
                         }}
                         className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <PlusIcon className="w-4 h-4" />
                         Add Attribute
                       </button>
                     </div>
@@ -1161,7 +1161,7 @@ const ItemForm = ({
                 onClick={() => imageInputRef.current?.click()}
                 className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-300 transition-colors"
               >
-                <Plus className="w-5 h-5 mb-1" />
+                <PlusIcon className="w-4 h-4 mb-1" />
                 <span className="text-[11px] font-medium">Upload</span>
               </button>
               <input

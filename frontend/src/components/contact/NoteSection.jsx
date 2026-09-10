@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
@@ -6,7 +7,6 @@ import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
 import { 
   StickyNote,
-  Plus,
   Edit3,
   Trash2,
   Clock,
@@ -414,7 +414,7 @@ const NoteSection = ({ contactId: propContactId, isQuickView }) => {
           onClick={() => setIsEditorOpen(true)}
           className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
         >
-          <Plus className="w-4 h-4" />
+          <PlusIcon className="w-4 h-4" />
           New Note
         </button>
       </div>

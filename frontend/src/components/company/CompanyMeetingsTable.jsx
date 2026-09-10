@@ -1,7 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
 import {
   ChevronDown,
-  Plus,
   Calendar,
   Clock,
   CheckCircle2,
@@ -249,7 +249,7 @@ const CompanyMeetingsTable = ({ companyId, setMeetings }) => {
             onClick={() => setShowMeetingForm(true)}
             className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 text-sm transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             New Meeting
           </button>
         </div>

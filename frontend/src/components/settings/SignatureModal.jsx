@@ -1,7 +1,9 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { X, Upload, Edit3, Type, Check, RefreshCw, Palette, Plus, Eraser, PenTool } from "lucide-react";
+import { X, Edit3, Type, Check, RefreshCw, Palette, Eraser, PenTool } from "lucide-react";
 import toast from "react-hot-toast";
+import UploadIcon from "../common/UploadIcon";
 
 const FONT_FAMILIES = [
   { id: "dancing", name: "Dancing Script", fontName: "Dancing Script", className: "font-signature-dancing" },
@@ -542,7 +544,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
               activeTab === "upload" ? "bg-white text-sky-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            <Upload className="h-4 w-4" />
+            <UploadIcon className="h-4 w-4" />
             Upload Image
           </button>
 
@@ -599,7 +601,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
                 className="h-7 w-7 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center text-gray-600 hover:border-sky-500 hover:text-sky-600 transition"
                 title="Add Custom Color"
               >
-                <Plus className="h-4 w-4" />
+                <PlusIcon className="w-4 h-4" />
               </button>
             </div>
 
@@ -678,7 +680,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
                 ) : (
                   <label className="flex cursor-pointer flex-col items-center text-center">
                     <div className="rounded-full bg-sky-50 p-3 text-sky-600 shadow-sm">
-                      <Upload className="h-6 w-6" />
+                      <UploadIcon className="h-6 w-6" />
                     </div>
                     <span className="mt-2 text-sm font-semibold text-gray-700">Click to upload signature</span>
                     <span className="mt-1 text-xs text-gray-400">PNG, JPG, or SVG (Max 2MB)</span>

@@ -1,3 +1,4 @@
+import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { formatNumberToIndian, formatNumberFixed } from "../utils/numberFormatter";
@@ -14,7 +15,6 @@ import {
   TrendingUp,
   Edit,
   Trash2,
-  Download,
   Mail,
   IndianRupee,
   Package,
@@ -1481,7 +1481,7 @@ const BillingDetail = () => {
                               className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all text-xs font-medium border border-blue-200 hover:border-blue-300"
                               title="Download Invoice"
                             >
-                              <Download className="w-3.5 h-3.5" />
+                              <DownloadIcon className="w-4 h-4" />
                               <span className="hidden sm:inline">Download</span>
                             </button>
                           )}

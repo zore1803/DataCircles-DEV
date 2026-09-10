@@ -3,10 +3,11 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import toast from "react-hot-toast";
-import { User, Upload, Check, ChevronRight, ArrowRight } from "lucide-react";
+import { User, Check, ChevronRight, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import onboardingBg from "../assets/onboarding-bg.png";
 import AppToaster from "../components/AppToaster";
+import UploadIcon from "../components/common/UploadIcon";
 
 const Onboarding = () => {
   const { user } = useAuth0();
@@ -289,7 +290,7 @@ const Onboarding = () => {
             )}
           </div>
           <label className="absolute bottom-0 right-0 bg-white shadow-sm border border-gray-200 rounded-full p-1.5 cursor-pointer hover:bg-gray-50">
-            <Upload className="w-3 h-3 text-gray-600" />
+            <UploadIcon className="w-4 h-4 text-gray-600" />
             <input
               type="file"
               className="hidden"
@@ -299,7 +300,7 @@ const Onboarding = () => {
           </label>
           <span className="absolute left-20 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-600 whitespace-nowrap">
             <span className="flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-200 text-xs font-semibold hover:border-blue-400 hover:text-blue-600 transition-all cursor-pointer">
-              <Upload className="w-3.5 h-3.5" /> Upload Logo
+              <UploadIcon className="w-4 h-4" /> Upload Logo
             </span>
           </span>
         </div>
@@ -529,7 +530,7 @@ const Onboarding = () => {
                                             }
                                         `}
                   >
-                    {step > s ? <Check className="w-3.5 h-3.5" /> : s}
+                    {step > s ? <Check className="w-4 h-4" /> : s}
                   </div>
                   {s < 3 && (
                     <div

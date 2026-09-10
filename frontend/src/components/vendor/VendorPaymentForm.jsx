@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus } from "lucide-react";
+import { X } from "lucide-react";
 import API from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickVendorForm from "./QuickVendorForm";

@@ -1,7 +1,8 @@
+import DownloadIcon from "../common/DownloadIcon";
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, Download, Printer, Share2, Pencil, Mail, MessageCircle, MessageSquare, Copy, Repeat,
+  X, Printer, Share2, Pencil, Mail, MessageCircle, MessageSquare, Copy, Repeat,
 } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
@@ -158,7 +159,7 @@ export default function ExpenseReceiptModal({
             </button>
 
             <button title="Download" onClick={handleDownload} className={iconBtn} disabled={!pdfUrl}>
-              <Download className="w-4 h-4" />
+              <DownloadIcon className="w-4 h-4" />
             </button>
             <button title="Print" onClick={handlePrint} className={iconBtn} disabled={!pdfUrl}>
               <Printer className="w-4 h-4" />

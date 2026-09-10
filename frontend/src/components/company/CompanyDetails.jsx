@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
-  Plus,
   Filter,
   DollarSign,
   AlertCircle,

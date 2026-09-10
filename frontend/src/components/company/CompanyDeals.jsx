@@ -1,6 +1,7 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { EditablePaginationButtons } from "../common/EditablePaginationButtons";
 import API from "../../services/api";
 import QuickDealForm from "../deal/QuickDealForm";
@@ -115,7 +116,7 @@ const CompanyDeals = ({ deals, companyId, setDeals }) => {
             onClick={() => setShowDealForm(true)}
             className="flex items-center gap-1 text-gray-700 hover:text-gray-900 text-sm font-medium transition-colors px-3 py-2 border border-gray-200 rounded-md hover:bg-gray-50"
           >
-            <Plus className="w-4 h-4" />
+            <PlusIcon className="w-4 h-4" />
             Add Deal
           </button>
         </div>

@@ -1,10 +1,11 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import API, { configureAxios } from "../../services/api";
 import SearchableDropdown from "../contact/SearchableDropdown";
 import QuickCompanyForm from "../company/QuickCompanyForm";
 import QuickContactForm from "../contact/QuickContactForm";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import toast from "react-hot-toast";
 
 const QuickDealForm = ({
@@ -570,7 +571,7 @@ const QuickDealForm = ({
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
                   title="Add New Company"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {validationErrors.company && (
@@ -646,7 +647,7 @@ const QuickDealForm = ({
                   type="button"
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {validationErrors.status && (
@@ -677,7 +678,7 @@ const QuickDealForm = ({
                   className="flex-shrink-0 w-[38px] h-[38px] rounded-full bg-[#158FFF] border border-[#1F2937]/10 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
                   title="Add New Contact"
                 >
-                  <Plus className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                  <PlusIcon className="w-4 h-4 text-white" />
                 </button>
               </div>
               {validationErrors.contact && (

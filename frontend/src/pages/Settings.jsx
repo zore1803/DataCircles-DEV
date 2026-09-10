@@ -15,7 +15,6 @@ import {
   Package,
   Mail,
   Crown,
-  Settings as SettingsIcon,
   ChevronRight,
   Zap,
   Bell,
@@ -28,6 +27,7 @@ import {
   ListChecks,
   CalendarClock,
 } from "lucide-react";
+import SettingsIcon from "../components/common/SettingsIcon";
 import BankDetails from "../components/settings/BankDetails";
 import Profile from "./Profile";
 import BrandSettings from "../components/settings/BrandSettings";
@@ -376,7 +376,7 @@ const Settings = () => {
     },
     {
       id: "system-defaults",
-      icon: <SettingsIcon className="w-5 h-5" />,
+      icon: <SettingsIcon className="w-4 h-4" />,
       label: "System Defaults",
       description: "Manage custom task statuses and note types",
       color: "text-slate-600",
@@ -477,7 +477,7 @@ const Settings = () => {
 
   const categoryIcons = {
     Billing: <CreditCard className="w-5 h-5" />,
-    General: <SettingsIcon className="w-5 h-5" />,
+    General: <SettingsIcon className="w-4 h-4" />,
     Team: <Users className="w-5 h-5" />,
     Customization: <Zap className="w-5 h-5" />,
     Automation: <Workflow className="w-5 h-5" />,
@@ -604,7 +604,7 @@ const Settings = () => {
                   <div className="bg-[#0085FF] p-2 rounded-lg shadow-md">
                     <div className="text-white">
                       {categoryIcons[category] || (
-                        <SettingsIcon className="w-5 h-5" />
+                        <SettingsIcon className="w-4 h-4" />
                       )}
                     </div>
                   </div>

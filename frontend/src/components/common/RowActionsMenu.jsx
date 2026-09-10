@@ -1,6 +1,6 @@
+import MoreIcon from "./MoreIcon";
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { MoreVertical } from "lucide-react";
 import { getAncestorZoom } from "../../utils/domUtils";
 
 // Single "⋮" button that pops a small action card, portaled to document.body
@@ -46,7 +46,7 @@ export default function RowActionsMenu({ actions }) {
         className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-500"
         title="More options"
       >
-        <MoreVertical className="w-4 h-4" />
+        <MoreIcon className="w-4 h-4" />
       </button>
 
       {open && pos && createPortal(

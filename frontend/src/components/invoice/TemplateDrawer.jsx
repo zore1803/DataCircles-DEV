@@ -1,3 +1,4 @@
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -6,7 +7,6 @@ import {
   LayoutTemplate,
   Hash,
   PenLine,
-  Plus,
   Trash2,
   Edit3,
   CheckCircle,
@@ -576,7 +576,7 @@ const TemplateDrawer = ({ isOpen, onClose, type = "tax", docLabel = "Invoice" })
                   }}
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[#0085FF] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex-shrink-0"
                 >
-                  <Plus className="w-4 h-4" />
+                  <PlusIcon className="w-4 h-4" />
                   Add
                 </button>
               </div>
