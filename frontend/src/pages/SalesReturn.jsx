@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -33,7 +35,7 @@ import {
   ListOrdered,
   List as ListIcon,
   Link as LinkIcon,
-  Video, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowUp, ArrowDown } from "lucide-react";
 import TableSkeletonRows from "../components/common/TableSkeletonRows";
 import { useTopLoadingSignal } from "../components/common/TopLoadingBar";
 import Skeleton from "../components/common/Skeleton";
@@ -746,22 +748,12 @@ const SalesReturn = () => {
           enableResizing: false,
           header: () => (
             <div className="flex justify-center items-center w-full">
-              <input
-                type="checkbox"
-                checked={selected.length === rows.length && rows.length > 0}
-                onChange={handleSelectAll}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
+              <Checkbox checked={selected.length === rows.length && rows.length > 0} onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
             </div>
           ),
           cell: ({ row }) => (
             <div className="flex justify-center items-center gap-1 w-full">
-              <input
-                type="checkbox"
-                checked={selectedSet.has(row.original._id)}
-                onChange={() => handleSelect(row.original._id)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
+              <Checkbox checked={selectedSet.has(row.original._id)} onChange={() => handleSelect(row.original._id)} />
             </div>
           ),
         })
@@ -1594,7 +1586,7 @@ const SalesReturn = () => {
                   <>
                     <div className="flex items-center gap-2">
                       <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Sales Returns</h1>
-                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <VideoIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 truncate">
                       Goods returned by customers against sales invoices

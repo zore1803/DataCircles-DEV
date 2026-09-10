@@ -1,3 +1,6 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
+import CellphoneIcon from "../components/common/CellphoneIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import HotlistIcon from "../components/common/HotlistIcon";
@@ -18,7 +21,6 @@ import {
   Users,
   Building2,
   Mail,
-  Phone,
   User,
   RefreshCw,
   Trash2,
@@ -40,7 +42,7 @@ import {
   Star,
   FileText,
   List,
-  Video, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowUp, ArrowDown } from "lucide-react";
 import API from "../services/api";
 import ContactFolder from "../components/contact/ContactFolder";
 import ProfilePicture from "../components/contact/ProfilePicture";
@@ -664,7 +666,7 @@ function Contacts() {
         visible: true,
         order: 4,
         sortable: true,
-        icon: Phone,
+        icon: CellphoneIcon,
       },
     ];
 
@@ -944,25 +946,15 @@ function Contacts() {
           enableResizing: false,
           header: () => (
             <div className="flex justify-center items-center w-full">
-              <input
-                type="checkbox"
-                checked={
+              <Checkbox checked={
                   selectedContactsSet.size === contacts.length &&
                   contacts.length > 0
-                }
-                onChange={handleSelectAll}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
+                } onChange={handleSelectAll} uncheckedColor="text-[#525866]" />
             </div>
           ),
           cell: ({ row }) => (
             <div className="flex justify-center items-center w-full">
-              <input
-                type="checkbox"
-                checked={selectedContactsSet.has(row.original._id)}
-                onChange={() => handleSelectContact(row.original._id)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
+              <Checkbox checked={selectedContactsSet.has(row.original._id)} onChange={() => handleSelectContact(row.original._id)} />
             </div>
           ),
         }),
@@ -2255,7 +2247,7 @@ function Contacts() {
         )}
         {contact.phone && (
           <div className="flex items-center gap-2 text-xs text-gray-600 group">
-            <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <CellphoneIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <a
               href={`tel:${contact.phone}`}
               className="hover:text-blue-600 hover:underline transition-colors"
@@ -2386,7 +2378,7 @@ function Contacts() {
             >
               <div className="flex items-center gap-2">
                 <h1 className="m-0 leading-tight font-bold text-base text-gray-900 truncate">Contacts</h1>
-                <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <VideoIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
               </div>
               <p className="m-0 leading-tight text-[10px] text-gray-500 font-inter truncate">
                 Manage your contacts and leads
@@ -2849,7 +2841,7 @@ function Contacts() {
                             <div className="w-full border-t border-[#F1F1F5]" />
 
                             <div className="flex items-center gap-2 w-full">
-                              <Phone className="w-4 h-4 text-[#525252] flex-shrink-0" />
+                              <CellphoneIcon className="w-4 h-4 text-[#525252] flex-shrink-0" />
                               <span
                                 className="truncate"
                                 style={{ fontFamily: "Inter", fontWeight: 500, fontSize: "12px", lineHeight: "120%", color: "#525252" }}

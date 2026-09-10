@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -559,7 +560,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                         <input type="number" name="stock" min="0" value={currentVariant.stock} onChange={handleVariantChange} onWheel={(e) => e.target.blur()} className={inp} />
                       </div>
                       <div className="flex items-center gap-2 pt-1">
-                        <input type="checkbox" id="vActive" name="isActive" checked={currentVariant.isActive !== false} onChange={(e) => setCurrentVariant((p) => ({ ...p, isActive: e.target.checked }))} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                        <Checkbox checked={currentVariant.isActive !== false} onChange={(e) => setCurrentVariant((p) => ({ ...p, isActive: e.target.checked }))} id="vActive" name="isActive" />
                         <label htmlFor="vActive" className="text-sm font-medium text-[#161618] cursor-pointer font-inter">Active</label>
                       </div>
                       <div className="flex gap-3 pt-2">

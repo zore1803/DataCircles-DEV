@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useState } from "react";
 
 const FONT_SIZE_CLASS = { small: "text-sm", normal: "text-base", large: "text-xl", xlarge: "text-3xl" };
@@ -199,19 +200,13 @@ export default function FormElementRenderer({ element, fieldMeta, value, onChang
           <div className="flex flex-col gap-1.5">
             {(fieldMeta?.options || []).map((opt) => (
               <label key={opt} className={`flex items-center gap-2 text-sm ${interactive ? "cursor-pointer" : "opacity-60"}`}>
-                <input
-                  type="checkbox"
-                  disabled={!interactive}
-                  checked={selectedValues.includes(opt)}
-                  onChange={(e) =>
+                <Checkbox checked={selectedValues.includes(opt)} onChange={(e) =>
                     onChange?.(
                       e.target.checked
                         ? [...selectedValues, opt]
                         : selectedValues.filter((v) => v !== opt)
                     )
-                  }
-                  className="w-4 h-4"
-                />
+                  } disabled={!interactive} />
                 <span>{opt}</span>
               </label>
             ))}

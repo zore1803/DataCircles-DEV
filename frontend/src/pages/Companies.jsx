@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import HotlistIcon from "../components/common/HotlistIcon";
@@ -35,7 +37,6 @@ import {
   Pin,
   PinOff,
   Star,
-  Video,
   User, ArrowUp, ArrowDown } from "lucide-react";
 import ImportClients from "../components/company/ImportClients";
 import Hotlist from "../components/company/Hotlist";
@@ -702,25 +703,15 @@ function Companies() {
           enableResizing: false,
           header: () => (
             <div className="flex justify-center items-center w-full">
-              <input
-                type="checkbox"
-                checked={
+              <Checkbox checked={
                   selectedCompanies.length === companies.length &&
                   companies.length > 0
-                }
-                onChange={handleSelectAll}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
+                } onChange={handleSelectAll} uncheckedColor="text-[#525866]" />
             </div>
           ),
           cell: ({ row }) => (
             <div className="flex justify-center items-center gap-1 w-full">
-              <input
-                type="checkbox"
-                checked={selectedCompaniesSet.has(row.original._id)}
-                onChange={() => handleSelectCompany(row.original._id)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
+              <Checkbox checked={selectedCompaniesSet.has(row.original._id)} onChange={() => handleSelectCompany(row.original._id)} />
             </div>
           ),
         }),
@@ -1924,7 +1915,7 @@ function Companies() {
                   <>
                     <div className="flex items-center gap-2">
                       <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Companies</h1>
-                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <VideoIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                       Manage your accounts & company directory

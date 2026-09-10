@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { X, Trash2, Edit3, Clock, User, Calendar, PhoneOutgoing, PhoneIncoming } from "lucide-react";
+import { X, Trash2, Edit3, Clock, User, Calendar } from "lucide-react";
+import IncomingCallIcon from "../common/IncomingCallIcon";
+import OutgoingCallIcon from "../common/OutgoingCallIcon";
 
 // Matches the "View Task" quick-drawer style (TaskDetailsModal): a
 // right-anchored slide-in panel with a compact ID-style header, info card,
@@ -22,7 +24,7 @@ const CallLogDetailView = ({ open, log, onClose, onEdit, onDelete }) => {
 
   const callId = `CALL-${(log._id || "").slice(-5).toUpperCase()}`;
   const loggedBy = typeof log.user === "object" ? log.user : null;
-  const CallTypeIcon = log.callType === "Inbound" ? PhoneIncoming : PhoneOutgoing;
+  const CallTypeIcon = log.callType === "Inbound" ? IncomingCallIcon : OutgoingCallIcon;
 
   const formatFullDateTime = (dateString) => {
     if (!dateString) return "—";

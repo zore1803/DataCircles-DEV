@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { X, ChevronDown } from "lucide-react";
 
@@ -55,12 +56,7 @@ const FilterDropdown = ({ label, options, selected, onToggle }) => {
           ) : (
             options.map(opt => (
               <label key={opt} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => onToggle(opt)}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                />
+                <Checkbox checked={selected.includes(opt)} onChange={() => onToggle(opt)} />
                 <span className="text-sm text-gray-700 truncate">{opt}</span>
               </label>
             ))

@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect } from "react";
 import API from "../../services/api";
@@ -398,12 +399,7 @@ const handleSubmit = async (e) => {
                                 key={user._id}
                                 className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={form.users?.includes(user._id)}
-                                  onChange={() => handleUserSelection(user._id)}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
+                                <Checkbox checked={form.users?.includes(user._id)} onChange={() => handleUserSelection(user._id)} />
                                 <div className="flex items-center gap-2">
                                   <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                                     <User className="w-3 h-3 text-blue-600" />

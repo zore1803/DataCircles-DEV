@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import SearchIcon from "../common/SearchIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -784,12 +785,7 @@ const CompanyTaskForm = ({
                               key={user._id}
                               className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
                             >
-                              <input
-                                type="checkbox"
-                                checked={form.users?.includes(user._id)}
-                                onChange={() => handleUserSelection(user._id)}
-                                className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                              />
+                              <Checkbox checked={form.users?.includes(user._id)} onChange={() => handleUserSelection(user._id)} />
                               <span className="text-[12px] font-medium text-[#1F2937] truncate">{user.name || user.email}</span>
                             </label>
                           ))}

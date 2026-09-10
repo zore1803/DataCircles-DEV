@@ -1,3 +1,4 @@
+import CellphoneIcon from "../components/common/CellphoneIcon";
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
@@ -9,7 +10,6 @@ import {
   Package,
   Target,
   CheckCircle2,
-  Phone,
   Calendar,
   Clock,
   Briefcase,
@@ -698,7 +698,7 @@ const TenantDetails = () => {
           <StatCard
             label="Call Logs"
             value={stats.totalCallLogs || 0}
-            icon={Phone}
+            icon={CellphoneIcon}
             color="text-purple-600"
           />
           <StatCard

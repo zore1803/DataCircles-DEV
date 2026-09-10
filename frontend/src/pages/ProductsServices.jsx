@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -20,7 +22,7 @@ import {
   Pin,
   PinOff,
   SlidersHorizontal,
-  Video, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowUp, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 import BulkActions from "../components/BulkActions";
 import ItemForm from "../components/item/ItemForm";
@@ -1129,12 +1131,7 @@ function ProductsServices() {
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedItems.length === items.length && items.length > 0}
-              onChange={handleSelectAll}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedItems.length === items.length && items.length > 0} onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
@@ -1142,12 +1139,7 @@ function ProductsServices() {
             className="flex justify-center items-center gap-1 w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <input
-              type="checkbox"
-              checked={selectedItemsSet.has(row.original._id)}
-              onChange={() => handleSelectItem(row.original._id)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedItemsSet.has(row.original._id)} onChange={() => handleSelectItem(row.original._id)} />
           </div>
         ),
       }),
@@ -1785,7 +1777,7 @@ function ProductsServices() {
                   <>
                     <div className="flex items-center gap-2">
                       <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Product & Services</h1>
-                      <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <VideoIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     </div>
                     <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                       Manage your products and services

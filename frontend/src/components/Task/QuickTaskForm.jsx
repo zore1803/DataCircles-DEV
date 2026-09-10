@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -798,12 +799,7 @@ const QuickTaskForm = ({
                                     key={user._id}
                                     className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
                                   >
-                                    <input
-                                      type="checkbox"
-                                      checked={form.users?.includes(user._id)}
-                                      onChange={() => handleUserSelection(user._id)}
-                                      className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                    />
+                                    <Checkbox checked={form.users?.includes(user._id)} onChange={() => handleUserSelection(user._id)} />
                                     <span className="text-xs font-medium text-gray-700 truncate">
                                       {user.name || user.email}
                                     </span>

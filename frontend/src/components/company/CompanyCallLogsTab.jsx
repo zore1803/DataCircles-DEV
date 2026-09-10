@@ -1,13 +1,15 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
+import AddCallIcon from "../common/AddCallIcon";
+import CellphoneIcon from "../common/CellphoneIcon";
+import IncomingCallIcon from "../common/IncomingCallIcon";
+import OutgoingCallIcon from "../common/OutgoingCallIcon";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
 import { getAncestorZoom } from "../../utils/domUtils";
 import { getPinnedBoundaryOverlayStyle } from "../../utils/pinnedColumnShadow";
 import {
-  Phone,
-  PhoneOutgoing,
-  PhoneIncoming,
   ChevronUp,
   ChevronDown,
   Pin,
@@ -63,9 +65,13 @@ const MoreVertIcon = ({ size = 20, ...props }) => (
   </svg>
 );
 
-const TotalCallsIcon = ({ size = 20, ...props }) => <Phone size={size} strokeWidth={1.5} {...props} />;
-const ConnectedCallsIcon = ({ size = 20, ...props }) => <PhoneIncoming size={size} strokeWidth={1.5} {...props} />;
-const MissedCallsIcon = ({ size = 20, ...props }) => <PhoneOutgoing size={size} strokeWidth={1.5} {...props} />;
+{/* Scaled to 80% of the requested size: these are solid-filled glyphs, so at
+    the same pixel box as the thin-stroke lucide Clock icon next to them they
+    read visibly heavier/bigger. Sizing down compensates for that optical
+    weight difference and keeps the stat row's four icons looking uniform. */}
+const TotalCallsIcon = ({ size = 20, ...props }) => <CellphoneIcon className="" style={{ width: size * 0.8, height: size * 0.8 }} {...props} />;
+const ConnectedCallsIcon = ({ size = 20, ...props }) => <IncomingCallIcon className="" style={{ width: size * 0.8, height: size * 0.8 }} {...props} />;
+const MissedCallsIcon = ({ size = 20, ...props }) => <OutgoingCallIcon className="" style={{ width: size * 0.8, height: size * 0.8 }} {...props} />;
 const TalkTimeIcon = ({ size = 20, ...props }) => <Clock size={size} strokeWidth={1.5} {...props} />;
 
 // Also drives the contact profile's Call Logs tab: pass `contactId` instead of
@@ -699,7 +705,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
             style={{ width: "44px", height: "44px", borderColor: "#E1E4EA" }}
             title="New Call"
           >
-            <PlusIcon className="w-4 h-4" />
+            <AddCallIcon className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -729,13 +735,13 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
       {/* Call log table or empty state */}
       {!isLoading && callLogs.length === 0 ? (
         <div className="flex flex-col items-center justify-center w-full min-h-[300px] bg-gray-50 border border-gray-200 rounded-xl text-gray-500">
-          <Phone size={28} className="mb-3 text-gray-400" />
+          <CellphoneIcon className="w-7 h-7 mb-3 text-gray-400" />
           <button
             type="button"
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0085FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <PlusIcon className="w-4 h-4" />
+            <AddCallIcon className="w-4 h-4" />
             Add new call log
           </button>
         </div>
@@ -743,12 +749,12 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
         <div className="space-y-3">
           {paginatedLogs.length === 0 ? (
             <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-              <Phone className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+              <CellphoneIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
               <p className="text-sm text-gray-600">No matching calls</p>
             </div>
           ) : (
             paginatedLogs.map((log) => {
-              const CallTypeIcon = log.callType === "Inbound" ? PhoneIncoming : PhoneOutgoing;
+              const CallTypeIcon = log.callType === "Inbound" ? IncomingCallIcon : OutgoingCallIcon;
               const loggedBy = typeof log.user === "object" ? log.user : null;
               const isSelected = selectedItems.includes(log._id);
               return (
@@ -849,12 +855,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                   className="px-3 py-2.5"
                 >
                   <div className="flex justify-center items-center w-full">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.length > 0 && selectedItems.length === paginatedLogs.length}
-                      onChange={(e) => (e.target.checked ? selectAll(paginatedLogs) : clearSelection())}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                    />
+                    <Checkbox checked={selectedItems.length > 0 && selectedItems.length === paginatedLogs.length} onChange={(e) => (e.target.checked ? selectAll(paginatedLogs) : clearSelection())}  uncheckedColor="text-[#525866]"/>
                   </div>
                 </th>
                 {orderedColumns.map((col) => {
@@ -1010,7 +1011,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                   const isSelected = selectedItems.includes(log._id);
                   const isActionsOpen = openRowActionsId === log._id;
                   const loggedBy = typeof log.user === "object" ? log.user : null;
-                  const CallTypeIcon = log.callType === "Inbound" ? PhoneIncoming : PhoneOutgoing;
+                  const CallTypeIcon = log.callType === "Inbound" ? IncomingCallIcon : OutgoingCallIcon;
 
                   const rowActionsMenu = (
                     <div className="relative flex items-center justify-center flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
@@ -1112,7 +1113,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                           className="inline-flex items-center gap-1 capitalize"
                           style={{ padding: "5px 12px", borderRadius: 53, backgroundColor: "rgba(0, 133, 255, 0.1)", fontFamily: "Inter", fontWeight: 500, fontSize: 12, lineHeight: "120%", color: "#0085FF" }}
                         >
-                          <CallTypeIcon size={12} />
+                          <CallTypeIcon className="w-3 h-3" />
                           <HighlightText text={CALL_TYPE_LABELS[log.callType] || log.callType || "Outbound"} query={searchTerm} />
                         </span>
                       </td>
@@ -1196,12 +1197,7 @@ const CompanyCallLogsTab = ({ companyId, contactId, callLogs = [], setCallLogs, 
                         className="px-3"
                       >
                         <div className="flex justify-center items-center w-full">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleItem(log._id)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                          />
+                          <Checkbox checked={isSelected} onChange={() => toggleItem(log._id)} />
                         </div>
                       </td>
                       {orderedColumns.map((col, colIdx) => {

@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import { useState, useEffect } from 'react';
 import { X, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import API from '../../services/api';
@@ -335,12 +336,7 @@ const QuickBrandingModal = ({ isOpen, onClose, onComplete }) => {
 
           {/* Do not show again */}
           <div className="flex items-center gap-2 pt-2">
-            <input
-              type="checkbox"
-              id="branding-dont-show-again"
-              checked={dontShowAgain}
-              onChange={e => setDontShowAgain(e.target.checked)}
-            />
+            <Checkbox checked={dontShowAgain} onChange={e => setDontShowAgain(e.target.checked)} id="branding-dont-show-again" />
             <label
               htmlFor="branding-dont-show-again"
               className="text-sm text-gray-700 select-none cursor-pointer"

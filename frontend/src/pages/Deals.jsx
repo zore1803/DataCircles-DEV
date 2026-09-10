@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -63,7 +65,6 @@ import {
   Handshake,
   ClipboardList,
   Eye,
-  Video,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -387,13 +388,7 @@ const ModernDealCard = React.memo(({ deal, onClick, isStale, colorTheme = "blue"
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => onToggleSelect(deal._id)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  aria-label={`Select ${deal.title || "deal"}`}
-                />
+                <Checkbox checked={selected} onChange={() => onToggleSelect(deal._id)} />
               </span>
             )}
             <span
@@ -526,14 +521,10 @@ const ModernKanbanColumn = React.memo(({
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
 
-  // Header select-all state for this column: fully ticked when every card here
-  // is selected, indeterminate (native dash) when only some are.
+  // Header select-all state for this column: ticked when every card here is
+  // selected. (No indeterminate/dash state — the Checkbox component only
+  // has empty/checked glyphs, so a partial selection just reads as empty.)
   const allSelected = dealIds.length > 0 && dealIds.every((id) => selectedDeals.includes(id));
-  const someSelected = dealIds.some((id) => selectedDeals.includes(id));
-  const headerCbRef = useRef(null);
-  useEffect(() => {
-    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
-  }, [someSelected, allSelected]);
 
   const totalAmount = deals.reduce((sum, deal) => sum + (parseInt(deal.amount) || 0), 0);
   const formattedTotal = formatNumberToIndian(totalAmount);
@@ -569,12 +560,11 @@ const ModernKanbanColumn = React.memo(({
       >
         <div className="flex items-center gap-1.5">
           {onToggleColumnSelect && !loading && dealIds.length > 0 && (
-            <input
-              ref={headerCbRef}
-              type="checkbox"
+            <Checkbox
               checked={allSelected}
               onChange={() => onToggleColumnSelect(dealIds)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              uncheckedColor="text-[#525866]"
+              wrapperClassName="flex-shrink-0"
               title={`Select all in ${status}`}
               aria-label={`Select all deals in ${status}`}
             />
@@ -2383,7 +2373,7 @@ function Deals() {
                 >
                   Deals
                 </h2>
-                <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <VideoIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
               </div>
               <p className="text-[#5B5A64] text-[10px] sm:text-sm m-0 leading-tight truncate">
                 Manage Your Sales Pipeline

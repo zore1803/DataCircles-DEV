@@ -1,3 +1,4 @@
+import VideoIcon from "../components/common/VideoIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
@@ -17,6 +18,7 @@ import VendorCalendar from "../components/vendor/VendorCalendar";
 import QuickVendorForm from "../components/vendor/QuickVendorForm";
 import PageSkeleton from "../components/common/PageSkeleton";
 import toast from "react-hot-toast";
+import CallingIcon from "../components/common/CallingIcon";
 import {
   Edit2,
   Twitter,
@@ -26,8 +28,6 @@ import {
   Receipt,
   CheckSquare,
   Calendar,
-  PhoneCall,
-  Video,
   FolderOpen,
   FilePlus,
   ChevronDown,
@@ -70,7 +70,7 @@ const tabs = ["Overview", "Payments", "Notes", "Tasks", "Meetings", "Calendar"];
 // `size` prop; the bordered box around it lives in the tile markup, not in
 // here, so both pages' KPI tiles share one box style instead of each icon
 // bringing its own.
-const TotalReceivedIcon = ({ size = 20 }) => <PhoneCall size={size} />;
+const TotalReceivedIcon = ({ size = 20 }) => <CallingIcon style={{ width: size * 0.8, height: size * 0.8 }} />;
 const TotalPaidIcon = ({ size = 20 }) => <Receipt size={size} />;
 const NetBalanceIcon = ({ size = 20 }) => <CheckSquare size={size} />;
 
@@ -527,7 +527,7 @@ const VendorDetailsPageNew = () => {
       meetings.forEach((m) => {
         items.push({
           type: "Meetings",
-          icon: Video,
+          icon: VideoIcon,
           iconClass: "bg-purple-50 text-purple-600",
           title: m.title || "Meeting",
           subtitle: m.status || m.meetingType || null,
@@ -1426,7 +1426,7 @@ const VendorDetailsPageNew = () => {
                       <div
                         className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${item.iconClass}`}
                       >
-                        <item.icon size={13} />
+                        <item.icon style={{ width: 13, height: 13 }} />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-gray-900 leading-tight">

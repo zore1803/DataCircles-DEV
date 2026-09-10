@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef } from "react";
 import PhoneNumberInput from "../common/PhoneNumberInput";
@@ -290,10 +291,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                     key={index}
                     className="flex items-center gap-2 cursor-pointer hover:bg-[#F2F2F7] rounded-full px-3 h-8 transition-colors border border-transparent hover:border-[#1F2937]/10"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={(e) => {
+                    <Checkbox checked={isChecked} onChange={(e) => {
                         let newValues;
                         if (e.target.checked) {
                           newValues = [...selectedValues, option];
@@ -301,9 +299,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                           newValues = selectedValues.filter((v) => v !== option);
                         }
                         handleFieldChange(newValues);
-                      }}
-                      className="w-4 h-4 text-blue-600 border-[#1F2937]/10 rounded focus:ring-blue-500"
-                    />
+                      }} />
                     <span className="text-[12px] text-[#1F2937] font-medium font-inter">{option}</span>
                   </label>
                 );

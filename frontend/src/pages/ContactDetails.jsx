@@ -1,3 +1,4 @@
+import AddCallIcon from "../components/common/AddCallIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
@@ -25,7 +26,6 @@ import {
   BriefcaseBusiness,
   Eye,
   CheckSquare,
-  Phone,
   StickyNote,
   Calendar,
   CopyPlus,
@@ -55,7 +55,7 @@ const newEntryOptions = [
   { label: "New Notes", icon: StickyNote, tab: "Notes" },
   { label: "New Task", icon: CheckSquare, tab: "Tasks" },
   { label: "New Meetings", icon: Calendar, create: "meeting" },
-  { label: "New Call Log", icon: Phone, tab: "Call Logs" },
+  { label: "New Call Log", icon: AddCallIcon, tab: "Call Logs" },
 ];
 
 const ContactDetailsPage = () => {
@@ -626,8 +626,8 @@ const ContactDetailsPage = () => {
                       }}
                       className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                     >
-                      <option.icon size={12} className="text-gray-400 lg:hidden" />
-                      <option.icon size={14} className="text-gray-400 hidden lg:block" />
+                      <option.icon style={{ width: 12, height: 12 }} className="text-gray-400 lg:hidden" />
+                      <option.icon style={{ width: 14, height: 14 }} className="text-gray-400 hidden lg:block" />
                       {option.label}
                     </button>
                   ))}

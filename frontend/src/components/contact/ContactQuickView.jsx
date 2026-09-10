@@ -1,3 +1,4 @@
+import CellphoneIcon from "../common/CellphoneIcon";
 // src/components/contact/ContactQuickView.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
@@ -10,7 +11,6 @@ import {
   Minimize2,
   Edit2,
   Mail,
-  Phone,
   Building2,
 } from "lucide-react";
 import BasicDetails from "./BasicDetails";
@@ -236,9 +236,8 @@ const ContactQuickView = ({ contactId, onClose, onEdit }) => {
 
                     {contact.phone && (
                       <div className="flex items-center gap-2.5 overflow-hidden">
-                        <Phone
-                          size={16}
-                          className="text-gray-500 flex-shrink-0"
+                        <CellphoneIcon
+                          className="w-4 h-4 text-gray-500 flex-shrink-0"
                         />
                         <a
                           href={`tel:${contact.phone}`}

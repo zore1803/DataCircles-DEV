@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
@@ -923,12 +924,7 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
                 className="px-3 py-2.5"
               >
                 <div className="flex justify-center items-center w-full">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.length > 0 && selectedItems.length === paginatedTasks.length}
-                    onChange={(e) => e.target.checked ? selectAll(paginatedTasks) : clearSelection()}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
+                  <Checkbox checked={selectedItems.length > 0 && selectedItems.length === paginatedTasks.length} onChange={(e) => e.target.checked ? selectAll(paginatedTasks) : clearSelection()}  uncheckedColor="text-[#525866]"/>
                 </div>
               </th>
               {orderedColumns.map((col) => {
@@ -1224,16 +1220,10 @@ export default function CompanyTasksTab({ companyId, contactId, dealId, tasks = 
                     __select: (
                         <td key="__select" style={{ height: 60 }} className="px-3 border-r border-b border-[#E1E4EA]" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center items-center w-full">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
+                            <Checkbox checked={isSelected} onChange={(e) => {
                                 e.stopPropagation();
                                 toggleItem(task._id);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                            />
+                              }} />
                           </div>
                         </td>
                     ),

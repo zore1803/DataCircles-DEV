@@ -1,4 +1,3 @@
-import PlusIcon from "../common/PlusIcon";
 // components/settings/FormsList.jsx
 // Forms List — Build order step 1, per FORMS_FRONTEND_ARCHITECTURE.md §2. Renders inside the
 // Settings shell at /settings/forms (settingsItems entry in Settings.jsx). Table via TanStack,
@@ -16,7 +15,9 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { X, ChevronLeft, ChevronRight, FileText, User, Building2, Truck, Trash2, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, User, Building2, Truck, Trash2, Lock, WifiOff, AlertTriangle, ShieldOff } from "lucide-react";
+import FormIcon from "../common/FormIcon";
+import AddFormIcon from "../common/AddFormIcon";
 
 const columnHelper = createColumnHelper();
 
@@ -43,7 +44,7 @@ const FormStatusBadge = ({ status }) => {
 
 const MODULE_ICONS = { Contact: User, Company: Building2, Vendor: Truck };
 const ModuleTag = ({ module }) => {
-  const Icon = MODULE_ICONS[module] || FileText;
+  const Icon = MODULE_ICONS[module] || FormIcon;
   return (
     <span className="inline-flex items-center gap-1.5 text-gray-700">
       <Icon className="w-3.5 h-3.5 text-gray-400" />
@@ -98,7 +99,7 @@ function CreateFormModal({ onClose, onCreated }) {
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-xl">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg">
-              <FileText className="w-5 h-5 text-emerald-600" />
+              <AddFormIcon className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">New Form</h2>
@@ -357,7 +358,7 @@ const FormsList = () => {
             onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0C4FCD] text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none cursor-pointer shadow-sm transition-colors"
           >
-            <PlusIcon className="w-4 h-4" />
+            <AddFormIcon className="w-4 h-4" />
             New Form
           </button>
         ) : null}
@@ -439,7 +440,7 @@ const FormsList = () => {
             ) : forms.length === 0 ? (
               <tr>
                 <td colSpan={table.getAllColumns().length} className="px-6 py-12 text-center text-gray-500">
-                  <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <FormIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                   <p className="font-semibold text-gray-900">Website Forms</p>
                   <p className="text-sm text-gray-500 max-w-sm mx-auto mt-1">
                     Capture leads directly into your CRM. Forms let visitors submit enquiries, requests, and

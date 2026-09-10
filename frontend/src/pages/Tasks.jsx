@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -2172,32 +2173,20 @@ function Tasks() {
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={
+            <Checkbox checked={
                 tasks.length > 0 && selectedTasks.length === tasks.length
-              }
-              onChange={(e) => {
+              } onChange={(e) => {
                 e.stopPropagation();
                 handleSelectAllTasks();
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedTasks.includes(row.original._id)}
-              onChange={(e) => {
+            <Checkbox checked={selectedTasks.includes(row.original._id)} onChange={(e) => {
                 e.stopPropagation();
                 handleSelectTask(row.original._id);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }} />
           </div>
         ),
       }),
@@ -2467,33 +2456,21 @@ function Tasks() {
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={
+            <Checkbox checked={
                 meetings.length > 0 &&
                 selectedMeetings.length === meetings.length
-              }
-              onChange={(e) => {
+              } onChange={(e) => {
                 e.stopPropagation();
                 handleSelectAllMeetings();
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedMeetings.includes(row.original._id)}
-              onChange={(e) => {
+            <Checkbox checked={selectedMeetings.includes(row.original._id)} onChange={(e) => {
                 e.stopPropagation();
                 handleSelectMeeting(row.original._id);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }} />
           </div>
         ),
       }),
@@ -3380,7 +3357,7 @@ function Tasks() {
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${taskTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30">
               {taskTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -3544,7 +3521,7 @@ function Tasks() {
             className="w-full border-separate border-spacing-0 text-left"
             style={{ minWidth: `${meetingTable.getTotalSize()}px`, tableLayout: "fixed" }}
           >
-            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA]">
+            <thead className="bg-[#F5F7FA] border-b border-[#E1E4EA] sticky top-0 z-30">
               {meetingTable.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {

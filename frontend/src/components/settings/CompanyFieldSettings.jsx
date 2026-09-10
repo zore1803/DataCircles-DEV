@@ -1,3 +1,5 @@
+import Checkbox from "../common/Checkbox";
+import CellphoneIcon from "../common/CellphoneIcon";
 import PlusIcon from "../common/PlusIcon";
 import { useEffect, useState } from "react";
 import API from "../../services/api";
@@ -23,7 +25,6 @@ import {
   GripVertical,
   Clock,
   Award,
-  Phone,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import CompanyIndustrySettings from "./CompanyIndustrySettings";
@@ -128,7 +129,7 @@ const CompanyFieldSettings = () => {
     {
       value: "phone",
       label: "Phone Number",
-      icon: <Phone className="w-4 h-4" />,
+      icon: <CellphoneIcon className="w-4 h-4" />,
     },
   ];
 
@@ -552,7 +553,7 @@ const CompanyFieldSettings = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <input type="checkbox" id={`editRequired-${index}`} checked={editValue.required || false} onChange={(e) => setEditValue((prev) => ({ ...prev, required: e.target.checked }))} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+            <Checkbox checked={editValue.required || false} onChange={(e) => setEditValue((prev) => ({ ...prev, required: e.target.checked }))} id={`editRequired-${index}`} />
             <label htmlFor={`editRequired-${index}`} className="text-sm font-medium text-gray-700">Mark as required field</label>
           </div>
 
@@ -878,15 +879,9 @@ const CompanyFieldSettings = () => {
           </div>
 
           <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="newRequired"
-              checked={newField.required || false} // <-- Add || false here
-              onChange={(e) =>
+            <Checkbox checked={newField.required || false} onChange={(e) =>
                 setNewField((prev) => ({ ...prev, required: e.target.checked }))
-              }
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
+              } id="newRequired" />
             <label
               htmlFor="newRequired"
               className="ml-2 text-sm font-medium text-gray-700"

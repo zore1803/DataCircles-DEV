@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Bell, Pencil, Trash2, CheckCircle, X } from "lucide-react";
+import { Pencil, Trash2, CheckCircle, X } from "lucide-react";
 import PlusIcon from "./common/PlusIcon";
+import BellIcon from "./common/BellIcon";
 import API from "../services/api";
 
 /*
@@ -19,7 +20,7 @@ import API from "../services/api";
 const POLL_MS = 15000;
 
 const actionStyle = {
-  created: { Icon: Plus, cls: "bg-[#E7F7EE] text-[#12B76A]" },
+  created: { Icon: PlusIcon, cls: "bg-[#E7F7EE] text-[#12B76A]" },
   updated: { Icon: Pencil, cls: "bg-[#EAF3FF] text-[#0085FF]" },
   deleted: { Icon: Trash2, cls: "bg-[#FDECEC] text-[#DF120B]" },
 };
@@ -151,7 +152,7 @@ const NotificationBell = ({ variant = "desktop" }) => {
         aria-expanded={isOpen}
         className={buttonClass}
       >
-        <Bell className="w-4 h-4 text-[#111827]" strokeWidth={1.8} />
+        <BellIcon className="w-4 h-4 text-[#111827]" />
         {unread > 0 && (
           <span
             className={`absolute rounded-full bg-[#DF120B] text-white text-[9px] font-semibold flex items-center justify-center ${

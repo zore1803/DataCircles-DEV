@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 // pages/ReferralProgramAdmin.jsx
 //
@@ -235,7 +236,7 @@ const ReferralProgramAdmin = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2"><Gift className="w-4 h-4 text-purple-600" /> Program configuration</h3>
               <label className="flex items-center gap-2 text-sm font-medium">
-                <input type="checkbox" checked={!!program.enabled} onChange={(e) => setP({ enabled: e.target.checked })} />
+                <Checkbox checked={!!program.enabled} onChange={(e) => setP({ enabled: e.target.checked })} />
                 {program.enabled ? "Enabled" : "Disabled"}
               </label>
             </div>

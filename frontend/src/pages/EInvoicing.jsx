@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -338,22 +339,12 @@ export default function EInvoicing() {
         enableResizing: false,
         header: () => (
           <div className="w-full flex justify-center">
-            <input
-              type="checkbox"
-              checked={sortedEInvoices.length > 0 && sortedEInvoices.every((r) => selectedIdsSet.has(r._id))}
-              onChange={handleSelectAllOnPage}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={sortedEInvoices.length > 0 && sortedEInvoices.every((r) => selectedIdsSet.has(r._id))} onChange={handleSelectAllOnPage}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
-            <input
-              type="checkbox"
-              checked={selectedIdsSet.has(row.original._id)}
-              onChange={() => handleSelectOne(row.original._id)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedIdsSet.has(row.original._id)} onChange={() => handleSelectOne(row.original._id)} />
           </div>
         ),
       })

@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useState, useEffect } from "react";
 import {
   Mail,
@@ -874,20 +875,15 @@ const EmailNotifications = () => {
                                   className="px-4 py-3 text-center"
                                 >
                                   {fromStatus !== toStatus && (
-                                    <input
-                                      type="checkbox"
-                                      checked={isTransitionEnabled(
+                                    <Checkbox checked={isTransitionEnabled(
                                         fromStatus,
                                         toStatus
-                                      )}
-                                      onChange={() =>
+                                      )} onChange={() =>
                                         handleTransitionToggle(
                                           fromStatus,
                                           toStatus
                                         )
-                                      }
-                                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                    />
+                                      } />
                                   )}
                                 </td>
                               ))}

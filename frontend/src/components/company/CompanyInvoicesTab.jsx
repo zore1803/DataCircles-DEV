@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import React, { useMemo, useState, useRef, useEffect } from "react";
@@ -792,12 +793,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                 className="px-3 py-2.5"
               >
                 <div className="flex justify-center items-center w-full">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.length > 0 && selectedItems.length === paginatedInvoices.length}
-                    onChange={(e) => e.target.checked ? selectAll(paginatedInvoices) : clearSelection()}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
+                  <Checkbox checked={selectedItems.length > 0 && selectedItems.length === paginatedInvoices.length} onChange={(e) => e.target.checked ? selectAll(paginatedInvoices) : clearSelection()}  uncheckedColor="text-[#525866]"/>
                 </div>
               </th>
               {orderedColumns.map((col) => {
@@ -991,12 +987,7 @@ export default function CompanyInvoicesTab({ invoices, summary, loading, showSta
                       className="px-3"
                     >
                       <div className="flex justify-center items-center w-full">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleItem(invoice._id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        />
+                        <Checkbox checked={isSelected} onChange={() => toggleItem(invoice._id)} />
                       </div>
                     </td>
                     {orderedColumns.map((col) => {

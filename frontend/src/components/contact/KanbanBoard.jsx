@@ -1,3 +1,4 @@
+import CellphoneIcon from "../common/CellphoneIcon";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
 // import React, { useEffect, useState, useRef } from "react";
@@ -374,7 +375,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Phone, Mail, Edit, Trash2 } from "lucide-react";
+import { Mail, Edit, Trash2 } from "lucide-react";
 
 // ============================================================================
 // 1. PIXEL-PERFECT CARD COMPONENT
@@ -482,7 +483,7 @@ const KanbanCard = ({ contact, isDragging, onEdit, onDelete }) => {
           </span>
         </div>
         <div className="flex items-center gap-2.5 text-gray-500">
-          <Phone className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+          <CellphoneIcon className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
           <span className="text-[11px] font-medium">{contact.phone}</span>
         </div>
       </div>

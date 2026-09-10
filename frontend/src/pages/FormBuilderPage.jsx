@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 // pages/FormBuilderPage.jsx
 // Form Builder — dedicated full-width route, /forms/:id/builder (see FORMS_FRONTEND_ARCHITECTURE.md
 // §1.2 amendment). Vertical slice: Canvas + drag/drop + Properties + Save (PATCH) + Publish (POST).
@@ -974,12 +975,7 @@ function PropertiesPanel({ element, fieldMetaById, onChange, onUploadImage }) {
 
         <div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={!!element.required}
-              disabled={lockedRequired}
-              onChange={(e) => onChange({ ...element, required: e.target.checked })}
-            />
+            <Checkbox checked={!!element.required} onChange={(e) => onChange({ ...element, required: e.target.checked })} disabled={lockedRequired} />
             Required
           </label>
           {/* Say WHY it's locked: this is a CRM schema constraint, not an arbitrary form setting. */}
@@ -1088,13 +1084,11 @@ function PropertiesPanel({ element, fieldMetaById, onChange, onUploadImage }) {
             {supports.restrictPastDates && (
               <div className="mt-2 flex flex-col gap-1.5">
                 <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input type="checkbox" checked={!!overrides.restrictPastDates}
-                    onChange={(e) => setOverride({ restrictPastDates: e.target.checked })} />
+                  <Checkbox checked={!!overrides.restrictPastDates} onChange={(e) => setOverride({ restrictPastDates: e.target.checked })} />
                   No past dates
                 </label>
                 <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input type="checkbox" checked={!!overrides.restrictFutureDates}
-                    onChange={(e) => setOverride({ restrictFutureDates: e.target.checked })} />
+                  <Checkbox checked={!!overrides.restrictFutureDates} onChange={(e) => setOverride({ restrictFutureDates: e.target.checked })} />
                   No future dates
                 </label>
               </div>
@@ -1221,11 +1215,7 @@ function PropertiesPanel({ element, fieldMetaById, onChange, onUploadImage }) {
         </div>
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={element.fontWeight === "bold"}
-              onChange={(e) => onChange({ ...element, fontWeight: e.target.checked ? "bold" : "normal" })}
-            />
+            <Checkbox checked={element.fontWeight === "bold"} onChange={(e) => onChange({ ...element, fontWeight: e.target.checked ? "bold" : "normal" })} />
             <Bold className="w-3.5 h-3.5" /> Bold
           </label>
           <AlignButtons value={element.textAlign || "left"} onChange={(v) => onChange({ ...element, textAlign: v })} />

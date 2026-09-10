@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useEffect, useState, useRef } from "react";
 import { COUNTRY_DIAL_CODES, DEFAULT_DIAL_CODE } from "../../utils/countryDialCodes";
 import { X, Paperclip, Twitter, Linkedin, Instagram, Facebook } from "lucide-react";
@@ -281,10 +282,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                     key={index}
                     className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-full px-3 h-8 transition-colors border border-transparent hover:border-[#1F2937]/10"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={(e) => {
+                    <Checkbox checked={isChecked} onChange={(e) => {
                         let newValues;
                         if (e.target.checked) {
                           // Add option to array
@@ -294,9 +292,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                           newValues = selectedValues.filter((v) => v !== option);
                         }
                         handleFieldChange(newValues);
-                      }}
-                      className="w-4 h-4 text-blue-600 border-[#1F2937]/10 rounded focus:ring-blue-500"
-                    />
+                      }} />
                     <span className="text-[12px] text-[#1F2937] font-medium font-inter">{option}</span>
                   </label>
                 );
@@ -887,12 +883,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   </label>
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={!!ship.sameAsBilling}
-                        onChange={(e) => handleShippingSameAsBilling(index, e.target.checked)}
-                        className="w-4 h-4 rounded border-[#E0E0E1] text-blue-600 focus:ring-blue-500"
-                      />
+                      <Checkbox checked={!!ship.sameAsBilling} onChange={(e) => handleShippingSameAsBilling(index, e.target.checked)} />
                       <span className="text-[13px] font-medium text-[#525866]">
                         Same as billing
                       </span>

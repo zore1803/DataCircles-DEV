@@ -1,14 +1,14 @@
 import React from "react";
-import { 
-  X, 
-  Phone, 
-  Clock, 
-  User, 
-  MessageSquare, 
+import {
+  X,
+  Clock,
+  User,
+  MessageSquare,
   Calendar,
-  PhoneOutgoing,
-  PhoneIncoming
 } from "lucide-react";
+import CellphoneIcon from "../common/CellphoneIcon";
+import IncomingCallIcon from "../common/IncomingCallIcon";
+import OutgoingCallIcon from "../common/OutgoingCallIcon";
 
 const CallLogDetailView = ({ log, onClose }) => {
   if (!log) return null;
@@ -47,7 +47,7 @@ const CallLogDetailView = ({ log, onClose }) => {
     }
   };
 
-  const CallIcon = log.callType === "Outbound" ? PhoneOutgoing : PhoneIncoming;
+  const CallIcon = log.callType === "Outbound" ? OutgoingCallIcon : IncomingCallIcon;
 
   return (
     <>
@@ -167,7 +167,7 @@ const CallLogDetailView = ({ log, onClose }) => {
                 {/* Call Type */}
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <Phone className="w-4 h-4 text-gray-500" />
+                    <CellphoneIcon className="w-4 h-4 text-gray-500" />
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       Call Type
                     </span>

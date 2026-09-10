@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -27,7 +29,6 @@ import {
   Pin,
   PinOff,
   EyeOff,
-  Video,
   ArrowUp, ArrowDown } from "lucide-react";
 import VideoTutorialModal from "../components/VideoTutorialModal";
 import BulkActions from "../components/BulkActions";
@@ -1280,7 +1281,7 @@ function Vendors() {
                 <>
                   <div className="flex items-center gap-2">
                     <h1 className="m-0 leading-tight font-bold text-base sm:text-lg text-gray-900 truncate">Vendors</h1>
-                    <Video className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <VideoIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   </div>
                   <p className="m-0 leading-tight text-[10px] sm:text-xs text-gray-500 font-inter truncate">
                     Manage your vendors.
@@ -1514,15 +1515,10 @@ function Vendors() {
                   className="px-4 py-3 border-b border-r border-[#E1E4EA] bg-[#F5F7FA]"
                 >
                   <div className="flex justify-center items-center w-full">
-                    <input
-                      type="checkbox"
-                      checked={
+                    <Checkbox checked={
                         selectedVendors.length === vendors.length &&
                         vendors.length > 0
-                      }
-                      onChange={handleSelectAll}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                    />
+                      } onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
                   </div>
                 </th>
 
@@ -1631,12 +1627,7 @@ function Vendors() {
                       className="px-4 py-2 align-middle border-b border-r border-[#E1E4EA] bg-inherit overflow-hidden"
                     >
                       <div className="flex justify-center items-center w-full">
-                        <input
-                          type="checkbox"
-                          checked={selectedVendors.includes(vendor._id)}
-                          onChange={() => handleSelectVendor(vendor._id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        />
+                        <Checkbox checked={selectedVendors.includes(vendor._id)} onChange={() => handleSelectVendor(vendor._id)} />
                       </div>
                     </td>
 

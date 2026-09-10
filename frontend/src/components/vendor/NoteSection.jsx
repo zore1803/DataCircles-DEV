@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
@@ -827,26 +828,15 @@ const NoteSection = ({ showKPIs = true, autoOpenCreate = false, onAutoOpenCreate
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={
+            <Checkbox checked={
                 selectedItems.length > 0 &&
                 selectedItems.length === filteredNotes.length
-              }
-              onChange={(e) => (e.target.checked ? selectAll(filteredNotes) : clearSelection())}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              } onChange={(e) => (e.target.checked ? selectAll(filteredNotes) : clearSelection())}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedItems.includes(row.original._id)}
-              onChange={() => toggleItem(row.original._id)}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedItems.includes(row.original._id)} onChange={() => toggleItem(row.original._id)} />
           </div>
         ),
       },

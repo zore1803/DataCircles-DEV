@@ -1,6 +1,7 @@
+import CellphoneIcon from "../common/CellphoneIcon";
 // components/subscription/BillingProfileModal.jsx
 import React, { useState } from 'react';
-import { Mail, Phone, ShieldCheck, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Mail, ShieldCheck, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import API from '../../services/api';
 
 // Charge-at-Will requires a Razorpay customer record with both email and
@@ -145,7 +146,7 @@ const BillingProfileModal = ({ show, missingEmail, missingPhone, onSaved, onClos
                   <span>+91</span>
                 </div>
                 <div className="relative flex-1">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <CellphoneIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   <input
                     type="tel"
                     inputMode="numeric"

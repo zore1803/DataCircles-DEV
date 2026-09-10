@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -1170,18 +1171,13 @@ export default function Journals() {
                 className="relative px-4 py-3 bg-[#F5F7FA]"
               >
                 <div className="flex justify-center items-center">
-                  <input
-                    type="checkbox"
-                    checked={paginatedJournals.length > 0 && selectedJournals.length === paginatedJournals.length}
-                    onChange={(e) => {
+                  <Checkbox checked={paginatedJournals.length > 0 && selectedJournals.length === paginatedJournals.length} onChange={(e) => {
                       if (e.target.checked) {
                         setSelectedJournals(paginatedJournals.map((j) => j._id));
                       } else {
                         setSelectedJournals([]);
                       }
-                    }}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded cursor-pointer"
-                  />
+                    }}  uncheckedColor="text-[#525866]"/>
                 </div>
                 <ResizeHandle colId="selection" />
               </th>
@@ -1264,18 +1260,13 @@ export default function Journals() {
                     className="px-4 py-2 align-middle bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedJournals.includes(j._id)}
-                        onChange={(e) => {
+                      <Checkbox checked={selectedJournals.includes(j._id)} onChange={(e) => {
                           if (e.target.checked) {
                             setSelectedJournals((prev) => [...prev, j._id]);
                           } else {
                             setSelectedJournals((prev) => prev.filter((id) => id !== j._id));
                           }
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded cursor-pointer"
-                      />
+                        }} id="true" />
                     </div>
                   </td>
 

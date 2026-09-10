@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
@@ -342,13 +343,7 @@ const DealCard = React.memo(({ deal, selected = false, onToggleSelect, setDealTo
       className="pointer-events-auto flex items-center flex-shrink-0"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={() => onToggleSelect(deal._id)}
-        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-        aria-label={`Select ${deal.title || "deal"}`}
-      />
+      <Checkbox checked={selected} onChange={() => onToggleSelect(deal._id)} />
     </span>
   ) : null;
 
@@ -401,14 +396,10 @@ const KanbanColumn = React.memo(({ status, deals, amountDeals, totalDealsCount, 
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dealIds = useMemo(() => deals.map((d) => d._id), [deals]);
 
-  // Header select-all state for this column: fully ticked when every card here
-  // is selected, indeterminate (native dash) when only some are.
+  // Header select-all state for this column: ticked when every card here is
+  // selected. (No indeterminate/dash state — the Checkbox component only
+  // has empty/checked glyphs, so a partial selection just reads as empty.)
   const allSelected = dealIds.length > 0 && dealIds.every((id) => selectedDeals.includes(id));
-  const someSelected = dealIds.some((id) => selectedDeals.includes(id));
-  const headerCbRef = useRef(null);
-  useEffect(() => {
-    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
-  }, [someSelected, allSelected]);
 
   // Deliberately computed from `amountDeals` (the column's real, committed
   // membership) rather than `deals` (which includes the live drag-over
@@ -449,12 +440,11 @@ const KanbanColumn = React.memo(({ status, deals, amountDeals, totalDealsCount, 
       >
         <div className="flex items-center gap-1.5">
           {onToggleColumnSelect && !loading && dealIds.length > 0 && (
-            <input
-              ref={headerCbRef}
-              type="checkbox"
+            <Checkbox
               checked={allSelected}
               onChange={() => onToggleColumnSelect(dealIds)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              uncheckedColor="text-[#525866]"
+              wrapperClassName="flex-shrink-0"
               title={`Select all in ${status}`}
               aria-label={`Select all deals in ${status}`}
             />
@@ -1738,12 +1728,7 @@ export default function CompanyDealsKanban({
                         "Select All", which spans every record across all pages. */}
                     <th style={{ width: 44, height: 56 }} className="px-3 py-2.5 border-r border-b border-[#E1E4EA]">
                       <div className="flex justify-center items-center w-full">
-                        <input
-                          type="checkbox"
-                          checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
-                          onChange={handleSelectAllDeals}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        />
+                        <Checkbox checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length} onChange={handleSelectAllDeals}  uncheckedColor="text-[#525866]"/>
                       </div>
                     </th>
                     {(() => {
@@ -1933,12 +1918,7 @@ export default function CompanyDealsKanban({
                         <tr key={deal._id} className={`hover:bg-gray-50 transition-colors group ${isSelected ? "!bg-blue-50" : ""}`}>
                           <td style={{ height: 54, width: 44 }} className="px-3 border-r border-b border-[#E1E4EA]">
                             <div className="flex justify-center items-center w-full">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => handleSelectDeal(deal._id)}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                              />
+                              <Checkbox checked={isSelected} onChange={() => handleSelectDeal(deal._id)} />
                             </div>
                           </td>
                           {(() => {

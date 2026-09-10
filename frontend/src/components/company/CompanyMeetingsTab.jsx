@@ -1,3 +1,5 @@
+import VideoIcon from "../common/VideoIcon";
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { DATE_RANGES, getDateRangeLabel } from "../../utils/dateBuckets";
@@ -14,7 +16,6 @@ import {
   Pin,
   PinOff,
   AlarmClock,
-  Video,
   EyeOff,
   X,
   Eye,
@@ -911,12 +912,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                   className="px-3 py-2.5"
                 >
                   <div className="flex justify-center items-center w-full">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.length > 0 && selectedItems.length === paginatedMeetings.length}
-                      onChange={(e) => e.target.checked ? selectAll(paginatedMeetings) : clearSelection()}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                    />
+                    <Checkbox checked={selectedItems.length > 0 && selectedItems.length === paginatedMeetings.length} onChange={(e) => e.target.checked ? selectAll(paginatedMeetings) : clearSelection()}  uncheckedColor="text-[#525866]"/>
                   </div>
                 </th>
                 {orderedColumns.map((col) => {
@@ -1338,12 +1334,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                         className="px-3"
                       >
                         <div className="flex justify-center items-center w-full">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleItem(meeting._id)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                          />
+                          <Checkbox checked={isSelected} onChange={() => toggleItem(meeting._id)} />
                         </div>
                       </td>
                       {orderedColumns.map((col, colIdx) => {
@@ -1706,7 +1697,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                                 className="flex items-center justify-center flex-shrink-0"
                                 style={{ width: 16, height: 16, background: "#E1E4EA", borderRadius: 103 }}
                               >
-                                <Video size={10} style={{ color: "#000000" }} />
+                                <VideoIcon className="w-2.5 h-2.5" style={{ color: "#000000" }} />
                               </span>
                               <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }} className="capitalize">
                                 {meeting.meetingType?.replace("-", " ") || "General"}
@@ -1951,7 +1942,7 @@ export default function CompanyMeetingsTab({ companyId, companyName, contactId, 
                                 className="flex items-center justify-center flex-shrink-0"
                                 style={{ width: 16, height: 16, background: "#E1E4EA", borderRadius: 103 }}
                               >
-                                <Video size={10} style={{ color: "#000000" }} />
+                                <VideoIcon className="w-2.5 h-2.5" style={{ color: "#000000" }} />
                               </span>
                               <span style={{ fontFamily: "Inter", fontWeight: 400, fontSize: 10, lineHeight: "120%", color: "#78788D" }} className="capitalize">
                                 {meeting.meetingType?.replace("-", " ") || "General"}

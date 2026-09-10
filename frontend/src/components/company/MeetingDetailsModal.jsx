@@ -1,6 +1,7 @@
+import VideoIcon from "../common/VideoIcon";
 import PlusIcon from "../common/PlusIcon";
 import React from "react";
-import { X, Trash2, Loader2, Edit3, Users, Video } from "lucide-react";
+import { X, Trash2, Loader2, Edit3, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CircleCheckIcon = (props) => (
@@ -155,7 +156,7 @@ const MeetingDetailsModal = ({ open, meetingData, users, onDelete, onClose, onEd
                     color: "#1F2937",
                   }}
                 >
-                  <Video className="w-4 h-4" style={{ color: "#1C1B1F" }} />
+                  <VideoIcon className="w-4 h-4" style={{ color: "#1C1B1F" }} />
                   Join Meeting
                 </button>
               </div>

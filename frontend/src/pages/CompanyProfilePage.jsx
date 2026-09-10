@@ -1,3 +1,5 @@
+import AddCallIcon from "../components/common/AddCallIcon";
+import CellphoneIcon from "../components/common/CellphoneIcon";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
@@ -35,7 +37,6 @@ import {
   Receipt,
   CheckSquare,
   Mail,
-  Phone,
   File,
   StickyNote,
   Calendar,
@@ -80,7 +81,7 @@ const newEntryOptions = [
   { label: "New Invoice", icon: FileText, tab: "Invoices", create: "invoice" },
   { label: "New Notes", icon: StickyNote, tab: "Notes", create: "note" },
   { label: "New Meetings", icon: Calendar, tab: "Meetings", create: "meeting" },
-  { label: "New Call Log", icon: Phone, tab: "Call Logs", create: "call" },
+  { label: "New Call Log", icon: AddCallIcon, tab: "Call Logs", create: "call" },
   { label: "New Folders", icon: FolderOpen, tab: "Folders", create: "folder" },
 ];
 
@@ -545,7 +546,7 @@ const CompanyProfilePage = () => {
     callLogs.forEach((call) => {
       items.push({
         type: "Call Logs",
-        icon: Phone,
+        icon: CellphoneIcon,
         iconClass: "bg-green-50 text-green-600",
         title: `Logged Call: ${call.purpose || "Phone Call"}`,
         subtitle: call.notes || null,
@@ -1087,8 +1088,8 @@ const CompanyProfilePage = () => {
                         }}
                         className="flex items-center gap-1.5 lg:gap-2 w-full px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50 text-left"
                       >
-                        <option.icon size={12} className="text-gray-400 lg:hidden" />
-                        <option.icon size={14} className="text-gray-400 hidden lg:block" />
+                        <option.icon style={{ width: 12, height: 12 }} className="text-gray-400 lg:hidden" />
+                        <option.icon style={{ width: 14, height: 14 }} className="text-gray-400 hidden lg:block" />
                         {option.label}
                       </button>
                     ) : (
@@ -1098,8 +1099,8 @@ const CompanyProfilePage = () => {
                         onClick={() => setShowNewEntryMenu(false)}
                         className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 text-xs lg:text-sm font-normal text-gray-700 hover:bg-gray-50"
                       >
-                        <option.icon size={12} className="text-gray-400 lg:hidden" />
-                        <option.icon size={14} className="text-gray-400 hidden lg:block" />
+                        <option.icon style={{ width: 12, height: 12 }} className="text-gray-400 lg:hidden" />
+                        <option.icon style={{ width: 14, height: 14 }} className="text-gray-400 hidden lg:block" />
                         {option.label}
                       </Link>
                     ),
@@ -1515,7 +1516,7 @@ const CompanyProfilePage = () => {
                             <div
                               className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${item.iconClass}`}
                             >
-                              <item.icon size={13} />
+                              <item.icon style={{ width: 13, height: 13 }} />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-medium text-gray-900 truncate">
@@ -1708,7 +1709,7 @@ const CompanyProfilePage = () => {
                                 </>
                               ) : contact.phone ? (
                                 <>
-                                  <Phone size={10} /> {contact.phone}
+                                  <CellphoneIcon style={{ width: 10, height: 10 }} /> {contact.phone}
                                 </>
                               ) : (
                                 "No contact info"

@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
 import React, { useState, useEffect, useCallback } from "react";
@@ -243,12 +244,7 @@ const ConfirmModal = ({ title, description, confirmLabel, extra, requireCheck, o
               className="flex items-center self-stretch cursor-pointer"
               style={{ width: 360, height: 20, gap: 8 }}
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={(e) => setChecked(e.target.checked)}
-                className="sr-only"
-              />
+              <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
               <CheckboxIcon size={16} checked={checked} style={{ flexShrink: 0 }} />
               <span
                 style={{

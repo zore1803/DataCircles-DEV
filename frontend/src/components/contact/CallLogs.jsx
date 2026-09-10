@@ -1,17 +1,18 @@
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
-import { 
-  Phone, 
-  Clock, 
-  User, 
-  MessageSquare, 
-  Edit2, 
-  Trash2, 
-  PhoneOutgoing, 
-  PhoneIncoming,
+import {
+  Clock,
+  User,
+  MessageSquare,
+  Edit2,
+  Trash2,
   ChevronDown
 } from "lucide-react";
+import CellphoneIcon from "../common/CellphoneIcon";
+import AddCallIcon from "../common/AddCallIcon";
+import IncomingCallIcon from "../common/IncomingCallIcon";
+import OutgoingCallIcon from "../common/OutgoingCallIcon";
 import CallLogForm from "./CallLogForm";
 import CallLogDetailView from "./CallLogDetailView";
 import toast from 'react-hot-toast';
@@ -19,8 +20,8 @@ import AppToaster from "../AppToaster";
 
 import SearchIcon from "../common/SearchIcon";
 const callTypeOptions = [
-  { value: "Outbound", label: "Outbound", icon: PhoneOutgoing },
-  { value: "Inbound", label: "Inbound", icon: PhoneIncoming },
+  { value: "Outbound", label: "Outbound", icon: OutgoingCallIcon },
+  { value: "Inbound", label: "Inbound", icon: IncomingCallIcon },
 ];
 
 const statusOptions = [
@@ -131,7 +132,7 @@ const CallLogs = ({ contactId }) => {
 
   const getCallTypeIcon = (type) => {
     const typeConfig = callTypeOptions.find((t) => t.value === type);
-    return typeConfig ? typeConfig.icon : Phone;
+    return typeConfig ? typeConfig.icon : CellphoneIcon;
   };
 
   const formatRelativeTime = (date) => {
@@ -162,14 +163,14 @@ const CallLogs = ({ contactId }) => {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-600">
-          <Phone className="w-4 h-4" />
+          <CellphoneIcon className="w-4 h-4" />
           <span>{filteredLogs.length} calls</span>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors"
         >
-          <PlusIcon className="w-4 h-4" />
+          <AddCallIcon className="w-4 h-4" />
           New Call
         </button>
       </div>
@@ -245,7 +246,7 @@ const CallLogs = ({ contactId }) => {
         </div>
       ) : filteredLogs.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-          <Phone className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+          <CellphoneIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm text-gray-600 mb-4">
             {logs.length === 0 ? 'No call logs yet' : 'No matching calls'}
           </p>

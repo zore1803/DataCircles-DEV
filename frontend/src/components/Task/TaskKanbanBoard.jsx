@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import MoreIcon from "../common/MoreIcon";
 import React, { useEffect, useState, useRef } from "react";
 import {
@@ -70,13 +71,7 @@ const TaskKanbanCard = ({ task, isDragging, onEdit, onDelete, selected = false, 
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              <input
-                type="checkbox"
-                checked={selected}
-                onChange={() => onToggleSelect(task._id)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                aria-label={`Select ${task.title || "task"}`}
-              />
+              <Checkbox checked={selected} onChange={() => onToggleSelect(task._id)} />
             </span>
           )}
           <h4 className="font-bold text-gray-900 text-[14px] leading-tight flex-1 mr-2">
@@ -244,14 +239,10 @@ const DroppableColumn = ({
   const columnItems = items.filter((item) => item.column === column);
   const itemIds = columnItems.map((item) => item[itemIdKey].toString());
 
-  // Header select-all state for this column: fully ticked when every card here
-  // is selected, indeterminate (native dash) when only some are.
+  // Header select-all state for this column: ticked when every card here is
+  // selected. (No indeterminate/dash state — the Checkbox component only
+  // has empty/checked glyphs, so a partial selection just reads as empty.)
   const allSelected = itemIds.length > 0 && itemIds.every((id) => selectedItems.includes(id));
-  const someSelected = itemIds.some((id) => selectedItems.includes(id));
-  const headerCbRef = useRef(null);
-  useEffect(() => {
-    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected && !allSelected;
-  }, [someSelected, allSelected]);
 
   return (
     <div
@@ -265,12 +256,11 @@ const DroppableColumn = ({
         style={{ height: "46px", background: "#F5F7FA", padding: "0 18px" }}
       >
         {onToggleColumnSelect && itemIds.length > 0 && (
-          <input
-            ref={headerCbRef}
-            type="checkbox"
+          <Checkbox
             checked={allSelected}
             onChange={() => onToggleColumnSelect(itemIds)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+            uncheckedColor="text-[#525866]"
+            wrapperClassName="flex-shrink-0"
             title={`Select all in ${column}`}
             aria-label={`Select all tasks in ${column}`}
           />

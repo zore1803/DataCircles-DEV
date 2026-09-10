@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useEffect, useState, useRef } from "react";
 import PhoneNumberInput from "../common/PhoneNumberInput";
 import API from "../../services/api";
@@ -354,10 +355,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                     key={index}
                     className="flex items-center gap-2 cursor-pointer hover:bg-[#F2F2F7] rounded-xl px-4 py-3 transition-colors border border-transparent hover:border-[#E0E0E1]"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={(e) => {
+                    <Checkbox checked={isChecked} onChange={(e) => {
                         let newValues;
                         if (e.target.checked) {
                           newValues = [...selectedValues, option];
@@ -365,9 +363,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                           newValues = selectedValues.filter((v) => v !== option);
                         }
                         handleFieldChange(newValues);
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
+                      }} />
                     <span className="text-[14px] text-gray-900 font-medium font-inter">{option}</span>
                   </label>
                 );

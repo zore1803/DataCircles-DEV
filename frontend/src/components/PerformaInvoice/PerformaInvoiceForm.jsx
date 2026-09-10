@@ -21,7 +21,7 @@ import SearchableDropdown from "../contact/SearchableDropdown";
 import toast from "react-hot-toast";
 import { AddressFieldsGroup, emptyAddress, isAddressEmpty, SectionHeader } from "../invoice/formPrimitives";
 import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultText";
-import { computeDocument } from "../../../../shared/documentTemplates";
+import { computeDocument, DOCUMENT_TEMPLATES } from "../../../../shared/documentTemplates";
 
 import SearchIcon from "../common/SearchIcon";
 // Function to convert number to words
@@ -1208,7 +1208,7 @@ const PerformaInvoiceForm = ({
               aria-label="Select Pro Forma invoice style"
             >
               <option value="">Select style...</option>
-              {styles.map((s, idx) => (
+              {DOCUMENT_TEMPLATES.map((s, idx) => (
                 <option key={idx} value={s}>
                   {s}
                 </option>

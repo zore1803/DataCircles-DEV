@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { formatNumberToIndian, formatNumberFixed } from "../../utils/numberFormatter";
@@ -1946,15 +1947,10 @@ const QuotationForm = ({
                     <div className="flex justify-end gap-2 text-xs pt-1">
                       <label className="flex items-center gap-1.5 cursor-pointer text-gray-500">
                         Hide Totals
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                          checked={form.hideTotals}
-                          onChange={(e) => {
+                        <Checkbox checked={form.hideTotals} onChange={(e) => {
                             setForm((p) => ({ ...p, hideTotals: e.target.checked }));
                             setHasUnsavedChanges(true);
-                          }}
-                        />
+                          }} />
                       </label>
                     </div>
                     

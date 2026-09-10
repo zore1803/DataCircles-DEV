@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import SearchIcon from "../common/SearchIcon";
 import DownloadIcon from "../common/DownloadIcon";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -454,28 +455,17 @@ const PaymentsTable = ({ payments, vendor, showKPIs = true, autoOpenCreate = fal
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={
+            <Checkbox checked={
                 selectedItems.length > 0 &&
                 selectedItems.length === filteredPayments.length
-              }
-              onChange={(e) =>
+              } onChange={(e) =>
                 e.target.checked ? selectAll(filteredPayments) : clearSelection()
-              }
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedItems.includes(row.original._id)}
-              onChange={() => toggleItem(row.original._id)}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedItems.includes(row.original._id)} onChange={() => toggleItem(row.original._id)} />
           </div>
         ),
       },

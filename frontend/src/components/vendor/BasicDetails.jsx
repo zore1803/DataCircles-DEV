@@ -1,7 +1,7 @@
+import CellphoneIcon from "../common/CellphoneIcon";
 import React, {useState} from "react";
 import {
   User,
-  Phone,
   Mail,
   Building2,
   FileText,
@@ -167,7 +167,7 @@ const BasicDetails = ({ vendor, payments, vendorFieldList = [] }) => {
           {/* Phone */}
           <div className="p-3 border border-gray-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
-              <Phone className="w-4 h-4 text-gray-600" />
+              <CellphoneIcon className="w-4 h-4 text-gray-600" />
               <p className="text-xs text-gray-600">Phone</p>
             </div>
             <p className="text-sm font-medium text-gray-900">{vendor.phone || "—"}</p>

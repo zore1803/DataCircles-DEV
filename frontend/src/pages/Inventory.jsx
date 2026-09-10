@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
@@ -1033,12 +1034,7 @@ export default function Inventory() {
                 className="relative px-4 py-2 bg-[#F5F7FA] overflow-hidden"
               >
                 <div className="flex justify-center items-center">
-                  <input
-                    type="checkbox"
-                    checked={filteredItems.length > 0 && selectedIds.length === filteredItems.length}
-                    onChange={handleSelectAllOnPage}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
+                  <Checkbox checked={filteredItems.length > 0 && selectedIds.length === filteredItems.length} onChange={handleSelectAllOnPage}  uncheckedColor="text-[#525866]"/>
                 </div>
                 <ResizeHandle colId="selection" />
               </th>
@@ -1136,12 +1132,7 @@ export default function Inventory() {
                     {/* The stock-status dot that used to live here is redundant with the Status
                         column's badge, so the column now carries the selection checkbox instead. */}
                     <div className="flex justify-center items-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(item._id)}
-                        onChange={() => handleSelectRow(item._id)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                      />
+                      <Checkbox checked={selectedIds.includes(item._id)} onChange={() => handleSelectRow(item._id)} />
                     </div>
                   </td>
 

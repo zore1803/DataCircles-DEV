@@ -1,3 +1,4 @@
+import CellphoneIcon from "../common/CellphoneIcon";
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
@@ -11,7 +12,6 @@ import {
   ArrowLeft,
   AlertCircle,
   Mail,
-  Phone,
   MapPin,
   CheckCircle2,
   Image as ImageIcon,
@@ -422,7 +422,7 @@ function BrandSettings() {
               {/* Mobile */}
               <div ref={mobileRef}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                  <Phone className="w-4 h-4" />
+                  <CellphoneIcon className="w-4 h-4" />
                   Mobile Number <span className="text-red-500">*</span>
                 </label>
                 <input

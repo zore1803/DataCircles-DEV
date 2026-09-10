@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import SignatureCanvas from "react-signature-canvas";
@@ -832,12 +833,7 @@ export default function SignatureModal({ isOpen, onClose, onSave, initialData })
 
               <div className="flex items-end pb-2">
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={isDefault}
-                    onChange={(e) => setIsDefault(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-                  />
+                  <Checkbox checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
                   Set as Default
                 </label>
               </div>

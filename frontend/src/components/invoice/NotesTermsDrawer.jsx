@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -270,21 +271,11 @@ const NotesTermsDrawer = ({
 
               <div className="flex flex-col gap-2 flex-shrink-0">
                 <label className="flex items-center gap-2 text-[13px] text-[#1F2937] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!!editing.isDefault}
-                    onChange={(e) => setEditing((p) => ({ ...p, isDefault: e.target.checked }))}
-                    className="w-4 h-4 accent-[#0085FF]"
-                  />
+                  <Checkbox checked={!!editing.isDefault} onChange={(e) => setEditing((p) => ({ ...p, isDefault: e.target.checked }))} />
                   Use as the default for {typeLabel.toLowerCase()}s
                 </label>
                 <label className="flex items-center gap-2 text-[13px] text-[#1F2937] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editing.isActive !== false}
-                    onChange={(e) => setEditing((p) => ({ ...p, isActive: e.target.checked }))}
-                    className="w-4 h-4 accent-[#0085FF]"
-                  />
+                  <Checkbox checked={editing.isActive !== false} onChange={(e) => setEditing((p) => ({ ...p, isActive: e.target.checked }))} />
                   Active
                 </label>
               </div>

@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -22,7 +23,6 @@ import {
   EyeOff,
   Pin,
   PinOff,
-  Video,
   Share2,
   MessageCircle,
   Mail,
@@ -796,22 +796,12 @@ const PurchaseReturn = () => {
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedReturns.length === purchaseReturns.length && purchaseReturns.length > 0}
-              onChange={handleSelectAll}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedReturns.length === purchaseReturns.length && purchaseReturns.length > 0} onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center gap-1 w-full">
-            <input
-              type="checkbox"
-              checked={selectedReturnsSet.has(row.original._id)}
-              onChange={() => handleSelectReturn(row.original._id)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedReturnsSet.has(row.original._id)} onChange={() => handleSelectReturn(row.original._id)} />
           </div>
         ),
       })

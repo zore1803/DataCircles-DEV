@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -695,12 +696,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                   className="px-3 py-2.5"
                 >
                   <div className="flex justify-center items-center w-full">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.length > 0 && selectedItems.length === paginatedContacts.length}
-                      onChange={(e) => e.target.checked ? selectAll(paginatedContacts) : clearSelection()}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                    />
+                    <Checkbox checked={selectedItems.length > 0 && selectedItems.length === paginatedContacts.length} onChange={(e) => e.target.checked ? selectAll(paginatedContacts) : clearSelection()}  uncheckedColor="text-[#525866]"/>
                   </div>
                 </th>
                 {orderedColumns.map((col) => {
@@ -883,12 +879,7 @@ export default function CompanyContactsTab({ contacts, meetings = [], tasks = []
                       className="px-3"
                     >
                       <div className="flex justify-center items-center w-full">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleItem(contact._id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        />
+                        <Checkbox checked={isSelected} onChange={() => toggleItem(contact._id)} />
                       </div>
                     </td>
                     {orderedColumns.map((col) => {

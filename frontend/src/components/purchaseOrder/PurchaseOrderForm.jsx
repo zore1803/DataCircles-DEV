@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import {
@@ -654,14 +655,9 @@ const PurchaseOrderForm = ({
                         </span>
                       </div>
                       <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={item.taxInclusive || false}
-                          onChange={(e) =>
+                        <Checkbox checked={item.taxInclusive || false} onChange={(e) =>
                             updateItem(index, "taxInclusive", e.target.checked)
-                          }
-                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                        />
+                          } />
                         <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                           Tax Inc.
                         </span>

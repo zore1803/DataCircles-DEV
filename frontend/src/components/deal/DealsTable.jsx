@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import MoreIcon from "../common/MoreIcon";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -475,31 +476,21 @@ export default function DealsTable({
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={
+            <Checkbox checked={
                 sortedTableDeals.length > 0 &&
                 sortedTableDeals.every((deal) => selectedRows.includes(deal._id))
-              }
-              onChange={(e) => {
+              } onChange={(e) => {
                 e.stopPropagation();
                 handleSelectAll(e);
-              }}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }} uncheckedColor="text-[#525866]" />
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={selectedRows.includes(row.original._id)}
-              onChange={(e) => {
+            <Checkbox checked={selectedRows.includes(row.original._id)} onChange={(e) => {
                 e.stopPropagation();
                 handleRowSelect(row.original._id);
-              }}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              }} />
           </div>
         ),
       }),

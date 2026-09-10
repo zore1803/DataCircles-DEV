@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import { useState, useEffect } from "react";
 import API from "../../services/api";
@@ -338,7 +339,7 @@ const GenericFieldSettings = ({ apiBase, moduleLabel, icon, builtInFields = [] }
           </div>
 
           <div className="flex items-center gap-2">
-            <input type="checkbox" id={`editRequired-${index}`} checked={editValue.required || false} onChange={(e) => setEditValue((prev) => ({ ...prev, required: e.target.checked }))} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+            <Checkbox checked={editValue.required || false} onChange={(e) => setEditValue((prev) => ({ ...prev, required: e.target.checked }))} id={`editRequired-${index}`} />
             <label htmlFor={`editRequired-${index}`} className="text-sm font-medium text-gray-700">Mark as required field</label>
           </div>
 
@@ -529,13 +530,7 @@ const GenericFieldSettings = ({ apiBase, moduleLabel, icon, builtInFields = [] }
           </div>
 
           <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="newRequired"
-              checked={newField.required}
-              onChange={(e) => setNewField((prev) => ({ ...prev, required: e.target.checked }))}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
+            <Checkbox checked={newField.required} onChange={(e) => setNewField((prev) => ({ ...prev, required: e.target.checked }))} id="newRequired" />
             <label htmlFor="newRequired" className="ml-2 text-sm font-medium text-gray-700">Mark as required field</label>
           </div>
 

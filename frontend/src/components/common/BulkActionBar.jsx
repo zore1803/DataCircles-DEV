@@ -1,7 +1,7 @@
 import DownloadIcon from "./DownloadIcon";
+import SelectAllIcon from "./SelectAllIcon";
 import React from 'react';
 import {
-  CheckSquare,
   Edit2,
   ListChecks,
   StickyNote,
@@ -91,7 +91,7 @@ const BulkActionBar = ({
       </div>
 
       <div className="flex items-center gap-3 flex-shrink-0 py-2">
-        <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+        <SelectAllIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
         <span className="text-blue-800 font-semibold text-sm font-inter whitespace-nowrap">
           {selectedCount} {entityName}
           {selectedCount !== 1 ? 's' : ''} selected
@@ -101,7 +101,7 @@ const BulkActionBar = ({
             onClick={onSelectAll}
             className="h-10 px-4 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[25px] hover:bg-gray-50 focus:outline-none transition-colors flex items-center gap-2 flex-shrink-0 whitespace-nowrap"
           >
-            <CheckSquare className="w-4 h-4" />
+            <SelectAllIcon className="w-4 h-4" />
             Select All
           </button>
         )}

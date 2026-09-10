@@ -1,10 +1,12 @@
+import VideoIcon from "../common/VideoIcon";
+import CellphoneIcon from "../common/CellphoneIcon";
 // ContactMeetingForm.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
-  X, Calendar, Clock, Users, MapPin, FileText, Video, Phone,
+  X, Calendar, Clock, Users, MapPin, FileText,
   AlertTriangle, CheckCircle2, Search, Trash2, User,
   Building, Lightbulb, Timer, Flag, Pencil
 } from "lucide-react";
@@ -90,8 +92,8 @@ const TimeConflictAlert = ({ conflict, suggestedTimes, onTimeSelect }) => (
 const MeetingTypeIcon = ({ type }) => {
   const icons = {
     "in-person": <Building className="w-4 h-4" />,
-    "video-call": <Video className="w-4 h-4" />,
-    "phone-call": <Phone className="w-4 h-4" />,
+    "video-call": <VideoIcon className="w-4 h-4" />,
+    "phone-call": <CellphoneIcon className="w-4 h-4" />,
   };
   return icons[type] || icons["in-person"];
 };
@@ -601,7 +603,7 @@ const ContactMeetingForm = ({ open, mode, meetingData, calendarDate, contactId, 
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField label="Meeting Type" icon={Video}>
+                  <FormField label="Meeting Type" icon={VideoIcon}>
                     <select
                       value={form.meetingType}
                       onChange={(e) => handleChange("meetingType", e.target.value)}

@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import React, { useEffect, useState } from "react";
@@ -589,15 +590,10 @@ const PaymentPage = () => {
                 <tr>
                   {selectionMode && (
                     <th className="px-4 py-4">
-                      <input
-                        type="checkbox"
-                        checked={
+                      <Checkbox checked={
                           selectedPayments.length === payments.length &&
                           payments.length > 0
-                        }
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600"
-                      />
+                        } onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
                     </th>
                   )}
                   <SortableHeader field="paymentDate">
@@ -665,12 +661,7 @@ const PaymentPage = () => {
                     >
                       {selectionMode && (
                         <td className="px-4 py-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedPayments.includes(p._id)}
-                            onChange={() => handleSelectPayment(p._id)}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600"
-                          />
+                          <Checkbox checked={selectedPayments.includes(p._id)} onChange={() => handleSelectPayment(p._id)} />
                         </td>
                       )}
                       <td className="px-6 py-4 text-sm">

@@ -43,7 +43,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                 <select
                   value={current}
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select…</option>
                   {(field.options || []).map((opt) => (
@@ -91,7 +91,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   type="number"
                   value={current}
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             );
@@ -105,7 +105,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   type="date"
                   value={current}
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             );
@@ -120,7 +120,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   value={current}
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
                   placeholder="https://…"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             );
@@ -134,7 +134,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   value={current}
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             );
@@ -148,7 +148,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                 type="text"
                 value={current}
                 onChange={(e) => setValue(field.name, field.type, e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           );

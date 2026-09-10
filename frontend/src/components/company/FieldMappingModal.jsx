@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
 
@@ -236,12 +237,7 @@ const FieldMappingModal = ({
             {/* Include First Row Checkbox */}
             {/* <div className="mb-4">
               <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={includeFirstRow}
-                  onChange={(e) => setIncludeFirstRow(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
+                <Checkbox checked={includeFirstRow} onChange={(e) => setIncludeFirstRow(e.target.checked)} />
                 <span className="ml-2 text-sm text-blue-600">
                   Include First(Header) Row of CSV or XLS (Excel) file.
                 </span>

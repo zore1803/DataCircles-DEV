@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from "react";
 import API from "../../services/api";
 import SearchableDropdown from "./SearchableDropdown";
-import { X, PhoneOutgoing, PhoneIncoming } from "lucide-react";
+import { X } from "lucide-react";
+import IncomingCallIcon from "../common/IncomingCallIcon";
+import OutgoingCallIcon from "../common/OutgoingCallIcon";
 import toast from "react-hot-toast";
 import ReactQuill from "react-quill-new";
 import '../../QuickCallLogForm.css';
 
 const callTypeOptions = [
-  { value: "Outbound", label: "Outbound", icon: PhoneOutgoing },
-  { value: "Inbound", label: "Inbound", icon: PhoneIncoming },
+  { value: "Outbound", label: "Outbound", icon: OutgoingCallIcon },
+  { value: "Inbound", label: "Inbound", icon: IncomingCallIcon },
 ];
 
 const statusOptions = [

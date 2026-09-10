@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
@@ -253,18 +254,13 @@ const ItemForm = ({
             <div className="flex flex-wrap gap-3 border border-gray-200 rounded-lg p-3">
               {fieldDef.options?.map((option, index) => (
                 <label key={index} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(option)}
-                    onChange={() =>
+                  <Checkbox checked={selected.includes(option)} onChange={() =>
                       handleFieldChange(
                         selected.includes(option)
                           ? selected.filter((v) => v !== option)
                           : [...selected, option]
                       )
-                    }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
+                    } />
                   {option}
                 </label>
               ))}
@@ -866,14 +862,7 @@ const ItemForm = ({
                   </div>
 
                   <div className="flex items-center gap-2 pt-2">
-                    <input
-                      type="checkbox"
-                      id="variantActive"
-                      name="isActive"
-                      checked={currentVariant.isActive !== false}
-                      onChange={(e) => setCurrentVariant(prev => ({ ...prev, isActive: e.target.checked }))}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                    />
+                    <Checkbox checked={currentVariant.isActive !== false} onChange={(e) => setCurrentVariant(prev => ({ ...prev, isActive: e.target.checked }))} id="variantActive" name="isActive" />
                     <label htmlFor="variantActive" className="text-sm font-medium text-gray-900">
                       Active
                     </label>
@@ -999,14 +988,9 @@ const ItemForm = ({
           {!hasVariants && (
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.taxInclusive}
-                onChange={(e) =>
+              <Checkbox checked={form.taxInclusive} onChange={(e) =>
                   handleFormChange("taxInclusive", e.target.checked)
-                }
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
+                } />
               <label className="text-sm text-gray-700 font-medium">
                 Tax Inclusive
               </label>
@@ -1259,12 +1243,7 @@ const ItemForm = ({
 
           {/* Active */}
           <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.isActive}
-              onChange={(e) => handleFormChange("isActive", e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
+            <Checkbox checked={form.isActive} onChange={(e) => handleFormChange("isActive", e.target.checked)} />
             <label className="text-sm text-gray-700 font-medium">
               Active
             </label>

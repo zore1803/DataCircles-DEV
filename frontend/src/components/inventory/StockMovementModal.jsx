@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, AlertTriangle, MinusCircle, ChevronDown } from "lucide-react";
@@ -493,12 +494,7 @@ export default function StockMovementModal({ isOpen, onClose, item, direction, o
                   className={fieldClass}
                 />
                 <label className="mt-2.5 flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.priceIncludesTax}
-                    onChange={(e) => set({ priceIncludesTax: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
+                  <Checkbox checked={form.priceIncludesTax} onChange={(e) => set({ priceIncludesTax: e.target.checked })} />
                   <span className="text-xs text-gray-600">This price includes tax as well.</span>
                 </label>
               </div>

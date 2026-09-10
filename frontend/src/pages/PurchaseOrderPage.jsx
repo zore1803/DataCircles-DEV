@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -34,7 +35,6 @@ import {
   CheckCircle2,
   Pin,
   PinOff,
-  Video,
   MessageCircle,
   Mail,
   Copy,
@@ -1051,25 +1051,15 @@ const PurchaseOrderPage = () => {
         enableResizing: false,
         header: () => (
           <div className="flex justify-center items-center w-full">
-            <input
-              type="checkbox"
-              checked={
+            <Checkbox checked={
                 selectedPurchaseOrders.length === purchaseOrders.length &&
                 purchaseOrders.length > 0
-              }
-              onChange={handleSelectAll}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+              } onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
           </div>
         ),
         cell: ({ row }) => (
           <div className="flex justify-center items-center gap-1 w-full">
-            <input
-              type="checkbox"
-              checked={selectedPOSet.has(row.original._id)}
-              onChange={() => handleSelectPurchaseOrder(row.original._id)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-            />
+            <Checkbox checked={selectedPOSet.has(row.original._id)} onChange={() => handleSelectPurchaseOrder(row.original._id)} />
           </div>
         ),
       }),

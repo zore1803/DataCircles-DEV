@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import CellphoneIcon from "../components/common/CellphoneIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import logo from "/DataCircles.png";
@@ -35,7 +37,6 @@ import {
   Briefcase,
   FileText,
   Target,
-  Phone,
   Mail,
   ShoppingCart,
   Package,
@@ -61,7 +62,6 @@ import {
   XCircle,
   PieChartIcon,
   CheckSquare,
-  Video,
   IndianRupeeIcon,
   MessageSquare,
   Receipt,
@@ -1084,7 +1084,7 @@ const Insights = () => {
       Contacted: {
         bg: "bg-yellow-100",
         text: "text-yellow-800",
-        icon: <Phone className="w-3 h-3" />,
+        icon: <CellphoneIcon className="w-3 h-3" />,
       },
       Qualified: {
         bg: "bg-green-100",
@@ -1208,7 +1208,7 @@ const Insights = () => {
       items.push({
         id: `meeting-${meeting._id}`,
         type: "meetings",
-        icon: <Video className="w-4 h-4" />,
+        icon: <VideoIcon className="w-4 h-4" />,
         iconBg: "bg-purple-100 text-purple-600",
         title: isCompleted ? "Meeting Completed" : "Meeting Scheduled",
         subtitle: meeting.title || "Untitled meeting",
@@ -2577,7 +2577,7 @@ const Insights = () => {
               if (!at) return;
               contactActivity.push({
                 id: `meeting-${m._id}`,
-                icon: <Video className="w-4 h-4" />,
+                icon: <VideoIcon className="w-4 h-4" />,
                 iconBg: "rgba(0, 133, 255, 0.1)",
                 iconColor: "#0085FF",
                 title: m.title || "Meeting",

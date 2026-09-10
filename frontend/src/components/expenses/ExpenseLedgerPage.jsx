@@ -1,3 +1,4 @@
+import Checkbox from "../common/Checkbox";
 import PlusIcon from "../common/PlusIcon";
 import MoreIcon from "../common/MoreIcon";
 import DownloadIcon from "../common/DownloadIcon";
@@ -869,14 +870,9 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                   className="relative px-4 py-3 bg-[#F5F7FA]"
                 >
                   <div className="flex justify-center items-center">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={(e) =>
+                    <Checkbox checked={allSelected} onChange={(e) =>
                         setSelectedIds(e.target.checked ? sortedRows.map((r) => r._id) : [])
-                      }
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                    />
+                      } uncheckedColor="text-[#525866]" />
                   </div>
                 </th>
 
@@ -949,18 +945,13 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                       className="px-4 py-2 align-middle bg-inherit overflow-hidden"
                     >
                       <div className="flex justify-center items-center">
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() =>
+                        <Checkbox checked={selected} onChange={() =>
                             setSelectedIds((prev) =>
                               prev.includes(r._id)
                                 ? prev.filter((x) => x !== r._id)
                                 : [...prev, r._id]
                             )
-                          }
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        />
+                          } />
                       </div>
                     </td>
 

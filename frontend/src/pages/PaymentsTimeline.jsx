@@ -1,3 +1,5 @@
+import VideoIcon from "../components/common/VideoIcon";
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 import MoreIcon from "../components/common/MoreIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
@@ -7,7 +9,7 @@ import {
   X, ChevronDown, ChevronUp, Pencil, Trash2, Eye, EyeOff,
   SlidersHorizontal, Share2, Edit2,
   ChevronLeft, ChevronRight, Pin, PinOff, FileText,
-  Video, TrendingUp, TrendingDown, Wallet, ListChecks,
+  TrendingUp, TrendingDown, Wallet, ListChecks,
   ArrowLeftRight, ArrowUp, ArrowDown } from "lucide-react";
 import SearchIcon from "../components/common/SearchIcon";
 import SettingsIcon from "../components/common/SettingsIcon";
@@ -1307,7 +1309,7 @@ export default function PaymentsTimeline() {
                         </div>
                         {walletSummary && (
                           <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-                            <input type="checkbox" checked={selectedAccountIds.includes(walletSummary?.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, walletSummary?.id] : prev.filter(id => id !== walletSummary?.id)); }} className="h-4 w-4 rounded accent-blue-500" />
+                            <Checkbox checked={selectedAccountIds.includes(walletSummary?.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, walletSummary?.id] : prev.filter(id => id !== walletSummary?.id)); }} id="true" />
                             <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                               <Wallet className="w-4 h-4 text-gray-500" />
                             </div>
@@ -1319,7 +1321,7 @@ export default function PaymentsTimeline() {
                         )}
                         {cashSummary && (
                           <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-                            <input type="checkbox" checked={selectedAccountIds.includes(cashSummary.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, cashSummary.id] : prev.filter(id => id !== cashSummary.id)); }} className="h-4 w-4 rounded accent-blue-500" />
+                            <Checkbox checked={selectedAccountIds.includes(cashSummary.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, cashSummary.id] : prev.filter(id => id !== cashSummary.id)); }} id="true" />
                             <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
                               <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                             </div>
@@ -1331,7 +1333,7 @@ export default function PaymentsTimeline() {
                         )}
                         {bankSummaries.map(bank => (
                           <label key={bank.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-                            <input type="checkbox" checked={selectedAccountIds.includes(bank.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, bank.id] : prev.filter(id => id !== bank.id)); }} className="h-4 w-4 rounded accent-blue-500" />
+                            <Checkbox checked={selectedAccountIds.includes(bank.id)} onChange={e => { const c = e.target.checked; setSelectedAccountIds(prev => c ? [...prev, bank.id] : prev.filter(id => id !== bank.id)); }} id="true" />
                             <BankLogo bankName={bank.title} size={32} className="flex-shrink-0 rounded-lg overflow-hidden" />
                             <div className="flex flex-col min-w-0">
                               <span className="text-sm font-bold text-gray-900 whitespace-nowrap">{bank.title}</span>
@@ -1616,7 +1618,7 @@ export default function PaymentsTimeline() {
                   onClick={() => { setShowVideoTutorial(true); setIsMoreMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  <Video className="w-4 h-4 text-gray-400" />
+                  <VideoIcon className="w-4 h-4 text-gray-400" />
                   Video Tutorial
                 </button>
               </div>
@@ -1748,12 +1750,7 @@ export default function PaymentsTimeline() {
                 className="relative px-4 py-3 bg-[#F5F7FA]"
               >
                 <div className="flex justify-center items-center">
-                  <input
-                    type="checkbox"
-                    checked={filteredDocs.length > 0 && selectedIds.length === filteredDocs.length}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
+                  <Checkbox checked={filteredDocs.length > 0 && selectedIds.length === filteredDocs.length} onChange={handleSelectAll}  uncheckedColor="text-[#525866]"/>
                 </div>
                 <ResizeHandle colId="selection" />
               </th>
@@ -1838,12 +1835,7 @@ export default function PaymentsTimeline() {
                     className="px-4 py-2 align-middle bg-inherit overflow-hidden"
                   >
                     <div className="flex justify-center items-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(doc._id)}
-                        onChange={() => handleSelectRow(doc._id)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                      />
+                      <Checkbox checked={selectedIds.includes(doc._id)} onChange={() => handleSelectRow(doc._id)} />
                     </div>
                   </td>
 

@@ -1,8 +1,9 @@
+import CellphoneIcon from "../components/common/CellphoneIcon";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import API, { configureAxios } from "../services/api";
 import { useAuth0 } from "@auth0/auth0-react";
-import { User, Mail, Phone, Camera, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
+import { User, Mail, Camera, LogOut, X, Monitor, ShieldCheck, Trash2 } from "lucide-react";
 import logo from "/DataCircles.png";
 import toast from "react-hot-toast";
 import AppToaster from "../components/AppToaster";
@@ -377,7 +378,7 @@ const Profile = () => {
 
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                <Phone className="w-4 h-4 text-gray-500" />
+                <CellphoneIcon className="w-4 h-4 text-gray-500" />
                 Phone Number
               </label>
               <input

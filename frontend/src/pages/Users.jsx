@@ -1,3 +1,4 @@
+import CellphoneIcon from "../components/common/CellphoneIcon";
 import DownloadIcon from "../components/common/DownloadIcon";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -843,7 +844,7 @@ const Users = () => {
                         )}
                         {user.phone && (
                           <div className="flex items-center text-xs text-gray-600">
-                            <Phone className="w-3 h-3 mr-1 text-gray-400" />
+                            <CellphoneIcon className="w-3 h-3 mr-1 text-gray-400" />
                             <span>{user.phone}</span>
                           </div>
                         )}

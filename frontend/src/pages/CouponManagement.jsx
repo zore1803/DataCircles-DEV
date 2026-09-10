@@ -1,3 +1,4 @@
+import Checkbox from "../components/common/Checkbox";
 import PlusIcon from "../components/common/PlusIcon";
 // pages/CouponManagement.jsx
 import React, { useState, useEffect, useCallback } from "react";
@@ -479,7 +480,7 @@ const CouponManagement = () => {
                     return (
                       <div key={`${productType}-${productKey}`} className="flex items-center gap-3 px-3 py-2">
                         <label className="flex items-center gap-2 w-40 shrink-0 text-sm">
-                          <input type="checkbox" checked={enabled} onChange={() => toggleProductRule(productType, productKey)} />
+                          <Checkbox checked={enabled} onChange={() => toggleProductRule(productType, productKey)} />
                           {label}
                         </label>
                         {enabled ? (
@@ -586,7 +587,7 @@ const CouponManagement = () => {
               )}
 
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })} />
+                <Checkbox checked={draft.isActive} onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })} />
                 Active
               </label>
 

@@ -1,3 +1,4 @@
+import Checkbox from "./Checkbox";
 import DownloadIcon from "./DownloadIcon";
 // src/components/common/ExportModal.jsx
 import React, { useState, useEffect, useMemo } from "react";
@@ -182,12 +183,7 @@ export default function ExportModal({
                     key={col.key}
                     className="flex items-center gap-3 p-2 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-blue-100"
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedCols.includes(col.key)}
-                      onChange={() => toggleColumn(col.key)}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
+                    <Checkbox checked={selectedCols.includes(col.key)} onChange={() => toggleColumn(col.key)} />
                     <span className="text-sm font-medium text-gray-700 flex-1">
                       {col.label}
                     </span>
