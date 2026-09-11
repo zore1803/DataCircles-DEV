@@ -72,15 +72,15 @@ const UserChip = ({ user, onRemove, isRemovable = false }) => (
 );
 
 const FormField = ({ label, required, children, error, description }) => (
-  <div className="space-y-2">
-    <label className="block text-sm font-semibold text-gray-900">
+  <div>
+    <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
       {label}
-      {required && <span className="text-red-500 ml-1">*</span>}
+      {required && <span className="text-[#FF4935]">*</span>}
     </label>
     {children}
-    {description && <p className="text-xs text-gray-500">{description}</p>}
+    {description && <p className="text-[13px] font-inter text-[#A0A0A0] mt-1.5">{description}</p>}
     {error && (
-      <p className="text-xs text-red-600 flex items-center gap-1">
+      <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
         <AlertCircle className="w-3 h-3" />
         {error}
       </p>
@@ -279,33 +279,21 @@ const VendorTaskForm = ({
         }`}
       >
         <div className="h-full flex flex-col">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-100 p-2 rounded-xl">
-                <CheckCircle2 className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">
-                  {isEditMode
-                    ? "Edit Task"
-                    : mode === "create"
-                    ? "Create Task"
-                    : "Task Details"}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {isEditMode
-                    ? "Update task details"
-                    : mode === "create"
-                    ? "Add a new task to your workflow"
-                    : "View and manage task details"}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
+              {isEditMode
+                ? "Edit Task"
+                : mode === "create"
+                ? "Create Task"
+                : "Task Details"}
+            </h2>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -316,10 +304,10 @@ const VendorTaskForm = ({
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`w-full h-[38px] px-3 rounded-full border text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                       errors.title
                         ? "border-red-300 bg-red-50"
-                        : "border-gray-300 bg-white"
+                        : "border-[#1F2937]/10 bg-white"
                     }`}
                     placeholder="Enter a descriptive task title"
                   />
@@ -336,9 +324,9 @@ const VendorTaskForm = ({
                     }
                   >
                     {calendarDate ? (
-                      <div className="flex items-center gap-2 py-3 px-4 bg-blue-50 text-blue-800 rounded-xl border border-blue-200">
+                      <div className="flex items-center gap-2 h-[38px] px-3 bg-[#158FFF]/10 text-[#158FFF] rounded-full border border-[#158FFF]/20">
                         <CalendarIcon className="w-4 h-4" />
-                        <span className="font-medium">{calendarDate}</span>
+                        <span className="font-medium text-[13px]">{calendarDate}</span>
                       </div>
                     ) : (
                       <div className="relative">
@@ -349,10 +337,10 @@ const VendorTaskForm = ({
                           onChange={(e) =>
                             handleChange("selectedDate", e.target.value)
                           }
-                          className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          className={`w-full h-[38px] pl-10 pr-3 rounded-full border text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                             errors.selectedDate
                               ? "border-red-300 bg-red-50"
-                              : "border-gray-300 bg-white"
+                              : "border-[#1F2937]/10 bg-white"
                           }`}
                         />
                       </div>
@@ -369,10 +357,10 @@ const VendorTaskForm = ({
                         onChange={(e) =>
                           handleChange("dueDate", e.target.value)
                         }
-                        className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        className={`w-full h-[38px] pl-10 pr-3 rounded-full border text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                           errors.dueDate
                             ? "border-red-300 bg-red-50"
-                            : "border-gray-300 bg-white"
+                            : "border-[#1F2937]/10 bg-white"
                         }`}
                       />
                     </div>
@@ -390,7 +378,7 @@ const VendorTaskForm = ({
                         handleChange("description", e.target.value)
                       }
                       rows={4}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      className="w-full pl-10 pr-3 py-2 rounded-2xl border border-[#1F2937]/10 bg-white text-[12px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 resize-vertical"
                       placeholder="Describe the task objectives, requirements, and any important details..."
                     />
                   </div>
@@ -399,7 +387,7 @@ const VendorTaskForm = ({
                   <select
                     value={form.status}
                     onChange={(e) => handleChange("status", e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-[38px] px-3 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     {taskStatuses.map(s => (
                       <option key={s} value={s}>{s}</option>
@@ -412,7 +400,7 @@ const VendorTaskForm = ({
                 >
                   <div className="space-y-3">
                     {assignedUsers.length > 0 && (
-                      <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-2xl border border-gray-200">
                         {assignedUsers.map((user) => (
                           <UserChip
                             key={user._id}
@@ -426,13 +414,13 @@ const VendorTaskForm = ({
                     <button
                       type="button"
                       onClick={() => setShowUserSelector(!showUserSelector)}
-                      className="flex items-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-200 hover:bg-blue-100 transition-colors w-full justify-center"
+                      className="flex items-center gap-2 h-[38px] px-4 bg-[#158FFF]/10 text-[#158FFF] rounded-full border border-[#158FFF]/20 hover:bg-[#158FFF]/20 transition-colors w-full justify-center text-[13px] font-medium"
                     >
                       <PlusIcon className="w-4 h-4" />
                       {showUserSelector ? "Hide Users" : "Select Users"}
                     </button>
                     {showUserSelector && (
-                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl bg-white">
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-2xl bg-white">
                         {users?.length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
                             <TeamIcon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
@@ -557,33 +545,18 @@ const VendorTaskForm = ({
             )}
           </div>
 
-          <div className="p-6 border-t border-gray-200 bg-white flex gap-3 flex-shrink-0 mt-auto">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             {!isEditMode ? (
               <>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditMode(true)}
-                  className="flex-1 px-6 py-3 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
-                >
-                  <EditIcon className="w-4 h-4" />
-                  Edit
-                </button>
                 {onDelete && (
                   <button
                     type="button"
                     onClick={handleDelete}
                     disabled={isDeleting}
-                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-colors border ${
+                    className={`flex items-center justify-center gap-2 px-6 py-2 rounded-[25px] text-sm font-bold transition-colors border ${
                       isDeleting
                         ? "bg-red-100 text-red-400 border-red-100 cursor-not-allowed"
-                        : "text-red-700 bg-red-50 hover:bg-red-100 border-red-200"
+                        : "text-red-700 bg-white border-gray-200 hover:bg-red-50"
                     }`}
                   >
                     {isDeleting ? (
@@ -594,13 +567,28 @@ const VendorTaskForm = ({
                     Delete
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditMode(true)}
+                  className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 transition-colors flex items-center justify-center gap-2"
+                >
+                  <EditIcon className="w-4 h-4" />
+                  Edit
+                </button>
               </>
             ) : (
               <>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                  className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -608,19 +596,12 @@ const VendorTaskForm = ({
                   type="submit"
                   form="vendor-task-form"
                   disabled={loading}
-                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                    loading
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl"
-                  }`}
+                  className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      {isEditMode && mode === "view" ? "Update Task" : "Save Task"}
-                    </>
+                    isEditMode && mode === "view" ? "Update Task" : "Save Task"
                   )}
                 </button>
               </>

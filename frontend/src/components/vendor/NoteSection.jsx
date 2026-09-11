@@ -443,32 +443,23 @@ const NoteEditor = ({
         }`}
       >
         <div className="h-full flex flex-col">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
-            <div className="flex items-center gap-3">
-              <div className="bg-amber-100 p-2 rounded-xl">
-                <StickyNote className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">
-                  {isEditing ? 'Edit Note' : 'New Note'}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {isEditing ? 'Update your note' : `Note for ${vendorName}`}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
+              {isEditing ? 'Edit Note' : 'New Note'}
+            </h2>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <div className="space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Title
                 </label>
                 <input
@@ -476,15 +467,15 @@ const NoteEditor = ({
                   value={noteTitle}
                   onChange={(e) => setNoteTitle(e.target.value)}
                   placeholder="Enter note title..."
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full h-[38px] px-3 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-[#1F2937] placeholder:opacity-50"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                   Note
                 </label>
-                <div className="border border-gray-300 rounded-xl overflow-hidden">
+                <div className="border border-[#1F2937]/10 rounded-2xl overflow-hidden">
                   <ReactQuill
                     value={noteContent}
                     onChange={setNoteContent}
@@ -497,18 +488,17 @@ const NoteEditor = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-700">
+              <div className="flex items-center gap-2 px-3 h-[38px] bg-gray-50 rounded-full border border-[#1F2937]/10 text-[13px] text-[#1F2937]">
                 <User className="w-4 h-4" />
                 <span>Tagged: {vendorName}</span>
               </div>
-            </div>
           </div>
 
-          <div className="p-6 border-t border-gray-200 bg-white flex gap-3 flex-shrink-0 mt-auto">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
@@ -516,19 +506,12 @@ const NoteEditor = ({
               type="button"
               onClick={onSave}
               disabled={loading || !noteContent.trim()}
-              className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                loading || !noteContent.trim()
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl"
-              }`}
+              className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  {isEditing ? 'Update Note' : 'Save Note'}
-                </>
+                isEditing ? 'Update Note' : 'Save Note'
               )}
             </button>
           </div>

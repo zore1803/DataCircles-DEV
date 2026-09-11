@@ -154,27 +154,28 @@ const VendorPaymentForm = ({
         `}
       >
         {/* Header */}
-        <div className="flex justify-between items-center p-8 pb-6 border-b border-[#F2F2F7] flex-shrink-0 bg-white">
-          <h2 className="text-[24px] font-bold text-[#111216]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+          <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
             {isEditMode ? "Edit Payment" : form.direction === "IN" ? "Add Incoming Payment" : form.direction === "OUT" ? "Add Outgoing Payment" : "Add Payment"}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+            aria-label="Close"
           >
-            <X className="w-6 h-6" />
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className="space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
           {/* Vendor Selection - Only if not pre-selected */}
           {!vendorId && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vendor <span className="text-red-500">*</span>
+              <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                Vendor <span className="text-[#FF4935]">*</span>
               </label>
               <SearchableDropdown
                 options={localVendors}
@@ -184,44 +185,44 @@ const VendorPaymentForm = ({
                 displayKey="name"
                 valueKey="_id"
                 required={true}
-                className="w-full border border-gray-300 rounded-lg"
+                className="w-full border border-[#1F2937]/10 rounded-full"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amount <span className="text-red-500">*</span>
+            <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              Amount <span className="text-[#FF4935]">*</span>
             </label>
             <input
               type="number"
               value={form.amount}
               onChange={(e) => handleChange("amount", e.target.value)}
               placeholder="Enter Amount"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Date <span className="text-red-500">*</span>
+            <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              Payment Date <span className="text-[#FF4935]">*</span>
             </label>
             <input
               type="date"
               value={form.paymentDate}
               onChange={(e) => handleChange("paymentDate", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Direction <span className="text-red-500">*</span>
+            <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              Direction <span className="text-[#FF4935]">*</span>
             </label>
             <select
               value={form.direction}
               onChange={(e) => handleChange("direction", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             >
               <option value="">Select Direction</option>
               <option value="IN">You Got ( Incoming )</option>
@@ -230,13 +231,13 @@ const VendorPaymentForm = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Type <span className="text-red-500">*</span>
+            <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              Payment Type <span className="text-[#FF4935]">*</span>
             </label>
             <select
               value={form.paymentType}
               onChange={(e) => handleChange("paymentType", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             >
               <option value="Card">Card</option>
               <option value="Cash">Cash</option>
@@ -247,20 +248,20 @@ const VendorPaymentForm = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Bank <span className="text-red-500">*</span>
+            <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              Bank <span className="text-[#FF4935]">*</span>
             </label>
             <input
               type="text"
               value={form.bank}
               onChange={(e) => handleChange("bank", e.target.value)}
               placeholder="Enter Bank Name"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
               Reference
             </label>
             <input
@@ -268,38 +269,37 @@ const VendorPaymentForm = ({
               value={form.reference}
               onChange={(e) => handleChange("reference", e.target.value)}
               placeholder="UTR / Cheque no. / Txn ID"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-red-500">*</span>
+            <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+              Notes <span className="text-[#FF4935]">*</span>
             </label>
             <textarea
               value={form.notes}
               onChange={(e) => handleChange("notes", e.target.value)}
               placeholder="Add Notes"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              className="w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-vertical"
               rows={3}
             />
-          </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="p-8 pt-6 border-t border-[#F2F2F7] bg-white flex justify-end gap-3 flex-shrink-0 mt-auto">
+        <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="px-6 py-2 bg-[#2D31A6] text-white rounded-xl text-sm font-semibold hover:bg-opacity-90 disabled:opacity-50 transition-colors"
+            className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "Saving..." : isEditMode ? "Save Changes" : "Save"}
           </button>

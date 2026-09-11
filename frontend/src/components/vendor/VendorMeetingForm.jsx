@@ -42,16 +42,16 @@ const PriorityChip = ({ priority }) => {
 };
 
 const FormField = ({ label, required, children, error, description, icon: Icon }) => (
-  <div className="space-y-2">
-    <label className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+  <div>
+    <label className="flex items-center gap-1.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
       {Icon && <Icon className="w-4 h-4 text-gray-500" />}
       {label}
-      {required && <span className="text-red-500">*</span>}
+      {required && <span className="text-[#FF4935]">*</span>}
     </label>
     {children}
-    {description && <p className="text-xs text-gray-500">{description}</p>}
+    {description && <p className="text-[13px] font-inter text-[#A0A0A0] mt-1.5">{description}</p>}
     {error && (
-      <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+      <div className="flex items-center gap-2 p-2 mt-1 bg-red-50 border border-red-200 rounded-lg">
         <AlertTriangle className="w-4 h-4 text-red-500" />
         <p className="text-xs text-red-600">{error}</p>
       </div>
@@ -365,25 +365,17 @@ const VendorMeetingForm = ({
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-600 p-2.5 rounded-xl shadow-sm">
-                <Truck className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">
-                  {isCreating ? "Schedule Vendor Meeting" : isViewing ? "Meeting Details" : "Edit Meeting"}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {isCreating ? "Create a new meeting with your vendor" : isViewing ? "View meeting information" : "Update meeting information"}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
+            <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
+              {isCreating ? "Schedule Vendor Meeting" : isViewing ? "Meeting Details" : "Edit Meeting"}
+            </h2>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-colors"
+              title="Close"
+              className="w-5 h-5 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
             </button>
           </div>
 
@@ -459,8 +451,8 @@ const VendorMeetingForm = ({
                     type="text"
                     value={form.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                      errors.title ? "border-red-300 bg-red-50" : "border-gray-300 bg-white"
+                    className={`w-full h-[38px] px-3 rounded-full border text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                      errors.title ? "border-red-300 bg-red-50" : "border-[#1F2937]/10 bg-white"
                     }`}
                     placeholder="Enter meeting subject or agenda"
                   />
@@ -475,16 +467,16 @@ const VendorMeetingForm = ({
                         min={new Date().toISOString().split("T")[0]}
                         max="2099-12-31"
                         onChange={(e) => handleChange("date", e.target.value)}
-                        className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                          errors.date ? "border-red-300 bg-red-50" : "border-gray-300 bg-white"
+                        className={`w-full h-[38px] px-3 rounded-full border text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                          errors.date ? "border-red-300 bg-red-50" : "border-[#1F2937]/10 bg-white"
                         }`}
                       />
                     </FormField>
                   ) : (
                     <FormField label="Date" icon={CalendarIcon} description="Selected from calendar">
-                      <div className="flex items-center gap-2 py-3 px-4 bg-purple-50 text-purple-800 rounded-xl border border-purple-200">
+                      <div className="flex items-center gap-2 h-[38px] px-3 bg-[#158FFF]/10 text-[#158FFF] rounded-full border border-[#158FFF]/20">
                         <CalendarIcon className="w-4 h-4" />
-                        <span className="font-medium">{calendarDate}</span>
+                        <span className="font-medium text-[13px]">{calendarDate}</span>
                       </div>
                     </FormField>
                   )}
@@ -494,10 +486,10 @@ const VendorMeetingForm = ({
                       type="time"
                       value={form.time}
                       onChange={(e) => handleChange("time", e.target.value)}
-                      className={`w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2 ${
+                      className={`w-full h-[38px] px-3 rounded-full border text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 ${
                         timeConflict
                           ? "border-red-500 bg-red-50 focus:ring-red-500"
-                          : "border-gray-300 bg-white focus:ring-purple-500"
+                          : "border-[#1F2937]/10 bg-white focus:ring-blue-500"
                       }`}
                     />
                   </FormField>
@@ -506,7 +498,7 @@ const VendorMeetingForm = ({
                     <select
                       value={form.duration}
                       onChange={(e) => handleChange("duration", parseInt(e.target.value))}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full h-[38px] px-3 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value={15}>15 minutes</option>
                       <option value={30}>30 minutes</option>
@@ -521,7 +513,7 @@ const VendorMeetingForm = ({
                   <select
                     value={form.priority}
                     onChange={(e) => handleChange("priority", e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full h-[38px] px-3 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -542,7 +534,7 @@ const VendorMeetingForm = ({
                     <select
                       value={form.meetingType}
                       onChange={(e) => handleChange("meetingType", e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full h-[38px] px-3 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="in-person">In-person</option>
                       <option value="video-call">Video call</option>
@@ -550,8 +542,8 @@ const VendorMeetingForm = ({
                     </select>
                   </FormField>
 
-                  <FormField 
-                    label="Location" 
+                  <FormField
+                    label="Location"
                     icon={MapPin}
                     description="Meeting room, address, or link"
                   >
@@ -559,7 +551,7 @@ const VendorMeetingForm = ({
                       type="text"
                       value={form.location}
                       onChange={(e) => handleChange("location", e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full h-[38px] px-3 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                       placeholder={
                         form.meetingType === "video-call"
                           ? "Meeting link or platform"
@@ -580,13 +572,13 @@ const VendorMeetingForm = ({
                     value={form.description}
                     onChange={(e) => handleChange("description", e.target.value)}
                     rows={4}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                    className="w-full px-3 py-2 rounded-2xl border border-[#1F2937]/10 bg-white text-[12px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 resize-vertical"
                     placeholder="Add meeting agenda, discussion topics, or preparation notes..."
                   />
                 </FormField>
 
                 {existingMeetings.length > 0 && (
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl">
                     <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
                       <CalendarIcon className="w-4 h-4" />
                       Other meetings on this date
@@ -610,41 +602,41 @@ const VendorMeetingForm = ({
           </div>
 
           {/* Fixed Footer */}
-          <div className="p-6 border-t border-gray-200 bg-white flex gap-3 flex-shrink-0 mt-auto">
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
             {isViewing ? (
               <>
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="flex items-center justify-center gap-2 px-6 py-2 text-red-700 bg-white border border-gray-200 hover:bg-red-50 rounded-[25px] text-sm font-bold transition-colors"
+                  >
+                    <DeleteIcon className="w-4 h-4" />
+                    Delete
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                  className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsEditMode(true)}
-                  className="flex-1 px-6 py-3 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
+                  className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 transition-colors flex items-center justify-center gap-2"
                 >
                   <EditIcon className="w-4 h-4" />
                   Edit
                 </button>
-                {onDelete && (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl font-semibold transition-colors"
-                  >
-                    <DeleteIcon className="w-4 h-4" />
-                    Delete
-                  </button>
-                )}
               </>
             ) : (
               <>
                 <button
                   type="button"
                   onClick={isEditing ? handleCancelEdit : onClose}
-                  className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
+                  className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -652,21 +644,14 @@ const VendorMeetingForm = ({
                   type="submit"
                   form="vendor-meeting-form"
                   disabled={loading || timeConflict}
-                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                    loading || timeConflict
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl"
-                  }`}
+                  className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : timeConflict ? (
                     "Resolve Conflict First"
                   ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      {isEditing ? "Update Meeting" : "Schedule Meeting"}
-                    </>
+                    isEditing ? "Update Meeting" : "Schedule Meeting"
                   )}
                 </button>
               </>
