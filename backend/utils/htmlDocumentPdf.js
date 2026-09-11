@@ -116,7 +116,11 @@ module.exports = async function htmlDocumentPdf(
 <head><meta charset="utf-8" />
 <style>
   html, body { margin: 0; padding: 0; }
-  .dcsheet { padding: 0 !important; }
+  /* Cap the sheet to the printable area (A4 minus the 16px top/bottom PDF
+     margins) so the bottom-pinned "Page 1 / 1 …" line stays on page 1 instead
+     of tipping onto a second page. */
+  .dcsheet { padding: 0 !important; min-height: calc(297mm - 34px) !important; }
+  .dcsheet.t-Landscape { min-height: calc(210mm - 34px) !important; }
 </style>
 </head>
 <body class="is-pdf">${fragment}</body>
@@ -130,10 +134,11 @@ module.exports = async function htmlDocumentPdf(
       format: "A4",
       landscape: template === "Landscape",
       printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: '<div style="font-size: 8px;"></div>',
-      footerTemplate: '<div style="font-size: 9px; color: #666; font-family: Arial, Helvetica, sans-serif; width: 100%; text-align: right; padding-right: 20px; box-sizing: border-box;">Page <span class="pageNumber"></span>/<span class="totalPages"></span></div>',
-      margin: { top: "16px", bottom: "36px", left: "0", right: "0" },
+      // No Puppeteer header/footer: each template already prints its own
+      // bottom-pinned "Page 1 / 1  This is a digitally signed document." line,
+      // and the browser footer duplicated a page number on the right edge.
+      displayHeaderFooter: false,
+      margin: { top: "16px", bottom: "16px", left: "0", right: "0" },
     });
   } finally {
     await page.close();

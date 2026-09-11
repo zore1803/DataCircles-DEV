@@ -63,6 +63,7 @@ const quotationSchema = new mongoose.Schema({
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
+  bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
   isTaxQuotation: { type: Boolean, default: false },
   isRoundOff: { type: Boolean, default: true },
   transactionType: { type: String, enum: ['intra', 'inter'], default: 'intra' },

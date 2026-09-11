@@ -48,18 +48,21 @@ export const css = `
 .dcsheet.t-Professional .dc-payable { display: flex; justify-content: space-between; padding: 4px 8px 0; font-weight: bold; }
 .dcsheet.t-Professional .dc-note-row { font-size: 10px; color: var(--muted); margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 
-.dcsheet.t-Professional .dc-footer { display: flex; justify-content: space-between; align-items: flex-start; border: 0; margin: 20px 24px 0; }
-.dcsheet.t-Professional .dc-bank { font-size: 12px; font-weight: bold; flex: 1; }
+.dcsheet.t-Professional .dc-footer { display: block; border: 0; margin: 20px 24px 0; }
+/* Bank details, the pay QR and the signature sit on one row, top-aligned. */
+.dcsheet.t-Professional .dc-pay-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.dcsheet.t-Professional .dc-bank { font-size: 12px; font-weight: bold; flex: 0 1 auto; min-width: 0; }
 .dcsheet.t-Professional .dc-bank .dc-label { font-weight: bold; margin-bottom: 4px; }
 .dcsheet.t-Professional .dc-bank-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; }
-.dcsheet.t-Professional .dc-qr-img svg { width: 78px; height: 78px; display: block; }
-.dcsheet.t-Professional .dc-notes-block { font-size: 10px; margin-top: 14px; }
+.dcsheet.t-Professional .dc-pay-row .dc-pay-qr { float: none; flex-shrink: 0; margin: 14px 0 0; text-align: center; }
+.dcsheet.t-Professional .dc-pay-row .dc-pay-qr svg { width: 78px; height: 78px; }
+.dcsheet.t-Professional .dc-notes-block { font-size: 10px; margin-top: 16px; }
 .dcsheet.t-Professional .dc-notes-block .dc-label { font-weight: bold; margin-bottom: 4px; }
 .dcsheet.t-Professional .dc-notes-body { white-space: pre-line; color: #333; }
-.dcsheet.t-Professional .dc-sign { flex: 1; padding: 0; display: block; text-align: right; }
+.dcsheet.t-Professional .dc-sign { flex-shrink: 0; padding: 0; margin-top: 14px; text-align: center; }
 .dcsheet.t-Professional .dc-sign-img { max-height: 40px; margin: 0 auto; object-fit: contain; display: block; }
 .dcsheet.t-Professional .dc-sign-line { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; font-size: 9px; }
-.dcsheet.t-Professional .dc-page-footer { margin: 16px 24px 0; font-size: 8.5px; color: var(--muted); text-align: left; }
+.dcsheet.t-Professional .dc-page-footer { margin: auto 24px 28px; padding-top: 24px; font-size: 8.5px; color: var(--muted); text-align: left; }
 @media print {
   @page {
     size: A4;
@@ -76,13 +79,6 @@ export const css = `
     padding: 0;
     box-sizing: border-box;
   }
-  .dc-page-footer {
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-    text-align: right;
-    margin: 0;
-  }
   .dc-header, .dc-items, .dc-totals-wrap, .dc-footer {
     page-break-inside: avoid;
   }
@@ -91,9 +87,8 @@ export const css = `
 
 export function html(ctx) {
   const {
-    t, doc, org, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle,
-    upiQrSvg,
+    t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, payQrSvg,
   } = ctx;
 
   const sigImg = doc.signature || org.signatureUrl;
@@ -243,25 +238,31 @@ export function html(ctx) {
   </div>
  
   <div class="dc-footer">
-    <div style="flex:1;">
-      ${upiQrSvg && t.grandTotal > 0 ? `<div class="dc-bank">
-        <div class="dc-label">Pay using UPI</div>
-        <div class="dc-qr-img" style="margin-top:4px;">${upiQrSvg}</div>
-      </div>` : ""}
-      ${notes ? `<div class="dc-notes-block"><div class="dc-label">Notes</div><div class="dc-notes-body">${esc(notes)}</div></div>` : ""}
-      ${terms ? `<div class="dc-notes-block"><div class="dc-label">Terms and Conditions</div><div class="dc-notes-body">${esc(terms)}</div></div>` : ""}
-    </div>
-    <div class="dc-sign">
-      <div style="display: inline-block; text-align: center; min-width: 150px;">
-        <div style="font-weight:normal;margin-bottom:6px;">For ${esc(org.companyName || "Your Company")}</div>
-        ${sigImg ? `<img class="dc-sign-img" src="${esc(sigImg)}" />` : `<div style="height:40px;"></div>`}
-        <div class="dc-sign-line">Authorized Signatory</div>
+    <div class="dc-pay-row">
+      <div class="dc-bank">
+        <div class="dc-label">Bank Details</div>
+        <div class="dc-bank-grid">
+          <div style="color:var(--muted);">Bank:</div><div>${esc(bank.bank || "—")}</div>
+          <div style="color:var(--muted);">Account Holder:</div><div>${esc(bank.accountHolder || org.companyName || "—")}</div>
+          <div style="color:var(--muted);">Account #:</div><div>${esc(bank.accountNumber || "—")}</div>
+          <div style="color:var(--muted);">IFSC Code:</div><div>${esc(bank.ifscCode || "—")}</div>
+          <div style="color:var(--muted);">Branch:</div><div>${esc(bank.branch || "—")}</div>
+        </div>
+      </div>
+      <div class="dc-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
+      <div class="dc-sign">
+        <div style="display: inline-block; text-align: center; min-width: 150px;">
+          <div style="font-weight:normal;margin-bottom:6px;">For ${esc(org.companyName || "Your Company")}</div>
+          ${sigImg ? `<img class="dc-sign-img" src="${esc(sigImg)}" />` : `<div style="height:40px;"></div>`}
+          <div class="dc-sign-line">Authorized Signatory</div>
+        </div>
       </div>
     </div>
+    ${notes ? `<div class="dc-notes-block"><div class="dc-label">Notes</div><div class="dc-notes-body">${esc(notes)}</div></div>` : ""}
+    ${terms ? `<div class="dc-notes-block"><div class="dc-label">Terms and Conditions</div><div class="dc-notes-body">${esc(terms)}</div></div>` : ""}
   </div>
 
 
 
-    <div class="dc-page-footer">Page 1 / 1</div>
   `;
 }

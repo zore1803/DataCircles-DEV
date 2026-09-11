@@ -24,28 +24,37 @@ export const css = `
 .dcsheet.t-Vintage .vt-cust-row { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-cust-col { padding: 10px 12px; }
 .dcsheet.t-Vintage .vt-cust-col:first-child { border-right: 1px solid var(--ink); }
-.dcsheet.t-Vintage .vt-cust-col .vt-col-title { font-size: 8px; font-weight: bold; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 4px; }
+/* Bleed the title strip to the column edges so its underline meets the column
+   divider — one connected rule across "Customer Details" / "Shipping Address". */
+.dcsheet.t-Vintage .vt-cust-col .vt-col-title { font-size: 8px; font-weight: bold; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; margin: -10px -12px 8px; padding: 7px 12px 4px; border-bottom: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-cust-col .vt-cust-name { font-weight: bold; font-size: 11px; margin-bottom: 2px; }
 .dcsheet.t-Vintage .vt-sub-label { font-weight: bold; font-size: 9px; margin-top: 6px; margin-bottom: 2px; }
 /* ── items table ── */
 .dcsheet.t-Vintage .vt-items-wrap { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-.dcsheet.t-Vintage .dc-items { flex: 1; border: 0; margin: 0; width: 100%; border-collapse: collapse; }
+/* Separate borders (not collapsed) so every column rule is painted on a cell's
+   right EDGE — the same box-edge model the totals / footer / notes dividers use
+   — instead of straddling the grid line. That keeps them pixel-aligned. */
+.dcsheet.t-Vintage .dc-items { flex: 1; border: 0; margin: 0; width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .dcsheet.t-Vintage .vt-filler-row { height: 100%; }
 .dcsheet.t-Vintage .vt-filler-row td { border-top: 0; border-bottom: 0; }
-.dcsheet.t-Vintage .dc-items th { background: #f5f5f5; border: 1px solid var(--ink); border-top: 0; padding: 6px 8px; font-size: 9px; }
-.dcsheet.t-Vintage .dc-items th:first-child { border-left: 0; }
+.dcsheet.t-Vintage .dc-items th { background: #f5f5f5; border: 0; border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); padding: 6px 8px; font-size: 9px; }
 .dcsheet.t-Vintage .dc-items th:last-child { border-right: 0; }
-.dcsheet.t-Vintage .dc-items td { border-left: 1px solid var(--ink); border-right: 1px solid var(--ink); border-top: 0; border-bottom: 0; padding: 6px 8px; font-size: 9.5px; vertical-align: top; }
-.dcsheet.t-Vintage .dc-items td:first-child { border-left: 0; }
+.dcsheet.t-Vintage .dc-items td { border: 0; border-right: 1px solid var(--ink); padding: 6px 8px; font-size: 9.5px; vertical-align: top; }
 .dcsheet.t-Vintage .dc-items td:last-child { border-right: 0; }
 .dcsheet.t-Vintage .dc-items tbody tr:nth-child(even) { background: #fafafa; }
 .dcsheet.t-Vintage .dc-item-name { font-weight: bold; }
 .dcsheet.t-Vintage .dc-item-desc { font-size: 8.5px; color: var(--muted); white-space: pre-line; margin-top: 2px; }
 /* ── totals row ── */
-.dcsheet.t-Vintage .vt-totals { display: flex; justify-content: space-between; align-items: flex-start; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); padding: 10px 12px; gap: 12px; }
-.dcsheet.t-Vintage .vt-totals-left { font-size: 9px; color: var(--muted); }
+/* --vt-rcol (set on .vt-page) is the exact combined width of the right-hand
+   item columns, so the totals / footer / notes strips all split on that same
+   line and the vertical rule runs unbroken from the items table to the bottom. */
+.dcsheet.t-Vintage .vt-totals { display: grid; grid-template-columns: 1fr var(--vt-rcol, 220px); align-items: stretch; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.dcsheet.t-Vintage .vt-totals-left { font-size: 9px; color: var(--muted); padding: 10px 12px; border-right: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-totals-left b { color: var(--ink); font-size: 10px; }
-.dcsheet.t-Vintage .vt-totals-right { min-width: 220px; }
+.dcsheet.t-Vintage .vt-totals-right { padding: 10px 12px; min-width: 0; }
+/* Bleed the "Total" rule to the section edges so it meets the divider on the
+   left and the frame on the right. */
+.dcsheet.t-Vintage .vt-totals-right .dc-grand { margin: 4px -12px 0; padding: 4px 12px 0; }
 .dcsheet.t-Vintage .dc-trow { display: flex; justify-content: space-between; padding: 2px 0; font-size: 10px; }
 .dcsheet.t-Vintage .dc-grand { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; border-top: 1px solid var(--ink); margin-top: 4px; padding-top: 4px; }
 /* ── HSN table ── */
@@ -58,7 +67,9 @@ export const css = `
 .dcsheet.t-Vintage .vt-paid-row .dc-tick { font-size: 13px; }
 .dcsheet.t-Vintage .vt-bottom { display: flex; flex-direction: column; }
 /* ── footer: bank | UPI | signature ── */
-.dcsheet.t-Vintage .vt-footer { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--ink); }
+/* No border-top here — the row above (totals / HSN table / paid-row) already
+   draws a bottom rule, and stacking the two makes a 2px line. */
+.dcsheet.t-Vintage .vt-footer { display: grid; grid-template-columns: 1fr 1fr var(--vt-rcol, 220px); }
 .dcsheet.t-Vintage .vt-bank, .dcsheet.t-Vintage .vt-upi { padding: 0; border-right: 1px solid var(--ink); font-size: 9px; }
 .dcsheet.t-Vintage .vt-col-title { font-size: 8px; font-weight: bold; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; padding: 7px 12px; border-bottom: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-bank-grid { display: grid; grid-template-columns: auto 1fr; }
@@ -67,21 +78,22 @@ export const css = `
 .dcsheet.t-Vintage .vt-bank-cell.val { font-weight: bold; }
 .dcsheet.t-Vintage .vt-upi-body { padding: 10px 12px; display: flex; justify-content: center; }
 .dcsheet.t-Vintage .vt-qr-img svg { width: 76px; height: 76px; display: block; }
-.dcsheet.t-Vintage .vt-sign { padding: 12px; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; text-align: right; font-size: 9px; min-height: 100px; }
-.dcsheet.t-Vintage .vt-sign-img-wrap { overflow: hidden; display: flex; align-items: center; justify-content: center; height: 70px; width: 180px; }
-.dcsheet.t-Vintage .vt-sign-img-wrap img { transform: scale(2.2); max-height: 100%; width: 100%; object-fit: contain; }
+/* Spread the three lines across the full height of the footer cell (which is as
+   tall as the bank-details column) so the signature block doesn't float in a
+   pool of empty space. */
+.dcsheet.t-Vintage .vt-sign { padding: 10px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; font-size: 8.5px; }
+.dcsheet.t-Vintage .vt-sign-img-wrap { overflow: hidden; display: flex; align-items: center; justify-content: center; height: 34px; width: 110px; }
+.dcsheet.t-Vintage .vt-sign-img-wrap img { max-height: 100%; max-width: 100%; object-fit: contain; }
 /* ── notes/terms ── */
-.dcsheet.t-Vintage .vt-notes-row { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--ink); font-size: 9px; }
+.dcsheet.t-Vintage .vt-notes-row { display: grid; grid-template-columns: 1fr var(--vt-rcol, 220px); border-top: 1px solid var(--ink); font-size: 9px; }
 .dcsheet.t-Vintage .vt-notes-col { padding: 10px 12px; }
 .dcsheet.t-Vintage .vt-notes-col:first-child { border-right: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-terms-body { white-space: pre-line; }
-/* ── page footer ── */
-.dcsheet.t-Vintage .vt-page-footer { padding: 8px 4px 0; font-size: 8.5px; color: var(--muted); }
 `;
 
 export function html(ctx) {
   const {
-    t, doc, org, upiQrSvg, upiId, esc, fmt, formatDate,
+    t, doc, org, bank, upiId, payQrSvg, esc, fmt, formatDate,
     dealName, docLabel, docNumber, notes, terms, copySubtitle,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
@@ -152,7 +164,7 @@ export function html(ctx) {
   const hsnCols = !t.isTax ? 7 : t.isInterState ? 8 : 9;
 
   return `
-  <div class="vt-page">
+  <div class="vt-page" style="--vt-rcol:${t.isTax ? "306px" : "216px"};">
   <!-- Title bar -->
   <div class="vt-title">
     ${t.isTax ? "TAX " + esc(docLabel) : esc(docLabel)}
@@ -200,14 +212,14 @@ export function html(ctx) {
         <th style="width:24px;">#</th>
         <th style="text-align:left;">Item</th>
         <th style="width:60px;">HSN/SAC</th>
-        <th class="r" style="width:70px;">Rate/Item</th>
-        <th class="r nowrap" style="width:50px;">Qty</th>
-        <th class="r" style="width:80px;">Taxable Value</th>
+        <th class="r" style="width:64px;">Rate/Item</th>
+        <th class="r nowrap" style="width:48px;">Qty</th>
+        <th class="r" style="width:78px;">Taxable Value</th>
         ${t.isTax ? `<th class="r" style="width:90px;">Tax Amount</th>` : ""}
         <th class="r" style="width:90px;">Amount</th>
       </tr>
     </thead>
-    <tbody>${itemRows}<tr class="vt-filler-row">${Array(hsnCols - 1).fill("<td></td>").join("")}</tr></tbody>
+    <tbody>${itemRows}<tr class="vt-filler-row">${Array(t.isTax ? 8 : 7).fill("<td></td>").join("")}</tr></tbody>
   </table>
   </div>
   <div class="vt-bottom">
@@ -251,16 +263,26 @@ export function html(ctx) {
   ${doc.status === "Paid" ? `<div class="vt-paid-row"><span class="dc-tick">&#10003;</span><span>Amount Paid</span></div>` : ""}
   <!-- Bank details | Pay using UPI | Signature -->
   <div class="vt-footer">
+    <div class="vt-bank">
+      <div class="vt-col-title">Bank Details</div>
+      <div class="vt-bank-grid">
+        <div class="vt-bank-cell lbl">Bank</div><div class="vt-bank-cell val">${esc(bank.bank || "—")}</div>
+        <div class="vt-bank-cell lbl">Account #</div><div class="vt-bank-cell val">${esc(bank.accountNumber || "—")}</div>
+        <div class="vt-bank-cell lbl">IFSC</div><div class="vt-bank-cell val">${esc(bank.ifscCode || "—")}</div>
+        <div class="vt-bank-cell lbl">Branch</div><div class="vt-bank-cell val">${esc(bank.branch || "—")}</div>
+      </div>
+    </div>
     <div class="vt-upi">
       <div class="vt-col-title">Pay using UPI:</div>
       <div class="vt-upi-body">
-        ${upiQrSvg && t.grandTotal > 0 ? `<div class="vt-qr-img">${upiQrSvg}</div>` : (upiId ? `<div style="font-size:9px;">${esc(upiId)}</div>` : "")}
+        <div class="vt-qr-img">${payQrSvg}</div>
+        ${upiId ? `<div style="font-size:9px;">${esc(upiId)}</div>` : ""}
       </div>
     </div>
     <div class="vt-sign">
       <div style="font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">For ${esc(org.companyName || "Your Company")}</div>
       <div class="vt-sign-img-wrap">
-        ${sigImg ? `<img src="${esc(sigImg)}" style="transform:scale(2.2);max-height:100%;width:100%;object-fit:contain;" />` : `<div style="height:60px;"></div>`}
+        ${sigImg ? `<img src="${esc(sigImg)}" />` : `<div style="height:36px;"></div>`}
       </div>
       <div style="border-top:1px solid var(--ink);padding-top:4px;font-size:9px;">Authorized Signatory</div>
     </div>
@@ -271,6 +293,5 @@ export function html(ctx) {
   </div>` : ""}
   </div>
   </div>
-  <div class="vt-page-footer">Page 1 / 1&nbsp;&nbsp;This is a digitally signed document.</div>
   `;
 }

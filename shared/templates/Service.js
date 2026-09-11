@@ -18,16 +18,20 @@ export const css = `
 .dcsheet.t-Service .srv-totals-row { display: flex; justify-content: space-between; align-items: flex-start; padding-top: 16px; margin-top: 8px; }
 .dcsheet.t-Service .srv-trow { display: flex; justify-content: space-between; gap: 24px; padding: 3px 0; font-size: 10px; }
 .dcsheet.t-Service .srv-grand { font-size: 14px; font-weight: bold; color: #111; margin-top: 4px; }
-.dcsheet.t-Service .srv-footer-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 32px; font-size: 10px; }
-.dcsheet.t-Service .srv-bank-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 9.5px; }
-.dcsheet.t-Service .dc-qr-img svg { width: 72px; height: 72px; display: block; }
+.dcsheet.t-Service .srv-footer-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 32px; font-size: 10px; }
+/* QR sits in front of the bank block, which gets room to breathe so its values
+   don't wrap. */
+.dcsheet.t-Service .srv-bank-row { display: flex; align-items: flex-start; gap: 18px; flex: 1; min-width: 0; }
+.dcsheet.t-Service .srv-pay-qr { flex-shrink: 0; text-align: center; margin-top: 16px; }
+.dcsheet.t-Service .srv-pay-qr svg { width: 66px; height: 66px; display: block; margin: 0 auto; }
+.dcsheet.t-Service .srv-bank { flex: 1; min-width: 0; }
+.dcsheet.t-Service .srv-bank-grid { display: grid; grid-template-columns: max-content 1fr; gap: 3px 16px; font-size: 9.5px; }
 `;
 
 export function html(ctx) {
   const {
-    t, doc, org, esc, fmt, formatDate, formatPostalAddress,
-    dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow,
-    upiQrSvg,
+    t, doc, org, bank, esc, fmt, formatDate, formatPostalAddress,
+    dealName, docLabel, docNumber, notes, terms, copySubtitle, discountRow, payQrSvg,
   } = ctx;
   const sigImg = doc.signature || org.signatureUrl;
 
@@ -100,13 +104,20 @@ export function html(ctx) {
     </div>
   </div>
   <div class="srv-footer-row">
-    <div>
-      ${upiQrSvg && t.grandTotal > 0 ? `
-        <div style="font-weight:bold;margin-bottom:4px;">Pay using UPI:</div>
-        <div class="dc-qr-img">${upiQrSvg}</div>
-      ` : ""}
+    <div class="srv-bank-row">
+      <div class="srv-pay-qr">${payQrSvg}<div class="dc-pay-qr-cap">Scan to pay</div></div>
+      <div class="srv-bank">
+        <div style="font-weight:bold;margin-bottom:4px;">Bank Details:</div>
+        <div class="srv-bank-grid">
+          <div style="color:var(--muted);">Bank</div><div>${esc(bank.bank || "—")}</div>
+          <div style="color:var(--muted);">Account Holder</div><div>${esc(bank.accountHolder || org.companyName || "—")}</div>
+          <div style="color:var(--muted);">Account #</div><div>${esc(bank.accountNumber || "—")}</div>
+          <div style="color:var(--muted);">IFSC Code</div><div>${esc(bank.ifscCode || "—")}</div>
+          <div style="color:var(--muted);">Branch</div><div>${esc(bank.branch || "—")}</div>
+        </div>
+      </div>
     </div>
-    <div style="text-align:right;color:#555;">
+    <div style="text-align:right;color:#555;margin-top:16px;">
       <div style="font-size:9.5px;margin-bottom:4px;">For ${esc(org.companyName || "Your Company")}</div>
       ${sigImg ? `<img src="${esc(sigImg)}" style="max-height:45px;margin-left:auto;display:block;object-fit:contain;" />` : `<div style="height:40px;"></div>`}
       <div style="font-size:9px;margin-top:4px;">Authorized Signatory</div>
@@ -116,5 +127,6 @@ export function html(ctx) {
     ${notes ? `<div style="margin-bottom:6px;"><b>Notes:</b> ${esc(notes)}</div>` : ""}
     ${terms ? `<div><b>Terms &amp; Conditions:</b> ${esc(terms)}</div>` : ""}
   </div>` : ""}
+
   `;
 }

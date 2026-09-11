@@ -19,9 +19,9 @@ import {
   Key,
   Settings,
   EyeOff,
-  Crown,
   Loader2,
   User,
+  Crown,
 } from "lucide-react";
 import AppToaster from "../components/AppToaster";
 import TeamIcon from "../components/common/TeamIcon";
@@ -44,21 +44,21 @@ function ConfirmModal({
     switch (type) {
       case "danger":
         return {
-          icon: <AlertCircle className="w-6 h-6 text-red-600" />,
-          buttonClass: "bg-red-600 hover:bg-red-700",
-          iconBg: "bg-red-100",
+          icon: <AlertCircle className="w-6 h-6 text-danger-600" />,
+          buttonClass: "bg-danger-500 hover:bg-danger-600",
+          iconBg: "bg-danger-100",
         };
       case "warning":
         return {
-          icon: <AlertCircle className="w-6 h-6 text-yellow-600" />,
-          buttonClass: "bg-yellow-600 hover:bg-yellow-700",
-          iconBg: "bg-yellow-100",
+          icon: <AlertCircle className="w-6 h-6 text-warning-600" />,
+          buttonClass: "bg-warning-500 hover:bg-warning-600",
+          iconBg: "bg-warning-100",
         };
       default:
         return {
-          icon: <CheckCircle2 className="w-6 h-6 text-blue-600" />,
-          buttonClass: "bg-blue-600 hover:bg-blue-700",
-          iconBg: "bg-blue-100",
+          icon: <CheckCircle2 className="w-6 h-6 text-primary-600" />,
+          buttonClass: "bg-primary-500 hover:bg-primary-600",
+          iconBg: "bg-primary-100",
         };
     }
   };
@@ -66,19 +66,19 @@ function ConfirmModal({
   const styles = getTypeStyles();
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[10000] p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border-2 border-gray-200 animate-fade-in">
+    <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm flex justify-center items-center z-[10000] p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border-2 border-neutral-200 animate-fade-in">
         <div className="flex items-start gap-4 mb-4">
           <div className={`p-3 rounded-xl ${styles.iconBg}`}>{styles.icon}</div>
           <div className="flex-1">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-            <p className="text-gray-600 leading-relaxed">{message}</p>
+            <h3 className="text-xl font-bold text-neutral-900 mb-2">{title}</h3>
+            <p className="text-neutral-500 leading-relaxed">{message}</p>
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
+            className="px-5 py-2.5 bg-neutral-100 text-neutral-700 rounded-xl hover:bg-neutral-200 transition-colors font-semibold"
           >
             {cancelText}
           </button>
@@ -439,29 +439,22 @@ function UserManagement() {
       const isAtLimit = used >= limit;
       const percentage = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
       return (
-        <div>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-            <p className="text-blue-700 text-sm font-semibold">
-              {label}: {used} of {limit} seats used
+        <div className="flex-1 min-w-[120px]">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs font-semibold text-primary-700">
+              {label}
               {isAtLimit && (
-                <span className="text-red-600 font-semibold ml-2">
-                  (At limit - payment required)
-                </span>
+                <span className="text-danger-600 ml-1">· at limit</span>
               )}
-            </p>
-            <div className="text-right">
-              <span className="text-xl font-bold text-blue-700">
-                {used}/{limit}
-              </span>
-              <span className="text-xs text-blue-600 ml-2">
-                {Math.max(0, limit - used)} available
-              </span>
-            </div>
+            </span>
+            <span className="text-sm font-bold text-primary-700 tabular-nums">
+              {used}/{limit}
+            </span>
           </div>
-          <div className="mt-2 bg-blue-200 rounded-full h-3 overflow-hidden shadow-inner">
+          <div className="mt-1 bg-neutral-200 rounded-full h-1.5 overflow-hidden">
             <div
-              className={`h-3 rounded-full transition-all duration-500 ${
-                percentage >= 90 ? "bg-red-500" : "bg-blue-600"
+              className={`h-1.5 rounded-full transition-all duration-500 ${
+                percentage >= 90 ? "bg-danger-500" : "bg-primary-500"
               }`}
               style={{ width: `${percentage}%` }}
             />
@@ -470,16 +463,39 @@ function UserManagement() {
       );
     };
 
+    const pct = (used, limit) => (limit > 0 ? (used / limit) * 100 : 0);
+    const adminPct = pct(adminUsed, adminLimit);
+    const staffPct = pct(staffUsed, staffLimit);
+    const nearCapacity = adminPct >= 90 || staffPct >= 90;
+    const atCapacity = adminUsed >= adminLimit || staffUsed >= staffLimit;
+
     return (
-      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-2xl p-6 mb-8 shadow-lg space-y-5">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-3 rounded-xl shadow-md">
-            <TeamIcon className="w-6 h-6 text-white" />
-          </div>
-          <h3 className="text-lg font-bold text-blue-900">Seat Usage</h3>
+      <div className="bg-primary-100 border border-primary-300 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-2.5">
+          <TeamIcon className="w-4 h-4 text-primary-600" />
+          <p className="text-xs font-bold text-primary-700">Seat Usage</p>
         </div>
-        {renderBar("Admin", adminUsed, adminLimit)}
-        {renderBar("Staff", staffUsed, staffLimit)}
+        <div className="space-y-2.5">
+          {renderBar("Admin", adminUsed, adminLimit)}
+          {renderBar("Staff", staffUsed, staffLimit)}
+        </div>
+        {nearCapacity && (
+          <div className="mt-3 pt-3 border-t border-primary-300">
+            <p className="text-xs text-warning-600 font-medium">
+              {atCapacity
+                ? "You've used all your seats."
+                : "You're almost out of seats."}{" "}
+              Upgrade your plan to add more team members.
+            </p>
+            <button
+              onClick={() => navigate("/settings/subscription")}
+              className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-warning-500 hover:bg-warning-600 text-white rounded-lg text-xs font-semibold transition-colors"
+            >
+              <Crown className="w-3.5 h-3.5" />
+              Upgrade Plan
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -527,28 +543,28 @@ function UserManagement() {
     switch (permission) {
       case "read-write":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-md text-xs font-semibold">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success-100 text-success-600 rounded-md text-xs font-semibold">
             <EditIcon className="w-3 h-3" />
             Edit
           </span>
         );
       case "readonly":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-semibold">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-100 text-primary-700 rounded-md text-xs font-semibold">
             <EyeIcon className="w-3 h-3" />
             View
           </span>
         );
       case "own-only":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-md text-xs font-semibold">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-warning-100 text-warning-600 rounded-md text-xs font-semibold">
             <User className="w-3 h-3" />
             Own Only
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-xs font-semibold">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded-md text-xs font-semibold">
             <EyeOff className="w-3 h-3" />
             None
           </span>
@@ -557,327 +573,126 @@ function UserManagement() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 -mt-10 lg:-mt-12">
       <AppToaster />
-      {/* Seat Info */}
-      {renderSeatInfo()}
+      <div className="flex flex-col lg:block gap-6 lg:pr-[344px]">
+        {/* MAIN COLUMN */}
+        <div className="min-w-0 flex flex-col gap-4 lg:h-[calc(100vh-200px)]">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900"></h2>
-            <p className="text-sm text-gray-600 mt-1"></p>
-          </div>
-        </div>
-        {seatStatus && (
-          <div className={`text-xs px-3 py-1.5 rounded-lg font-medium ${
-            seatStatus.occupiedStaffSeats >= seatStatus.totalStaffSeats
-              ? "bg-red-50 text-red-700"
-              : "bg-gray-100 text-gray-600"
-          }`}>
-            Admin {seatStatus.occupiedAdminSeats} / {seatStatus.includedSeats} · Staff {seatStatus.occupiedStaffSeats} / {seatStatus.totalStaffSeats}
-          </div>
-        )}
+      <div className="flex flex-row justify-between items-center gap-4 shrink-0">
+        <p className="text-sm font-semibold text-neutral-700">
+          Add your staff. Assign Roles. Multiply your business.
+        </p>
         <button
           onClick={() => setFormVisible(!formVisible)}
-          disabled={
-            paymentProcessing
-            // ||
-            // (subscription?.subscription &&
-            //   users.length + invites.length >=
-            //     subscription.subscription.userCount)
-          }
-          className={`flex items-center gap-2 font-semibold px-6 py-3 rounded-xl cursor-pointer border-2 transition-all shadow-md ${
+          disabled={paymentProcessing}
+          className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-1.5 rounded-lg cursor-pointer transition-all ${
             formVisible
-              ? "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
-              : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-blue-600 shadow-lg"
+              ? "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+              : "bg-[#0085FF] hover:bg-[#0072db] text-white"
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {paymentProcessing ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
               Processing...
             </>
           ) : formVisible ? (
             <>
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
               Cancel
             </>
           ) : (
             <>
-              <UserPlus className="w-5 h-5" />
+              <UserPlus className="w-4 h-4" />
               Invite User
             </>
           )}
         </button>
       </div>
 
-      {/* Invite Form */}
-      {formVisible && (
-        <div className="bg-white border-2 border-gray-200 rounded-2xl p-8 shadow-xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="bg-purple-100 p-2.5 rounded-xl">
-              <UserPlus className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900">Invite New User</h3>
-          </div>
-
-          <form onSubmit={handleInvite} className="space-y-6">
-            <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                <Mail className="w-4 h-4" />
-                Email Address
-              </label>
-              <input
-                className="w-full border-2 border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                type="email"
-                placeholder="colleague@company.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                <Shield className="w-4 h-4" />
-                Permissions
-              </label>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Quick Preset
-                </label>
-                <select
-                  value={derivePreset(form.permissions)}
-                  onChange={handleInvitePresetChange}
-                  className="w-full border-2 border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="">Custom (Manual Selection)</option>
-                  <option value="view-only">
-                    👁️ View Only - Read-only access
-                  </option>
-                  <option value="own-only">
-                    👤 Own Only - Only access what they own
-                  </option>
-                  <option value="full-access">
-                    🔓 Full Access - Edit everything
-                  </option>
-                </select>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-                <div className="grid md:grid-cols-2 gap-4">
-                  {resources.map((resource) => (
-                    <div
-                      key={resource}
-                      className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200"
-                    >
-                      <span className="font-medium text-gray-700">
-                        {resource}
-                      </span>
-                      <select
-                        value={form.permissions[resource] || "no"}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            permissions: {
-                              ...form.permissions,
-                              [resource]: e.target.value,
-                            },
-                          })
-                        }
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      >
-                        {permissionOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt === "no"
-                              ? "None"
-                              : opt === "readonly"
-                              ? "View"
-                              : opt === "own-only"
-                              ? "Own Only"
-                              : "Edit"}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setFormVisible(false)}
-                className="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={paymentProcessing}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all disabled:opacity-50 shadow-lg"
-              >
-                <Mail className="w-4 h-4" />
-                Send Invite
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Organization Code */}
-      <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-lg">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="bg-amber-100 p-2.5 rounded-xl">
-            <Key className="w-6 h-6 text-amber-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">
-              Organization Code
-            </h3>
-            <p className="text-sm text-gray-600">
-              Share this code with team members to join
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <div className="flex-1 bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3">
-            {orgCode ? (
-              <span className="font-mono text-xl font-bold text-gray-900">
-                {orgCode}
-              </span>
-            ) : orgCodeError ? (
-              <span className="flex items-center gap-2 text-sm font-medium text-red-600">
-                {orgCodeError}
-                <button
-                  onClick={fetchOrgCode}
-                  className="text-blue-600 font-semibold hover:underline"
-                >
-                  Retry
-                </button>
-              </span>
-            ) : (
-              <span className="font-mono text-xl font-bold text-gray-400">
-                Loading...
-              </span>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(orgCode);
-                toast.success("Code copied to clipboard!");
-              }}
-              disabled={!orgCode}
-              className="flex items-center gap-2 px-4 py-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 font-semibold disabled:opacity-50 transition-colors"
-            >
-              <Copy className="w-4 h-4" />
-              Copy
-            </button>
-            <button
-              onClick={resetOrgCode}
-              className="flex items-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 font-semibold transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Reset
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Existing Users */}
-      <div className="bg-white border-2 border-gray-200 rounded-2xl shadow-lg overflow-hidden">
-        <div className="px-6 py-5 border-b-2 border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-100 p-2 rounded-lg">
-              <TeamIcon className="w-5 h-5 text-green-600" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-900">Active Users</h3>
-            <span className="ml-auto bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
-              {users.length}
-            </span>
-          </div>
-        </div>
+      <div className="min-h-0 flex-1 flex flex-col">
         {loading ? (
           <div className="px-6 py-12 text-center">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
-            <p className="text-gray-500">Loading users...</p>
+            <Loader2 className="w-8 h-8 text-primary-600 animate-spin mx-auto mb-3" />
+            <p className="text-neutral-500">Loading users...</p>
           </div>
         ) : users.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-500">
+          <div className="px-6 py-12 text-center text-neutral-500">
             No users found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="flex-1 min-h-0 overflow-auto border-t border-neutral-200">
             <table className="min-w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    User
+              <thead className="sticky top-0 z-10 bg-neutral-50">
+                <tr className="border-b border-neutral-200">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500">
+                    Name
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500">
+                    Mobile
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500">
+                    Email
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500">
                     Role
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-neutral-500">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-neutral-100">
                 {users.map((u) => {
                   const storedUser = JSON.parse(
                     localStorage.getItem("user") || "{}"
                   );
                   const isSelf = u._id === storedUser._id;
+                  const roleLabel =
+                    u.role.charAt(0).toUpperCase() + u.role.slice(1);
                   return (
-                    <tr
-                      key={u._id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-6 py-4">
+                    <tr key={u._id} className="hover:bg-neutral-50 transition-colors">
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                            {u.name.charAt(0).toUpperCase()}
+                          <div className="w-9 h-9 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 text-xs font-bold shrink-0">
+                            {u.name
+                              .split(" ")
+                              .map((p) => p.charAt(0))
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
                           </div>
-                          <div>
-                            <div className="font-semibold text-gray-900">
-                              {u.name}
-                              {isSelf && (
-                                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                  You
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {u.email}
-                            </div>
-                          </div>
+                          <span className="text-sm font-medium text-neutral-900">
+                            {u.name}
+                            {isSelf && (
+                              <span className="ml-2 text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">
+                                You
+                              </span>
+                            )}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold ${
-                            u.role === "admin"
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {u.role === "admin" && <Crown className="w-3 h-3" />}
-                          {u.role.charAt(0).toUpperCase() + u.role.slice(1)}
-                        </span>
+                      <td className="px-4 py-4 text-sm text-neutral-700">
+                        {u.phone || "—"}
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        {/* No row actions for the admin: the admin seat is the
-                            org creator, has every permission by definition,
-                            and can't be deleted (Delete was already disabled
-                            for yourself) - so both buttons only ever offered
-                            something that couldn't happen. */}
+                      <td className="px-4 py-4 text-sm text-neutral-700">
+                        {u.email || "—"}
+                      </td>
+                      <td
+                        className={`px-4 py-4 text-sm ${
+                          isSelf ? "text-neutral-300" : "text-neutral-700"
+                        }`}
+                      >
+                        {roleLabel}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        {/* The admin seat is the org creator: every permission
+                            by definition, and can't be deleted - so no actions. */}
                         {u.role === "admin" ? (
-                          <span className="text-xs text-gray-400">—</span>
+                          <span className="text-xs text-neutral-300">—</span>
                         ) : (
                           <div className="flex items-center justify-end gap-2">
                             <button
@@ -886,13 +701,13 @@ function UserManagement() {
                                 setPermissions(getInitialPermissions(u));
                                 setShowModal(true);
                               }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-semibold transition-colors"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-primary-600 rounded-lg hover:bg-primary-100 text-sm font-semibold transition-colors"
                             >
                               <Shield className="w-4 h-4" />
                               Permissions
                             </button>
                             <button
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-danger-600 rounded-lg hover:bg-danger-100 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               disabled={isSelf}
                               onClick={() => !isSelf && deleteUser(u._id)}
                             >
@@ -910,118 +725,282 @@ function UserManagement() {
           </div>
         )}
       </div>
+        </div>
+        {/* END MAIN COLUMN */}
 
-      {/* Pending Invitations */}
-      <div className="bg-white border-2 border-gray-200 rounded-2xl shadow-lg overflow-hidden">
-        <div className="px-6 py-5 border-b-2 border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="bg-yellow-100 p-2 rounded-lg">
-              <Mail className="w-5 h-5 text-yellow-600" />
+        {/* SIDEBAR */}
+        <aside className="w-full lg:w-80 space-y-4 mt-1.5 lg:mt-0 lg:fixed lg:top-[150px] lg:right-6 lg:bottom-6 lg:overflow-y-auto lg:pr-1">
+          {/* Organization Code */}
+          <div className="bg-white border border-neutral-200 rounded-xl p-5 text-center">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Key className="w-4 h-4 text-warning-600" />
+              <p className="text-xs font-bold text-neutral-900">Organization Code</p>
             </div>
-            <h3 className="text-lg font-bold text-gray-900">
-              Pending Invitations
-            </h3>
-            <span className="ml-auto bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-bold">
-              {invites.length}
-            </span>
+            {orgCode ? (
+              <span className="block font-mono text-xl font-bold text-neutral-900 break-all">
+                {orgCode}
+              </span>
+            ) : orgCodeError ? (
+              <span className="flex items-center justify-center gap-2 text-xs font-medium text-danger-600">
+                {orgCodeError}
+                <button
+                  onClick={fetchOrgCode}
+                  className="text-primary-600 font-semibold hover:underline"
+                >
+                  Retry
+                </button>
+              </span>
+            ) : (
+              <span className="block font-mono text-xl font-bold text-neutral-300">
+                Loading...
+              </span>
+            )}
+            <p className="text-xs text-neutral-500 mt-1">
+              Share this code with team members to join
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(orgCode);
+                  toast.success("Code copied to clipboard!");
+                }}
+                disabled={!orgCode}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-300 text-xs font-semibold disabled:opacity-50 transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Copy
+              </button>
+              <button
+                onClick={resetOrgCode}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-neutral-900 text-white rounded-lg hover:bg-neutral-700 text-xs font-semibold transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Seat Usage */}
+          {renderSeatInfo()}
+
+          {/* Pending Invitations */}
+          <div className="bg-white border border-neutral-200 rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Mail className="w-4 h-4 text-warning-600" />
+              <p className="text-xs font-bold text-neutral-900">
+                Pending Invitations
+              </p>
+              <span className="ml-auto bg-warning-100 text-warning-600 px-2 py-0.5 rounded-full text-xs font-bold">
+                {invites.length}
+              </span>
+            </div>
+            {loading ? (
+              <p className="text-xs text-neutral-300 py-2">Loading…</p>
+            ) : invites.length === 0 ? (
+              <p className="text-xs text-neutral-300 py-2">No pending invites.</p>
+            ) : (
+              <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {invites.map((invite) => (
+                  <li
+                    key={invite._id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span className="flex-1 min-w-0 truncate text-neutral-700">
+                      {invite.email}
+                    </span>
+                    {invite.pendingPayment && (
+                      <Loader2
+                        className="w-3 h-3 text-warning-500 shrink-0"
+                        aria-label="Awaiting seat payment"
+                      />
+                    )}
+                    <button
+                      onClick={() => revokeInvite(invite._id)}
+                      className="shrink-0 text-danger-600 hover:bg-danger-100 rounded p-1 transition-colors"
+                      title="Revoke"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {/* Invite User Modal */}
+      {formVisible && (
+        <div
+          className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm flex justify-center items-center z-[100009] p-4"
+          onClick={() => !paymentProcessing && setFormVisible(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl border-2 border-neutral-200 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white border-b-2 border-neutral-100 px-6 py-5 z-10">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary-100 p-2.5 rounded-xl">
+                  <UserPlus className="w-6 h-6 text-primary-600" />
+                </div>
+                <h3 className="flex-1 text-xl font-bold text-neutral-900">
+                  Invite New User
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setFormVisible(false)}
+                  className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-neutral-500" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleInvite}>
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-neutral-700 mb-2">
+                    <Mail className="w-4 h-4" />
+                    Email Address
+                  </label>
+                  <input
+                    className="w-full border-2 border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    type="email"
+                    placeholder="colleague@company.com"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-neutral-700 mb-3">
+                    <Shield className="w-4 h-4" />
+                    Permissions
+                  </label>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-neutral-500 mb-2">
+                      Quick Preset
+                    </label>
+                    <select
+                      value={derivePreset(form.permissions)}
+                      onChange={handleInvitePresetChange}
+                      className="w-full border-2 border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="">Custom (Manual Selection)</option>
+                      <option value="view-only">
+                        👁️ View Only - Read-only access
+                      </option>
+                      <option value="own-only">
+                        👤 Own Only - Only access what they own
+                      </option>
+                      <option value="full-access">
+                        🔓 Full Access - Edit everything
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="bg-neutral-50 rounded-xl p-5 border border-neutral-200">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {resources.map((resource) => (
+                        <div
+                          key={resource}
+                          className="flex justify-between items-center bg-white p-3 rounded-lg border border-neutral-200"
+                        >
+                          <span className="font-medium text-neutral-700">
+                            {resource}
+                          </span>
+                          <select
+                            value={form.permissions[resource] || "no"}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                permissions: {
+                                  ...form.permissions,
+                                  [resource]: e.target.value,
+                                },
+                              })
+                            }
+                            className="border border-neutral-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                          >
+                            {permissionOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt === "no"
+                                  ? "None"
+                                  : opt === "readonly"
+                                  ? "View"
+                                  : opt === "own-only"
+                                  ? "Own Only"
+                                  : "Edit"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="sticky bottom-0 bg-neutral-50 border-t-2 border-neutral-100 px-6 py-5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormVisible(false)}
+                  className="px-6 py-3 bg-neutral-100 text-neutral-700 font-semibold rounded-xl hover:bg-neutral-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={paymentProcessing}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition-all disabled:opacity-50 shadow-lg"
+                >
+                  <Mail className="w-4 h-4" />
+                  Send Invite
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-        {loading ? (
-          <div className="px-6 py-12 text-center">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
-            <p className="text-gray-500">Loading invites...</p>
-          </div>
-        ) : invites.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-500">
-            No pending invites.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {invites.map((invite) => (
-                  <tr
-                    key={invite._id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                          <Mail className="w-5 h-5 text-gray-500" />
-                        </div>
-                        <span className="font-medium text-gray-700">
-                          {invite.email}
-                        </span>
-                        {invite.pendingPayment && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md text-xs font-semibold">
-                            <Loader2 className="w-3 h-3" />
-                            Awaiting seat payment
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-semibold transition-colors"
-                        onClick={() => revokeInvite(invite._id)}
-                      >
-                        <X className="w-4 h-4" />
-                        Revoke
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Permissions Modal */}
       {showModal && selectedUser && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[100009] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl border-2 border-gray-200 max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b-2 border-gray-100 px-6 py-5 z-10">
+        <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm flex justify-center items-center z-[100009] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl border-2 border-neutral-200 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b-2 border-neutral-100 px-6 py-5 z-10">
               <div className="flex items-center gap-3">
-                <div className="bg-purple-100 p-2.5 rounded-xl">
-                  <Shield className="w-6 h-6 text-purple-600" />
+                <div className="bg-primary-100 p-2.5 rounded-xl">
+                  <Shield className="w-6 h-6 text-primary-600" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-bold text-gray-900">
+                  <h3 className="text-xl font-bold text-neutral-900">
                     Manage Permissions
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-neutral-500">
                     for {selectedUser.name}
                   </p>
                 </div>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-5 h-5 text-neutral-500" />
                 </button>
               </div>
             </div>
 
             <div className="p-6">
               <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-neutral-700 mb-2">
                   Quick Preset
                 </label>
                 <select
                   value={derivePreset(permissions)}
                   onChange={handleModalPresetChange}
-                  className="w-full border-2 border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full border-2 border-neutral-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                 >
                   <option value="">Custom (Manual Selection)</option>
                   <option value="view-only">
@@ -1040,9 +1019,9 @@ function UserManagement() {
                 {resources.map((resource) => (
                   <div
                     key={resource}
-                    className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200"
+                    className="flex justify-between items-center bg-neutral-50 p-4 rounded-xl border border-neutral-200"
                   >
-                    <span className="font-semibold text-gray-700">
+                    <span className="font-semibold text-neutral-700">
                       {resource}
                     </span>
                     <select
@@ -1053,7 +1032,7 @@ function UserManagement() {
                           [resource]: e.target.value,
                         }))
                       }
-                      className="border-2 border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                      className="border-2 border-neutral-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white font-medium"
                     >
                       {permissionOptions.map((opt) => (
                         <option key={opt} value={opt}>
@@ -1070,16 +1049,16 @@ function UserManagement() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-gray-50 border-t-2 border-gray-100 px-6 py-5 flex justify-end gap-3">
+            <div className="sticky bottom-0 bg-neutral-50 border-t-2 border-neutral-100 px-6 py-5 flex justify-end gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
+                className="px-6 py-3 bg-neutral-100 text-neutral-700 rounded-xl hover:bg-neutral-200 transition-colors font-semibold"
               >
                 Cancel
               </button>
               <button
                 onClick={savePermissions}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all font-semibold shadow-lg"
+                className="flex items-center gap-2 px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-xl transition-all font-semibold shadow-lg"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Save Changes

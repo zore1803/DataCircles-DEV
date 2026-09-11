@@ -31,6 +31,7 @@ import { PREDEFINED_NOTES, PREDEFINED_TERMS } from "../../utils/documentDefaultT
 
 import SettingsIcon from "../common/SettingsIcon";
 import InvoiceLivePreview from "./InvoiceLivePreview";
+import BankSelect from "./BankSelect";
 import InsufficientStockDialog from "../common/InsufficientStockDialog";
 import TemplateDrawer from "./TemplateDrawer";
 import NotesTermsDrawer from "./NotesTermsDrawer";
@@ -391,10 +392,15 @@ const InvoiceForm = ({
     sameAsBilling: true,
     notes: defaultNotesForNew,
     terms: defaultTermsForNew,
+    bankDetails: "",
     signature: "",
   });
   const [savedSignatures, setSavedSignatures] = useState([]);
   const [signaturesLoading, setSignaturesLoading] = useState(false);
+  // Bank accounts saved under Settings → Bank Details. A brand-new invoice
+  // adopts the org's default; an edit keeps whatever account it was saved
+  // with. The chosen id rides on the payload as `bankDetails`.
+  const [banks, setBanks] = useState([]);
   const [isSliding, setIsSliding] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const [showItemForm, setShowItemForm] = useState(false);
@@ -1116,6 +1122,7 @@ const InvoiceForm = ({
             JSON.stringify({ ...emptyAddress(), ...(sourceData.shippingAddress || {}) }),
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
+        bankDetails: sourceData.bankDetails?._id || sourceData.bankDetails || "",
         signature: sourceData.signature || "",
       };
       setForm(initialForm);
@@ -1152,6 +1159,7 @@ const InvoiceForm = ({
         sameAsBilling: true,
         notes: "",
         terms: "",
+        bankDetails: "",
         signature: "",
       };
       setForm(initialForm);
@@ -1192,6 +1200,28 @@ const InvoiceForm = ({
         }
       };
       fetchSignatures();
+
+      // Fetch saved bank accounts and auto-select the org default for new
+      // invoices; an edit keeps whatever account it was saved with.
+      const fetchBanks = async () => {
+        try {
+          const res = await API.get("/bank-details/all");
+          const list = Array.isArray(res.data) ? res.data : [];
+          setBanks(list);
+          if (!editingInvoice) {
+            const fallback = list.find((b) => b.isDefault) || list[0];
+            if (fallback) {
+              setForm((prev) =>
+                prev.bankDetails ? prev : { ...prev, bankDetails: fallback._id }
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch bank accounts:", err);
+          setBanks([]);
+        }
+      };
+      fetchBanks();
     } else {
       setIsSliding(false);
       setTimeout(() => setShouldRender(false), 300);
@@ -1974,9 +2004,19 @@ const InvoiceForm = ({
                     <label className="text-sm font-semibold text-gray-700">Select Bank</label>
                     <div className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[10px]">?</div>
                   </div>
-                  <button type="button" className="w-full py-3 bg-[#FAF5FF] border border-[#E9D5FF] rounded-lg text-[#9333EA] font-semibold text-sm hover:bg-[#F3E8FF] transition-colors flex items-center justify-center gap-2">
-                    <span className="text-lg">🏦</span> Add Bank to Invoice (Optional)
-                  </button>
+                  <BankSelect
+                    banks={banks}
+                    value={form.bankDetails || ""}
+                    onChange={(id) => {
+                      setForm((prev) => ({ ...prev, bankDetails: id }));
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <p className="text-xs text-gray-400">
+                    {banks.length === 0
+                      ? "No bank accounts yet — add them in Settings → Bank Details."
+                      : "The default is applied to every invoice unless you pick another here."}
+                  </p>
                 </div>
 
                 {/* Signature */}
@@ -2204,6 +2244,7 @@ const CreateInvoicePanel = ({
     out.items = pad(n++);
     out.notes = pad(n++);
     out.terms = pad(n++);
+    out.bank = pad(n++);
     out.signature = pad(n++);
     out.summary = pad(n++);
     return out;
@@ -2261,8 +2302,8 @@ const CreateInvoicePanel = ({
           isRoundOff: sourceDoc.isRoundOff !== undefined ? sourceDoc.isRoundOff : true,
           notes: sourceDoc.notes || "",
           terms: sourceDoc.terms || "",
-          signature: sourceDoc.signature || "",
           bankDetails: sourceDoc.bankDetails?._id || sourceDoc.bankDetails || "",
+          signature: sourceDoc.signature || "",
           status: initialDoc ? sourceDoc.status : "Draft",
         }
       : {
@@ -2286,8 +2327,8 @@ const CreateInvoicePanel = ({
           isRoundOff: true,
           notes: defaultNotesForNewDoc,
           terms: defaultTermsForNewDoc,
-          signature: "",
           bankDetails: "",
+          signature: "",
           status: "Draft",
         };
     return formOverride ? { ...base, ...formOverride } : base;
@@ -2308,11 +2349,10 @@ const CreateInvoicePanel = ({
   const [showTemplates, setShowTemplates] = useState(false);
   const [orgDetails, setOrgDetails] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
-  // Org's saved bank accounts (Settings → Bank Details), offered as a
-  // dropdown so this document can print a specific one instead of always
-  // the org's default (`bankDetails` above, used only for the live preview).
-  const [orgBanks, setOrgBanks] = useState([]);
-  const [banksLoading, setBanksLoading] = useState(false);
+  // Bank accounts saved under Settings → Bank Details. New documents adopt the
+  // org's default; existing ones keep whatever was chosen when created. The
+  // chosen id rides on the payload as `bankDetails` and the backend prints it.
+  const [banks, setBanks] = useState([]);
   // Numbering (prefix/suffix/next number) comes from DocumentSettings.
   const [docSettings, setDocSettings] = useState({
     invoicePrefix: "INV-",
@@ -2450,15 +2490,30 @@ const CreateInvoicePanel = ({
     if (showTemplates) return;
     (async () => {
       try {
-        const [b, bank, settings, docSettingsRes] = await Promise.allSettled([
+        const [b, bank, bankList, settings, docSettingsRes] = await Promise.allSettled([
           API.get("/branding"),
           API.get("/bank-details"),
+          API.get("/bank-details/all"),
           API.get("/document-templates"),
           API.get("/document-settings"),
         ]);
         if (b.status === "fulfilled") setOrgDetails(b.value.data || null);
         if (bank.status === "fulfilled")
           setBankDetails(bank.value.data || null);
+        if (bankList.status === "fulfilled") {
+          const list = Array.isArray(bankList.value.data) ? bankList.value.data : [];
+          setBanks(list);
+          // Preselect the org default for brand-new documents only — an edit
+          // keeps whatever account it was saved with (even "none").
+          if (!initialDoc) {
+            const fallback = list.find((x) => x.isDefault) || list[0];
+            if (fallback) {
+              setForm((prev) =>
+                prev.bankDetails ? prev : { ...prev, bankDetails: fallback._id }
+              );
+            }
+          }
+        }
         if (settings.status === "fulfilled") {
           const chosen = settings.value.data?.templates?.[type];
           if (chosen) setOrgTemplate(chosen);
@@ -2484,29 +2539,6 @@ const CreateInvoicePanel = ({
       }
     })();
   }, [type, showTemplates]);
-
-  // Full list of the org's saved bank accounts, for the Select Bank dropdown.
-  useEffect(() => {
-    (async () => {
-      setBanksLoading(true);
-      try {
-        const res = await API.get("/bank-details/all");
-        setOrgBanks(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error("Failed to load bank details", err);
-        setOrgBanks([]);
-      } finally {
-        setBanksLoading(false);
-      }
-    })();
-  }, []);
-
-  // The bank the live preview (and its UPI QR) should actually show: the one
-  // explicitly picked in Select Bank, falling back to the org's default
-  // (`bankDetails`, fetched separately above) when none is picked — same
-  // resolution order the backend's resolveBankDetails uses for the PDF.
-  const effectiveBankDetails =
-    orgBanks.find((b) => b._id === form.bankDetails) || bankDetails;
 
   // The panel is an overlay, not a route. Push a history entry while it's open
   // so the browser Back button closes the panel and stays on Accounting,
@@ -2841,8 +2873,8 @@ const CreateInvoicePanel = ({
         isRoundOff: form.isRoundOff,
         notes: form.notes,
         terms: form.terms,
-        signature: form.signature,
         bankDetails: form.bankDetails || null,
+        signature: form.signature,
         amount: finalTotal,
         items: form.items.map((it) => ({
           itemId: it.isVariant ? it.parentItemId : it._id,
@@ -2933,6 +2965,11 @@ const CreateInvoicePanel = ({
   // Used by the preview *and* the print window so all three agree.
   const previewTemplate = orgTemplate;
 
+  // Bank block shown in the live preview / print window: the account picked in
+  // "Select Bank", falling back to the org default the backend would use.
+  const effectiveBankDetails =
+    banks.find((x) => x._id === form.bankDetails) || bankDetails;
+
   // For new documents, docNumber is "" until saved. Build a preview number
   // from whatever the user has typed into the prefix/number/suffix fields so
   // the live preview (and print window) shows the chosen number immediately.
@@ -2960,8 +2997,8 @@ const CreateInvoicePanel = ({
         type,
         template: previewTemplate,
         orgDetails,
-        bankDetails,
-        dealName: dealOptions.find((d) => d.value === form.deal)?.label,
+        bankDetails: effectiveBankDetails,
+        dealName: customerNameForDeal(form.deal),
         documentNumber: previewDocNumber,
       }
     );
@@ -2976,7 +3013,25 @@ const CreateInvoicePanel = ({
 <style>
   @page { size: ${previewTemplate === "Landscape" ? "A4 landscape" : "A4 portrait"}; margin: 12mm; }
   html, body { margin: 0; padding: 0; }
-  .dcsheet { padding: 0 !important; max-width: 100% !important; min-height: 0 !important; }
+  /* Size the sheet to the printable area (A4 minus the 12mm @page margins), not
+     a full 297mm, so the bottom-pinned "Page 1 / 1 …" line sits at the bottom of
+     page 1 instead of tipping onto a second page. */
+  .dcsheet { padding: 0 !important; width: 100% !important; max-width: 100% !important; min-height: ${previewTemplate === "Landscape" ? "184mm" : "271mm"} !important; margin: 0 !important; }
+  /* On screen the sheet is ~760px wide; the printable A4 column is narrower,
+     so an auto-laid-out items table can grow past its cell min-content and
+     spill off the right edge of the paper (columns get clipped — see the
+     Classic template). dc-items and cl-items declare a width on every column
+     except the item/description one, so pinning table-layout lets that column
+     absorb the remainder exactly like on screen. Templates whose item tables
+     don't fully declare column widths are left on auto layout. */
+  .dcsheet .dc-items, .dcsheet .cl-items {
+    table-layout: fixed !important; width: 100% !important;
+  }
+  .dcsheet .dc-items td, .dcsheet .dc-items th,
+  .dcsheet .cl-items td, .dcsheet .cl-items th {
+    overflow-wrap: anywhere; word-break: break-word;
+  }
+  .dcsheet img, .dcsheet svg { max-width: 100%; }
   /* Browsers drop background fills when printing unless asked not to, which
      would strip the header bands and tinted rows some templates rely on. */
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -3002,6 +3057,18 @@ const CreateInvoicePanel = ({
   const handleSubmit = () => submitInvoice(form.status || "Draft");
 
   const dealOptions = deals.map((d) => ({ value: d._id, label: d.title }));
+  // Name the document is billed to: the deal's customer (company, else contact),
+  // falling back to the deal's own title when neither is set. Used for the live
+  // preview / print so it matches what the saved PDF renders.
+  const customerNameForDeal = (dealId) => {
+    const d = deals.find((x) => x._id === dealId);
+    return (
+      d?.company?.name ||
+      d?.contact?.name ||
+      d?.title ||
+      dealOptions.find((o) => o.value === dealId)?.label
+    );
+  };
   const inputClass =
     "w-full h-[38px] px-3.5 rounded-full border border-[#1F2937]/10 bg-white text-[13px] text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
 
@@ -3880,6 +3947,23 @@ const CreateInvoicePanel = ({
             </div>
           </div>
 
+          <SectionHeader number={sectionNo.bank} title="Bank Account" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
+            <div className="flex flex-col gap-1">
+              <FieldLabel>Select Bank</FieldLabel>
+              <BankSelect
+                banks={banks}
+                value={form.bankDetails || ""}
+                onChange={(id) => setField("bankDetails", id)}
+              />
+              <p className="text-[11px] text-[#99A0AE]">
+                {banks.length === 0
+                  ? "No bank accounts yet — add them in Settings → Bank Details."
+                  : `The default prints on every ${docName.toLowerCase()} unless you pick another here.`}
+              </p>
+            </div>
+          </div>
+
           <SectionHeader number={sectionNo.signature} title="Signature" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
             <div className="flex flex-col gap-1">
@@ -3930,7 +4014,6 @@ const CreateInvoicePanel = ({
 
           <SectionHeader number={sectionNo.summary} title={`${docName} Summary`} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
-            <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <FieldLabel>{docName} Discount</FieldLabel>
               <div className="flex items-center gap-2">
@@ -3993,37 +4076,6 @@ const CreateInvoicePanel = ({
               </div>
                 <div className="w-10 flex-shrink-0" aria-hidden="true" />
               </div>
-            </div>
-
-            {/* Select Bank — org's saved bank accounts (Settings → Bank
-                Details), printed on the document when one is picked; left
-                unset, PDF generation falls back to the org's default bank. */}
-            <div className="flex flex-col gap-1">
-              <FieldLabel>Select Bank</FieldLabel>
-              <div className="relative">
-                <select
-                  value={form.bankDetails || ""}
-                  onChange={(e) => setField("bankDetails", e.target.value)}
-                  disabled={banksLoading}
-                  className="w-full h-[38px] appearance-none pl-3.5 pr-8 text-[13px] text-[#1F2937] border border-[#1F2937]/10 rounded-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {banksLoading
-                      ? "Loading banks…"
-                      : orgBanks.length === 0
-                        ? "No banks added yet"
-                        : "Use organization's default bank"}
-                  </option>
-                  {orgBanks.map((b) => (
-                    <option key={b._id} value={b._id}>
-                      {b.bank} •••• {String(b.accountNumber || "").slice(-4)}
-                      {b.isDefault ? " (Default)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              </div>
-            </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -4231,7 +4283,7 @@ const CreateInvoicePanel = ({
                   template={previewTemplate}
                   supportsTax={supportsTax}
                   invoiceNumber={previewDocNumber}
-                  dealName={dealOptions.find((d) => d.value === form.deal)?.label}
+                  dealName={customerNameForDeal(form.deal)}
                 />
               </div>
             </div>
@@ -4296,7 +4348,7 @@ const CreateInvoicePanel = ({
                   template={previewTemplate}
                   supportsTax={supportsTax}
                   invoiceNumber={previewDocNumber}
-                  dealName={dealOptions.find((d) => d.value === form.deal)?.label}
+                  dealName={customerNameForDeal(form.deal)}
                 />
                 </div>
               </div>

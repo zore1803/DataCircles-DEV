@@ -35,14 +35,13 @@ const invoiceSchema = new mongoose.Schema({
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
+  // Bank account printed on this document. Chosen via the invoice form's
+  // "Select Bank" dropdown; when unset the org's default bank is used.
+  bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
   isTaxInvoice: { type: Boolean, default: false },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },
   receiverGSTIN: { type: String }, // Added receiverGSTIN field
-  // Which of the organization's saved bank accounts to print on this
-  // document. Left unset, PDF generation falls back to the org's default
-  // bank (getDefaultBankDetails) — same behavior as before this field existed.
-  bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
   transactionType: { type: String, enum: ['intra', 'inter'], default: 'intra' },
   gstRate: { type: Number, min: 0, max: 100, default: 18 },
   items: [{

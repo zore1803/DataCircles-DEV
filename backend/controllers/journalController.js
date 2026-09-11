@@ -10,6 +10,31 @@ const toSignedBalance = (openingBalance, balanceType) => {
   return balanceType === "Debit" ? -amt : amt;
 };
 
+// The ledger is CHRONOLOGICAL by the entry's own `date` (which the user may set
+// to any day — before the journal was created, or in the future), with
+// `createdAt` only as a tie-breaker for same-day entries. Because a back-dated
+// entry lands in the middle of history, every entry's stored `balanceAfter` and
+// the journal's `currentBalance` are rebuilt from the opening balance on every
+// insert / delete / close, so the running balance always reconciles.
+const replayJournalBalances = async (journal, session) => {
+  const query = JournalEntry.find({ journal: journal._id }).sort({ date: 1, createdAt: 1, _id: 1 });
+  if (session) query.session(session);
+  const entries = await query;
+
+  let running = toSignedBalance(journal.openingBalance, journal.balanceType);
+  for (const entry of entries) {
+    running += entry.type === "payin" ? entry.amount : -entry.amount;
+    if (entry.balanceAfter !== running) {
+      entry.balanceAfter = running;
+      await entry.save(session ? { session } : undefined);
+    }
+  }
+
+  journal.currentBalance = running;
+  await journal.save(session ? { session } : undefined);
+  return running;
+};
+
 // Create Journal
 exports.createJournal = async (req, res) => {
   try {
@@ -56,7 +81,11 @@ exports.getJournals = async (req, res) => {
       if (to) filter.date.$lte = new Date(to);
     }
 
-    const journals = await Journal.find(filter).sort({ createdAt: -1 });
+    // Sorted by last activity: recording a Pay In / Pay Out saves the parent
+    // Journal (bumping updatedAt), so the account that just had a transaction
+    // rises to the top of the list. Falls back to createdAt for journals that
+    // have never been touched since creation.
+    const journals = await Journal.find(filter).sort({ updatedAt: -1, createdAt: -1 });
     res.json(journals);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -105,14 +134,11 @@ exports.updateJournal = async (req, res) => {
         ? Math.abs(Number(openingBalance) || 0)
         : journal.openingBalance;
 
-      const lastEntry = await JournalEntry.findOne({ journal: journal._id }).sort({ createdAt: -1 });
-      const netFromEntries = lastEntry
-        ? lastEntry.balanceAfter - toSignedBalance(journal.openingBalance, journal.balanceType)
-        : 0;
-
       journal.openingBalance = nextOpeningBalance;
       journal.balanceType = nextBalanceType;
-      journal.currentBalance = toSignedBalance(nextOpeningBalance, nextBalanceType) + netFromEntries;
+      // Re-derive currentBalance (and every entry's balanceAfter) from the new
+      // opening balance plus the chronological Pay In/Pay Out history.
+      await replayJournalBalances(journal);
     }
 
     await journal.save();
@@ -181,9 +207,10 @@ exports.addJournalEntry = async (req, res) => {
       return res.status(400).json({ error: "Cannot record a transaction against a cancelled journal" });
     }
 
-    // Pay In always adds, Pay Out always subtracts — the sign lives entirely in `type`.
-    const balanceAfter = journal.currentBalance + (type === "payin" ? parsedAmount : -parsedAmount);
-
+    // `date` is whatever the user picked — any past date (even before the
+    // journal's own creation date) or a future date is allowed. The final
+    // balanceAfter is written by the replay below, which slots this entry into
+    // its chronological position; the value here is just a provisional seed.
     const [entry] = await JournalEntry.create(
       [
         {
@@ -200,19 +227,21 @@ exports.addJournalEntry = async (req, res) => {
           referenceId: referenceId || "",
           notes: notes || "",
           internalNotes: internalNotes || "",
-          balanceAfter,
+          balanceAfter: 0,
         },
       ],
       { session }
     );
 
-    journal.currentBalance = balanceAfter;
-    await journal.save({ session });
+    // Rebuild every entry's running balance in date order (the new one may be
+    // back-dated into the middle of the ledger) and refresh journal.currentBalance.
+    await replayJournalBalances(journal, session);
 
     await session.commitTransaction();
     session.endSession();
 
-    res.status(201).json({ entry, journal });
+    const savedEntry = await JournalEntry.findById(entry._id);
+    res.status(201).json({ entry: savedEntry, journal });
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
@@ -267,19 +296,9 @@ exports.deleteJournalEntry = async (req, res) => {
 
     await JournalEntry.deleteOne({ _id: target._id }).session(session);
 
-    const remaining = await JournalEntry.find({ journal: journal._id })
-      .sort({ date: 1, createdAt: 1 })
-      .session(session);
-
-    let runningBalance = toSignedBalance(journal.openingBalance, journal.balanceType);
-    for (const entry of remaining) {
-      runningBalance += entry.type === "payin" ? entry.amount : -entry.amount;
-      entry.balanceAfter = runningBalance;
-      await entry.save({ session });
-    }
-
-    journal.currentBalance = runningBalance;
-    await journal.save({ session });
+    // Removing an entry shifts every later running total — rebuild them (and
+    // journal.currentBalance) in chronological date order.
+    await replayJournalBalances(journal, session);
 
     await session.commitTransaction();
     session.endSession();
@@ -306,10 +325,13 @@ exports.getJournalLedger = async (req, res) => {
     });
     if (!journal) return res.status(404).json({ error: "Journal not found or access denied" });
 
+    // Chronological by the entry's own `date` (any past/future date is allowed),
+    // with createdAt/_id breaking same-day ties. balanceAfter is kept in sync
+    // with this order by replayJournalBalances on every write.
     const entries = await JournalEntry.find({
       journal: journal._id,
       organization: req.user.organization,
-    }).sort({ date: 1, createdAt: 1 });
+    }).sort({ date: 1, createdAt: 1, _id: 1 });
 
     const openingSigned = toSignedBalance(journal.openingBalance, journal.balanceType);
 
@@ -386,6 +408,10 @@ exports.closeJournal = async (req, res) => {
       session.endSession();
       return res.status(400).json({ error: "Cannot close a cancelled journal" });
     }
+
+    // Make sure currentBalance reflects the chronological ledger before we size
+    // the settlement entry against it.
+    await replayJournalBalances(journal, session);
 
     const currentBalance = journal.currentBalance;
     journal.closingBalance = currentBalance;
@@ -498,19 +524,10 @@ exports.reopenJournal = async (req, res) => {
       isClosingEntry: true
     }).session(session);
 
-    // Recalculate balance
-    const remaining = await JournalEntry.find({ journal: journal._id })
-      .sort({ date: 1, createdAt: 1 })
-      .session(session);
+    // Rebuild the running balances in chronological date order now the closing
+    // entry is gone.
+    await replayJournalBalances(journal, session);
 
-    let runningBalance = toSignedBalance(journal.openingBalance, journal.balanceType);
-    for (const entry of remaining) {
-      runningBalance += entry.type === "payin" ? entry.amount : -entry.amount;
-      entry.balanceAfter = runningBalance;
-      await entry.save({ session });
-    }
-
-    journal.currentBalance = runningBalance;
     journal.closingBalance = null;
     journal.status = "active";
     await journal.save({ session });

@@ -20,6 +20,12 @@
 
 const LOGO_URL = 'https://www.datacircles.in/assets/DataCirclesBWLogo.jpg';
 
+// Google Maps link for the registered office. The whole footer address is
+// wrapped in this single anchor so mail clients don't auto-linkify it into a
+// scatter of broken part-links.
+const MAP_URL = 'https://www.google.com/maps/search/?api=1&query=' +
+  encodeURIComponent('Centura Square IT Park, Road No. 27, Wagle Estate, Thane West, Thane, Maharashtra 400604');
+
 // Greys: the footer band is the darker grey; the page (outermost container)
 // sits a shade or two lighter so the white card reads clearly against both.
 const PAGE_BG = '#f1f5f9';   // outermost container
@@ -133,8 +139,9 @@ function renderEmail(o) {
         </td></tr>
         <tr><td style="background:${FOOTER_BG};padding:26px 40px;text-align:center;">
           <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#333333;">DataCircles Technology</p>
-          <p style="margin:0 0 2px;font-size:12px;line-height:1.6;color:#666666;">Registered Office&nbsp;No.&nbsp;721, Centura Square IT Park, Road&nbsp;No.&nbsp;27, Wagle Estate,</p>
-          <p style="margin:0 0 6px;font-size:12px;line-height:1.6;color:#666666;">Thane&nbsp;(West)&nbsp;-&nbsp;400604, Maharashtra, India</p>
+          <p style="margin:0 0 6px;font-size:12px;line-height:1.6;">
+            <a href="${MAP_URL}" style="color:#666666;text-decoration:underline;" target="_blank">Registered Office&nbsp;No.&nbsp;721, Centura Square IT Park, Road&nbsp;No.&nbsp;27, Wagle Estate,<br>Thane&nbsp;(West)&nbsp;-&nbsp;400604, Maharashtra, India</a>
+          </p>
           <p style="margin:0 0 6px;font-size:12px;color:#666666;">+91 98208 77677 | 022 4662 7501</p>
           <p style="margin:0 0 10px;font-size:12px;color:#666666;"><a href="https://www.datacircles.in" style="color:#1a56db;text-decoration:none;">www.datacircles.in</a> | 27AJXPM6211H2ZT</p>
           <p style="margin:0;font-size:11px;color:#9aa0a6;">&copy; ${year} DataCircles Technology. All Rights Reserved.</p>

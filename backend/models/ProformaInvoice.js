@@ -32,10 +32,11 @@ const proformaInvoiceSchema = new mongoose.Schema({
       min: 0,
     },
   },
-  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', 'Vintage', 'Professional', 'Landscape', 'Service', ''], default: '' },
+  style: { type: String, enum: ['Classic', 'Modern', 'Minimal', 'Elegant', 'Compact', 'Corporate', 'Vibrant', 'Mono', 'Vintage', 'Professional', 'Landscape', 'Service', 'Detailed', ''], default: '' },
   // Free-text footer blocks, printed on the document when present.
   notes: { type: String, default: '' },
   terms: { type: String, default: '' },
+  bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
   isTaxInvoice: { type: Boolean, default: false },
   transactionType: { type: String, enum: ['intra', 'inter'], default: 'intra' },
   signature: { type: String },
