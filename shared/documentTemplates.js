@@ -341,6 +341,15 @@ export function buildUpiUri(doc, options = {}) {
   });
   const ref = doc?.[numberKey];
   if (ref) params.set("tn", `${DOC_LABEL[type] || "Invoice"} ${ref}`);
+  // `tr` (transaction reference) is optional per the NPCI UPI deep-link spec,
+  // but its absence is a known trigger for some UPI apps (notably recent
+  // GPay builds) to treat the link as an incomplete payment intent and fall
+  // back to an onboarding/"add bank account" flow instead of the pay screen.
+  // Alphanumeric only, max 35 chars per spec; falls back to the document's
+  // own id if there's no human-readable number to sanitize into one.
+  const rawRef = ref != null ? String(ref) : doc?._id ? String(doc._id) : "";
+  const tr = rawRef.replace(/[^a-zA-Z0-9]/g, "").slice(0, 35);
+  if (tr) params.set("tr", tr);
   return `upi://pay?${params.toString().replace(/\+/g, "%20")}`;
 }
 
