@@ -166,22 +166,8 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
       errors.name = "Name is required";
     }
 
-    if (!form.email.trim()) {
-      errors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       errors.email = "Invalid email format";
-    }
-
-    if (!form.phone.trim()) {
-      errors.phone = "Phone is required";
-    }
-
-    if (!form.company) {
-      errors.company = "Please select a company";
-    }
-
-    if (!form.leadSource) {
-      errors.leadSource = "Please select a lead source";
     }
 
     // Validate required additional fields
@@ -365,9 +351,6 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
       const candidates = [
         errors.name ? nameInputRef.current : null,
         errors.email ? emailInputRef.current : null,
-        errors.phone ? phoneInputRef.current : null,
-        errors.company ? companyRef.current : null,
-        errors.leadSource ? leadSourceRef.current : null,
       ].filter(Boolean);
 
       let topMost = null;
@@ -384,7 +367,12 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
     payload.append("name", form.name);
     payload.append("email", form.email);
     payload.append("phone", form.phone);
-    payload.append("company", form.company);
+    // Company is a Mongo ObjectId ref — only send it when actually selected,
+    // since an empty string fails to cast on save (unlike the other, plain
+    // string fields above, which are safe to send blank).
+    if (form.company) {
+      payload.append("company", form.company);
+    }
     payload.append("leadSource", form.leadSource);
 
     const processedAdditionalFields = fieldDefinitions
@@ -609,7 +597,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
             {/* Email - Now with validation */}
             <div>
               <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Email <span className="text-[#FF4935]">*</span>
+                Email
               </label>
               <input
                 ref={emailInputRef}
@@ -630,7 +618,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
             {/* Phone */}
             <div>
               <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Phone <span className="text-[#FF4935]">*</span>
+                Phone
               </label>
               {/* Wrapper carries phoneInputRef: the scroll-to-first-error
                   logic below targets a DOM node, and the ref used to sit on
@@ -655,7 +643,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
             {/* Company - Now required with validation */}
             <div ref={companyRef}>
               <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Company <span className="text-[#FF4935]">*</span>
+                Company
               </label>
               <div className="flex items-center gap-3">
                 <SearchableDropdown
@@ -686,7 +674,7 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
             {/* Lead Source */}
             <div ref={leadSourceRef}>
               <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-                Lead Source <span className="text-[#FF4935]">*</span>
+                Lead Source
               </label>
               <CustomDropdown
                 options={["Referral", "Website", "Cold Call", "Social Media", "Event", "Advertisement", "Other"]}
