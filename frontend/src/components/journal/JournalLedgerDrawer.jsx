@@ -344,22 +344,6 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="date"
-                      value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
-                      className="h-8 px-2 rounded-md border border-gray-200 text-xs text-gray-700 outline-none focus:border-blue-500"
-                    />
-                    <span className="text-gray-400 text-xs font-medium">to</span>
-                    <input 
-                      type="date"
-                      value={endDate}
-                      onChange={e => setEndDate(e.target.value)}
-                      className="h-8 px-2 rounded-md border border-gray-200 text-xs text-gray-700 outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  
                   <div className={`relative h-8 flex items-center border border-[#E1E4EA] rounded-full bg-white transition-all duration-300 ease-in-out hover:bg-gray-50 focus-within:border-[#0085FF] focus-within:hover:bg-white ${
                     isSearchExpanded ? "w-[200px]" : "w-8"
                   } max-w-full`}>
@@ -389,6 +373,22 @@ const JournalLedgerDrawer = ({ isOpen, journalId, refreshKey, onClose, onOpenPay
                         <X className="w-2.5 h-2.5" strokeWidth={2.5} />
                       </button>
                     )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="h-8 px-2 rounded-md border border-gray-200 text-xs text-gray-700 outline-none focus:border-blue-500"
+                    />
+                    <span className="text-gray-400 text-xs font-medium">to</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="h-8 px-2 rounded-md border border-gray-200 text-xs text-gray-700 outline-none focus:border-blue-500"
+                    />
                   </div>
                 </div>
               </div>

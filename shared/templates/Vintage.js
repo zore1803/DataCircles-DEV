@@ -67,7 +67,9 @@ export const css = `
 .dcsheet.t-Vintage .vt-paid-row .dc-tick { font-size: 13px; }
 .dcsheet.t-Vintage .vt-bottom { display: flex; flex-direction: column; }
 /* ── footer: bank | UPI | signature ── */
-.dcsheet.t-Vintage .vt-footer { display: grid; grid-template-columns: 1fr 1fr var(--vt-rcol, 220px); border-top: 1px solid var(--ink); }
+/* No border-top here — the row above (totals / HSN table / paid-row) already
+   draws a bottom rule, and stacking the two makes a 2px line. */
+.dcsheet.t-Vintage .vt-footer { display: grid; grid-template-columns: 1fr 1fr var(--vt-rcol, 220px); }
 .dcsheet.t-Vintage .vt-bank, .dcsheet.t-Vintage .vt-upi { padding: 0; border-right: 1px solid var(--ink); font-size: 9px; }
 .dcsheet.t-Vintage .vt-col-title { font-size: 8px; font-weight: bold; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; padding: 7px 12px; border-bottom: 1px solid var(--ink); }
 .dcsheet.t-Vintage .vt-bank-grid { display: grid; grid-template-columns: auto 1fr; }

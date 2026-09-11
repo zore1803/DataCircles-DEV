@@ -350,6 +350,41 @@
   --font-space: 'Inter', sans-serif;
 }
 
+/* === DataCircles UI Color System ===
+   Anchor: Tech Blue #2776EA. All shades kept at ~75–85% saturation. */
+@theme {
+  --color-primary-700: #174FA3;
+  --color-primary-600: #1E63C9;
+  --color-primary-500: #2776EA;
+  --color-primary-400: #4E90EE;
+  --color-primary-300: #86B4F4;
+  --color-primary-100: #EAF1FD;
+
+  --color-success-600: #178F5D;
+  --color-success-500: #1FA971;
+  --color-success-100: #E6F7EF;
+
+  --color-danger-600: #D33333;
+  --color-danger-500: #EA4B4B;
+  --color-danger-100: #FCEAEA;
+
+  --color-warning-600: #CC7F12;
+  --color-warning-500: #EA9927;
+  --color-warning-100: #FDF3E6;
+
+  --color-info-600: #1897C2;
+  --color-info-500: #27B4EA;
+  --color-info-100: #E6F8FD;
+
+  --color-neutral-900: #10203D;
+  --color-neutral-700: #33456B;
+  --color-neutral-500: #56698A;
+  --color-neutral-300: #A2AFC6;
+  --color-neutral-200: #D6DEEC;
+  --color-neutral-100: #EEF2F9;
+  --color-neutral-50: #F7F9FD;
+}
+
 * {
   font-family: 'Inter', sans-serif !important;
 }

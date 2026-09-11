@@ -54,6 +54,24 @@ export const css = `
 .dcsheet.t-Corporate .cp-notes { font-size: 9px; color: var(--muted); padding-right: 16px; }
 .dcsheet.t-Corporate .cp-sign { text-align: right; }
 .dcsheet.t-Corporate .cp-sign img { max-height: 44px; margin: 2px 0 0 auto; display: block; object-fit: contain; }
+
+/* Print edge-to-edge: drop the page margin and let the sheet fill the paper so
+   the navy band isn't floating in a wide white border. The template's own
+   26px band/body padding keeps the content off the very edge. */
+@media print {
+  @page { size: A4; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  .dcsheet.t-Corporate {
+    width: 100% !important;
+    min-height: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .dcsheet.t-Corporate .cp-band,
+  .dcsheet.t-Corporate .cp-items,
+  .dcsheet.t-Corporate .cp-lower { page-break-inside: avoid; }
+}
 .dcsheet.t-Corporate .cp-sign-line { display: inline-block; min-width: 120px; border-top: 2px solid var(--navy); padding-top: 4px; margin-top: 8px; font-weight: 700; }
 .dcsheet.t-Corporate .r { text-align: right; }
 .dcsheet.t-Corporate .c { text-align: center; }

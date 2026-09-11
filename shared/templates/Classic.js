@@ -31,6 +31,9 @@ export const css = `
 .dcsheet.t-Classic .cl-items th { background: #f0f0f0; border-bottom: 1.5px solid var(--line); border-right: 1px solid var(--line); padding: 5px 6px; font-size: 8.5px; text-transform: uppercase; letter-spacing: .3px; }
 .dcsheet.t-Classic .cl-items td { border-right: 1px solid var(--line); border-bottom: 1px solid #bbb; padding: 5px 6px; vertical-align: top; }
 .dcsheet.t-Classic .cl-items th:last-child, .dcsheet.t-Classic .cl-items td:last-child { border-right: 0; }
+/* Last row keeps no bottom rule — the .cl-lower section right below draws its
+   own top border, and stacking the two reads as a thick line. */
+.dcsheet.t-Classic .cl-items tr:last-child td { border-bottom: 0; }
 .dcsheet.t-Classic .cl-iname { font-weight: bold; }
 .dcsheet.t-Classic .cl-idesc { color: var(--muted); font-size: 8.5px; margin-top: 1px; white-space: pre-line; }
 .dcsheet.t-Classic .cl-lower { display: flex; border-top: 1.5px solid var(--line); }
