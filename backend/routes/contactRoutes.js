@@ -95,7 +95,24 @@ router.put(
   contactController.updateLifecycleStage
 );
 
-// PUT /api/contacts/update/:id (Full update with avatar - requires write permission)
+// PUT /api/contacts/:id (Full update with avatar - requires write permission).
+// This is the route every frontend call site actually uses
+// (QuickContactForm, BasicDetails ownership transfer, ContactFolder inline
+// edits all PUT to the bare `/contacts/:id`) — without it registered, every
+// one of those saves 404'd and surfaced as a generic "Failed to save
+// contact" error, since axios's error body was HTML, not JSON.
+router.put(
+  "/:id",
+  requireAuth,
+  subscriptionGate,
+  // restrictByPlan("contacts", "write"),
+  // checkPermission("contacts", "read-write"),
+  uploadMiddlewareS3().single("avatar"),
+  contactController.updateContact
+);
+
+// PUT /api/contacts/update/:id — same handler, kept for any external caller
+// still using this older path.
 router.put(
   "/update/:id",
   requireAuth,

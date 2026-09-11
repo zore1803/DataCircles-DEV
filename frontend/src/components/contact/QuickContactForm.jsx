@@ -28,6 +28,9 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
   const companyRef = useRef(null);
   const phoneInputRef = useRef(null);
   const leadSourceRef = useRef(null);
+  // Scroll-to-error targets for custom fields, keyed by field name — same
+  // pattern as the fixed refs above, just dynamic since fields vary per org.
+  const customFieldRefs = useRef({});
   // Object URL for the currently picked file, so the preview shows the actual
   // image instead of just its filename. Revoked whenever the selection
   // changes or the form unmounts, since object URLs otherwise leak.
@@ -170,9 +173,12 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
       errors.email = "Invalid email format";
     }
 
-    // Validate required additional fields
+    // Validate required additional fields — only when creating. A field
+    // marked required after a contact already existed shouldn't retroactively
+    // block that older contact from being saved just because it predates the
+    // field; "required" only applies going forward, to new contacts.
     fieldDefinitions.forEach((fieldDef) => {
-      if (fieldDef.required) {
+      if (fieldDef.required && !isEditing) {
         const value = additionalFields[fieldDef.name];
         if (!value || value.toString().trim() === "") {
           errors[`additional_${fieldDef.name}`] = `${fieldDef.name} is required`;
@@ -347,10 +353,14 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
+      toast.error("Please fill in all required fields");
 
       const candidates = [
         errors.name ? nameInputRef.current : null,
         errors.email ? emailInputRef.current : null,
+        ...fieldDefinitions
+          .filter((fieldDef) => errors[`additional_${fieldDef.name}`])
+          .map((fieldDef) => customFieldRefs.current[fieldDef.name]),
       ].filter(Boolean);
 
       let topMost = null;
@@ -413,7 +423,11 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
       setIsFormDirty(false);
       closeForm();
     } catch (err) {
-      let errorMessage = "Failed to save contact. Please try again.";
+      // Surface the backend's actual message (e.g. a Mongoose validation
+      // error naming the exact bad field/value) instead of masking every
+      // failure behind the same generic text — that generic text is what
+      // made a real save error indistinguishable from a network hiccup.
+      let errorMessage = err.response?.data?.error || err.response?.data?.message || "Failed to save contact. Please try again.";
       if (err.response && err.response.status === 402) {
         errorMessage = err.response?.data?.message || "An active subscription is required to make changes.";
       } else if (err.response && err.response.status === 403) {
@@ -700,13 +714,18 @@ const QuickContactForm = ({ companies = [], onContactCreated, onContactUpdated, 
                 </div>
                 <div className="space-y-3 sm:space-y-4">
                   {fieldDefinitions.map((fieldDef) => (
-                    <div key={fieldDef.name}>
+                    <div key={fieldDef.name} ref={(el) => (customFieldRefs.current[fieldDef.name] = el)}>
                       <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                         {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                       </label>
                       {renderFieldInput(
                         fieldDef,
                         additionalFields[fieldDef.name]
+                      )}
+                      {validationErrors[`additional_${fieldDef.name}`] && (
+                        <p className="text-red-500 text-xs mt-1 font-inter">
+                          {validationErrors[`additional_${fieldDef.name}`]}
+                        </p>
                       )}
                     </div>
                   ))}
