@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import ReactQuill from "react-quill-new";
 import "react-quill/dist/quill.snow.css";
 import API from "../../services/api";
-import CustomFieldsSection from "../common/CustomFieldsSection";
+import CustomFieldsSection, { getMissingRequiredFields } from "../common/CustomFieldsSection";
 import toast from "react-hot-toast";
 import SearchIcon from "../common/SearchIcon";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -861,6 +861,10 @@ const AdminMeetingForm = ({
     if (form.linkedTo === "company" && form.participants.length === 0) {
       newErrors.participants = "At least one client contact is required";
     }
+    Object.assign(
+      newErrors,
+      getMissingRequiredFields(meetingFieldDefs, form.additionalFields, !!meetingData)
+    );
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -877,6 +881,7 @@ const AdminMeetingForm = ({
     e.preventDefault();
 
     if (!validateForm()) {
+      toast.error("Please fill in all required fields");
       // Scroll to whichever invalid field sits highest on screen, rather
       // than just reporting via toast that something is wrong.
       const latestErrors = {};
@@ -1427,7 +1432,19 @@ const AdminMeetingForm = ({
                       <CustomFieldsSection
                         fieldDefs={meetingFieldDefs}
                         values={form.additionalFields}
-                        onChange={(next) => handleChange("additionalFields", next)}
+                        errors={errors}
+                        onChange={(next) => {
+                          handleChange("additionalFields", next);
+                          setErrors((prev) => {
+                            const cleared = { ...prev };
+                            next.forEach((f) => {
+                              if (f.value !== undefined && f.value !== null && f.value.toString().trim() !== "") {
+                                delete cleared[f.key];
+                              }
+                            });
+                            return cleared;
+                          });
+                        }}
                         title=""
                       />
                     </fieldset>

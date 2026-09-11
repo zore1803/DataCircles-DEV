@@ -60,6 +60,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   const [shippingAddressErrors, setShippingAddressErrors] = useState([]);
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
+  const [additionalFieldErrors, setAdditionalFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
@@ -71,6 +72,8 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
   const emailInputRef = useRef(null);
   const billingAddressRef = useRef(null);
   const shippingAddressRefs = useRef([]);
+  // Scroll-to-error targets for custom fields, keyed by field name.
+  const customFieldRefs = useRef({});
   // Object URL for whatever file is currently picked, so both create and edit
   // show the actual image instead of just its filename. Revoked whenever the
   // selection changes or the form unmounts, since object URLs otherwise leak.
@@ -208,6 +211,13 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
         [fieldDef.name]: newValue,
       }));
       setIsFormDirty(true);
+      if (additionalFieldErrors[fieldDef.name]) {
+        setAdditionalFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next[fieldDef.name];
+          return next;
+        });
+      }
     };
 
     switch (fieldDef.type) {
@@ -335,18 +345,43 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
     const newShippingErrors = form.shippingAddresses.map(
       (ship) => !isAddressComplete(ship)
     );
+    // Required custom fields only block CREATING a new company — a field
+    // marked required after a company already existed shouldn't retroactively
+    // block that older company from being saved just because it predates the
+    // field.
+    const newAdditionalFieldErrors = {};
+    if (!isEditing) {
+      fieldDefinitions.forEach((fieldDef) => {
+        if (fieldDef.required) {
+          const value = additionalFields[fieldDef.name];
+          if (!value || value.toString().trim() === "") {
+            newAdditionalFieldErrors[fieldDef.name] = `${fieldDef.name} is required`;
+          }
+        }
+      });
+    }
 
     setNameError(nameInvalid);
     setEmailError(emailInvalid ? "Invalid email format" : "");
     setBillingAddressError(billingInvalid);
     setShippingAddressErrors(newShippingErrors);
+    setAdditionalFieldErrors(newAdditionalFieldErrors);
 
-    if (nameInvalid || emailInvalid || billingInvalid || newShippingErrors.some(Boolean)) {
+    if (
+      nameInvalid ||
+      emailInvalid ||
+      billingInvalid ||
+      newShippingErrors.some(Boolean) ||
+      Object.keys(newAdditionalFieldErrors).length > 0
+    ) {
+      toast.error("Please fill in all required fields");
+
       const candidates = [
         nameInvalid ? nameInputRef.current : null,
         emailInvalid ? emailInputRef.current : null,
         billingInvalid ? billingAddressRef.current : null,
         ...newShippingErrors.map((invalid, i) => (invalid ? shippingAddressRefs.current[i] : null)),
+        ...Object.keys(newAdditionalFieldErrors).map((name) => customFieldRefs.current[name]),
       ].filter(Boolean);
 
       let topMost = null;
@@ -435,7 +470,7 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
       setIsFormDirty(false);
       closeForm();
     } catch (err) {
-      let errorMessage = "Failed to save company. Please try again.";
+      let errorMessage = err.response?.data?.error || err.response?.data?.message || "Failed to save company. Please try again.";
       if (err.response && err.response.status === 402) {
         errorMessage = err.response?.data?.message || "An active subscription is required to make changes.";
       } else if (err.response && err.response.status === 403) {
@@ -926,13 +961,16 @@ const QuickCompanyForm = ({ onCompanyCreated, onCompanyUpdated, onRequestClose, 
                   <span className="flex-1 h-px bg-[#D9D9D9]" />
                 </div>
                 {fieldDefinitions.map((fieldDef) => (
-                  <div key={fieldDef.name}>
+                  <div key={fieldDef.name} ref={(el) => (customFieldRefs.current[fieldDef.name] = el)}>
                     <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                       {fieldDef.name} {fieldDef.required && <span className="text-[#FF4935]">*</span>}
                     </label>
                     {renderFieldInput(
                       fieldDef,
                       additionalFields[fieldDef.name]
+                    )}
+                    {additionalFieldErrors[fieldDef.name] && (
+                      <p className="mt-1 text-xs text-red-600">{additionalFieldErrors[fieldDef.name]}</p>
                     )}
                   </div>
                 ))}

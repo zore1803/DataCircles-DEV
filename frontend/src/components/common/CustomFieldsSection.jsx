@@ -11,8 +11,10 @@ import React from "react";
  *   module's <module>-fields endpoint (e.g. GET /task-fields).
  * `values`: the document's current additionalFields array.
  * `onChange(nextAdditionalFields)`: called with the full updated array.
+ * `errors`: optional { [fieldName]: message } — shows an inline error and
+ *   red border under that field. Pair with getMissingRequiredFields below.
  */
-const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fields" }) => {
+const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fields", errors = {} }) => {
   if (!fieldDefs || fieldDefs.length === 0) return null;
 
   const valueFor = (name) => values?.find((v) => v.key === name)?.value ?? "";
@@ -22,6 +24,9 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
     next.push({ key: name, value, type });
     onChange(next);
   };
+
+  const errorText = (name) =>
+    errors[name] && <p className="mt-1 text-xs text-red-600">{errors[name]}</p>;
 
   return (
     <div className="space-y-3">
@@ -50,6 +55,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
+                {errorText(field.name)}
               </div>
             );
           }
@@ -79,6 +85,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                     </button>
                   ))}
                 </div>
+                {errorText(field.name)}
               </div>
             );
           }
@@ -93,6 +100,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errorText(field.name)}
               </div>
             );
           }
@@ -107,6 +115,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   onChange={(e) => setValue(field.name, field.type, e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errorText(field.name)}
               </div>
             );
           }
@@ -122,6 +131,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   placeholder="https://…"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errorText(field.name)}
               </div>
             );
           }
@@ -136,6 +146,7 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                   rows={2}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {errorText(field.name)}
               </div>
             );
           }
@@ -150,12 +161,36 @@ const CustomFieldsSection = ({ fieldDefs, values, onChange, title = "Custom Fiel
                 onChange={(e) => setValue(field.name, field.type, e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {errorText(field.name)}
             </div>
           );
         })}
       </div>
     </div>
   );
+};
+
+/*
+ * Returns { [fieldName]: message } for any required field left empty in
+ * `values` — but only when `isEditing` is false. A field marked required
+ * after a record already existed shouldn't retroactively block that older
+ * record from being saved just because it predates the field; "required"
+ * only applies going forward, to new records. Callers merge this into
+ * their own validation-error state and pass it back in as `errors`.
+ */
+export const getMissingRequiredFields = (fieldDefs, values, isEditing) => {
+  const errors = {};
+  if (isEditing || !fieldDefs) return errors;
+
+  fieldDefs.forEach((field) => {
+    if (!field.required) return;
+    const current = values?.find((v) => v.key === field.name)?.value;
+    if (current === undefined || current === null || current.toString().trim() === "") {
+      errors[field.name] = `${field.name} is required`;
+    }
+  });
+
+  return errors;
 };
 
 export default CustomFieldsSection;

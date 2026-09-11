@@ -46,6 +46,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
   const [addressError, setAddressError] = useState(false);
   const [additionalFields, setAdditionalFields] = useState({});
   const [fieldDefinitions, setFieldDefinitions] = useState([]);
+  const [additionalFieldErrors, setAdditionalFieldErrors] = useState({});
   const [profilePicture, setProfilePicture] = useState(null);
   const [profilePreview, setProfilePreview] = useState(null);
   const [gstinLoading, setGstinLoading] = useState(false);
@@ -59,6 +60,8 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
   const nameInputRef = useRef(null);
   const emailInputRef = useRef(null);
   const addressRef = useRef(null);
+  // Scroll-to-error targets for custom fields, keyed by field name.
+  const customFieldRefs = useRef({});
 
   // GSTIN API configuration
   const GSTIN_API_KEY = import.meta.env.VITE_APP_GSTIN_API_KEY || "";
@@ -264,6 +267,13 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
         [fieldDef.name]: newValue,
       }));
       setIsFormDirty(true);
+      if (additionalFieldErrors[fieldDef.name]) {
+        setAdditionalFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next[fieldDef.name];
+          return next;
+        });
+      }
     };
 
     const inputClassName = "w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50 font-inter";
@@ -421,16 +431,35 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
     const nameInvalid = !form.name.trim();
     const emailInvalid = !!form.email.trim() && !emailRegex.test(form.email.trim());
     const addressInvalid = !isAddressComplete(form.address);
+    // Required custom fields only block CREATING a new vendor — a field
+    // marked required after a vendor already existed shouldn't retroactively
+    // block that older vendor from being saved just because it predates the
+    // field.
+    const newAdditionalFieldErrors = {};
+    if (!isEditing) {
+      fieldDefinitions.forEach((fieldDef) => {
+        if (fieldDef.required) {
+          const value = additionalFields[fieldDef.name];
+          if (!value || value.toString().trim() === "") {
+            newAdditionalFieldErrors[fieldDef.name] = `${fieldDef.name} is required`;
+          }
+        }
+      });
+    }
 
     setNameError(nameInvalid);
     setEmailError(emailInvalid ? "Invalid email format" : "");
     setAddressError(addressInvalid);
+    setAdditionalFieldErrors(newAdditionalFieldErrors);
 
-    if (nameInvalid || emailInvalid || addressInvalid) {
+    if (nameInvalid || emailInvalid || addressInvalid || Object.keys(newAdditionalFieldErrors).length > 0) {
+      toast.error("Please fill in all required fields");
+
       const candidates = [
         nameInvalid ? nameInputRef.current : null,
         emailInvalid ? emailInputRef.current : null,
         addressInvalid ? addressRef.current : null,
+        ...Object.keys(newAdditionalFieldErrors).map((name) => customFieldRefs.current[name]),
       ].filter(Boolean);
 
       let topMost = null;
@@ -488,7 +517,7 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
       setIsFormDirty(false);
       closeForm();
     } catch (err) {
-      let errorMessage = "Failed to save vendor. Please try again.";
+      let errorMessage = err.response?.data?.error || err.response?.data?.message || "Failed to save vendor. Please try again.";
       if (err.response && err.response.status === 402) {
         errorMessage = err.response?.data?.message || "An active subscription is required to make changes.";
       } else if (err.response && err.response.status === 403) {
@@ -891,13 +920,16 @@ const QuickVendorForm = ({ onVendorCreated, onVendorUpdated, onRequestClose, edi
                 </h3>
                 <div className="space-y-6 font-inter">
                   {fieldDefinitions.map((fieldDef) => (
-                    <div key={fieldDef.name}>
+                    <div key={fieldDef.name} ref={(el) => (customFieldRefs.current[fieldDef.name] = el)}>
                       <label className="block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
                         {fieldDef.name} {fieldDef.required && <span className="text-red-500">*</span>}
                       </label>
                       {renderFieldInput(
                         fieldDef,
                         additionalFields[fieldDef.name]
+                      )}
+                      {additionalFieldErrors[fieldDef.name] && (
+                        <p className="mt-1 text-xs text-red-600">{additionalFieldErrors[fieldDef.name]}</p>
                       )}
                     </div>
                   ))}

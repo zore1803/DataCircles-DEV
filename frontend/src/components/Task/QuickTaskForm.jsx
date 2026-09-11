@@ -26,7 +26,7 @@ import QuickContactForm from "../contact/QuickContactForm";
 import QuickDealForm from "../deal/QuickDealForm";
 import QuickVendorForm from "../vendor/QuickVendorForm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import CustomFieldsSection from "../common/CustomFieldsSection";
+import CustomFieldsSection, { getMissingRequiredFields } from "../common/CustomFieldsSection";
 
 // isOpen/onOpenChange are controlled by the parent form (a single shared
 // "which dropdown is open" key) rather than each instance owning its own
@@ -398,6 +398,7 @@ const QuickTaskForm = ({
     if (!form.dueDate) {
       errors.dueDate = "Due date is required";
     }
+    Object.assign(errors, getMissingRequiredFields(taskFieldDefs, form.additionalFields, isEditing));
     return errors;
   };
 
@@ -407,6 +408,7 @@ const QuickTaskForm = ({
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
+      toast.error("Please fill in all required fields");
 
       const candidates = [
         errors.title ? titleInputRef.current : null,
@@ -820,7 +822,19 @@ const QuickTaskForm = ({
                       <CustomFieldsSection
                         fieldDefs={taskFieldDefs}
                         values={form.additionalFields}
-                        onChange={(next) => setForm((prev) => ({ ...prev, additionalFields: next }))}
+                        errors={validationErrors}
+                        onChange={(next) => {
+                          setForm((prev) => ({ ...prev, additionalFields: next }));
+                          setValidationErrors((prev) => {
+                            const cleared = { ...prev };
+                            next.forEach((f) => {
+                              if (f.value !== undefined && f.value !== null && f.value.toString().trim() !== "") {
+                                delete cleared[f.key];
+                              }
+                            });
+                            return cleared;
+                          });
+                        }}
                       />
                     </div>
                   )}
