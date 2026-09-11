@@ -393,6 +393,10 @@ const InvoiceForm = ({
     notes: defaultNotesForNew,
     terms: defaultTermsForNew,
     bankDetails: "",
+    // UPI QR payment note ("tn") — left blank so it defaults to
+    // "Invoice <number>" (see buildUpiUri); editable so the user can
+    // override it.
+    qrNote: "",
     signature: "",
   });
   const [savedSignatures, setSavedSignatures] = useState([]);
@@ -1123,6 +1127,10 @@ const InvoiceForm = ({
         notes: sourceData.notes || "",
         terms: sourceData.terms || "",
         bankDetails: sourceData.bankDetails?._id || sourceData.bankDetails || "",
+        // Only an actual edit keeps the source's note — Convert/Duplicate
+        // starts blank since a custom note almost always references the old
+        // invoice's own number.
+        qrNote: editingInvoice ? (sourceData.qrNote || "") : "",
         signature: sourceData.signature || "",
       };
       setForm(initialForm);
@@ -1160,6 +1168,7 @@ const InvoiceForm = ({
         notes: "",
         terms: "",
         bankDetails: "",
+        qrNote: "",
         signature: "",
       };
       setForm(initialForm);
@@ -2019,6 +2028,28 @@ const InvoiceForm = ({
                   </p>
                 </div>
 
+                {/* Payment Note — the "note"/"tn" shown in the payer's UPI
+                    app when they scan the QR. Defaults to "Invoice <number>"
+                    when left blank (see buildUpiUri in
+                    shared/documentTemplates.js), but is fully editable. */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Payment Note (QR)</label>
+                  <input
+                    type="text"
+                    value={form.qrNote}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, qrNote: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    placeholder="Invoice INV-..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    maxLength={50}
+                  />
+                  <p className="text-xs text-gray-400">
+                    Shown as the payment note when the QR is scanned. Leave blank to use "Invoice &lt;number&gt;" automatically.
+                  </p>
+                </div>
+
                 {/* Signature */}
                 <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(15,23,42,0.06),0_8px_20px_-12px_rgba(15,23,42,0.12)] border border-slate-200 p-5">
                   <SectionHeader number="07" title="Signature" />
@@ -2303,6 +2334,10 @@ const CreateInvoicePanel = ({
           notes: sourceDoc.notes || "",
           terms: sourceDoc.terms || "",
           bankDetails: sourceDoc.bankDetails?._id || sourceDoc.bankDetails || "",
+          // Only an actual edit keeps the source's note — a different type or
+          // Duplicate starts blank since a custom note almost always
+          // references the old document's own number.
+          qrNote: initialDoc ? (sourceDoc.qrNote || "") : "",
           signature: sourceDoc.signature || "",
           status: initialDoc ? sourceDoc.status : "Draft",
         }
@@ -2328,6 +2363,7 @@ const CreateInvoicePanel = ({
           notes: defaultNotesForNewDoc,
           terms: defaultTermsForNewDoc,
           bankDetails: "",
+          qrNote: "",
           signature: "",
           status: "Draft",
         };
@@ -2874,6 +2910,7 @@ const CreateInvoicePanel = ({
         notes: form.notes,
         terms: form.terms,
         bankDetails: form.bankDetails || null,
+        qrNote: form.qrNote || "",
         signature: form.signature,
         amount: finalTotal,
         items: form.items.map((it) => ({
@@ -3962,6 +3999,25 @@ const CreateInvoicePanel = ({
                   : `The default prints on every ${docName.toLowerCase()} unless you pick another here.`}
               </p>
             </div>
+            {/* Only Invoice documents carry a qrNote field on the backend —
+                showing this for Quotation/Performa/Delivery Challan would let
+                the user type into a field that silently never saves. */}
+            {type === "tax" && (
+              <div className="flex flex-col gap-1">
+                <FieldLabel>Payment Note (QR)</FieldLabel>
+                <input
+                  type="text"
+                  value={form.qrNote}
+                  onChange={(e) => setField("qrNote", e.target.value)}
+                  placeholder={`${docName} ${form.invoiceNumber || "..."}`}
+                  maxLength={50}
+                  className="h-[38px] px-3.5 rounded-full border border-[#1F2937]/10 text-[13px] text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+                <p className="text-[11px] text-[#99A0AE]">
+                  Shown as the payment note when the QR is scanned. Leave blank to use "{docName} {form.invoiceNumber || "..."}" automatically.
+                </p>
+              </div>
+            )}
           </div>
 
           <SectionHeader number={sectionNo.signature} title="Signature" />

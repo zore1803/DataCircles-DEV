@@ -427,6 +427,10 @@ const InvoiceFormFull = ({
     terms: defaultTermsForNew,
     attachments: [],
     bankDetails: "",
+    // UPI QR payment note ("tn") — left blank so it defaults to
+    // "Invoice <number>" (see buildUpiUri); editable so the user can
+    // override it.
+    qrNote: "",
     signature: "",
   });
   const [isSliding, setIsSliding] = useState(false);
@@ -639,6 +643,10 @@ const InvoiceFormFull = ({
         terms: sourceData.terms || "",
         attachments: sourceData.attachments || [],
         bankDetails: sourceData.bankDetails?._id || sourceData.bankDetails || "",
+        // Same rule as invoiceNumber above: only an actual edit keeps the
+        // source's note — Convert/Duplicate starts blank since a custom note
+        // almost always references the old invoice's own number.
+        qrNote: editingInvoice ? (sourceData.qrNote || "") : "",
         signature: sourceData.signature || "",
       });
       setHasUnsavedChanges(false);
@@ -667,6 +675,7 @@ const InvoiceFormFull = ({
         terms: defaultTermsForNew,
         attachments: [],
         bankDetails: "",
+        qrNote: "",
         signature: "",
       });
       setHasUnsavedChanges(false);
@@ -1147,6 +1156,7 @@ const InvoiceFormFull = ({
         billingAddress: form.billingAddress,
         shippingAddress: form.sameAsBilling ? form.billingAddress : form.shippingAddress,
         bankDetails: form.bankDetails || null,
+        qrNote: form.qrNote || "",
         signature: form.signature,
         amount: (() => {
           let t = form.isTaxInvoice
@@ -2066,6 +2076,28 @@ const InvoiceFormFull = ({
                     {banks.length === 0
                       ? "No bank accounts yet — add them in Settings → Bank Details."
                       : "The default is applied to every invoice unless you pick another here."}
+                  </p>
+                </div>
+
+                {/* Payment Note — the "note"/"tn" shown in the payer's UPI
+                    app when they scan the QR. Defaults to "Invoice <number>"
+                    when left blank (see buildUpiUri in
+                    shared/documentTemplates.js), but is fully editable. */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Payment Note (QR)</label>
+                  <input
+                    type="text"
+                    value={form.qrNote}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, qrNote: e.target.value }));
+                      setHasUnsavedChanges(true);
+                    }}
+                    placeholder={`Invoice ${form.invoiceNumber || "..."}`}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    maxLength={50}
+                  />
+                  <p className="text-xs text-gray-400">
+                    Shown as the payment note when the QR is scanned. Leave blank to use "Invoice {form.invoiceNumber || "..."}" automatically.
                   </p>
                 </div>
 

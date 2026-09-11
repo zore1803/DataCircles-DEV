@@ -38,6 +38,10 @@ const invoiceSchema = new mongoose.Schema({
   // Bank account printed on this document. Chosen via the invoice form's
   // "Select Bank" dropdown; when unset the org's default bank is used.
   bankDetails: { type: mongoose.Schema.Types.ObjectId, ref: 'BankDetails', default: null },
+  // Editable text shown as the UPI payment note ("tn") on the QR code.
+  // Defaults to "Invoice <invoiceNumber>" when left blank — see
+  // shared/documentTemplates.js buildUpiUri.
+  qrNote: { type: String, default: '' },
   isTaxInvoice: { type: Boolean, default: false },
   signature: { type: String },
   signatureType: { type: String, enum: ['text', 'upload'], default: 'text' },

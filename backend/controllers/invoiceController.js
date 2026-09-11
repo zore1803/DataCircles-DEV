@@ -70,6 +70,7 @@ const createInvoice = async (req, res) => {
       notes,
       terms,
       bankDetails,
+      qrNote,
       isTaxInvoice,
       signature,
       signatureType,
@@ -239,6 +240,7 @@ const createInvoice = async (req, res) => {
       notes,
       terms,
       bankDetails: bankDetails || null,
+      qrNote: qrNote || "",
       isTaxInvoice,
       signature,
       signatureType,
@@ -749,6 +751,7 @@ const updateInvoice = async (req, res) => {
       notes,
       terms,
       bankDetails,
+      qrNote,
       isTaxInvoice,
       signature,
       signatureType,
@@ -880,6 +883,7 @@ const updateInvoice = async (req, res) => {
     invoice.notes = notes;
     invoice.terms = terms;
     invoice.bankDetails = bankDetails || null;
+    invoice.qrNote = qrNote || "";
     invoice.isTaxInvoice = isTaxInvoice;
     invoice.signature = signature;
     invoice.signatureType = signatureType;

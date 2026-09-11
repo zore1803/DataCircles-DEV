@@ -340,7 +340,14 @@ export function buildUpiUri(doc, options = {}) {
     cu: "INR",
   });
   const ref = doc?.[numberKey];
-  if (ref) params.set("tn", `${DOC_LABEL[type] || "Invoice"} ${ref}`);
+  // A user-edited note (Invoice form's "Payment Note" field) wins over the
+  // auto-generated "<Invoice> <number>" default.
+  const customNote = (doc?.qrNote || "").trim();
+  if (customNote) {
+    params.set("tn", customNote);
+  } else if (ref) {
+    params.set("tn", `${DOC_LABEL[type] || "Invoice"} ${ref}`);
+  }
   // `tr` (transaction reference) is optional per the NPCI UPI deep-link spec,
   // but its absence is a known trigger for some UPI apps (notably recent
   // GPay builds) to treat the link as an incomplete payment intent and fall
