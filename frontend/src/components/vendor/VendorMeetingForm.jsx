@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 import {
   X, Clock, Users, MapPin,
   AlertTriangle, CheckCircle2, Building, Lightbulb,
-  Timer, Flag, Truck
+  Flag, Truck
 } from "lucide-react";
 import EditIcon from "../common/EditIcon";
 
@@ -41,10 +41,9 @@ const PriorityChip = ({ priority }) => {
   );
 };
 
-const FormField = ({ label, required, children, error, description, icon: Icon }) => (
+const FormField = ({ label, required, children, error, description }) => (
   <div>
     <label className="flex items-center gap-1.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
-      {Icon && <Icon className="w-4 h-4 text-gray-500" />}
       {label}
       {required && <span className="text-[#FF4935]">*</span>}
     </label>
@@ -446,7 +445,7 @@ const VendorMeetingForm = ({
             ) : (
               /* EDIT/CREATE MODE - Form */
               <form id="vendor-meeting-form" onSubmit={handleSubmit} className="p-6 space-y-6">
-                <FormField label="Meeting Title" required error={errors.title} icon={PdfIcon}>
+                <FormField label="Meeting Title" required error={errors.title}>
                   <input
                     type="text"
                     value={form.title}
@@ -460,7 +459,7 @@ const VendorMeetingForm = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {!calendarDate ? (
-                    <FormField label="Date" required error={errors.date} icon={CalendarIcon}>
+                    <FormField label="Date" required error={errors.date}>
                       <input
                         type="date"
                         value={form.date}
@@ -473,7 +472,7 @@ const VendorMeetingForm = ({
                       />
                     </FormField>
                   ) : (
-                    <FormField label="Date" icon={CalendarIcon} description="Selected from calendar">
+                    <FormField label="Date" description="Selected from calendar">
                       <div className="flex items-center gap-2 h-[38px] px-3 bg-[#158FFF]/10 text-[#158FFF] rounded-full border border-[#158FFF]/20">
                         <CalendarIcon className="w-4 h-4" />
                         <span className="font-medium text-[13px]">{calendarDate}</span>
@@ -481,7 +480,7 @@ const VendorMeetingForm = ({
                     </FormField>
                   )}
 
-                  <FormField label="Time" required icon={Clock}>
+                  <FormField label="Time" required>
                     <input
                       type="time"
                       value={form.time}
@@ -494,7 +493,7 @@ const VendorMeetingForm = ({
                     />
                   </FormField>
 
-                  <FormField label="Duration" icon={Timer}>
+                  <FormField label="Duration">
                     <select
                       value={form.duration}
                       onChange={(e) => handleChange("duration", parseInt(e.target.value))}
@@ -509,7 +508,7 @@ const VendorMeetingForm = ({
                   </FormField>
                 </div>
 
-                <FormField label="Priority" icon={Flag}>
+                <FormField label="Priority">
                   <select
                     value={form.priority}
                     onChange={(e) => handleChange("priority", e.target.value)}
@@ -530,7 +529,7 @@ const VendorMeetingForm = ({
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField label="Meeting Type" icon={VideoIcon}>
+                  <FormField label="Meeting Type">
                     <select
                       value={form.meetingType}
                       onChange={(e) => handleChange("meetingType", e.target.value)}
@@ -544,7 +543,6 @@ const VendorMeetingForm = ({
 
                   <FormField
                     label="Location"
-                    icon={MapPin}
                     description="Meeting room, address, or link"
                   >
                     <input
@@ -565,7 +563,6 @@ const VendorMeetingForm = ({
 
                 <FormField
                   label="Description"
-                  icon={PdfIcon}
                   description="Meeting agenda, topics, or notes"
                 >
                   <textarea

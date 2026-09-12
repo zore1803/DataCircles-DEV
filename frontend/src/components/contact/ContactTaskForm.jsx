@@ -338,16 +338,13 @@ const handleSubmit = async (e) => {
                   </FormField>
                 </div>
                 <FormField label="Description" description="Provide additional context and requirements">
-                  <div className="relative">
-                    <PdfIcon className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-                    <textarea
-                      value={form.description}
-                      onChange={(e) => handleChange("description", e.target.value)}
-                      rows={4}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      placeholder="Describe the task objectives, requirements, and any important details..."
-                    />
-                  </div>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => handleChange("description", e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    placeholder="Describe the task objectives, requirements, and any important details..."
+                  />
                 </FormField>
                 <FormField label="Status">
                   <select

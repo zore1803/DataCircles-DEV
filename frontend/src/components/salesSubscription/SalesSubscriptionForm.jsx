@@ -1,10 +1,13 @@
 import DeleteIcon from "../common/DeleteIcon";
 import SearchIcon from "../common/SearchIcon";
+import PlusIcon from "../common/PlusIcon";
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import API from "../../services/api";
 import toast from "react-hot-toast";
 import SearchableDropdown from "../contact/SearchableDropdown";
+import NotesTermsDrawer from "../invoice/NotesTermsDrawer";
 
 const UNITS = [
   { value: "day", label: "Day(s)" },
@@ -37,6 +40,26 @@ const calcItemAmount = (it) => {
   const gstRate = parseFloat(it.gstRate) || 0;
   return taxable + taxable * (gstRate / 100);
 };
+
+const labelClass = "block text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2";
+const inputClass =
+  "w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-[#1F2937] placeholder:opacity-50";
+const selectClass =
+  "w-full border border-[#1F2937]/10 rounded-full px-3 h-[38px] text-[13px] text-[#1F2937] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all";
+const textareaClass =
+  "w-full border border-[#1F2937]/10 rounded-2xl px-3 py-2 text-[12px] text-[#1F2937] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none";
+
+const OpenNotesTermsButton = ({ label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title="Edit notes and terms"
+    className="inline-flex items-center gap-1 leading-none text-[12px] font-medium text-[#0085FF] hover:underline flex-shrink-0"
+  >
+    <PlusIcon className="w-3 h-3 flex-shrink-0" />
+    <span>{label}</span>
+  </button>
+);
 
 /*
  * Right-drawer create/edit form for a Sales Subscription (recurring billing
@@ -76,6 +99,8 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
   const [terms, setTerms] = useState("");
   const [status, setStatus] = useState("Draft");
   const [saving, setSaving] = useState(false);
+  // null when closed; otherwise which section ("notes" | "terms") to focus.
+  const [notesDrawer, setNotesDrawer] = useState(null);
 
   const isCancelled = editingSubscription?.status === "Cancelled";
   const availableStatusOptions = STATUS_OPTIONS.filter((s) => s !== "Cancelled" || isEditing);
@@ -270,290 +295,355 @@ const SalesSubscriptionForm = ({ editingSubscription, onRequestClose, onSuccess,
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100020] flex justify-end">
+  return createPortal(
+    <>
       <div
-        className={`absolute inset-0 bg-black transition-opacity duration-300 ${isSliding ? "opacity-40" : "opacity-0"}`}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000] transition-opacity duration-300 ease-in-out"
+        style={{ opacity: isSliding ? 1 : 0 }}
         onClick={handleClose}
       />
-      <form
-        onSubmit={handleSubmit}
-        className={`relative bg-white w-full max-w-3xl h-full overflow-y-auto shadow-2xl transition-transform duration-300 ${isSliding ? "translate-x-0" : "translate-x-full"}`}
+
+      <div
+        className={`
+          fixed dc-panel-card w-[calc(100%-3rem)] lg:w-[70vw] z-[10003]
+          bg-white shadow-2xl flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out font-inter
+          ${isSliding ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"}
+        `}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {isEditing ? "Edit Subscription" : "New Subscription"}
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              A recurring billing agreement — invoices are generated per cycle, not automatically edited here.
-            </p>
-          </div>
-          <button type="button" onClick={handleClose} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {isCancelled ? (
-          <div className="p-6">
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              This subscription is Cancelled and can no longer be edited. Create a new one instead.
-            </div>
-          </div>
-        ) : (
-          <div className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0">
+          {/* Sticky header — matches the CompanyForm header spec */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#D9D9D9] flex-shrink-0 bg-white gap-1">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Customer / Won Deal *</label>
-              <SearchableDropdown
-                options={dealOptions}
-                value={dealId}
-                onChange={handleDealChange}
-                placeholder="Search customer or deal…"
-                displayKey="label"
-              />
-              {dealOptions.length === 0 ? (
-                <p className="text-[11px] text-amber-600 mt-1">
-                  No eligible customers found. A subscription can only be created for a Won deal.
-                </p>
-              ) : (
-                <p className="text-[11px] text-gray-400 mt-1">Only deals marked Won are billable.</p>
-              )}
+              <h2 className="text-[15px] font-normal leading-6 text-[#78788D] uppercase tracking-wide">
+                {isEditing ? "Edit Subscription" : "New Subscription"}
+              </h2>
+              <p className="text-[13px] font-inter text-[#A0A0A0] mt-0.5">
+                A recurring billing agreement — invoices are generated per cycle, not automatically edited here.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={handleClose}
+              title="Close"
+              className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[#1C1B1F] hover:opacity-70 transition-opacity"
+              aria-label="Close"
+            >
+              <X className="w-[18px] h-[18px]" strokeWidth={2} />
+            </button>
+          </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-900">Products / Services</h3>
+          {/* Scrollable body */}
+          {isCancelled ? (
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700">
+                This subscription is Cancelled and can no longer be edited. Create a new one instead.
               </div>
-
-              <div className="relative mb-3">
-                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={itemSearch}
-                  onChange={(e) => { setItemSearch(e.target.value); setShowItemDropdown(true); }}
-                  onFocus={() => setShowItemDropdown(true)}
-                  placeholder="Search products/services to add…"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6 space-y-6">
+              <div>
+                <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                  Customer / Won Deal <span className="text-[#FF4935]">*</span>
+                </label>
+                <SearchableDropdown
+                  options={dealOptions}
+                  value={dealId}
+                  onChange={handleDealChange}
+                  placeholder="Search customer or deal…"
+                  displayKey="label"
+                  compact
                 />
-                {showItemDropdown && filteredCatalog.length > 0 && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowItemDropdown(false)} />
-                    <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl z-20">
-                      {filteredCatalog.map((item) => (
-                        <button
-                          key={item._id}
-                          type="button"
-                          onClick={() => addLine(item)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
-                        >
-                          <span className="text-gray-800">{item.name}</span>
-                          <span className="text-xs text-gray-400">{item.type} · {money(item.sellingPrice)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
+                {dealOptions.length === 0 ? (
+                  <p className="text-[13px] font-inter text-amber-600 mt-1.5">
+                    No eligible customers found. A subscription can only be created for a Won deal.
+                  </p>
+                ) : (
+                  <p className="text-[13px] font-inter text-[#A0A0A0] mt-1.5">Only deals marked Won are billable.</p>
                 )}
               </div>
 
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Item</th>
-                      <th className="px-3 py-2 text-right w-20">Qty</th>
-                      <th className="px-3 py-2 text-right w-28">Rate</th>
-                      <th className="px-3 py-2 text-right w-20" title="Each item is taxed at its own GST rate — there's no single overall rate for the document.">GST %</th>
-                      <th className="px-3 py-2 text-right">Amount</th>
-                      <th className="px-3 py-2 w-10" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {lines.length === 0 ? (
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                  <h3 className="flex-shrink-0 text-[14px] font-medium leading-[120%] text-[#1F2937]">
+                    Products / Services
+                  </h3>
+                  <span className="flex-1 h-px bg-[#D9D9D9]" />
+                </div>
+
+                <div className="relative mb-3">
+                  <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={itemSearch}
+                    onChange={(e) => { setItemSearch(e.target.value); setShowItemDropdown(true); }}
+                    onFocus={() => setShowItemDropdown(true)}
+                    placeholder="Search products/services to add…"
+                    className={`${inputClass} pl-9`}
+                  />
+                  {showItemDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowItemDropdown(false)} />
+                      <div className="absolute left-0 right-0 mt-1 bg-white border border-[#1F2937]/10 rounded-2xl shadow-xl z-20 overflow-hidden">
+                        <div className="p-2 border-b border-[#F2F2F7]">
+                          <input
+                            type="text"
+                            value={itemSearch}
+                            onChange={(e) => setItemSearch(e.target.value)}
+                            placeholder="Search products/services…"
+                            className="w-full h-8 px-3 text-[13px] border border-[#E0E0E1] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-inter placeholder:text-[#A0A0A0]"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="max-h-52 overflow-y-auto py-1">
+                          {filteredCatalog.length > 0 ? (
+                            filteredCatalog.map((item) => (
+                              <button
+                                key={item._id}
+                                type="button"
+                                onClick={() => addLine(item)}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                              >
+                                <span className="text-gray-800">{item.name}</span>
+                                <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{item.type} · {money(item.sellingPrice)}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-4 text-[13px] text-gray-400 text-center font-inter italic">
+                              No products or services found
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="border border-[#1F2937]/10 rounded-2xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
                       <tr>
-                        <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
-                          Search above to add a product or service.
-                        </td>
+                        <th className="px-3 py-2 text-left">Item</th>
+                        <th className="px-3 py-2 text-right w-20">Qty</th>
+                        <th className="px-3 py-2 text-right w-28">Rate</th>
+                        <th className="px-3 py-2 text-right w-20" title="Each item is taxed at its own GST rate — there's no single overall rate for the document.">GST %</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
+                        <th className="px-3 py-2 w-10" />
                       </tr>
-                    ) : (
-                      lines.map((l) => (
-                        <tr key={l._key} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 font-medium text-gray-900">{l.name}</td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              min={1}
-                              value={l.quantity}
-                              onChange={(e) => updateLine(l._key, { quantity: e.target.value })}
-                              className="w-16 px-2 py-1 text-right border border-gray-200 rounded"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={l.rate}
-                              onChange={(e) => updateLine(l._key, { rate: e.target.value })}
-                              className="w-24 px-2 py-1 text-right border border-gray-200 rounded"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={l.gstRate}
-                              onChange={(e) => updateLine(l._key, { gstRate: e.target.value })}
-                              className="w-16 px-2 py-1 text-right border border-gray-200 rounded"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right font-medium">{money(calcItemAmount(l))}</td>
-                          <td className="px-3 py-2">
-                            <button type="button" onClick={() => removeLine(l._key)} className="p-1 text-red-500 hover:bg-red-50 rounded">
-                              <DeleteIcon className="w-4 h-4" />
-                            </button>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {lines.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                            Search above to add a product or service.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        lines.map((l) => (
+                          <tr key={l._key} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 font-medium text-gray-900">{l.name}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                min={1}
+                                value={l.quantity}
+                                onChange={(e) => updateLine(l._key, { quantity: e.target.value })}
+                                className="w-16 px-2 py-1 text-right border border-[#1F2937]/10 rounded-lg"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={l.rate}
+                                onChange={(e) => updateLine(l._key, { rate: e.target.value })}
+                                className="w-24 px-2 py-1 text-right border border-[#1F2937]/10 rounded-lg"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={l.gstRate}
+                                onChange={(e) => updateLine(l._key, { gstRate: e.target.value })}
+                                className="w-16 px-2 py-1 text-right border border-[#1F2937]/10 rounded-lg"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium">{money(calcItemAmount(l))}</td>
+                            <td className="px-3 py-2">
+                              <button type="button" onClick={() => removeLine(l._key)} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                                <DeleteIcon className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Repeat every</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={intervalValue}
-                    onChange={(e) => setIntervalValue(e.target.value)}
-                    className="w-20 px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className={labelClass}>Repeat every</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={intervalValue}
+                      onChange={(e) => setIntervalValue(e.target.value)}
+                      className={`${inputClass} w-20 flex-shrink-0`}
+                    />
+                    <select
+                      value={intervalUnit}
+                      onChange={(e) => setIntervalUnit(e.target.value)}
+                      className={`${selectClass} flex-1`}
+                    >
+                      {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Status</label>
                   <select
-                    value={intervalUnit}
-                    onChange={(e) => setIntervalUnit(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className={selectClass}
                   >
-                    {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                    {availableStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className="flex items-center gap-0.5 text-[13px] font-medium text-[#161618] tracking-[-0.05em] mb-2">
+                    Start Date <span className="text-[#FF4935]">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>End Date (optional)</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Transaction Type</label>
+                  <select
+                    value={transactionType}
+                    onChange={(e) => setTransactionType(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="intra">Intra-state</option>
+                    <option value="inter">Inter-state</option>
+                  </select>
+                  <p className="text-[13px] font-inter text-[#A0A0A0] mt-1.5">Auto-set from your business state vs. the customer's — change it here if that doesn't apply.</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Discount Type</label>
+                  <select
+                    value={discountType}
+                    onChange={(e) => setDiscountType(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="fixed">Fixed</option>
+                    <option value="percentage">Percentage</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Discount Value</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                >
-                  {availableStatusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Start Date *</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">End Date (optional)</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Transaction Type</label>
-                <select
-                  value={transactionType}
-                  onChange={(e) => setTransactionType(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                >
-                  <option value="intra">Intra-state</option>
-                  <option value="inter">Inter-state</option>
-                </select>
-                <p className="text-[11px] text-gray-400 mt-1">Auto-set from your business state vs. the customer's — change it here if that doesn't apply.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Discount Type</label>
-                <select
-                  value={discountType}
-                  onChange={(e) => setDiscountType(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                >
-                  <option value="fixed">Fixed</option>
-                  <option value="percentage">Percentage</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Discount Value</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className={labelClass.replace(" mb-2", "")}>Notes</label>
+                    <OpenNotesTermsButton label="Add Notes" onClick={() => setNotesDrawer("notes")} />
+                  </div>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className={textareaClass}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className={labelClass.replace(" mb-2", "")}>Terms</label>
+                    <OpenNotesTermsButton label="Add Terms" onClick={() => setNotesDrawer("terms")} />
+                  </div>
+                  <textarea
+                    value={terms}
+                    onChange={(e) => setTerms(e.target.value)}
+                    rows={3}
+                    className={textareaClass}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Terms</label>
-                <textarea
-                  value={terms}
-                  onChange={(e) => setTerms(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                />
-              </div>
-            </div>
 
-            <div className="flex justify-end">
-              <div className="w-64 space-y-1 text-sm text-gray-700">
-                <div className="flex justify-between"><span>Subtotal (taxable)</span><span className="font-medium">{money(grossTaxable)}</span></div>
-                <div className="flex justify-between"><span>After discount</span><span className="font-medium">{money(afterDiscount)}</span></div>
-                <div className="flex justify-between text-base font-semibold text-gray-900 pt-1 border-t">
-                  <span>Per-cycle amount (incl. GST)</span><span>{money(totalWithGst)}</span>
+              <div className="flex justify-end">
+                <div className="w-64 space-y-1 text-sm text-gray-700">
+                  <div className="flex justify-between"><span>Subtotal (taxable)</span><span className="font-medium">{money(grossTaxable)}</span></div>
+                  <div className="flex justify-between"><span>After discount</span><span className="font-medium">{money(afterDiscount)}</span></div>
+                  <div className="flex justify-between text-base font-semibold text-gray-900 pt-1 border-t">
+                    <span>Per-cycle amount (incl. GST)</span><span>{money(totalWithGst)}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        <div className="sticky bottom-0 bg-white border-t px-6 py-3 flex justify-end gap-2">
-          <button type="button" onClick={handleClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
-            Cancel
-          </button>
-          {!isCancelled && (
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
-            >
-              {saving ? "Saving…" : isEditing ? "Update" : "Create"}
-            </button>
           )}
-        </div>
-      </form>
-    </div>
+
+          {/* Sticky footer — compact, matching the note editor card */}
+          <div className="flex-shrink-0 py-2.5 px-4 border-t border-gray-100 bg-white flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-6 py-2 border border-gray-200 text-gray-700 rounded-[25px] text-sm font-bold hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            {!isCancelled && (
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-6 py-2 bg-[#158FFF] text-white rounded-[25px] text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? "Saving…" : isEditing ? "Update" : "Create"}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+
+      <NotesTermsDrawer
+        isOpen={notesDrawer !== null}
+        focus={notesDrawer || "notes"}
+        onClose={() => setNotesDrawer(null)}
+        type="tax"
+        docName="Subscription"
+        onApplyNotes={(v) => setNotes(v)}
+        onApplyTerms={(v) => setTerms(v)}
+      />
+    </>,
+    document.body
   );
 };
 

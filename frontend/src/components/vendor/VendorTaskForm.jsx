@@ -370,18 +370,15 @@ const VendorTaskForm = ({
                   label="Description"
                   description="Provide additional context and requirements"
                 >
-                  <div className="relative">
-                    <PdfIcon className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-                    <textarea
-                      value={form.description}
-                      onChange={(e) =>
-                        handleChange("description", e.target.value)
-                      }
-                      rows={4}
-                      className="w-full pl-10 pr-3 py-2 rounded-2xl border border-[#1F2937]/10 bg-white text-[12px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 resize-vertical"
-                      placeholder="Describe the task objectives, requirements, and any important details..."
-                    />
-                  </div>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) =>
+                      handleChange("description", e.target.value)
+                    }
+                    rows={4}
+                    className="w-full px-3 py-2 rounded-2xl border border-[#1F2937]/10 bg-white text-[12px] text-[#1F2937] transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 resize-vertical"
+                    placeholder="Describe the task objectives, requirements, and any important details..."
+                  />
                 </FormField>
                 <FormField label="Status">
                   <select

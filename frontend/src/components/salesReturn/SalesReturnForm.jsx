@@ -275,7 +275,7 @@ const SalesReturnForm = ({ editingReturn, onRequestClose, onSuccess, onError }) 
 
         <form id="sr-form" onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-6">
           <div>
-            <label className={labelClass}>Against Invoice *</label>
+            <label className={labelClass}>Against Invoice <span className="text-[#FF4935]">*</span></label>
             <SearchableDropdown
               options={invoiceOptions}
               value={invoiceId}
