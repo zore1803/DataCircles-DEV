@@ -2171,10 +2171,10 @@ const OpenNotesTermsButton = ({ label, onClick }) => (
     type="button"
     onClick={onClick}
     title="Edit notes and terms"
-    className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0085FF] hover:underline flex-shrink-0"
+    className="inline-flex items-center gap-1 leading-none text-[12px] font-medium text-[#0085FF] hover:underline flex-shrink-0"
   >
-    <PlusIcon className="w-4 h-4" />
-    {label}
+    <PlusIcon className="w-3 h-3 flex-shrink-0" />
+    <span>{label}</span>
   </button>
 );
 

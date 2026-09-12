@@ -1623,7 +1623,7 @@ const PurchasePage = () => {
           ) : (
             <div className="flex items-center gap-2 lg:gap-4 w-full h-full">
               <div
-                className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}
+                className={`flex-shrink-0 flex flex-col justify-center gap-1.5 overflow-hidden transition-opacity duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[190px] opacity-100"}`}
               >
                 {showLoadingSkeleton ? (
                   <>

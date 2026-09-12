@@ -648,15 +648,13 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
               </div>
               <div>
                 <label className={lbl}>Description</label>
-                <div className="border border-[#1F2937]/10 rounded-xl bg-white">
-                  <ReactQuill
-                    theme="snow"
-                    value={form.description}
-                    onChange={(val) => handleChange("description", val)}
-                    placeholder="Add product description…"
-                    className="[&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
-                  />
-                </div>
+                <ReactQuill
+                  theme="snow"
+                  value={form.description}
+                  onChange={(val) => handleChange("description", val)}
+                  placeholder="Add product description…"
+                  className="[&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                />
               </div>
 
               {/* Images upload — heading follows the Product/Service toggle */}

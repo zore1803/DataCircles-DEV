@@ -2362,7 +2362,7 @@ function Deals() {
         ) : (
           <>
             <div
-              className={`flex flex-col gap-1 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
+              className={`flex flex-col gap-1 flex-shrink-0 overflow-hidden transition-opacity duration-300 ease-in-out lg:!w-auto lg:!opacity-100 ${isSearchExpanded ? "w-0 opacity-0" : "w-[160px] opacity-100"}`}
             >
               <div className="flex items-center gap-2">
                 <h2
