@@ -2679,7 +2679,7 @@ const Accounting = () => {
                     e.stopPropagation();
                     setShowMoreMenu((v) => !v);
                   }}
-                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors bg-white"
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50 transition-colors bg-white"
                 >
                   <MoreIcon className="w-4 h-4" />
                 </button>

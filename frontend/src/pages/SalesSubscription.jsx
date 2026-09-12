@@ -1090,7 +1090,7 @@ const SalesSubscription = () => {
                     <div className="relative" ref={moreMenuRef}>
                       <button
                         onClick={() => setIsMoreMenuOpen((v) => !v)}
-                        className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50"
+                        className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50"
                         title="More options"
                       >
                         <MoreIcon className="w-4 h-4" />

@@ -110,7 +110,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
   const [editingPage, setEditingPage] = useState(false);
   const [pageInput, setPageInput] = useState("");
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [sort, setSort] = useState({ key: "date", dir: "desc" });
+  const [sort, setSort] = useState({ key: null, dir: "desc" });
   const [openMenu, setOpenMenu] = useState(null);
   const [rowMenuPos, setRowMenuPos] = useState(null);
   // Which page of the row flyout is showing: the action list, the Convert
@@ -756,7 +756,7 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
               onClick={() => setMoreMenuOpen((v) => !v)}
               onBlur={() => setTimeout(() => setMoreMenuOpen(false), 150)}
               title="More"
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50 transition-colors"
             >
               <MoreIcon className="w-4 h-4" />
             </button>
@@ -1435,14 +1435,22 @@ export default function ExpenseLedgerPage({ kind = "expense", icon: Icon, title,
                     </button>
 
                     <button
-                      onClick={() => { setSort({ key: col.key, dir: "asc" }); closeColumnMenu(); }}
+                      onClick={() => {
+                        const isActive = sort.key === col.key && sort.dir === "asc";
+                        setSort(isActive ? { key: null, dir: null } : { key: col.key, dir: "asc" });
+                        closeColumnMenu();
+                      }}
                       className={`${item} ${sort.key === col.key && sort.dir === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                     >
                       <ArrowUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Sort Ascending
                     </button>
                     <button
-                      onClick={() => { setSort({ key: col.key, dir: "desc" }); closeColumnMenu(); }}
+                      onClick={() => {
+                        const isActive = sort.key === col.key && sort.dir === "desc";
+                        setSort(isActive ? { key: null, dir: null } : { key: col.key, dir: "desc" });
+                        closeColumnMenu();
+                      }}
                       className={`${item} ${sort.key === col.key && sort.dir === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                     >
                       <ArrowDown className="w-3.5 h-3.5 text-[#1C1B1F]" />

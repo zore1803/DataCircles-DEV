@@ -3198,7 +3198,7 @@ function Tasks() {
                 borderRadius: 96,
               }}
             >
-              <MoreIcon className="w-4 h-4 text-[#1F2937]" />
+              <MoreIcon className="w-4 h-4 text-[#525866]" />
             </button>
             {isMoreMenuOpen && (
               <div className="absolute right-0 z-50 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in duration-200 origin-top-right">

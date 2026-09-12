@@ -1599,7 +1599,7 @@ export default function PaymentsTimeline() {
           <div className="relative" ref={moreMenuRef}>
             <button
               onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50 transition-colors"
               title="More options"
             >
               <MoreIcon className="w-4 h-4" />
@@ -1791,12 +1791,20 @@ export default function PaymentsTimeline() {
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-[#EDF0F5]"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {sortConfig.key === col.id && (sortConfig.direction === "asc"
-                        ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                        : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
-                      <span className="truncate flex-1">{col.label}</span>
-                      {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
+                    <div className="flex items-center justify-between w-full group">
+                      <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
+                        <span className="truncate">{col.label}</span>
+                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
+                        {pinnedCols[col.id] && (
+                          <Pin
+                            size={12}
+                            className="text-blue-500 fill-blue-500 flex-shrink-0"
+                            style={{ transform: "rotate(45deg)" }}
+                          />
+                        )}
+                      </span>
                       <button
                         onClick={e => openColumnMenu(e, col.id)}
                         title="Column options"
@@ -2024,12 +2032,13 @@ export default function PaymentsTimeline() {
                 top: columnMenuPos.top,
                 left: columnMenuPos.left,
               }}
-              className="w-[220px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5"
+              className="w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             >
               {(() => {
                 const col = ALL_COLUMNS.find(c => c.id === openColumnMenuKey);
                 if (!col) return null;
                 const side = pinnedCols[col.id];
+                const required = columns.find(c => c.key === col.id)?.required;
                 const itemClass = "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap";
 
                 return (
@@ -2039,20 +2048,20 @@ export default function PaymentsTimeline() {
                         closeColumnMenu();
                         setColumnPin(col.id, "left");
                       }}
-                      className={`${itemClass} ${side === "left" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                      className={`${itemClass} ${side === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                     >
                       {side === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
-                      {side === "left" ? "Unpin" : "Pin to Left"}
+                      Pin to Left
                     </button>
                     <button
                       onClick={() => {
                         closeColumnMenu();
                         setColumnPin(col.id, "right");
                       }}
-                      className={`${itemClass} ${side === "right" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                      className={`${itemClass} ${side === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                     >
                       {side === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
-                      {side === "right" ? "Unpin" : "Pin to Right"}
+                      Pin to Right
                     </button>
 
                     <div className="w-full border-t border-[#F1F1F5] my-0.5" />
@@ -2078,17 +2087,20 @@ export default function PaymentsTimeline() {
                     >
                       <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
                       Sort Descending
-                    </button>                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+                    </button>
+
+                    <div className="w-full border-t border-[#F1F1F5] my-0.5" />
 
                     <button
+                      disabled={required}
                       onClick={() => {
+                        if (required) return;
                         closeColumnMenu();
                         saveColumns(columns.map(c => c.key === col.id ? { ...c, visible: false } : c));
                       }}
-                      disabled={columns.find(c => c.key === col.id)?.required}
-                      className={`${itemClass} text-[#161618] hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
+                      className={`${itemClass} ${required ? "text-gray-300 cursor-not-allowed" : "text-[#161618] hover:bg-gray-50"}`}
                     >
-                      <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                      <EyeOff className={`w-3.5 h-3.5 ${required ? "text-gray-300" : "text-[#1C1B1F]"}`} />
                       Hide Column
                     </button>
                   </>

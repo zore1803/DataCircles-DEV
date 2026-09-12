@@ -2552,7 +2552,7 @@ function Contacts() {
                       }}
                       className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <HotlistIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <HotlistIcon className="w-4 h-4 text-[#1D4ED8] flex-shrink-0" />
                       {activeTab === "Hotlist" ? "Hide Hotlist" : "Hotlist"}
                     </button>
                     

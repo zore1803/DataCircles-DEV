@@ -1155,7 +1155,7 @@ export default function EInvoicing() {
                 <div className="relative" ref={moreMenuRef}>
                   <button
                     onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                    className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
+                    className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50 transition-colors"
                     title="More options"
                   >
                     <MoreIcon className="w-4 h-4" />

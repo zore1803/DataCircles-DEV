@@ -22,9 +22,10 @@ const FilterIcon = ({ size = 16, className = "", style, ...props }) => (
     className={className}
     // Presentation *attribute*, not an inline style: the path is filled with
     // currentColor, and an attribute loses to any CSS, so a caller's `text-*`
-    // class (e.g. the active-filter blue) still wins while bare usages get
-    // #1F1F1F.
-    color="#1F1F1F"
+    // class (e.g. the active-filter blue) still wins while bare usages match
+    // SearchIcon's default colour (#525866), keeping every filter/search
+    // control pair visually consistent.
+    color="#525866"
     style={style}
     aria-hidden="true"
     focusable="false"

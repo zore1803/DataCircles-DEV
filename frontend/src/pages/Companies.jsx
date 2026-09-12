@@ -2007,7 +2007,7 @@ function Companies() {
                     {/* Filters — hidden on mobile, folded into three-dot menu */}
                     <button
                       onClick={() => setShowAdvancedFilters(true)}
-                      className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-500 hover:bg-gray-50 transition-colors"
+                      className="hidden lg:flex relative items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50 transition-colors"
                       title="Filters"
                     >
                       <FilterIcon size={16} />
@@ -2023,10 +2023,10 @@ function Companies() {
                       onClick={() => setShowHotlist(!showHotlist)}
                       className={`hidden lg:inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold transition-colors ${showHotlist
                         ? "bg-blue-50 ring-4 ring-inset ring-blue-100 text-blue-700"
-                        : "bg-white ring-4 ring-inset ring-gray-100 text-gray-800 hover:bg-gray-50"
+                        : "bg-white ring-4 ring-inset ring-gray-100 text-[#525866] hover:bg-gray-50"
                         }`}
                     >
-                      <HotlistIcon className="w-4 h-4 text-[#1F2937]" />
+                      <HotlistIcon className="w-4 h-4 text-[#1D4ED8]" />
                       <span className="font-medium">Hotlist</span>
                     </button>
 
@@ -2038,7 +2038,7 @@ function Companies() {
                           setOpenRowActionsId(null);
                           setRowActionsPos(null);
                         }}
-                        className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-gray-800 hover:bg-gray-50 transition-colors"
+                        className="relative flex items-center justify-center w-10 h-10 rounded-full border border-[#E1E4EA] text-[#525866] hover:bg-gray-50 transition-colors"
                         title="More options"
                       >
                         <MoreIcon className="w-4 h-4" />
@@ -2072,7 +2072,7 @@ function Companies() {
                               }}
                               className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <HotlistIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <HotlistIcon className="w-4 h-4 text-[#1D4ED8] flex-shrink-0" />
                               {showHotlist ? "Hide Hotlist" : "Hotlist"}
                             </button>
                             <button

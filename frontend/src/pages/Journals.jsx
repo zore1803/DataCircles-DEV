@@ -1206,12 +1206,20 @@ export default function Journals() {
                       isDragOver ? "bg-blue-100" : "bg-[#F5F7FA] hover:bg-gray-100"
                     } ${draggedColKey ? "cursor-grabbing" : "cursor-grab"} active:cursor-grabbing`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="truncate flex-1">{col.label}</span>
-                      {sortConfig.key === col.id && (sortConfig.direction === "asc"
-                        ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
-                        : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
-                      {pinnedCols[col.id] && <Pin className="w-3 h-3 text-[#0085FF] flex-shrink-0" />}
+                    <div className="flex items-center justify-between w-full group">
+                      <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
+                        <span className="truncate">{col.label}</span>
+                        {sortConfig.key === col.id && (sortConfig.direction === "asc"
+                          ? <ArrowUp className="w-3 h-3 text-[#0085FF] flex-shrink-0" />
+                          : <ArrowDown className="w-3 h-3 text-[#0085FF] flex-shrink-0" />)}
+                        {pinnedCols[col.id] && (
+                          <Pin
+                            size={12}
+                            className="text-blue-500 fill-blue-500 flex-shrink-0"
+                            style={{ transform: "rotate(45deg)" }}
+                          />
+                        )}
+                      </span>
                       <button
                         onClick={(e) => openColumnMenu(e, col.id)}
                         title="Column options"
@@ -1422,31 +1430,34 @@ export default function Journals() {
         <>
           <div className="fixed inset-0 z-[9998]" onClick={closeColumnMenu} />
           <div
-            className="fixed w-[220px] bg-white rounded-xl shadow-lg border border-[#E1E4EA] py-1 z-[9999]"
+            className="fixed w-[160px] z-[9999] bg-white border border-[#E5E5EC] rounded-lg shadow-[7px_24px_24px_-7px_rgba(0,0,0,0.25)] p-1.5 flex flex-col gap-0.5 animate-in fade-in zoom-in duration-150 origin-top-right"
             style={{ top: columnMenuPos.top, left: columnMenuPos.left }}
             onClick={(e) => e.stopPropagation()}
           >
             {(() => {
               const col = ALL_COLUMNS.find((c) => c.id === openColumnMenuKey);
               if (!col) return null;
-              const itemClass = "w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors";
+              const itemClass = "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-normal whitespace-nowrap";
+              const pinSide = pinnedCols[col.id];
               return (
                 <>
                   <button
                     onClick={() => { closeColumnMenu(); setColumnPin(col.id, "left"); }}
-                    className={`${itemClass} ${pinnedCols[col.id] === "left" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                    className={`${itemClass} ${pinSide === "left" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                   >
-                    {pinnedCols[col.id] === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-                    {pinnedCols[col.id] === "left" ? "Unpin from left" : "Pin left"}
+                    {pinSide === "left" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                    Pin to Left
                   </button>
                   <button
                     onClick={() => { closeColumnMenu(); setColumnPin(col.id, "right"); }}
-                    className={`${itemClass} ${pinnedCols[col.id] === "right" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
+                    className={`${itemClass} ${pinSide === "right" ? "bg-blue-50 text-blue-700" : "text-[#161618] hover:bg-gray-50"}`}
                   >
-                    {pinnedCols[col.id] === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-                    {pinnedCols[col.id] === "right" ? "Unpin from right" : "Pin right"}
+                    {pinSide === "right" ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5 text-[#1C1B1F]" />}
+                    Pin to Right
                   </button>
+
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
                   <button
                     onClick={() => {
                       closeColumnMenu();
@@ -1455,7 +1466,8 @@ export default function Journals() {
                     }}
                     className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "asc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
-                    <ChevronUp className="w-3.5 h-3.5" /> Sort Ascending
+                    <ChevronUp className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Sort Ascending
                   </button>
                   <button
                     onClick={() => {
@@ -1465,14 +1477,18 @@ export default function Journals() {
                     }}
                     className={`${itemClass} ${sortConfig.key === col.id && sortConfig.direction === "desc" ? "bg-blue-50 text-blue-700 font-medium" : "text-[#161618] hover:bg-gray-50"}`}
                   >
-                    <ChevronDown className="w-3.5 h-3.5" /> Sort Descending
+                    <ChevronDown className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Sort Descending
                   </button>
+
                   <div className="w-full border-t border-[#F1F1F5] my-0.5" />
+
                   <button
                     onClick={() => { closeColumnMenu(); setHiddenCols((prev) => [...prev, col.id]); }}
                     className={`${itemClass} text-[#161618] hover:bg-gray-50`}
                   >
-                    <EyeOff className="w-3.5 h-3.5" /> Hide Column
+                    <EyeOff className="w-3.5 h-3.5 text-[#1C1B1F]" />
+                    Hide Column
                   </button>
                 </>
               );
