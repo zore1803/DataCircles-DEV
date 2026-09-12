@@ -875,7 +875,7 @@ exports.createPayment = async (req, res) => {
       } catch (allocErr) {
         // The payment itself is meaningless without the split the user asked
         // for — don't leave a half-recorded receipt behind.
-        await Payment.deleteOne({ _id: payment._id });
+        await payment.deleteOne();
         if (allocErr instanceof allocationService.AllocationError) {
           return res.status(400).json({ error: allocErr.message });
         }

@@ -490,7 +490,7 @@ async function deleteForm(req, res) {
     }
 
     // status === "draft" falls through — safe to delete freely.
-    await FormDefinition.deleteOne({ _id: form._id });
+    await form.deleteOne();
     res.json({ success: true });
   } catch (err) {
     console.error("formController.deleteForm error:", err);

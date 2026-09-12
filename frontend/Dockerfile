@@ -25,6 +25,10 @@ ENV VITE_APP_AUTH0_CLIENT_ID=$VITE_APP_AUTH0_CLIENT_ID
 # Without this the Messenger never boots in the image: APP_ID is read at
 # build time by Vite, so an unset arg bakes in `undefined`.
 ENV VITE_INTERCOM_APP_ID=$VITE_INTERCOM_APP_ID
+# Node's default V8 old-space heap limit doesn't scale with the extra memory
+# swap provides, so a Vite/Rollup build can still OOM-crash (exit 134) on a
+# small instance even with swap enabled. Raise the cap explicitly.
+ENV NODE_OPTIONS=--max-old-space-size=3072
 RUN npm run build
 
 # --- Serve stage ---

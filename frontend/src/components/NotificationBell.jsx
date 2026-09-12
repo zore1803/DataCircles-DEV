@@ -186,9 +186,20 @@ const NotificationBell = ({ variant = "desktop" }) => {
           >
             {/* Header row: title + All/Unread switcher + close. */}
             <div className="flex items-center gap-3 px-5 h-16 flex-shrink-0 border-b border-gray-100">
-              <span className="text-base font-semibold text-gray-900 flex-shrink-0">
-                Notifications
-              </span>
+              <div className="flex flex-col flex-shrink-0">
+                <span className="text-base font-semibold text-gray-900">
+                  Notifications
+                </span>
+                {unreadInList > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="text-xs font-medium text-[#0085FF] hover:underline self-start"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
 
               <div className="inline-flex items-center gap-1 p-1 bg-gray-100 rounded-lg ml-auto">
                 {[
@@ -219,19 +230,6 @@ const NotificationBell = ({ variant = "desktop" }) => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Mark-all-read strip, only while there are unread items. */}
-            {unreadInList > 0 && (
-              <div className="px-5 py-2 flex-shrink-0 border-b border-gray-100 flex justify-end">
-                <button
-                  type="button"
-                  onClick={markAllRead}
-                  className="text-xs font-medium text-[#0085FF] hover:underline"
-                >
-                  Mark all read
-                </button>
-              </div>
-            )}
 
             <div className="flex-1 overflow-y-auto">
               {loading ? (

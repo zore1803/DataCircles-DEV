@@ -45,6 +45,30 @@ function humanType(modelName) {
   return modelName.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
+// Turn a camelCase (or PascalCase) field name into a friendly label for the
+// "Changed: ..." line, e.g. "swiftCode" -> "Swift Code",
+// "stockMovementStatus" -> "Stock Movement Status", "gstin" -> "Gstin".
+function humanField(field) {
+  if (!field) return field;
+  const spaced = String(field)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return spaced
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// Some model names are inherently plural ("Bank Details") and read oddly
+// with an "A/An ... was" construction when there's no record label to name
+// instead ("A bank details was updated"). Detected heuristically so the
+// fallback message stays grammatical for those.
+function isPluralType(entityType) {
+  return /s$/i.test(entityType) && !/ss$/i.test(entityType);
+}
+
 // Best-effort display name for a record.
 function labelFor(doc) {
   if (!doc) return "";
@@ -88,10 +112,17 @@ function getActor() {
 }
 
 function buildMessage(action, entityType, label) {
-  const named = label ? `${entityType} "${label}"` : `A ${entityType.toLowerCase()}`;
   const verb = action === "created" ? "created" : action === "deleted" ? "deleted" : "updated";
   // Passive voice, no actor: `Company "Acme" was deleted`.
-  return `${named} was ${verb}`;
+  if (label) return `${entityType} "${label}" was ${verb}`;
+  // No label to name the record — for a plural-looking type ("Bank Details")
+  // "A bank details was updated" reads wrong; use plural phrasing instead.
+  if (isPluralType(entityType)) {
+    return `${entityType} were ${verb}`;
+  }
+  const lower = entityType.toLowerCase();
+  const article = /^[aeiou]/i.test(lower) ? "An" : "A";
+  return `${article} ${lower} was ${verb}`;
 }
 
 // Changed fields from a saved document, using the paths Mongoose marked dirty.
@@ -100,7 +131,7 @@ function changesFromModifiedPaths(doc, paths) {
   for (const path of paths || []) {
     const top = path.split(".")[0];
     if (FIELD_BLACKLIST.has(top)) continue;
-    out.push({ field: top, value: safeValue(doc.get(top)) });
+    out.push({ field: humanField(top), value: safeValue(doc.get(top)) });
     if (out.length >= MAX_CHANGES) break;
   }
   // De-dupe by field (nested paths can collapse to the same top-level key).
@@ -118,7 +149,7 @@ function changesFromUpdate(update) {
     if (key.startsWith("$")) continue;
     const top = key.split(".")[0];
     if (FIELD_BLACKLIST.has(top)) continue;
-    out.push({ field: top, value: safeValue(flat[key]) });
+    out.push({ field: humanField(top), value: safeValue(flat[key]) });
     if (out.length >= MAX_CHANGES) break;
   }
   const seen = new Set();

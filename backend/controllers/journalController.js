@@ -294,7 +294,7 @@ exports.deleteJournalEntry = async (req, res) => {
       return res.status(400).json({ error: "Cannot manually delete a closing settlement entry" });
     }
 
-    await JournalEntry.deleteOne({ _id: target._id }).session(session);
+    await target.deleteOne({ session });
 
     // Removing an entry shifts every later running total — rebuild them (and
     // journal.currentBalance) in chronological date order.
@@ -518,11 +518,16 @@ exports.reopenJournal = async (req, res) => {
       return res.status(400).json({ error: "Only cancelled or settled journals can be reopened" });
     }
 
-    // Find and delete the closing entry if it exists
-    await JournalEntry.deleteOne({
+    // Find and delete the closing entry if it exists. Fetched first (rather
+    // than a filter-based deleteOne) so the change-notifier plugin's
+    // document-level delete hook fires with a real record to label.
+    const closingEntry = await JournalEntry.findOne({
       journal: journal._id,
       isClosingEntry: true
     }).session(session);
+    if (closingEntry) {
+      await closingEntry.deleteOne({ session });
+    }
 
     // Rebuild the running balances in chronological date order now the closing
     // entry is gone.

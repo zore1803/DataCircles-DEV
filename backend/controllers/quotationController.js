@@ -749,9 +749,17 @@ exports.bulkUpdateStatus = async (req, res) => {
     if (!ids || !ids.length || !status) {
       return res.status(400).json({ error: "ids and status are required" });
     }
-    await Quotation.updateMany(
-      { _id: { $in: ids }, organization: req.user.organization },
-      { status }
+    // One findByIdAndUpdate per record (not a single updateMany) so the
+    // change-notifier plugin's findOneAndUpdate hook fires per-record with a
+    // real document to label, instead of one garbled notification for the
+    // whole `$in` filter.
+    await Promise.all(
+      ids.map((id) =>
+        Quotation.findOneAndUpdate(
+          { _id: id, organization: req.user.organization },
+          { status }
+        )
+      )
     );
     res.json({ message: `Updated ${ids.length} quotations to status: ${status}` });
   } catch (error) {
@@ -770,9 +778,16 @@ exports.bulkUpdateSignature = async (req, res) => {
     const failedIds = ids.filter(id => !validIds.includes(id));
     
     if (validIds.length > 0) {
-      await Quotation.updateMany(
-        { _id: { $in: validIds } },
-        { signature: signature || "", signatureType: signatureType || "text" }
+      // Per-record findOneAndUpdate (not updateMany) so each quotation gets
+      // its own properly-labelled notification instead of one garbled entry
+      // for the whole `$in` filter.
+      await Promise.all(
+        validIds.map((id) =>
+          Quotation.findOneAndUpdate(
+            { _id: id },
+            { signature: signature || "", signatureType: signatureType || "text" }
+          )
+        )
       );
     }
     
