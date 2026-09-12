@@ -653,7 +653,7 @@ export default function QuickItemDrawer({ isOpen, onClose, onSaved }) {
                   value={form.description}
                   onChange={(val) => handleChange("description", val)}
                   placeholder="Add product description…"
-                  className="[&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:border-none [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-gray-100 [&_.ql-container]:border-none text-sm"
+                  className="rounded-xl border border-[#1F2937]/10 overflow-hidden [&_.ql-editor]:min-h-[150px] [&_.ql-toolbar]:!border-0 [&_.ql-toolbar]:!border-b [&_.ql-toolbar]:!border-gray-100 [&_.ql-toolbar]:rounded-t-xl [&_.ql-container]:!border-0 [&_.ql-container]:rounded-b-xl text-sm"
                 />
               </div>
 
